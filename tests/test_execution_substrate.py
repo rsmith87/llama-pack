@@ -170,7 +170,7 @@ async def test_agent_worker_completes_llm_generate_job():
                     },
                 }
             ]
-        if url.endswith("/jobs/job-1"):
+        if url.endswith("/nodes/agent-a/work/jobs/job-1/cancellation"):
             return {"id": "job-1", "status": "assigned", "cancellation_requested": False}
         if url.endswith("/nodes/agent-a/work/attempt-1/progress"):
             return {"ok": True}
@@ -314,7 +314,7 @@ async def test_agent_worker_completes_llm_embed_job():
                     },
                 }
             ]
-        if url.endswith("/jobs/job-2"):
+        if url.endswith("/nodes/agent-a/work/jobs/job-2/cancellation"):
             return {"id": "job-2", "status": "assigned", "cancellation_requested": False}
         if url.endswith("/nodes/agent-a/work/attempt-1/progress"):
             return {"ok": True}
@@ -473,7 +473,7 @@ async def test_agent_worker_completes_llm_batch_job():
                     },
                 }
             ]
-        if url.endswith("/jobs/job-batch-1"):
+        if url.endswith("/nodes/agent-a/work/jobs/job-batch-1/cancellation"):
             return {"id": "job-batch-1", "cancellation_requested": False}
         if url.endswith("/progress"):
             return {"ok": True}
@@ -564,7 +564,7 @@ async def test_agent_worker_llm_batch_records_case_error_and_continues():
                     },
                 }
             ]
-        if url.endswith("/jobs/job-batch-2"):
+        if url.endswith("/nodes/agent-a/work/jobs/job-batch-2/cancellation"):
             return {"id": "job-batch-2", "cancellation_requested": False}
         if url.endswith("/progress"):
             return {"ok": True}
@@ -633,7 +633,7 @@ async def test_agent_worker_llm_batch_fails_when_no_chat_executor():
                     },
                 }
             ]
-        if url.endswith("/jobs/job-batch-3"):
+        if url.endswith("/nodes/agent-a/work/jobs/job-batch-3/cancellation"):
             return {"id": "job-batch-3", "cancellation_requested": False}
         if url.endswith("/fail"):
             return {"id": "job-batch-3", "status": "failed"}
@@ -685,7 +685,7 @@ async def test_agent_worker_llm_batch_auto_assigns_case_ids():
                     },
                 }
             ]
-        if url.endswith("/jobs/job-batch-4"):
+        if url.endswith("/nodes/agent-a/work/jobs/job-batch-4/cancellation"):
             return {"id": "job-batch-4", "cancellation_requested": False}
         if url.endswith("/progress"):
             return {"ok": True}

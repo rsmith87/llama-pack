@@ -46,6 +46,24 @@ class FailRequest(BaseModel):
     retryable: bool = True
 
 
+@router.get("/nodes/{node}/work/jobs/{job_id}/cancellation")
+def work_job_cancellation(
+    node: str,
+    job_id: str,
+    request: Request,
+    orchestrator: Orchestrator = Depends(get_orchestrator),
+):
+    _enforce_node_work_auth(request, node)
+    try:
+        job = orchestrator.get_job(job_id)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    return {
+        "id": job.get("id"),
+        "cancellation_requested": bool(job.get("cancellation_requested")),
+    }
+
+
 @router.post("/nodes/{node}/work/claim")
 def claim_work(
     node: str,

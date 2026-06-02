@@ -408,7 +408,7 @@ def test_agent_worker_executes_model_transfer(tmp_path):
                     },
                 }
             ]
-        if url.endswith("/jobs/job-1"):
+        if url.endswith("/nodes/dest/work/jobs/job-1/cancellation"):
             return {"id": "job-1", "cancellation_requested": False}
         if url.endswith("/progress") or url.endswith("/complete"):
             return {"ok": True}

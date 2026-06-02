@@ -2860,6 +2860,31 @@ def test_node_work_requires_node_api_key_when_configured(tmp_path):
     assert authorized.status_code == 200
 
 
+def test_node_work_cancellation_check_uses_node_api_key(tmp_path):
+    app = create_app(
+        config=load_config({
+            "mode": "controller",
+            "log_dir": str(tmp_path),
+            "nodes": {"win": {"url": "http://win-agent:9000", "api_key": "node-secret"}},
+        })
+    )
+    client = TestClient(app)
+
+    job = client.post("/lm-api/v1/jobs", json={"type": "chat", "payload": {"prompt": "hi"}}).json()
+    client.post("/lm-api/v1/nodes/win/work/claim", json={"max_jobs": 1}, headers=WORKER_HEADERS)
+    client.post(f"/lm-api/v1/jobs/{job['id']}/cancel")
+
+    unauthorized = client.get(f"/lm-api/v1/nodes/win/work/jobs/{job['id']}/cancellation")
+    assert unauthorized.status_code == 401
+
+    authorized = client.get(
+        f"/lm-api/v1/nodes/win/work/jobs/{job['id']}/cancellation",
+        headers={"X-Llama-Manager-Key": "node-secret"},
+    )
+    assert authorized.status_code == 200
+    assert authorized.json() == {"id": job["id"], "cancellation_requested": True}
+
+
 def test_node_work_rejects_unknown_node(tmp_path):
     app = create_app(
         config=load_config({

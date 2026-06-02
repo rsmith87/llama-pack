@@ -268,7 +268,12 @@ class AgentWorker:
     async def _is_cancel_requested(self, job_id: str) -> bool:
         if not job_id:
             return False
-        job = await self._request("GET", self._url(f"/jobs/{job_id}"), None, self._headers())
+        job = await self._request(
+            "GET",
+            self._url(f"/nodes/{self.config.node_name}/work/jobs/{job_id}/cancellation"),
+            None,
+            self._headers(),
+        )
         return bool(isinstance(job, dict) and job.get("cancellation_requested"))
 
     async def _progress(self, attempt_id: str, progress: dict[str, Any]) -> None:
