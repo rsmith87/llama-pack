@@ -35,7 +35,7 @@ scripts/onboard_agent.sh \
 scripts/start_agent.sh
 ```
 
-The onboarding scripts write local secrets to `.llama-manager.env`, which is
+The onboarding scripts write local secrets to `.neuraxis.env`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
 
 Manual setup, migrations, admin keys, smoke tests, and test commands are in

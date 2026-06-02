@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG=""
-ENV_FILE="$ROOT_DIR/.llama-manager.env"
+ENV_FILE="$ROOT_DIR/.neuraxis.env"
 USERNAME="test-chat"
 
 usage() {
@@ -15,7 +15,7 @@ and write the raw key to the local env file for /ui/test-chat bootstrap.
 
 Options:
   --config PATH      Neuraxis config path passed to python -m llama_manager.auth.
-  --env-file PATH    Secrets file to update. Default: ./.llama-manager.env
+  --env-file PATH    Secrets file to update. Default: ./.neuraxis.env
   --username NAME    Auth username for the key. Default: test-chat
   -h, --help         Show this help.
 USAGE

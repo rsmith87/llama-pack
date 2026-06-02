@@ -94,7 +94,7 @@ def test_create_test_chat_key_script_updates_env_for_bootstrap() -> None:
 
     assert "create-test-chat-key" in contents
     assert "NEURAXIS_TEST_CHAT_API_KEY" in contents
-    assert ".llama-manager.env" in contents
+    assert ".neuraxis.env" in contents
     assert "chmod 600" in contents
 
 
@@ -142,7 +142,7 @@ def test_runtime_shell_scripts_are_executable() -> None:
 
 def test_onboard_agent_keeps_lan_urls_in_env_not_config(tmp_path: Path) -> None:
     config = tmp_path / "agent.config.yaml"
-    env_file = tmp_path / ".llama-manager.env"
+    env_file = tmp_path / ".neuraxis.env"
     controller_url = "http://192.168.1.104:9137"
     agent_url = "http://192.168.1.205:9137"
     env = {

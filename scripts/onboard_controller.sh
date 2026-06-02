@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="$ROOT_DIR/config.yaml"
-ENV_FILE="$ROOT_DIR/.llama-manager.env"
+ENV_FILE="$ROOT_DIR/.neuraxis.env"
 TEMPLATE=""
 HOST="0.0.0.0"
 PORT="9137"
@@ -20,7 +20,7 @@ run controller/auth/audit/chat-session migrations, and print startup commands.
 
 Options:
   --config PATH          Controller config to create/update. Default: ./config.yaml
-  --env-file PATH        Local secrets file to create/update. Default: ./.llama-manager.env
+  --env-file PATH        Local secrets file to create/update. Default: ./.neuraxis.env
   --template PATH        Optional controller template to copy instead of generating a portable config.
   --host HOST            Host used in the printed start command. Default: 0.0.0.0
   --port PORT            Port used in the printed start command. Default: 9137

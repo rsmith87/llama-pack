@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="$ROOT_DIR/agent.config.yaml"
-ENV_FILE="$ROOT_DIR/.llama-manager.env"
+ENV_FILE="$ROOT_DIR/.neuraxis.env"
 TEMPLATE="$ROOT_DIR/linux-agent.config.example.yaml"
 NODE_NAME="$(hostname -s 2>/dev/null || hostname)"
 CONTROLLER_URL=""
@@ -23,7 +23,7 @@ and print the controller-side values needed to register this node.
 
 Options:
   --config PATH                 Agent config to create/update. Default: ./agent.config.yaml
-  --env-file PATH               Local secrets file to create/update. Default: ./.llama-manager.env
+  --env-file PATH               Local secrets file to create/update. Default: ./.neuraxis.env
   --template PATH               Agent template. Default: ./linux-agent.config.example.yaml
   --node NAME                   Agent node name. Default: local hostname
   --controller-url URL          Controller URL, for example http://192.168.1.104:9137

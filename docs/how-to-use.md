@@ -40,7 +40,7 @@ scripts/start_controller.sh
 ```
 
 `scripts/onboard_controller.sh` creates `config.yaml` when needed, writes
-`.llama-manager.env`, generates `NEURAXIS_CONTROLLER_REGISTRATION_KEY`,
+`.neuraxis.env`, generates `NEURAXIS_CONTROLLER_REGISTRATION_KEY`,
 runs migrations, and creates the first admin API key. Use
 `--skip-migrations` only when you want to handle migrations/admin-key creation
 manually.
@@ -57,11 +57,11 @@ scripts/start_agent.sh
 ```
 
 `scripts/onboard_agent.sh` creates an agent config, writes
-`.llama-manager.env`, generates `NEURAXIS_AGENT_API_KEY`, and prints the
+`.neuraxis.env`, generates `NEURAXIS_AGENT_API_KEY`, and prints the
 controller `nodes:` entry that must use that agent key. The generated config
 keeps `controller_url` and `agent_url` as environment placeholders; the real
 LAN URLs passed to `--controller-url` and `--agent-url` are written only to
-`.llama-manager.env`.
+`.neuraxis.env`.
 
 To rotate keys later:
 
@@ -70,7 +70,7 @@ scripts/regenerate_key.sh --type controller-registration
 scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$NEURAXIS_AGENT_URL"
 ```
 
-The startup and stop scripts source `.llama-manager.env` automatically:
+The startup and stop scripts source `.neuraxis.env` automatically:
 
 ```bash
 scripts/start_agent.sh
@@ -282,7 +282,7 @@ scripts/onboard_controller.sh
 scripts/start_controller.sh
 ```
 
-The script generates `.llama-manager.env`, runs migrations, creates the first
+The script generates `.neuraxis.env`, runs migrations, creates the first
 admin API key, and prints the registration key for agents. The manual config
 shape is:
 
@@ -306,7 +306,7 @@ Run controller (different port from local agent):
 NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
 ```
 
-If `controller.yaml` is recorded in `.llama-manager.env` as
+If `controller.yaml` is recorded in `.neuraxis.env` as
 `NEURAXIS_CONFIG`, you can also use:
 
 ```bash
@@ -400,9 +400,9 @@ agent_worker_capacity:
 ```
 
 For a new worker agent, `scripts/onboard_agent.sh` creates the base agent
-config and `.llama-manager.env`; then enable `agent_worker_enabled` and add the
+config and `.neuraxis.env`; then enable `agent_worker_enabled` and add the
 worker labels/capacity fields in the generated config. Keep concrete LAN URLs
-in `.llama-manager.env`, not in the tracked agent config.
+in `.neuraxis.env`, not in the tracked agent config.
 
 Create a typed generation job on the controller:
 
@@ -499,7 +499,7 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 ```
 2. Start the app normally, or use `scripts/start_controller.sh` if
-   `.llama-manager.env` points at the right config.
+   `.neuraxis.env` points at the right config.
 3. Run focused smoke checks for auth, audit, chat sessions, and jobs.
 
 Rollback procedure:

@@ -27,10 +27,10 @@ heartbeat_interval_seconds: 30
 ```
 
 Keep `NEURAXIS_AGENT_API_KEY` and
-`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND` in `.llama-manager.env`,
+`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND` in `.neuraxis.env`,
 not in tracked docs or config examples.
 
-The Mac mini `.llama-manager.env` should also include:
+The Mac mini `.neuraxis.env` should also include:
 
 ```bash
 export NEURAXIS_CONTROLLER_URL=http://<raspberry-pi-lan-address>:9137
@@ -139,8 +139,8 @@ or controller API key and retry with `X-Llama-Manager-Key`.
 
 If a node is listed but not fresh, check that the agent has:
 
-- `controller_url: ${NEURAXIS_CONTROLLER_URL}` and the Pi URL in `.llama-manager.env`
+- `controller_url: ${NEURAXIS_CONTROLLER_URL}` and the Pi URL in `.neuraxis.env`
 - the correct `node_name`
-- `agent_url: ${NEURAXIS_AGENT_URL}` and its LAN-reachable URL in `.llama-manager.env`
+- `agent_url: ${NEURAXIS_AGENT_URL}` and its LAN-reachable URL in `.neuraxis.env`
 - the same registration key value the Pi expects
 - a running `scripts/start_agent.sh` process

@@ -139,7 +139,7 @@ Start the controller on a different port than any local Mac agent:
 NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
 ```
 
-If `.llama-manager.env` points at the controller config, use:
+If `.neuraxis.env` points at the controller config, use:
 
 ```bash
 scripts/start_controller.sh
@@ -216,7 +216,7 @@ controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUT
 Set the same `controller_registration_key` on the controller. On startup, the agent registers itself and then sends heartbeats on the configured interval.
 
 For Mac/Linux agents, `scripts/onboard_agent.sh` writes these placeholder fields
-to the generated config and stores the real LAN URLs in `.llama-manager.env`.
+to the generated config and stores the real LAN URLs in `.neuraxis.env`.
 For Windows, set the matching environment variables locally and copy the
 controller registration key printed by `scripts/onboard_controller.sh` into
 `NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.

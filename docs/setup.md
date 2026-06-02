@@ -38,7 +38,7 @@ scripts/onboard_agent.sh \
 scripts/start_agent.sh
 ```
 
-The onboarding scripts write local secrets to `.llama-manager.env`, which is
+The onboarding scripts write local secrets to `.neuraxis.env`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
 
 Manual setup remains available:
@@ -84,7 +84,7 @@ Onboard a fresh controller without manually copying config or generating keys:
 scripts/onboard_controller.sh
 ```
 
-The controller onboarding script writes local secrets to `.llama-manager.env`,
+The controller onboarding script writes local secrets to `.neuraxis.env`,
 including `NEURAXIS_CONTROLLER_REGISTRATION_KEY` and the first generated
 admin API key when migrations are enabled.
 
@@ -100,9 +100,9 @@ scripts/onboard_agent.sh \
 
 The agent onboarding script keeps `controller_url` and `agent_url` as
 environment placeholders in the generated config, and writes the real LAN URLs
-to `.llama-manager.env` alongside the agent API key, controller registration
+to `.neuraxis.env` alongside the agent API key, controller registration
 key, config path, host, and port. `scripts/start_agent.sh` and
-`scripts/stop_server.sh` source `.llama-manager.env` automatically.
+`scripts/stop_server.sh` source `.neuraxis.env` automatically.
 
 Regenerate a local key and print the matching update for the other machines:
 
@@ -123,7 +123,7 @@ NEURAXIS_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
 
 Neuraxis fails closed until you create an admin key or configure
 `agent_api_key`. `scripts/onboard_controller.sh` creates the first admin key
-for fresh controller setup and stores it in `.llama-manager.env`.
+for fresh controller setup and stores it in `.neuraxis.env`.
 
 For manual setup, create the first admin key from the terminal:
 

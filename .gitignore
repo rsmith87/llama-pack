@@ -6,7 +6,7 @@ logs/
 state/
 config.yaml
 .neuraxis.pid
-.llama-manager.env
+.neuraxis.env
 .specstory
 .vscode
 .playwright-mcp

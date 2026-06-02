@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.llama-manager.env"
+ENV_FILE="$ROOT_DIR/.neuraxis.env"
 KEY_TYPE=""
 NODE_NAME="$(hostname -s 2>/dev/null || hostname)"
 AGENT_URL=""
@@ -13,7 +13,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/regenerate_key.sh --type TYPE [options]
 
-Generate a replacement key, write it to .llama-manager.env, and print the
+Generate a replacement key, write it to .neuraxis.env, and print the
 value or config snippet needed on the other machines.
 
 Types:
@@ -22,7 +22,7 @@ Types:
   agent-registration        Rotate NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND.
 
 Options:
-  --env-file PATH           Local secrets file to update. Default: ./.llama-manager.env
+  --env-file PATH           Local secrets file to update. Default: ./.neuraxis.env
   --node NAME               Agent node name for printed controller snippet. Default: hostname
   --agent-url URL           Agent URL for printed controller snippet.
   --bytes N                 Random bytes before URL-safe encoding. Default: 32

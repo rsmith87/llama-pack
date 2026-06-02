@@ -3167,7 +3167,7 @@ def test_setup_bootstrap_admin_response_does_not_leak_config_or_registration_key
     text = response.text
     assert "controller-registration-secret" not in text
     assert "config.yaml" not in text
-    assert ".llama-manager.env" not in text
+    assert ".neuraxis.env" not in text
     assert "LLAMA" + "_MANAGER" not in text
 
 

@@ -28,9 +28,9 @@ Both modes share the same codebase and routes; mode-specific routes enforce beha
 
 ## Operational Scripts
 
-- `scripts/onboard_controller.sh`: creates or validates controller config, writes `.llama-manager.env`, runs migrations, creates the first admin API key, and prints the registration key for agents.
-- `scripts/onboard_agent.sh`: creates or validates agent config, writes `.llama-manager.env`, generates the agent API key, and prints the controller `nodes:` entry.
-- `scripts/start_agent.sh`, `scripts/start_controller.sh`, and `scripts/stop_server.sh`: source `.llama-manager.env` and manage local uvicorn processes.
+- `scripts/onboard_controller.sh`: creates or validates controller config, writes `.neuraxis.env`, runs migrations, creates the first admin API key, and prints the registration key for agents.
+- `scripts/onboard_agent.sh`: creates or validates agent config, writes `.neuraxis.env`, generates the agent API key, and prints the controller `nodes:` entry.
+- `scripts/start_agent.sh`, `scripts/start_controller.sh`, and `scripts/stop_server.sh`: source `.neuraxis.env` and manage local uvicorn processes.
 - `scripts/regenerate_key.sh`: rotates controller registration or agent API keys and prints the matching update for the other machines.
 
 ## Request Flow (High-Level)
