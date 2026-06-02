@@ -413,7 +413,10 @@ def test_agent_worker_executes_model_transfer(tmp_path):
             return {"ok": True}
         raise AssertionError(url)
 
+    transfer_stream_urls = []
+
     async def fake_stream(url, headers):
+        transfer_stream_urls.append(url)
         assert headers == {"Authorization": "Bearer transfer-token"}
         if url.endswith("/manifest"):
             return {
@@ -446,6 +449,10 @@ def test_agent_worker_executes_model_transfer(tmp_path):
     count = asyncio.run(worker.run_once())
 
     assert count == 1
+    assert transfer_stream_urls == [
+        "http://source/lm-api/v1/transfer-source/ggufs/file-1/manifest",
+        "http://source/lm-api/v1/transfer-source/files/manifest-file-1/content",
+    ]
     assert (dest_root / "Qwen" / "qwen.gguf").read_bytes() == source_bytes
     assert any(call[0] == "POST" and call[1].endswith("/complete") for call in calls)
 

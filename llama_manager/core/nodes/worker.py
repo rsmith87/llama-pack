@@ -172,7 +172,7 @@ class AgentWorker:
         try:
             source_node = str(payload["source_node"])
             source_file_id = str(payload["source_file_id"])
-            source_base = str(payload["source_url"]).rstrip("/")
+            source_base = self._api_base_url(str(payload["source_url"]))
             transfer_headers = {"Authorization": f"Bearer {payload['transfer_token']}"}
             manifest = await self._transfer_stream(
                 f"{source_base}/transfer-source/ggufs/{source_file_id}/manifest",
@@ -374,10 +374,15 @@ class AgentWorker:
         )
 
     def _url(self, path: str) -> str:
-        base = str(self.config.controller_url).rstrip("/")
+        base = self._api_base_url(str(self.config.controller_url))
+        return f"{base}/{path.lstrip('/')}"
+
+    @staticmethod
+    def _api_base_url(url: str) -> str:
+        base = url.rstrip("/")
         if not base.endswith("/lm-api/v1"):
             base = f"{base}/lm-api/v1"
-        return f"{base}/{path.lstrip('/')}"
+        return base
 
     def _headers(self) -> dict[str, str]:
         if self.config.controller_registration_key_outbound:
