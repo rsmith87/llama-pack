@@ -64,7 +64,6 @@ Manual setup, migrations, admin keys, smoke tests, and test commands are in
 - [Benchmarks](docs/benchmarks.md): benchmark definitions, managed runs, result metrics, and comparisons.
 - [How To Use](docs/how-to-use.md): longer end-to-end operating guide.
 - [Raspberry Pi Controller Topology](docs/pi-controller-topology.md): current Pi controller deployment notes and smoke checks.
-- [Windows Install And Troubleshooting](docs/windows-install.md): Windows agent setup and troubleshooting.
 - [Frontend](docs/frontend.md): React development workflow.
 - [Architecture](docs/architecture.md): contributor-focused code map and review guide.
 

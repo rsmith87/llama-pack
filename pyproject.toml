@@ -22,7 +22,12 @@ dependencies = [
     "respx>=0.23.1",
     "sqlalchemy>=2.0",
     "uvicorn[standard]>=0.29",
+]
+
+[project.optional-dependencies]
+controller-memory = [
     "chromadb>=1.5.9",
+    "sentence-transformers>=3.0",
 ]
 
 [project.optional-dependencies]
