@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from llama_manager.core.config import AppConfig, ModelConfig, save_config
+from llama_manager.core.config.models import ModelProfileConfig
 
 
 ReasoningMode = Literal["on", "off", "auto"]
@@ -61,6 +62,13 @@ class GgufLibrary:
             favorite=favorite,
             vision=vision,
             mmproj=mmproj,
+            profiles={
+                "default": ModelProfileConfig(
+                    label="Default",
+                    order=0,
+                    kind="default",
+                )
+            },
         )
         if self.config.config_source not in {"(defaults)", "(in-memory)"}:
             save_config(self.config)
@@ -118,6 +126,14 @@ class GgufLibrary:
             "favorite": model.favorite,
             "vision": model.vision,
             "mmproj": model.mmproj,
+            "profiles": {
+                profile_name: {
+                    "label": profile.label_or_default(profile_name),
+                    "order": profile.order,
+                    "kind": profile.kind,
+                }
+                for profile_name, profile in model.profiles.items()
+            },
         }
 
     def remove_model(self, name: str) -> dict[str, object]:

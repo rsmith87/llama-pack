@@ -96,6 +96,33 @@ it("preselects model and route target from chat handoff query parameters", async
   expect(screen.getByLabelText("Thread App")).toHaveValue("dashboard");
 });
 
+it("preselects the matching model family and default profile from a model card handoff", async () => {
+  window.history.pushState({}, "", "/ui/chat?model=qwen-chat&target=auto&mode=direct&source=gguf-library");
+  vi.stubGlobal("fetch", vi.fn(async (url: string) => {
+    if (url === "/lm-api/v1/models") {
+      return okJson({ models: [
+        { name: "llama", status: "running" },
+        { name: "qwen-chat", status: "running" },
+      ] });
+    }
+    if (url === "/lm-api/v1/models/profiles") {
+      return okJson({
+        families: [
+          { family: "llama", profiles: [{ profile: "default", label: "Default", identity: "llama:default" }] },
+          { family: "qwen-chat", profiles: [{ profile: "default", label: "Default", identity: "qwen-chat:default" }] },
+        ],
+      });
+    }
+    return okJson({});
+  }));
+
+  render(<ChatPage />);
+
+  expect(await screen.findByLabelText("Model")).toHaveValue("qwen-chat");
+  await waitFor(() => expect(screen.getByLabelText("Model Family")).toHaveValue("qwen-chat"));
+  expect(screen.getByLabelText("Context Profile")).toHaveValue("default");
+});
+
 it("loads controller node models into chat controls and sends to the selected node target", async () => {
   vi.stubGlobal(
     "fetch",
@@ -334,7 +361,8 @@ it("sends advanced sampling, structured JSON schema, cache prompt, reasoning, an
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   await screen.findByText("ok");
-  const body = JSON.parse(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1]?.body));
+  const streamCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find((call) => call[0] === "/lm-api/v1/chat/mistral/stream");
+  const body = JSON.parse(String(streamCall?.[1]?.body));
   expect(body).toMatchObject({
     top_k: 50,
     min_p: 0.05,

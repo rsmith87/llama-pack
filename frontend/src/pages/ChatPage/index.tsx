@@ -120,6 +120,11 @@ function firstProfileForFamily(catalog: ModelProfileCatalog, family: string) {
   return catalog.families.find((item) => item.family === family)?.profiles[0]?.profile || "";
 }
 
+function familyForModel(catalog: ModelProfileCatalog, model: string) {
+  if (!model) return "";
+  return catalog.families.find((family) => family.family === model)?.family || "";
+}
+
 function readChatHandoff() {
   const params = new URLSearchParams(window.location.search);
   const model = params.get("model")?.trim() || "";
@@ -280,10 +285,20 @@ export function ChatPage() {
     try {
       const catalog = asProfileCatalog(await getModelProfiles());
       setProfileCatalog(catalog);
-      setSelectedFamily((current) => current || catalog.families[0]?.family || "");
-      setSelectedProfile((current) => current || catalog.families[0]?.profiles[0]?.profile || "");
+      const preferredFamily = familyForModel(catalog, selectedModel) || catalog.families[0]?.family || "";
+      setSelectedFamily((current) => current || preferredFamily);
+      setSelectedProfile((current) => current || firstProfileForFamily(catalog, preferredFamily));
     } catch {
       setProfileCatalog({ families: [] });
+    }
+  }
+
+  function selectModel(model: string) {
+    setSelectedModel(model);
+    const family = familyForModel(profileCatalog, model);
+    if (family) {
+      setSelectedFamily(family);
+      setSelectedProfile(firstProfileForFamily(profileCatalog, family));
     }
   }
 
@@ -906,7 +921,7 @@ export function ChatPage() {
           <div className="stacked-controls">
             <FormField label="Model"><select value={selectedModel} onChange={(event) => {
               const nextModel = runningModels.find((model) => modelName(model) === event.target.value);
-              setSelectedModel(event.target.value);
+              selectModel(event.target.value);
               if (nextModel && modelTarget(nextModel)) setTarget(modelTarget(nextModel));
             }}>{runningModels.map((model) => <option key={`${modelName(model)}-${modelTarget(model) || "local"}`} value={modelName(model)}>{modelOptionLabel(model)}</option>)}</select></FormField>
             {profileFamilies.length ? (

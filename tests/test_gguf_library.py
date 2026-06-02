@@ -2,6 +2,8 @@ from pathlib import Path
 
 from llama_manager.core.config import load_config
 from llama_manager.core.model_assets.library import GgufLibrary
+from llama_manager.core.runtime.process_manager import ProcessManager
+from llama_manager.core.runtime.profile_catalog import build_profile_catalog
 
 
 def test_gguf_library_lists_files_with_stable_ids(tmp_path):
@@ -79,11 +81,55 @@ def test_gguf_library_adds_file_as_runtime_model(tmp_path):
         "favorite": False,
         "vision": False,
         "mmproj": None,
+        "profiles": {
+            "default": {
+                "label": "Default",
+                "order": 0,
+                "kind": "default",
+            }
+        },
     }
     assert config.models["gemma-local"].path == str(gguf_path)
     assert config.models["gemma-local"].reasoning == "auto"
     assert config.models["gemma-local"].reasoning_budget == 2048
     assert config.models["gemma-local"].prompt_template == "gemma"
+    assert config.models["gemma-local"].profiles["default"].label == "Default"
+    assert config.effective_model_config("gemma-local:default").port == 8088
+    assert config.effective_model_config("gemma-local:default").ctx == 8192
+
+
+def test_gguf_library_added_model_appears_in_profile_catalog(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_text("", encoding="utf-8")
+    config = load_config({"hf_models_dir": str(hf_dir), "log_dir": str(tmp_path / "logs")})
+    library = GgufLibrary(config)
+
+    library.add_model(
+        library.file_id(gguf_path),
+        name="gemma-local",
+        port=8088,
+        ctx=8192,
+        gpu_layers=999,
+        host="0.0.0.0",
+    )
+
+    statuses = ProcessManager(config).list_statuses()
+    catalog = build_profile_catalog(statuses)
+
+    assert statuses[0]["name"] == "gemma-local:default"
+    assert catalog["families"][0]["family"] == "gemma-local"
+    profile = catalog["families"][0]["profiles"][0]
+    assert profile["profile"] == "default"
+    assert profile["label"] == "Default"
+    assert profile["identity"] == "gemma-local:default"
+    assert profile["ctx"] == 8192
+    assert profile["port"] == 8088
+    assert profile["route"] == "local"
+    assert profile["order"] == 0
+    assert profile["kind"] == "default"
 
 
 def test_gguf_library_lists_files_from_multiple_roots(tmp_path):
@@ -278,6 +324,8 @@ models: {{}}
     assert reloaded.models["gemma-local"].reasoning == "auto"
     assert reloaded.models["gemma-local"].reasoning_budget == 2048
     assert reloaded.models["gemma-local"].prompt_template == "llama3"
+    assert reloaded.models["gemma-local"].profiles["default"].label == "Default"
+    assert reloaded.effective_model_config("gemma-local:default").port == 8088
 
 
 def test_gguf_library_deletes_file_and_unregisters_model(tmp_path):
