@@ -21,8 +21,9 @@ def worker_nodes(*names):
 
 
 def _create_controller_app(tmp_path, nodes):
-    prepare_all_persistence_dbs(tmp_path)
-    return create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path), "nodes": nodes}))
+    log_dir = tmp_path / "logs"
+    prepare_all_persistence_dbs(log_dir)
+    return create_app(config=load_config({"mode": "controller", "log_dir": str(log_dir), "nodes": nodes}))
 
 
 def test_llm_generate_job_validates_required_payload(tmp_path):
