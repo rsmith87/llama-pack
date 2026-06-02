@@ -40,6 +40,23 @@ def test_manifest_for_directory_model_includes_selected_gguf_and_sidecars(tmp_pa
     ]
 
 
+def test_manifest_excludes_macos_ds_store_sidecar(tmp_path):
+    root = tmp_path / "HFModels"
+    gguf = make_file(root / "Qwen" / "qwen-Q4_K_M.gguf", b"gguf")
+    make_file(root / "Qwen" / ".DS_Store", b"finder-metadata")
+    make_file(root / "Qwen" / "tokenizer.json", b"tokenizer")
+    config = AppConfig(hf_models_dirs=[root])
+    library = GgufLibrary(config)
+    manager = TransferManager(config)
+
+    manifest = manager.build_manifest(library.file_id(gguf))
+
+    assert [item["relative_path"] for item in manifest["files"]] == [
+        "Qwen/qwen-Q4_K_M.gguf",
+        "Qwen/tokenizer.json",
+    ]
+
+
 def test_manifest_for_root_level_gguf_includes_only_selected_file(tmp_path):
     root = tmp_path / "HFModels"
     gguf = make_file(root / "standalone.gguf", b"gguf")

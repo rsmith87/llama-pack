@@ -34,7 +34,7 @@ class TransferManager:
         paths: set[Path] = {source}
         if model_dir is not None:
             for path in logical_dir.iterdir():
-                if path.is_file() and path.suffix.lower() != ".gguf":
+                if self._is_transfer_sidecar(path):
                     paths.add(path)
         inferred_mmproj = self._inferred_mmproj_for_source(source)
         if inferred_mmproj:
@@ -57,6 +57,14 @@ class TransferManager:
             "size_bytes": stat.st_size,
             "sha256": self.sha256(path),
         }
+
+    @staticmethod
+    def _is_transfer_sidecar(path: Path) -> bool:
+        if not path.is_file():
+            return False
+        if path.suffix.lower() == ".gguf":
+            return False
+        return path.name != ".DS_Store"
 
     def _path_for_id(self, file_id: str) -> Path:
         for path in self.library._gguf_paths():
