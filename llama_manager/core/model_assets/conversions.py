@@ -27,7 +27,7 @@ class ConversionManager:
                 if not path.is_dir() or path.name.startswith("."):
                     continue
                 status = self._status_for_path(path.name, path)
-                if status["convertible"] or status["gguf_exists"]:
+                if status["convertible"]:
                     models.append(status)
         return models
 

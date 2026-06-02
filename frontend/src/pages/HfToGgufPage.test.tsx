@@ -42,11 +42,15 @@ it("starts conversion for a ready model", async () => {
   expect(await screen.findByText("running pid 42")).toBeInTheDocument();
 });
 
-it("disables conversion for non-convertible models", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([{ name: "Broken", convertible: false, running: false }])));
+it("hides non-convertible models from stale payloads", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
+    { name: "Qwen", convertible: true, running: false },
+    { name: "Existing GGUF", convertible: false, running: false, gguf_files: ["/hf/Existing/model.gguf"] },
+  ])));
 
   render(<HfToGgufPage />);
 
-  expect(await screen.findByRole("button", { name: "Convert Broken" })).toBeDisabled();
-  expect(screen.getByText("not convertible")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Convert Qwen" })).toBeEnabled();
+  expect(screen.queryByText("Existing GGUF")).not.toBeInTheDocument();
+  expect(screen.queryByText("not convertible")).not.toBeInTheDocument();
 });

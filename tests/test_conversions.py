@@ -62,6 +62,27 @@ def test_conversion_manager_lists_hf_models_and_existing_gguf(tmp_path):
     ]
 
 
+def test_conversion_manager_hides_gguf_only_folders(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    hf_dir.mkdir()
+    make_hf_model(hf_dir / "qwen")
+    gguf_dir = hf_dir / "gguf-output"
+    gguf_dir.mkdir()
+    (gguf_dir / "qwen-Q4_K_M.gguf").write_text("", encoding="utf-8")
+
+    manager = ConversionManager(
+        load_config(
+            {
+                "hf_models_dir": str(hf_dir),
+                "llama_cpp_dir": "/Users/robertsmith/Apps/llama.cpp",
+                "log_dir": str(tmp_path / "logs"),
+            }
+        )
+    )
+
+    assert [model["name"] for model in manager.list_models()] == ["qwen"]
+
+
 def test_conversion_manager_starts_conversion_inside_model_directory(tmp_path):
     spawned = []
     hf_dir = tmp_path / "HFModels"

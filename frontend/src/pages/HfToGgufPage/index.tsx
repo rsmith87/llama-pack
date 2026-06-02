@@ -1,5 +1,5 @@
 import "./styles.css";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { listConversions, startConversion } from "../../api/conversions";
 import { DataTable, EmptyState, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
 import type { ConversionRecord } from "../../types/api";
@@ -45,6 +45,8 @@ export function HfToGgufPage() {
     void refresh();
   }, []);
 
+  const convertibleModels = useMemo(() => models.filter((model) => Boolean(model.convertible)), [models]);
+
   async function convert(name: string) {
     await startConversion(name, undefined);
     await refresh();
@@ -58,9 +60,9 @@ export function HfToGgufPage() {
       </div>
       <ErrorBanner message={error} />
       <Panel title="Convertible HF Models" eyebrow="Source models">
-        {models.length === 0 && loading ? <EmptyState message="Loading convertible HF models..." /> : (
+        {convertibleModels.length === 0 && loading ? <EmptyState message="Loading convertible HF models..." /> : (
           <DataTable
-            rows={models}
+            rows={convertibleModels}
             emptyMessage="No convertible HF models found."
             getRowKey={(row, index) => text(row, "name", String(index))}
             columns={[
