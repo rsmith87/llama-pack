@@ -1,0 +1,33 @@
+.dashboard-health,
+.quick-actions-panel,
+.dashboard-controller-nodes {
+  grid-column: 1 / -1;
+}
+
+.controller-node-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 14px;
+}
+
+.dashboard-controller-nodes .controller-node-card {
+  display: block;
+}
+
+.model-card.active,
+.library-card.active {
+  border-color: color-mix(in srgb, var(--success) 70%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--success) 14%, var(--card-strong)), var(--card));
+  box-shadow: inset 3px 0 0 var(--success), 0 0 0 1px color-mix(in srgb, var(--success) 16%, transparent);
+}
+
+.model-card.active strong,
+.library-card.active .library-card-button strong {
+  color: var(--success);
+}
+
+@media (max-width: 720px) {
+  .controller-node-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,0 +1,101 @@
+# Single-file example config. All settings can live here, or you can split
+# large sections into focused files under a config/ directory using the
+# optional 'files' mapping:
+#
+#   files:
+#     runtime: config/runtime.yaml       # process paths, URLs, heartbeat settings
+#     models: config/models.yaml         # models map
+#     agent_tools: config/agent_tools.yaml
+#     auth: config/auth.yaml             # API keys (keep out of version control)
+#     persistence: config/persistence.yaml  # DB URLs, retention settings
+#     routing: config/routing.yaml       # fanout and agent worker settings
+#     nodes: config/nodes.yaml           # nodes map
+#     memory: config/memory.yaml         # memory config
+#
+# Each linked file owns its section. Direct-mapped files (models, nodes,
+# agent_tools, memory) contain the field's value with no wrapper key. Grouped
+# files (runtime, auth, persistence, routing) contain their top-level fields
+# directly. Values set inline in this root file override linked file values.
+# Any section not linked here can be kept inline as shown below.
+
+mode: agent
+llama_server_bin: llama-server
+llama_cpp_dir: ./llama.cpp
+python_bin: python3
+hf_models_dirs:
+ - ./models/HFModels
+log_dir: ./logs
+# Optional persistence DB URL overrides (defaults are under ./state):
+# controller_db_url: sqlite+pysqlite:///./state/controller_state.db
+# auth_db_url: sqlite+pysqlite:///./state/auth_store.db
+# audit_db_url: sqlite+pysqlite:///./state/audit_events.db
+# chat_sessions_db_url: sqlite+pysqlite:///./state/chat_sessions.db
+# downloads_db_url: sqlite+pysqlite:///./state/downloads.db
+# benchmarks_db_url: sqlite+pysqlite:///./state/benchmarks.db
+agent_worker_enabled: false
+agent_worker_poll_interval_seconds: 2
+agent_worker_max_jobs: 1
+agent_worker_labels: {}
+agent_worker_capacity: {}
+# Multi-agent fanout routing (controller mode only):
+# routing_fanout_enabled: false
+# routing_fanout_max: 2
+
+models:
+  example-model:
+    path: ./models/example-model/model.gguf
+    port: 8080
+    ctx: 8192
+    gpu_layers: 999
+    host: 0.0.0.0
+    reasoning: auto
+    reasoning_budget: 2048
+    extra_args: []
+    supports_json_schema: false
+    supports_grammar: false
+    strengths:
+      - general
+    cost_tier: low
+  gemma-4-E2B-it:
+    path: ./models/HFModels/gemma-4-E2B-it/model.gguf
+    port: 8081
+    ctx: 8192
+    gpu_layers: 999
+    host: 0.0.0.0
+    vision: true
+    mmproj: ./models/HFModels/gemma-4-E2B-it/mmproj.gguf
+    strengths:
+      - vision
+      - summarization
+    cost_tier: medium
+    profiles:
+      fast:
+        ctx: 8192
+        gpu_layers: 999
+        order: 10
+        kind: interactive
+        kv_cache_policy: gpu-preferred
+        resource_tier: low
+        cost_tier: low
+      long:
+        ctx: 131072
+        gpu_layers: 20
+        order: 30
+        kind: long-context
+        kv_cache_policy: cpu-ok
+        resource_tier: high
+        strengths:
+          - long_context
+          - summarization
+        cost_tier: high
+        extra_args:
+          - "--cache-type-k"
+          - "q4_0"
+          - "--cache-type-v"
+          - "q4_0"
+
+nodes:
+  mac-mini:
+    url: ${LLAMA_MANAGER_MAC_MINI_AGENT_URL}
+  windows-2080ti:
+    url: ${LLAMA_MANAGER_WINDOWS_2080TI_AGENT_URL}

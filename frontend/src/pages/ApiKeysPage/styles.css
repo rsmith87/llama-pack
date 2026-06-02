@@ -1,0 +1,141 @@
+.api-keys-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1.5rem);
+}
+
+.api-key-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3, 1rem);
+}
+
+.api-key-form-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3, 1rem);
+}
+
+@media (max-width: 640px) {
+  .api-key-form-fields {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ── Reveal banner ── */
+.api-key-reveal-banner {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: var(--space-3, 1rem);
+  border: 1.5px solid var(--color-warning, #d97706);
+  border-radius: var(--radius, 6px);
+  background: color-mix(in srgb, var(--color-warning, #d97706) 8%, transparent);
+}
+
+.api-key-reveal-header {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.api-key-reveal-warning {
+  font-size: 0.85em;
+}
+
+.api-key-reveal-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.api-key-reveal-input {
+  flex: 1;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.85em;
+  padding: 0.35em 0.6em;
+  border: 1px solid var(--color-border, #ccc);
+  border-radius: var(--radius-sm, 4px);
+  background: var(--color-surface, #fff);
+  color: var(--color-text, #111);
+}
+
+.api-key-reveal-meta {
+  font-size: 0.875em;
+}
+
+.api-key-reveal-hint {
+  font-size: 0.8em;
+}
+
+.api-key-reveal-dismiss {
+  align-self: flex-start;
+}
+
+.api-key-url-link {
+  max-width: 28ch;
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
+.api-key-link-button {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--color-accent, #2563eb);
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.api-key-link-button:hover {
+  text-decoration: underline;
+}
+
+.api-key-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.api-key-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1.5rem);
+}
+
+.api-key-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3, 1rem);
+}
+
+.api-key-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: var(--space-3, 1rem);
+  border: 1px solid var(--color-border, #ddd);
+  border-radius: var(--radius, 6px);
+  background: var(--color-surface-muted, #f7f7f8);
+}
+
+.api-key-metric strong {
+  overflow-wrap: anywhere;
+  color: black;
+}
+
+.api-key-analytics-section h3 {
+  margin-top: 0;
+}
+
+@media (max-width: 640px) {
+  .api-key-metrics {
+    grid-template-columns: 1fr;
+  }
+}

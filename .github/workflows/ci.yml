@@ -1,0 +1,180 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  migration-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Fresh install migration smoke
+        run: |
+          mkdir -p tests/tmp/task7
+          rm -f tests/tmp/task7/*.db || true
+
+          export LLAMA_MANAGER_CONFIG=tests/fixtures/migration-task7-config.yaml
+          alembic -x db=controller upgrade controller@head
+          alembic -x db=auth upgrade auth@head
+          alembic -x db=audit upgrade audit@head
+          alembic -x db=chat_sessions upgrade chat_sessions@head
+          alembic -x db=downloads upgrade downloads@head
+          alembic -x db=benchmarks upgrade benchmarks@head
+
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+
+          base = Path('tests/tmp/task7')
+          checks = {
+              'controller.db': {'jobs','job_attempts','node_leases','job_events','artifacts','schema_meta','controller_leases','alembic_version'},
+              'auth.db': {'api_keys','alembic_version'},
+              'audit.db': {'audit_events','alembic_version'},
+              'chat_sessions.db': {'chat_sessions','alembic_version'},
+              'downloads.db': {'model_downloads','alembic_version'},
+              'benchmarks.db': {'benchmark_definitions','benchmark_run_samples','benchmark_runs','alembic_version'},
+          }
+
+          for name, expected in checks.items():
+              conn = sqlite3.connect(base / name)
+              found = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+              conn.close()
+              missing = expected - found
+              extras = found - expected
+              assert not missing, f"{name}: missing tables {sorted(missing)}"
+              assert not extras, f"{name}: unexpected tables {sorted(extras)}"
+          PY
+
+      - name: Existing install stamp and upgrade smoke
+        run: |
+          mkdir -p tests/tmp/task7_existing
+          rm -f tests/tmp/task7_existing/*.db || true
+
+          python - <<'PY'
+          from pathlib import Path
+          from tests.persistence_db_setup import (
+              prepare_audit_db,
+              prepare_auth_db,
+              prepare_controller_db,
+          )
+          from tests.persistence_db_setup import TARGET_REVISIONS
+          from llama_manager.core.persistence.db_infra import create_persistence_engine, sqlite_url_for_path
+          from llama_manager.core.persistence.alembic_config import Base
+          from llama_manager.core.persistence.models.app_state import (
+              ApiKeyOrm, AuditEventOrm, ChatSessionOrm,
+              ModelDownloadOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm,
+          )
+          from sqlalchemy import Column, MetaData, String, Table, delete
+          from llama_manager.core.persistence.db_infra import create_session_factory, session_scope
+
+          ALEMBIC_VERSION = Table(
+              "alembic_version",
+              MetaData(),
+              Column("version_num", String(32), primary_key=True),
+          )
+
+          def _write(db_path, tables, revision):
+              db_path.parent.mkdir(parents=True, exist_ok=True)
+              engine = create_persistence_engine(sqlite_url_for_path(db_path))
+              Base.metadata.create_all(engine, tables=tables)
+              ALEMBIC_VERSION.metadata.create_all(engine)
+              sf = create_session_factory(engine)
+              with session_scope(sf) as s:
+                  s.execute(delete(ALEMBIC_VERSION))
+                  s.execute(ALEMBIC_VERSION.insert().values(version_num=revision))
+              engine.dispose()
+
+          base = Path('tests/tmp/task7_existing')
+          prepare_controller_db(base / 'controller.db')
+          prepare_auth_db(base / 'auth.db')
+          prepare_audit_db(base / 'audit.db')
+          # Simulate pre-split chat_sessions.db with all old tables
+          _write(base / 'chat_sessions.db', [
+              ChatSessionOrm.__table__,
+              ModelDownloadOrm.__table__,
+              BenchmarkDefinitionOrm.__table__,
+              BenchmarkRunOrm.__table__,
+              BenchmarkRunSampleOrm.__table__,
+          ], "20260522_0006")
+          PY
+
+          export LLAMA_MANAGER_CONFIG=tests/fixtures/migration-task7-existing-config.yaml
+          alembic -x db=controller stamp controller@head
+          alembic -x db=auth stamp auth@head
+          alembic -x db=audit stamp audit@head
+          alembic -x db=chat_sessions stamp 20260522_0006
+
+          alembic -x db=controller upgrade controller@head
+          alembic -x db=auth upgrade auth@head
+          alembic -x db=audit upgrade audit@head
+          alembic -x db=chat_sessions upgrade chat_sessions@head
+          alembic -x db=downloads upgrade downloads@head
+          alembic -x db=benchmarks upgrade benchmarks@head
+
+          python - <<'PY'
+          import sqlite3
+          from pathlib import Path
+
+          base = Path('tests/tmp/task7_existing')
+          expected_revisions = {
+              'controller.db': '20260513_0001',
+              'auth.db': '20260527_0001',
+              'audit.db': '20260513_0003',
+              'chat_sessions.db': '20260523_0007',
+              'downloads.db': '20260523_0001',
+              'benchmarks.db': '20260528_0003',
+          }
+          for name, expected in expected_revisions.items():
+              conn = sqlite3.connect(base / name)
+              rev = conn.execute("SELECT version_num FROM alembic_version").fetchone()[0]
+              conn.close()
+              assert rev == expected, f"{name}: unexpected revision {rev}"
+
+          # Verify chat_sessions.db no longer has operational tables
+          conn = sqlite3.connect(base / 'chat_sessions.db')
+          tables = {r[0] for r in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()}
+          conn.close()
+          assert 'model_downloads' not in tables, "model_downloads still in chat_sessions.db"
+          assert 'benchmark_definitions' not in tables, "benchmark_definitions still in chat_sessions.db"
+          PY
+
+  parity-suite:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ".[dev]"
+
+      - name: Run persistence parity and toggle tests
+        run: |
+          pytest -q \
+            tests/test_persistence_dto.py \
+            tests/test_orchestration_orm_models.py \
+            tests/test_app_state_orm_models.py \
+            tests/test_auth_store_orm.py \
+            tests/test_audit_store_orm.py \
+            tests/test_chat_session_store_orm.py \
+            tests/test_orchestration_store.py \
+            tests/test_api.py \
+            tests/test_config.py \
+            -k "auth_store_backend_toggle_uses_orm_store or audit_store_backend_toggle_uses_orm_store or chat_sessions_store_backend_toggle_uses_orm_store or orchestration_store_backend_toggle_uses_orm_store or auth_store_orm_behavior or auth_store_legacy_behavior or audit_store_orm_behavior or audit_store_legacy_behavior or chat_session_store_orm_behavior or chat_session_store_legacy_behavior or orchestration_store_orm_sets_schema_version or orchestrator_leader_lease_single_holder_orm_store or controller_phase3_defaults"

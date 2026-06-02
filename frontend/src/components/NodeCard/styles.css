@@ -1,0 +1,51 @@
+.controller-node-card {
+  display: grid;
+  gap: 14px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  padding: 14px;
+  background: color-mix(in srgb, var(--card) 92%, var(--accent) 8%);
+}
+
+.controller-node-card-header,
+.node-model-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.controller-node-card-header strong {
+  display: block;
+  margin-top: 3px;
+  font-size: 18px;
+}
+
+.node-model-summary {
+  color: var(--muted);
+  font-size: 13px;
+  margin-bottom: 10px;
+}
+
+.node-model-summary .btn {
+  flex: 0 0 auto;
+}
+
+.node-model-cards {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.node-model-cards .library-card {
+  box-shadow: none;
+  flex-basis: 48%;
+}
+
+@media (max-width: 720px) {
+  .controller-node-card-header,
+  .node-model-summary {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}

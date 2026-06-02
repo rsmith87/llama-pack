@@ -1,0 +1,68 @@
+
+
+.library-sections,.librry-crds{
+  display: grid;
+  gap: 14px;
+}
+
+
+
+.library-card-button span,.librry-crd-buttonsmll{
+  color: var(--muted);
+}
+
+
+
+.library-card-badges,.modl-ctions{
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+
+
+.library-detail,.librry-controls{
+  display: grid;
+  gap: 14px;
+}
+
+.node-model-sections {
+  display: grid;
+  gap: 16px;
+}
+
+.node-model-group {
+  display: grid;
+  gap: 8px;
+}
+
+.node-model-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.node-model-list {
+  display: grid;
+  gap: 6px;
+  padding-left: 12px;
+}
+
+.node-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.node-model-item.active .node-model-name {
+  font-weight: 600;
+}
+
+.node-model-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

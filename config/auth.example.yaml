@@ -1,0 +1,4 @@
+agent_api_key: ${LLAMA_MANAGER_AGENT_API_KEY}
+test_chat_api_key: ${LLAMA_MANAGER_TEST_CHAT_API_KEY}
+controller_registration_key: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key_outbound: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}

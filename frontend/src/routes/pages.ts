@@ -1,0 +1,77 @@
+export type PageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "audit" | "benchmarks" | "api-keys" | "settings";
+export type PageIcon =
+  | "dashboard"
+  | "setup"
+  | "chat"
+  | "nodes"
+  | "library"
+  | "convert"
+  | "download"
+  | "quantize"
+  | "controller"
+  | "runtime"
+  | "embeddings"
+  | "audit"
+  | "benchmark"
+  | "api-keys"
+  | "settings";
+export type AppMode = "agent" | "controller";
+export type NavSectionKey = "gateway" | "operations" | "models" | "runtime" | "system";
+export type NavSection = { key: NavSectionKey; label: string };
+export type PageDefinition = { key: PageKey; label: string; path: string; icon: PageIcon; section: NavSectionKey; hideInModes?: AppMode[] };
+export type PageNavigationOptions = { search?: string };
+
+export const navSections: NavSection[] = [
+  { key: "gateway", label: "Gateway" },
+  { key: "operations", label: "Operations" },
+  { key: "models", label: "Models" },
+  { key: "runtime", label: "Runtime" },
+  { key: "system", label: "System" },
+];
+
+export const pages: PageDefinition[] = [
+  { key: "chat", label: "Chat", path: "/ui/chat", icon: "chat", section: "gateway" },
+  { key: "api-keys", label: "App Keys", path: "/ui/api-keys", icon: "api-keys", section: "gateway", hideInModes: ["agent"] },
+  { key: "audit", label: "Audit", path: "/ui/audit", icon: "audit", section: "gateway", hideInModes: ["agent"] },
+  { key: "dashboard", label: "Dashboard", path: "/", icon: "dashboard", section: "operations" },
+  { key: "nodes", label: "Nodes", path: "/ui/nodes", icon: "nodes", section: "operations", hideInModes: ["agent"] },
+  { key: "controller-ops", label: "Controller Ops", path: "/ui/controller-ops", icon: "controller", section: "operations", hideInModes: ["agent"] },
+  { key: "gguf-library", label: "GGUF Library", path: "/ui/gguf-library", icon: "library", section: "models" },
+  { key: "hf-downloads", label: "HF Downloads", path: "/ui/hf-downloads", icon: "download", section: "models" },
+  { key: "hf-to-gguf", label: "HF to GGUF", path: "/ui/hf-to-gguf", icon: "convert", section: "models" },
+  { key: "quantization", label: "Quantization", path: "/ui/quantization", icon: "quantize", section: "models" },
+  { key: "benchmarks", label: "Benchmarks", path: "/ui/benchmarks", icon: "benchmark", section: "models", hideInModes: ["agent"] },
+  { key: "runtime-overview", label: "Overview", path: "/ui/runtime", icon: "runtime", section: "runtime" },
+  { key: "embeddings", label: "Embeddings", path: "/ui/embeddings", icon: "embeddings", section: "runtime" },
+  { key: "setup", label: "Setup", path: "/ui/setup", icon: "setup", section: "system" },
+  { key: "settings", label: "Settings", path: "/ui/settings", icon: "settings", section: "system" },
+];
+
+export function pagesForMode(mode: string): PageDefinition[] {
+  const normalizedMode = mode === "agent" || mode === "controller" ? mode : "";
+  return pages.filter((page) => !normalizedMode || !page.hideInModes?.includes(normalizedMode));
+}
+
+export function pagesBySectionForMode(mode: string): Array<NavSection & { pages: PageDefinition[] }> {
+  const visible = pagesForMode(mode);
+  return navSections
+    .map((section) => ({
+      ...section,
+      pages: visible.filter((page) => page.section === section.key),
+    }))
+    .filter((section) => section.pages.length > 0);
+}
+
+export function pageForKey(key: PageKey): PageDefinition {
+  return pages.find((page) => page.key === key) || pages.find((page) => page.key === "dashboard") || pages[0];
+}
+
+export function pageForPath(pathname: string): PageDefinition {
+  return pages.find((page) => page.path === pathname) || pageForKey("dashboard");
+}
+
+export function pathForPage(page: PageDefinition, options: PageNavigationOptions = {}): string {
+  const search = options.search?.trim();
+  if (!search) return page.path;
+  return `${page.path}?${search.startsWith("?") ? search.slice(1) : search}`;
+}

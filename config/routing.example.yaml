@@ -1,0 +1,11 @@
+routing_fanout_enabled: false
+routing_fanout_max: 2
+routing_plugin_path: null
+agent_worker_enabled: false
+agent_worker_poll_interval_seconds: 2
+agent_worker_max_jobs: 1
+agent_worker_labels:
+  gpu: local
+  os: local
+agent_worker_capacity:
+  gpu_count: 1

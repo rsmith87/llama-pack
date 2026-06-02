@@ -1,0 +1,33 @@
+/* component styles */
+.quantization-page-react .stacked-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+}
+
+.quantization-page-react .detail-json {
+    flex-basis: 100%;
+    margin-top: 0;
+    margin-bottom: 0;
+}
+
+.quantization-page-react .recommendation-form {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+    align-items: flex-end;
+}
+
+.quantization-page-react .recommendation-form .form-field {
+    grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
+    gap: 4px;
+}
+
+.quantization-page-react .side-panel {
+    position: relative;
+    top: 0;
+}
+
+@media (max-width: 700px) {
+    
+}

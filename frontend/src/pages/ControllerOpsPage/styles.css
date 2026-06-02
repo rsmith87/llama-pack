@@ -1,0 +1,6 @@
+
+
+.job-detail-react,.job-detil-summry{
+  display: grid;
+  gap: 10px;
+}

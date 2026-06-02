@@ -1,0 +1,12 @@
+/* component styles */
+.stacked-controls input,
+.stacked-controls select,
+.stacked-controls textarea,
+.compact-select {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: var(--input);
+  color: var(--ink);
+  width: 100%;
+}

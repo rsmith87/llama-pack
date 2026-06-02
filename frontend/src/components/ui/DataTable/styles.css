@@ -1,0 +1,12 @@
+.data-table th,.dt-table td{
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: left;
+  font-size: 12px;
+  vertical-align: middle;
+}
+
+.quantization-page-react .data-table tr th:nth-child(5),
+.quantization-page-react .data-table tr th:nth-child(1) {
+  width: 200px;
+}

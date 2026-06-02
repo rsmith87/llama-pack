@@ -1,0 +1,36 @@
+.controller-filters button,
+.log-modal-controls button,
+button.primary {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 9px 13px;
+  background: var(--button);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.log-modal-controls {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 12px;
+}
+
+.modal-log-output {
+  min-height: 360px;
+  max-height: 62vh;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 14px;
+  background: var(--log-bg);
+  color: var(--log-ink);
+  white-space: pre-wrap;
+}
+
+@media (max-width: 980px) {
+  .log-modal-controls {
+    grid-template-columns: 1fr;
+  }
+}

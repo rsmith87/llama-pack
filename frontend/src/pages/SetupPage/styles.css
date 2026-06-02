@@ -1,0 +1,439 @@
+.setup-page-react {
+  display: block;
+}
+
+.setup-grid {
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+}
+
+.setup-panel {
+  align-content: start;
+  display: grid;
+  gap: 12px;
+}
+
+.setup-panel h3 {
+  margin: 0;
+}
+
+.setup-step {
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.setup-form {
+  display: grid;
+  gap: 10px;
+}
+
+.setup-form input {
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.setup-command,
+.setup-secret code {
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: block;
+  font-size: 12px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.setup-secret {
+  display: grid;
+  gap: 8px;
+}
+
+.setup-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.setup-check {
+  background: var(--button);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--muted);
+  padding: 7px 9px;
+}
+
+.setup-check.ok {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+/* ---- Wizard layout ---- */
+
+.wizard-page {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.wizard-step-indicator {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.wizard-step-pip {
+  align-items: center;
+  background: var(--button);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--muted);
+  display: flex;
+  font-size: 11px;
+  font-weight: 600;
+  gap: 4px;
+  padding: 4px 8px;
+  text-transform: uppercase;
+}
+
+.wizard-step-pip.done {
+  background: var(--success-bg);
+  border-color: var(--success);
+  color: var(--success);
+}
+
+.wizard-step-pip.active {
+  background: var(--accent-bg, var(--button));
+  border-color: var(--accent-dark);
+  color: var(--accent-dark);
+}
+
+.wizard-step-pip-label {
+  white-space: nowrap;
+}
+
+.wizard-step-body {
+  min-height: 320px;
+}
+
+.wizard-footer {
+  border-top: 1px solid var(--line);
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 14px;
+}
+
+.wizard-footer-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wizard-validation-error {
+  color: var(--danger, red);
+  font-size: 13px;
+  margin-right: auto;
+  align-self: center;
+}
+
+/* ---- Mode selection ---- */
+
+.wizard-mode-selection {
+  display: grid;
+  gap: 16px;
+  max-width: 800px;
+}
+
+.wizard-mode-intro {
+  margin: 0;
+}
+
+.wizard-mode-cards {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.wizard-mode-card {
+  background: var(--button);
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  text-align: left;
+  transition: border-color 0.1s;
+}
+
+.wizard-mode-card:hover {
+  border-color: var(--accent-dark);
+}
+
+.wizard-mode-card.selected {
+  background: var(--accent-bg, var(--button));
+  border-color: var(--accent-dark);
+}
+
+.wizard-mode-card-header {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  justify-content: space-between;
+}
+
+.wizard-mode-card-title {
+  font-size: 15px;
+  font-weight: 700;
+}
+
+.wizard-mode-card-badge {
+  background: var(--line);
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 6px;
+  text-transform: uppercase;
+}
+
+.wizard-mode-card.selected .wizard-mode-card-badge {
+  background: var(--accent-dark);
+  color: #fff;
+}
+
+.wizard-mode-card-desc {
+  font-size: 13px;
+  margin: 0;
+}
+
+.wizard-mode-card-detail {
+  font-size: 12px;
+  margin: 0;
+}
+
+.wizard-step-placeholder {
+  padding: 32px 0;
+  color: var(--muted);
+}
+
+/* ---- Key row (input + action button side by side) ---- */
+
+.wizard-key-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.wizard-key-row input {
+  flex: 1;
+}
+
+/* ---- Callout box (install notes etc.) ---- */
+
+.wizard-callout {
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-dark);
+  border-radius: 8px;
+  display: grid;
+  font-size: 13px;
+  gap: 8px;
+  padding: 12px 14px;
+}
+
+/* ---- Three-column numeric row (port / gpu_layers / ctx) ---- */
+
+.wizard-form-row {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(3, 1fr);
+}
+
+/* ---- Strength checkbox group ---- */
+
+.wizard-strength-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+  padding-top: 4px;
+}
+
+/* ---- Worker label rows ---- */
+
+.wizard-labels-section {
+  display: grid;
+  gap: 8px;
+}
+
+.wizard-labels-heading {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.wizard-label-row {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+}
+
+.wizard-label-row input {
+  flex: 1;
+}
+
+.wizard-label-sep {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+/* ---- Tabs (Config & Commands step) ---- */
+
+.wizard-tabs {
+  border-bottom: 1px solid var(--line);
+  display: flex;
+  gap: 0;
+}
+
+.wizard-tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  margin-bottom: -1px;
+  padding: 8px 16px;
+  transition: color 0.15s, border-color 0.15s;
+}
+
+.wizard-tab-btn:hover {
+  color: var(--ink);
+}
+
+.wizard-tab-btn.active {
+  border-bottom-color: var(--accent-dark);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.wizard-tab-content {
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-config-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* ---- Shared step form layout ---- */
+
+.wizard-step {
+  display: grid;
+  gap: 20px;
+  max-width: 600px;
+}
+
+.wizard-step h3 {
+  margin: 0;
+}
+
+.wizard-step-desc {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+
+.wizard-form {
+  display: grid;
+  gap: 12px;
+}
+
+.wizard-form input,
+.wizard-form select {
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  padding: 9px 10px;
+  width: 100%;
+}
+
+.wizard-toggle {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.wizard-toggle input[type="checkbox"] {
+  height: 16px;
+  width: 16px;
+}
+
+.wizard-toggle-label {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.wizard-subsection {
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+}
+
+.wizard-code-block {
+  background: var(--input);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  display: block;
+  font-size: 12px;
+  overflow: auto;
+  padding: 12px;
+  white-space: pre-wrap;
+}
+
+.wizard-secret {
+  display: grid;
+  gap: 8px;
+}
+
+/* ---- Verification checks ---- */
+
+.wizard-checks {
+  display: grid;
+  gap: 8px;
+}
+
+.wizard-check-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.wizard-check-icon {
+  font-size: 16px;
+  width: 20px;
+  text-align: center;
+}
+
+.wizard-check-icon.pass { color: var(--success); }
+.wizard-check-icon.fail { color: var(--danger, red); }
+.wizard-check-icon.unknown { color: var(--muted); }
+
+.wizard-check-reason {
+  color: var(--muted);
+  font-size: 12px;
+}
+

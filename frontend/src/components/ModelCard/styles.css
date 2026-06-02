@@ -1,0 +1,125 @@
+/* Uses existing global library-card selectors from app.css */
+.library-sections {
+  display: grid;
+  gap: 14px;
+}
+
+.library-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+
+.library-cards .model-actions button {
+  font-size: 11px;
+  min-height: 26px;
+  padding: 4px 8px;
+}
+
+.library-cards .model-actions button:nth-child(1) {
+  border-color: rgba(55, 213, 229, 0.7);
+  background: linear-gradient(135deg, #14b8c7, #0f7f91);
+  color: #061014;
+  font-weight: 800;
+}
+
+.library-cards .model-actions button:nth-child(2) {
+  color: var(--danger);
+}
+
+.library-card {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: linear-gradient(180deg, var(--card-strong), var(--card));
+  display: grid;
+  gap: 10px;
+}
+
+.library-card-button {
+  display: grid;
+  gap: 10px;
+  text-align: left;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.library-card-button span,
+.library-card-button small {
+  color: var(--muted);
+}
+
+.library-card-button strong {
+  font-size: 14px;
+  line-height: 1.25;
+}
+
+.library-card-meta {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 7px 10px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.library-card-meta div {
+  display: contents;
+}
+
+.library-card-meta dt {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.library-card-meta dd {
+  margin: 0;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.inline-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 800;
+}
+
+.inline-status::before {
+  content: "";
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 10px currentColor;
+}
+
+.inline-status-success {
+  color: var(--success);
+}
+
+.inline-status-warning {
+  color: var(--warning);
+}
+
+.library-card-badges,
+.modal-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.library-detail,
+.library-controls {
+  display: grid;
+  gap: 14px;
+}
+
+.library-controls {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}

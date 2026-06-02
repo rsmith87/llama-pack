@@ -1,0 +1,208 @@
+mode: agent
+
+# Linux agent runtime paths. Adjust these if your Linux checkout/model paths differ.
+llama_server_bin: /home/{user_name}/Apps/llama.cpp/build/bin/llama-server
+llama_cpp_dir: /home/{user_name}/Apps/llama.cpp
+python_bin: /home/{user_name}/Apps/llama.cpp/.venv/bin/python
+hf_models_dirs:
+  - /home/{user_name}/models/HFModels
+log_dir: logs
+
+# Requests from the Mac controller to this Linux agent must send this value as
+# X-Llama-Manager-Key. Keep the real key outside the repo.
+agent_api_key: ${LLAMA_MANAGER_AGENT_API_KEY}
+
+# Agent heartbeat/registration back to the controller.
+controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}
+node_name: linux-2080ti
+agent_url: ${LLAMA_MANAGER_AGENT_URL}
+heartbeat_interval_seconds: 30
+controller_registration_key_outbound: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+
+# Enable only if this Linux box should claim controller jobs.
+agent_worker_enabled: false
+agent_worker_poll_interval_seconds: 2
+agent_worker_max_jobs: 1
+agent_worker_labels:
+  gpu: 2080ti
+  os: linux
+agent_worker_capacity:
+  gpu_count: 1
+
+agent_tools:
+  enabled: true
+  max_iterations: 4
+  tool_timeout_seconds: 10
+  safe_roots:
+    - ./logs
+    - /home/{user_name}/models/HFModels
+    - /home/{user_name}/Apps/llama_manager
+  tools:
+    list_runtime_status:
+      type: shell
+      description: Print a short runtime status line.
+      command: ["printf", "agent runtime ok"]
+
+    read_agent_note:
+      type: file_read
+      description: Read the agent notes file.
+      path: ./logs/agent-note.txt
+
+    write_agent_note:
+      type: file_write
+      description: Write or append a note to the agent notes file. Use this to remember things about the user, save important findings, or record anything worth keeping across conversations.
+      path: ./logs/agent-note.txt
+      write_mode: append
+      max_write_bytes: 4096
+      parameters:
+        type: object
+        properties:
+          content:
+            type: string
+            description: Text to append to the notes file.
+        required: [content]
+        additionalProperties: false
+
+    local_health:
+      type: http
+      description: Check local health.
+      method: GET
+      url: http://127.0.0.1:9137/health
+
+    list_hf_models:
+      type: directory_list
+      description: List top-level directories and files in the HF models folder.
+      path: /home/{user_name}/models/HFModels
+      recursive: false
+      max_entries: 200
+      include_hidden: false
+
+    list_llama_manager_project:
+      type: directory_list
+      description: List top-level and one-level-deep files in the llama_manager project.
+      path: /home/{user_name}/Apps/llama_manager
+      recursive: true
+      max_depth: 1
+      max_entries: 300
+      include_hidden: false
+
+    find_python_files:
+      type: file_search
+      description: Find Python source files in the project.
+      path: /home/{user_name}/Apps/llama_manager
+      glob: "**/*.py"
+      max_entries: 200
+      include_hidden: false
+
+    find_test_files:
+      type: file_search
+      description: Find test files by name prefix.
+      path: /home/{user_name}/Apps/llama_manager/tests
+      glob: "test_*.py"
+      max_entries: 100
+      include_hidden: false
+
+    search_project_code:
+      type: text_search
+      description: Search for text or symbols in project Python source files.
+      path: /home/{user_name}/Apps/llama_manager
+      glob: "**/*.py"
+      case_sensitive: false
+      max_matches: 50
+      max_file_bytes: 524288
+      regex: true
+      parameters:
+        type: object
+        properties:
+          query:
+            type: string
+            description: The substring to search for.
+        required: [query]
+        additionalProperties: false
+
+    repo_status:
+      type: git_status
+      description: Show current git branch and changed files.
+      path: /home/{user_name}/Apps/llama_manager
+
+    repo_diff:
+      type: git_diff
+      description: Show unstaged changes in the project repo.
+      path: /home/{user_name}/Apps/llama_manager
+      max_lines: 300
+
+    repo_log:
+      type: git_log
+      description: Show recent git commit history for the project repo.
+      path: /home/{user_name}/Apps/llama_manager
+      max_commits: 20
+
+    inference_log:
+      type: log_tail
+      description: Tail the most recent lines from the inference server log.
+      path: /home/{user_name}/Apps/llama_manager/logs/llama_manager_agent_uvicorn.log
+      max_lines: 100
+
+    query_app_db:
+      type: sqlite_query
+      description: "Run a read-only SELECT query against one of the llama_manager databases. Available databases (use as the 'db' argument): audit_events, threads, controller_state, benchmarks, auth_store, chat_sessions, downloads."
+      paths:
+        - /home/{user_name}/Apps/llama_manager/logs/audit_events.db
+        - /home/{user_name}/Apps/llama_manager/logs/threads.db
+        - /home/{user_name}/Apps/llama_manager/logs/controller_state.db
+        - /home/{user_name}/Apps/llama_manager/logs/benchmarks.db
+        - /home/{user_name}/Apps/llama_manager/logs/auth_store.db
+        - /home/{user_name}/Apps/llama_manager/logs/chat_sessions.db
+        - /home/{user_name}/Apps/llama_manager/logs/downloads.db
+      max_entries: 100
+      parameters:
+        type: object
+        properties:
+          db:
+            type: string
+            description: "Database to query: audit_events, threads, controller_state, benchmarks, auth_store, chat_sessions, or downloads."
+          query:
+            type: string
+            description: A SQL SELECT (or WITH ... SELECT) query to execute.
+        required: [db, query]
+        additionalProperties: false
+
+    browse_web:
+      type: web_fetch
+      description: Fetch and read any public web page. Use this to look up documentation, Stack Overflow answers, GitHub issues, PyPI package info, Hacker News articles, news sites, or any other allowed URL.
+      strip_html: true
+      max_response_bytes: 131072
+      allowed_domains:
+        - stackoverflow.com
+        - github.com
+        - docs.python.org
+        - pypi.org
+        - developer.mozilla.org
+        - fastapi.tiangolo.com
+        - pydantic-docs.helpmanual.io
+        - docs.pydantic.dev
+        - news.ycombinator.com
+      parameters:
+        type: object
+        properties:
+          url:
+            type: string
+            description: The full URL to fetch.
+        required: [url]
+        additionalProperties: false
+
+models: {}
+
+# Optional local model example:
+# models:
+#   qwen-coder:
+#     path: /home/{user_name}/models/HFModels/qwen-coder/model.gguf
+#     port: 8081
+#     ctx: 16384
+#     gpu_layers: 999
+#     host: 0.0.0.0
+#     reasoning: auto
+#     reasoning_budget: 2048
+#     extra_args: []
+#     supports_json_schema: false
+#     supports_grammar: false

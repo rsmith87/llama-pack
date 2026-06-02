@@ -1,0 +1,44 @@
+example-model:
+  path: ${LLAMA_MANAGER_MODELS_DIR}/example-model/model.gguf
+  port: 8081
+  ctx: 8192
+  gpu_layers: 999
+  host: 0.0.0.0
+  reasoning: auto
+  reasoning_budget: 2048
+  vision: false
+  mmproj: null
+  extra_args: []
+  supports_json_schema: null
+  supports_grammar: null
+  favorite: true
+  prompt_template: null
+  profiles:
+    chat:
+      ctx: 8192
+      port: null
+      gpu_layers: 999
+      host: null
+      extra_args: null
+      label: Chat
+      order: 10
+      kind: interactive
+      intended_ctx: null
+      kv_cache_policy: gpu-preferred
+      resource_tier: low
+    long:
+      ctx: 131072
+      port: null
+      gpu_layers: 20
+      host: null
+      extra_args:
+        - --cache-type-k
+        - q4_0
+        - --cache-type-v
+        - q4_0
+      label: Long Context
+      order: 30
+      kind: long-context
+      intended_ctx: null
+      kv_cache_policy: cpu-ok
+      resource_tier: high

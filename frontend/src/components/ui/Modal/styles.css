@@ -1,0 +1,10 @@
+
+
+.modal-panel,
+.drawer {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 22px;
+  box-shadow: 0 20px 60px var(--shadow-strong);
+}

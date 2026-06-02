@@ -1,0 +1,8 @@
+/* component styles */
+.error-text {
+  color: var(--muted);
+}
+
+.error-text {
+  color: var(--danger);
+}

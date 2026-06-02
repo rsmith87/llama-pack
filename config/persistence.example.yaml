@@ -1,0 +1,11 @@
+auth_db_url: null
+audit_db_url: null
+chat_sessions_db_url: null
+controller_db_url: null
+downloads_db_url: null
+benchmarks_db_url: null
+controller_retention_days: 30
+controller_archive_retention_days: 90
+controller_archive_dir: ./logs/archive
+controller_instance_id: controller-default
+controller_leader_lease_seconds: 30
