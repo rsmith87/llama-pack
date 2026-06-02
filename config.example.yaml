@@ -96,6 +96,6 @@ models:
 
 nodes:
   mac-mini:
-    url: ${LLAMA_MANAGER_MAC_MINI_AGENT_URL}
+    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
   windows-2080ti:
-    url: ${LLAMA_MANAGER_WINDOWS_2080TI_AGENT_URL}
+    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}

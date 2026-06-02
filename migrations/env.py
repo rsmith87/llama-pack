@@ -25,7 +25,7 @@ def _selected_target() -> str:
 
 
 def _selected_url() -> str:
-    source = os.getenv("LLAMA_MANAGER_CONFIG")
+    source = os.getenv("NEURAXIS_CONFIG")
     app_config = load_config(source)
     return resolve_target_url_from_config(config=app_config, target=_selected_target())
 

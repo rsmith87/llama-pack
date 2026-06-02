@@ -26,7 +26,7 @@ nodes:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setenv("LLAMA_MANAGER_MODE", "controller")
+    monkeypatch.setenv("NEURAXIS_MODE", "controller")
 
     config = load_config(config_file)
 
@@ -51,6 +51,7 @@ def test_example_network_configs_use_env_placeholders_for_lan_urls():
         assert "192.168." not in text, config_file.name
         assert "MAC_MINI_IP" not in text, config_file.name
         assert "LINUX_2080TI_IP" not in text, config_file.name
+        assert "LLAMA" + "_MANAGER_" not in text, config_file.name
 
 
 def test_load_config_expands_env_var_placeholders_in_nested_values(tmp_path, monkeypatch):
@@ -347,11 +348,11 @@ def test_agent_tools_reject_directory_list_path_outside_safe_roots(tmp_path):
 
 
 def test_raspberry_pi_example_includes_thread_routing_defaults(monkeypatch):
-    monkeypatch.setenv("LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY", "controller-key")
-    monkeypatch.setenv("LLAMA_MANAGER_MAC_MINI_AGENT_URL", "http://mac:9137")
-    monkeypatch.setenv("LLAMA_MANAGER_MAC_MINI_AGENT_API_KEY", "mac-key")
-    monkeypatch.setenv("LLAMA_MANAGER_LINUX_2080TI_AGENT_URL", "http://linux:9137")
-    monkeypatch.setenv("LLAMA_MANAGER_LINUX_2080TI_AGENT_API_KEY", "linux-key")
+    monkeypatch.setenv("NEURAXIS_CONTROLLER_REGISTRATION_KEY", "controller-key")
+    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_URL", "http://mac:9137")
+    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", "mac-key")
+    monkeypatch.setenv("NEURAXIS_LINUX_2080TI_AGENT_URL", "http://linux:9137")
+    monkeypatch.setenv("NEURAXIS_LINUX_2080TI_AGENT_API_KEY", "linux-key")
 
     config = load_config("raspberry-pi-controller.config.example.yaml")
 
@@ -396,7 +397,7 @@ def test_build_llama_server_command_uses_configured_model_options():
 
 def test_default_config_does_not_embed_machine_specific_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("LLAMA_MANAGER_CONFIG", raising=False)
+    monkeypatch.delenv("NEURAXIS_CONFIG", raising=False)
     config = load_config()
 
     assert config.llama_cpp_dir == Path("./llama.cpp")
@@ -405,7 +406,7 @@ def test_default_config_does_not_embed_machine_specific_paths(tmp_path, monkeypa
 
 def test_load_config_prefers_local_config_yaml_when_env_unset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("LLAMA_MANAGER_CONFIG", raising=False)
+    monkeypatch.delenv("NEURAXIS_CONFIG", raising=False)
     (tmp_path / "config.yaml").write_text(
         """
 mode: agent
@@ -429,7 +430,7 @@ llama_server_bin: /Users/stale/llama-server
 
 def test_load_config_falls_back_to_local_example_when_config_yaml_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("LLAMA_MANAGER_CONFIG", raising=False)
+    monkeypatch.delenv("NEURAXIS_CONFIG", raising=False)
     (tmp_path / "config.example.yaml").write_text(
         """
 mode: agent
@@ -714,19 +715,19 @@ def test_save_split_example_auth_file_keeps_secret_placeholders(tmp_path, monkey
     _write_yaml(
         auth_file,
         {
-            "agent_api_key": "${LLAMA_MANAGER_AGENT_API_KEY}",
-            "test_chat_api_key": "${LLAMA_MANAGER_TEST_CHAT_API_KEY}",
-            "controller_registration_key": "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}",
-            "controller_registration_key_outbound": "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
+            "agent_api_key": "${NEURAXIS_AGENT_API_KEY}",
+            "test_chat_api_key": "${NEURAXIS_TEST_CHAT_API_KEY}",
+            "controller_registration_key": "${NEURAXIS_CONTROLLER_REGISTRATION_KEY}",
+            "controller_registration_key_outbound": "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
         },
     )
     manifest = tmp_path / "config.yaml"
     _write_yaml(manifest, {"mode": "agent", "files": {"auth": "config/auth.example.yaml"}})
-    monkeypatch.setenv("LLAMA_MANAGER_AGENT_API_KEY", "real-agent-key")
-    monkeypatch.setenv("LLAMA_MANAGER_TEST_CHAT_API_KEY", "real-test-chat-key")
-    monkeypatch.setenv("LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY", "real-registration-key")
+    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "real-agent-key")
+    monkeypatch.setenv("NEURAXIS_TEST_CHAT_API_KEY", "real-test-chat-key")
+    monkeypatch.setenv("NEURAXIS_CONTROLLER_REGISTRATION_KEY", "real-registration-key")
     monkeypatch.setenv(
-        "LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND",
+        "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND",
         "real-registration-outbound-key",
     )
 
@@ -738,12 +739,12 @@ def test_save_split_example_auth_file_keeps_secret_placeholders(tmp_path, monkey
 
     import yaml
     saved_auth = yaml.safe_load(auth_file.read_text(encoding="utf-8"))
-    assert saved_auth["agent_api_key"] == "${LLAMA_MANAGER_AGENT_API_KEY}"
-    assert saved_auth["test_chat_api_key"] == "${LLAMA_MANAGER_TEST_CHAT_API_KEY}"
-    assert saved_auth["controller_registration_key"] == "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}"
+    assert saved_auth["agent_api_key"] == "${NEURAXIS_AGENT_API_KEY}"
+    assert saved_auth["test_chat_api_key"] == "${NEURAXIS_TEST_CHAT_API_KEY}"
+    assert saved_auth["controller_registration_key"] == "${NEURAXIS_CONTROLLER_REGISTRATION_KEY}"
     assert (
         saved_auth["controller_registration_key_outbound"]
-        == "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}"
+        == "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}"
     )
 
 
@@ -753,12 +754,12 @@ def test_save_single_file_example_config_keeps_secret_placeholders(tmp_path, mon
         config_file,
         {
             "mode": "agent",
-            "agent_api_key": "${LLAMA_MANAGER_AGENT_API_KEY}",
-            "test_chat_api_key": "${LLAMA_MANAGER_TEST_CHAT_API_KEY}",
+            "agent_api_key": "${NEURAXIS_AGENT_API_KEY}",
+            "test_chat_api_key": "${NEURAXIS_TEST_CHAT_API_KEY}",
         },
     )
-    monkeypatch.setenv("LLAMA_MANAGER_AGENT_API_KEY", "real-agent-key")
-    monkeypatch.setenv("LLAMA_MANAGER_TEST_CHAT_API_KEY", "real-test-chat-key")
+    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "real-agent-key")
+    monkeypatch.setenv("NEURAXIS_TEST_CHAT_API_KEY", "real-test-chat-key")
 
     config = load_config(config_file)
     assert config.agent_api_key == "real-agent-key"
@@ -768,5 +769,5 @@ def test_save_single_file_example_config_keeps_secret_placeholders(tmp_path, mon
 
     import yaml
     saved = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-    assert saved["agent_api_key"] == "${LLAMA_MANAGER_AGENT_API_KEY}"
-    assert saved["test_chat_api_key"] == "${LLAMA_MANAGER_TEST_CHAT_API_KEY}"
+    assert saved["agent_api_key"] == "${NEURAXIS_AGENT_API_KEY}"
+    assert saved["test_chat_api_key"] == "${NEURAXIS_TEST_CHAT_API_KEY}"

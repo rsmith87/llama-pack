@@ -27,7 +27,7 @@ it("renders primary React navigation and defaults to dashboard", async () => {
   stubDashboardFetches();
   render(<App />);
 
-  expect(screen.getByRole("heading", { name: "Llama Manager" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Neuraxis" })).toBeInTheDocument();
   expect(Array.from(document.querySelectorAll(".nav-section-label")).map((node) => node.textContent)).toEqual([
     "Gateway",
     "Operations",

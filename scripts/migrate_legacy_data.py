@@ -16,7 +16,7 @@ Invocation:
   python scripts/migrate_legacy_data.py [--config PATH]
 
   --config PATH   Path to llama-manager YAML config. Defaults to the value of
-                  LLAMA_MANAGER_CONFIG env var, then ./config.yaml.
+                  NEURAXIS_CONFIG env var, then ./config.yaml.
 
 The utility is safe to re-run: rows that already exist (by primary key) in the
 target databases are skipped.

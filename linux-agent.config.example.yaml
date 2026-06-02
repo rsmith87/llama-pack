@@ -10,14 +10,14 @@ log_dir: logs
 
 # Requests from the Mac controller to this Linux agent must send this value as
 # X-Llama-Manager-Key. Keep the real key outside the repo.
-agent_api_key: ${LLAMA_MANAGER_AGENT_API_KEY}
+agent_api_key: ${NEURAXIS_AGENT_API_KEY}
 
 # Agent heartbeat/registration back to the controller.
-controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}
+controller_url: ${NEURAXIS_CONTROLLER_URL}
 node_name: linux-2080ti
-agent_url: ${LLAMA_MANAGER_AGENT_URL}
+agent_url: ${NEURAXIS_AGENT_URL}
 heartbeat_interval_seconds: 30
-controller_registration_key_outbound: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 
 # Enable only if this Linux box should claim controller jobs.
 agent_worker_enabled: false
@@ -36,7 +36,7 @@ agent_tools:
   safe_roots:
     - ./logs
     - /home/{user_name}/models/HFModels
-    - /home/{user_name}/Apps/llama_manager
+    - /home/{user_name}/Apps/neuraxis
   tools:
     list_runtime_status:
       type: shell
@@ -77,10 +77,10 @@ agent_tools:
       max_entries: 200
       include_hidden: false
 
-    list_llama_manager_project:
+    list_neuraxis_project:
       type: directory_list
-      description: List top-level and one-level-deep files in the llama_manager project.
-      path: /home/{user_name}/Apps/llama_manager
+      description: List top-level and one-level-deep files in the neuraxis project.
+      path: /home/{user_name}/Apps/neuraxis
       recursive: true
       max_depth: 1
       max_entries: 300
@@ -89,7 +89,7 @@ agent_tools:
     find_python_files:
       type: file_search
       description: Find Python source files in the project.
-      path: /home/{user_name}/Apps/llama_manager
+      path: /home/{user_name}/Apps/neuraxis
       glob: "**/*.py"
       max_entries: 200
       include_hidden: false
@@ -97,7 +97,7 @@ agent_tools:
     find_test_files:
       type: file_search
       description: Find test files by name prefix.
-      path: /home/{user_name}/Apps/llama_manager/tests
+      path: /home/{user_name}/Apps/neuraxis/tests
       glob: "test_*.py"
       max_entries: 100
       include_hidden: false
@@ -105,7 +105,7 @@ agent_tools:
     search_project_code:
       type: text_search
       description: Search for text or symbols in project Python source files.
-      path: /home/{user_name}/Apps/llama_manager
+      path: /home/{user_name}/Apps/neuraxis
       glob: "**/*.py"
       case_sensitive: false
       max_matches: 50
@@ -123,37 +123,37 @@ agent_tools:
     repo_status:
       type: git_status
       description: Show current git branch and changed files.
-      path: /home/{user_name}/Apps/llama_manager
+      path: /home/{user_name}/Apps/neuraxis
 
     repo_diff:
       type: git_diff
       description: Show unstaged changes in the project repo.
-      path: /home/{user_name}/Apps/llama_manager
+      path: /home/{user_name}/Apps/neuraxis
       max_lines: 300
 
     repo_log:
       type: git_log
       description: Show recent git commit history for the project repo.
-      path: /home/{user_name}/Apps/llama_manager
+      path: /home/{user_name}/Apps/neuraxis
       max_commits: 20
 
     inference_log:
       type: log_tail
       description: Tail the most recent lines from the inference server log.
-      path: /home/{user_name}/Apps/llama_manager/logs/llama_manager_agent_uvicorn.log
+      path: /home/{user_name}/Apps/neuraxis/logs/llama_manager_agent_uvicorn.log
       max_lines: 100
 
     query_app_db:
       type: sqlite_query
-      description: "Run a read-only SELECT query against one of the llama_manager databases. Available databases (use as the 'db' argument): audit_events, threads, controller_state, benchmarks, auth_store, chat_sessions, downloads."
+      description: "Run a read-only SELECT query against one of the neuraxis databases. Available databases (use as the 'db' argument): audit_events, threads, controller_state, benchmarks, auth_store, chat_sessions, downloads."
       paths:
-        - /home/{user_name}/Apps/llama_manager/logs/audit_events.db
-        - /home/{user_name}/Apps/llama_manager/logs/threads.db
-        - /home/{user_name}/Apps/llama_manager/logs/controller_state.db
-        - /home/{user_name}/Apps/llama_manager/logs/benchmarks.db
-        - /home/{user_name}/Apps/llama_manager/logs/auth_store.db
-        - /home/{user_name}/Apps/llama_manager/logs/chat_sessions.db
-        - /home/{user_name}/Apps/llama_manager/logs/downloads.db
+        - /home/{user_name}/Apps/neuraxis/logs/audit_events.db
+        - /home/{user_name}/Apps/neuraxis/logs/threads.db
+        - /home/{user_name}/Apps/neuraxis/logs/controller_state.db
+        - /home/{user_name}/Apps/neuraxis/logs/benchmarks.db
+        - /home/{user_name}/Apps/neuraxis/logs/auth_store.db
+        - /home/{user_name}/Apps/neuraxis/logs/chat_sessions.db
+        - /home/{user_name}/Apps/neuraxis/logs/downloads.db
       max_entries: 100
       parameters:
         type: object

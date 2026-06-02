@@ -20,9 +20,9 @@ def test_start_agent_script_uses_agent_specific_runtime_defaults() -> None:
     contents = script.read_text(encoding="utf-8")
     assert ".llama_manager_agent.pid" in contents
     assert "llama_manager_agent_uvicorn.log" in contents
-    assert "LLAMA_MANAGER_MODE=agent" in contents
+    assert "NEURAXIS_MODE=agent" in contents
     assert "Expected agent config" in contents
-    assert "LLAMA_MANAGER_START_FRONTEND" in contents
+    assert "NEURAXIS_START_FRONTEND" in contents
     assert 'start_frontend.sh' in contents
 
 
@@ -51,9 +51,9 @@ def test_start_controller_script_uses_controller_specific_runtime_defaults() -> 
 
     assert ".llama_manager_controller.pid" in contents
     assert "llama_manager_controller_uvicorn.log" in contents
-    assert "LLAMA_MANAGER_MODE=controller" in contents
+    assert "NEURAXIS_MODE=controller" in contents
     assert "Expected controller config" in contents
-    assert "LLAMA_MANAGER_START_FRONTEND" in contents
+    assert "NEURAXIS_START_FRONTEND" in contents
     assert 'start_frontend.sh' in contents
 
 
@@ -64,9 +64,9 @@ def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     assert "llama_manager_frontend_vite.log" in contents
     assert "VITE_API_PROXY_TARGET" in contents
     assert "npm run dev" in contents
-    assert 'LLAMA_MANAGER_FRONTEND_HOST:-127.0.0.1' in contents
-    assert 'LLAMA_MANAGER_FRONTEND_PORT:-5173' in contents
-    assert 'LLAMA_MANAGER_FRONTEND_BASE_PATH:-/ui/' in contents
+    assert 'NEURAXIS_FRONTEND_HOST:-127.0.0.1' in contents
+    assert 'NEURAXIS_FRONTEND_PORT:-5173' in contents
+    assert 'NEURAXIS_FRONTEND_BASE_PATH:-/ui/' in contents
 
 
 def test_start_controller_stack_script_starts_controller_and_frontend() -> None:
@@ -93,7 +93,7 @@ def test_create_test_chat_key_script_updates_env_for_bootstrap() -> None:
     contents = read_script("create_test_chat_key.sh")
 
     assert "create-test-chat-key" in contents
-    assert "LLAMA_MANAGER_TEST_CHAT_API_KEY" in contents
+    assert "NEURAXIS_TEST_CHAT_API_KEY" in contents
     assert ".llama-manager.env" in contents
     assert "chmod 600" in contents
 
@@ -101,8 +101,8 @@ def test_create_test_chat_key_script_updates_env_for_bootstrap() -> None:
 def test_stop_frontend_script_wraps_stop_server_frontend_target() -> None:
     contents = read_script("stop_frontend.sh")
 
-    assert "LLAMA_MANAGER_FRONTEND_PID_FILE" in contents
-    assert "LLAMA_MANAGER_PID_FILE" in contents
+    assert "NEURAXIS_FRONTEND_PID_FILE" in contents
+    assert "NEURAXIS_PID_FILE" in contents
     assert 'exec "$ROOT_DIR/scripts/stop_server.sh" frontend' in contents
 
 
@@ -147,8 +147,8 @@ def test_onboard_agent_keeps_lan_urls_in_env_not_config(tmp_path: Path) -> None:
     agent_url = "http://192.168.1.205:9137"
     env = {
         **os.environ,
-        "LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND": "join-key",
-        "LLAMA_MANAGER_AGENT_API_KEY": "agent-key",
+        "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND": "join-key",
+        "NEURAXIS_AGENT_API_KEY": "agent-key",
     }
 
     result = subprocess.run(
@@ -174,13 +174,13 @@ def test_onboard_agent_keeps_lan_urls_in_env_not_config(tmp_path: Path) -> None:
     )
 
     config_text = config.read_text(encoding="utf-8")
-    assert "controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}" in config_text
-    assert "agent_url: ${LLAMA_MANAGER_AGENT_URL}" in config_text
+    assert "controller_url: ${NEURAXIS_CONTROLLER_URL}" in config_text
+    assert "agent_url: ${NEURAXIS_AGENT_URL}" in config_text
     assert controller_url not in config_text
     assert agent_url not in config_text
 
     env_text = env_file.read_text(encoding="utf-8")
-    assert f"export LLAMA_MANAGER_CONTROLLER_URL={controller_url}" in env_text
-    assert f"export LLAMA_MANAGER_AGENT_URL={agent_url}" in env_text
+    assert f"export NEURAXIS_CONTROLLER_URL={controller_url}" in env_text
+    assert f"export NEURAXIS_AGENT_URL={agent_url}" in env_text
 
-    assert "url: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_URL}" in result.stdout
+    assert "url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}" in result.stdout

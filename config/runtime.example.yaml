@@ -3,10 +3,10 @@ llama_cpp_dir: ./llama.cpp
 python_bin: python3
 hf_models_dir: null
 hf_models_dirs:
-  - ${LLAMA_MANAGER_MODELS_DIR}
+  - ${NEURAXIS_MODELS_DIR}
 log_dir: ./logs
-controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}
-node_name: ${LLAMA_MANAGER_NODE_NAME}
-agent_url: ${LLAMA_MANAGER_AGENT_URL}
+controller_url: ${NEURAXIS_CONTROLLER_URL}
+node_name: ${NEURAXIS_NODE_NAME}
+agent_url: ${NEURAXIS_AGENT_URL}
 heartbeat_interval_seconds: 30
 node_heartbeat_timeout_seconds: 90

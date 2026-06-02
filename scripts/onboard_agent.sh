@@ -36,8 +36,8 @@ Options:
   -h, --help                    Show this help.
 
 Required environment:
-  LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
-  LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY.
+  NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
+  NEURAXIS_CONTROLLER_REGISTRATION_KEY.
 USAGE
 }
 
@@ -112,12 +112,12 @@ if [[ -z "$CONTROLLER_URL" || -z "$AGENT_URL" ]]; then
   exit 2
 fi
 
-export LLAMA_MANAGER_CONTROLLER_URL="$CONTROLLER_URL"
-export LLAMA_MANAGER_AGENT_URL="$AGENT_URL"
+export NEURAXIS_CONTROLLER_URL="$CONTROLLER_URL"
+export NEURAXIS_AGENT_URL="$AGENT_URL"
 
-if [[ -z "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND:-}" ]]; then
-  echo "LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND is required." >&2
-  echo "Set it to the controller's LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY." >&2
+if [[ -z "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND:-}" ]]; then
+  echo "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND is required." >&2
+  echo "Set it to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY." >&2
   exit 1
 fi
 
@@ -128,13 +128,13 @@ if [[ ! -f "$TEMPLATE" ]]; then
   exit 1
 fi
 
-if [[ -z "${LLAMA_MANAGER_AGENT_API_KEY:-}" ]]; then
+if [[ -z "${NEURAXIS_AGENT_API_KEY:-}" ]]; then
   AGENT_API_KEY="$(scripts/generate_api_key.py)"
-  export LLAMA_MANAGER_AGENT_API_KEY="$AGENT_API_KEY"
-  echo "Generated LLAMA_MANAGER_AGENT_API_KEY for this shell."
+  export NEURAXIS_AGENT_API_KEY="$AGENT_API_KEY"
+  echo "Generated NEURAXIS_AGENT_API_KEY for this shell."
 else
-  AGENT_API_KEY="$LLAMA_MANAGER_AGENT_API_KEY"
-  echo "Using existing LLAMA_MANAGER_AGENT_API_KEY from the environment."
+  AGENT_API_KEY="$NEURAXIS_AGENT_API_KEY"
+  echo "Using existing NEURAXIS_AGENT_API_KEY from the environment."
 fi
 
 if [[ -f "$CONFIG" && "$FORCE" != "true" ]]; then
@@ -145,8 +145,8 @@ else
   sed \
     -e "s|{user_name}|${USER:-llama-manager}|g" \
     -e "s|node_name: .*|node_name: $NODE_NAME|g" \
-    -e 's|controller_url: .*|controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}|g' \
-    -e 's|agent_url: .*|agent_url: ${LLAMA_MANAGER_AGENT_URL}|g' \
+    -e 's|controller_url: .*|controller_url: ${NEURAXIS_CONTROLLER_URL}|g' \
+    -e 's|agent_url: .*|agent_url: ${NEURAXIS_AGENT_URL}|g' \
     "$TEMPLATE" > "$CONFIG"
   echo "Wrote agent config: $CONFIG"
 fi
@@ -188,7 +188,7 @@ path.chmod(0o600)
 PY
 }
 
-LLAMA_MANAGER_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
+NEURAXIS_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
 from llama_manager.core.config import load_config
 
 config = load_config()
@@ -224,13 +224,13 @@ CONTROLLER_NODE_URL_ENV="$(
     | sed -E 's/[^A-Z0-9]+/_/g; s/^_+//; s/_+$//'
 )_AGENT_URL"
 
-upsert_env "LLAMA_MANAGER_CONFIG" "$CONFIG"
-upsert_env "LLAMA_MANAGER_AGENT_API_KEY" "$AGENT_API_KEY"
-upsert_env "LLAMA_MANAGER_CONTROLLER_URL" "$CONTROLLER_URL"
-upsert_env "LLAMA_MANAGER_AGENT_URL" "$AGENT_URL"
-upsert_env "LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND" "$LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND"
-upsert_env "LLAMA_MANAGER_HOST" "$HOST"
-upsert_env "LLAMA_MANAGER_PORT" "$PORT"
+upsert_env "NEURAXIS_CONFIG" "$CONFIG"
+upsert_env "NEURAXIS_AGENT_API_KEY" "$AGENT_API_KEY"
+upsert_env "NEURAXIS_CONTROLLER_URL" "$CONTROLLER_URL"
+upsert_env "NEURAXIS_AGENT_URL" "$AGENT_URL"
+upsert_env "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND" "$NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND"
+upsert_env "NEURAXIS_HOST" "$HOST"
+upsert_env "NEURAXIS_PORT" "$PORT"
 
 cat <<EOF
 
@@ -240,10 +240,10 @@ Local secrets were written to:
   $ENV_FILE
 
 Add or verify this node on the controller:
-  export LLAMA_MANAGER_${CONTROLLER_NODE_URL_ENV}='$AGENT_URL'
+  export NEURAXIS_${CONTROLLER_NODE_URL_ENV}='$AGENT_URL'
   nodes:
     $NODE_NAME:
-      url: \${LLAMA_MANAGER_${CONTROLLER_NODE_URL_ENV}}
+      url: \${NEURAXIS_${CONTROLLER_NODE_URL_ENV}}
       api_key: $AGENT_API_KEY
       verify_tls: true
 

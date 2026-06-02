@@ -2,25 +2,25 @@ mode: controller
 
 # Raspberry Pi controller config. The Pi coordinates agents; it does not need
 # local llama.cpp runtime paths unless you also run a separate agent process.
-log_dir: /home/{user_name}/llama-manager/logs
+log_dir: /home/{user_name}/neuraxis/logs
 
 # Agents use this value as controller_registration_key_outbound when they
 # register and send heartbeats. Keep the real key outside the repo.
-controller_registration_key: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 # Explicit SQLite locations keep controller state predictable on the Pi.
-controller_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/controller_state.db
-auth_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/auth_store.db
-audit_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/audit_events.db
-chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/chat_sessions.db
+controller_db_url: sqlite+pysqlite:////home/{user_name}/neuraxis/logs/controller_state.db
+auth_db_url: sqlite+pysqlite:////home/{user_name}/neuraxis/logs/auth_store.db
+audit_db_url: sqlite+pysqlite:////home/{user_name}/neuraxis/logs/audit_events.db
+chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/neuraxis/logs/chat_sessions.db
 
 # Optional controller leader/retention settings.
 controller_instance_id: raspberry-pi-controller
 controller_leader_lease_seconds: 60
 controller_retention_days: 14
 controller_archive_retention_days: 30
-controller_archive_dir: /home/{user_name}/llama-manager/logs/archives
+controller_archive_dir: /home/{user_name}/neuraxis/logs/archives
 
 # Multi-agent fanout routing (optional):
 # routing_fanout_enabled: false
@@ -29,8 +29,8 @@ controller_archive_dir: /home/{user_name}/llama-manager/logs/archives
 # Agents managed by the Pi controller. Keep URLs and keys outside the repo.
 nodes:
   mac-mini:
-    url: ${LLAMA_MANAGER_MAC_MINI_AGENT_URL}
-    api_key: ${LLAMA_MANAGER_MAC_MINI_AGENT_API_KEY}
+    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
+    api_key: ${NEURAXIS_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
     default_model: gemma-4-E2B-it
     request_types:
@@ -41,8 +41,8 @@ nodes:
         model: gemma-4-E2B-it
         priority: 50
   linux-2080ti:
-    url: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_URL}
-    api_key: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_API_KEY}
+    url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}
+    api_key: ${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
     default_model: qwen
     request_types:

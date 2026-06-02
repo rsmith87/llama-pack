@@ -70,15 +70,15 @@ export function SettingsPage() {
   }, [agentApiKey, agentName, agentUrl, controllerApiKey, controllerUrl, logDir, mode, registrationKey]);
 
   const envExports = useMemo(() => {
-    const lines = [`export LLAMA_MANAGER_CONFIG=config.yaml`, `export LLAMA_MANAGER_MODE=${mode}`];
+    const lines = [`export NEURAXIS_CONFIG=config.yaml`, `export NEURAXIS_MODE=${mode}`];
     if (mode === "agent") {
-      lines.push(`export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND=${shellQuote(registrationKey || "CHANGE_ME_REGISTRATION_KEY")}`);
-      lines.push(`export LLAMA_MANAGER_CONTROLLER_URL=${shellQuote(controllerUrl || "http://127.0.0.1:9137")}`);
-      if (controllerApiKey) lines.push(`export LLAMA_MANAGER_CONTROLLER_API_KEY=${shellQuote(controllerApiKey)}`);
+      lines.push(`export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=${shellQuote(registrationKey || "CHANGE_ME_REGISTRATION_KEY")}`);
+      lines.push(`export NEURAXIS_CONTROLLER_URL=${shellQuote(controllerUrl || "http://127.0.0.1:9137")}`);
+      if (controllerApiKey) lines.push(`export NEURAXIS_CONTROLLER_API_KEY=${shellQuote(controllerApiKey)}`);
     } else if (mode === "controller") {
-      lines.push(`export LLAMA_MANAGER_AGENT_API_KEY=${shellQuote(agentApiKey || "CHANGE_ME_AGENT_API_KEY")}`);
+      lines.push(`export NEURAXIS_AGENT_API_KEY=${shellQuote(agentApiKey || "CHANGE_ME_AGENT_API_KEY")}`);
     } else if (controllerApiKey) {
-      lines.push(`export LLAMA_MANAGER_API_KEY=${shellQuote(controllerApiKey)}`);
+      lines.push(`export NEURAXIS_API_KEY=${shellQuote(controllerApiKey)}`);
     }
     return `${lines.join("\n")}\n`;
   }, [agentApiKey, controllerApiKey, controllerUrl, mode, registrationKey]);

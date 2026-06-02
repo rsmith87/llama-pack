@@ -1,5 +1,5 @@
 example-model:
-  path: ${LLAMA_MANAGER_MODELS_DIR}/example-model/model.gguf
+  path: ${NEURAXIS_MODELS_DIR}/example-model/model.gguf
   port: 8081
   ctx: 8192
   gpu_layers: 999

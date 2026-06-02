@@ -33,7 +33,7 @@ List active definitions:
 
 ```bash
 curl -s \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/benchmarks/definitions
 ```
 
@@ -44,7 +44,7 @@ Add `?include_archived=true` to include archived definitions.
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/benchmarks/definitions \
   -d '{
     "name": "Coding Smoke",
@@ -78,7 +78,7 @@ Run one definition against one or more models:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs \
   -d '{
     "definition_id": "<definition-id>",
@@ -108,7 +108,7 @@ Managed-load runs isolate a model on one target node:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs \
   -d '{
     "definition_id": "<definition-id>",
@@ -131,7 +131,7 @@ List recent runs:
 
 ```bash
 curl -s \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   "http://127.0.0.1:9137/lm-api/v1/benchmarks/runs?limit=50"
 ```
 
@@ -139,7 +139,7 @@ Fetch a run and its samples:
 
 ```bash
 curl -s \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs/<run-id>
 ```
 
@@ -162,7 +162,7 @@ Compare runs from the same definition:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs/compare \
   -d '{"run_ids":["<run-a>","<run-b>"]}'
 ```

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${LLAMA_MANAGER_ENV_FILE:-$ROOT_DIR/.llama-manager.env}"
+ENV_FILE="${NEURAXIS_ENV_FILE:-$ROOT_DIR/.llama-manager.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -16,16 +16,16 @@ if [[ -f "$VENV_ACTIVATE" ]]; then
   source "$VENV_ACTIVATE"
 fi
 
-AGENT_PID_FILE="${LLAMA_MANAGER_PID_FILE:-$ROOT_DIR/.llama_manager_agent.pid}"
-FRONTEND_PID_FILE="${LLAMA_MANAGER_FRONTEND_PID_FILE:-$ROOT_DIR/.llama_manager_frontend.pid}"
+AGENT_PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.llama_manager_agent.pid}"
+FRONTEND_PID_FILE="${NEURAXIS_FRONTEND_PID_FILE:-$ROOT_DIR/.llama_manager_frontend.pid}"
 DEFAULT_CONFIG="$ROOT_DIR/config.example.yaml"
 if [[ -f "$ROOT_DIR/config.yaml" ]]; then
   DEFAULT_CONFIG="$ROOT_DIR/config.yaml"
 fi
-CONFIG="${LLAMA_MANAGER_CONFIG:-$DEFAULT_CONFIG}"
+CONFIG="${NEURAXIS_CONFIG:-$DEFAULT_CONFIG}"
 
 print_debug_config_keys() {
-  if [[ "${LLAMA_MANAGER_DEBUG_CONFIG_KEYS:-0}" != "1" ]]; then
+  if [[ "${NEURAXIS_DEBUG_CONFIG_KEYS:-0}" != "1" ]]; then
     return
   fi
 
@@ -36,7 +36,7 @@ print_debug_config_keys() {
     python_bin="${PYTHON:-python3}"
   fi
 
-  LLAMA_MANAGER_CONFIG="$CONFIG" LLAMA_MANAGER_MODE=agent "$python_bin" - <<'PY'
+  NEURAXIS_CONFIG="$CONFIG" NEURAXIS_MODE=agent "$python_bin" - <<'PY'
 from llama_manager.core.config import load_config
 
 config = load_config()

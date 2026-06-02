@@ -1,6 +1,6 @@
 # Configuration
 
-Set `LLAMA_MANAGER_CONFIG` to a YAML file path. Set `LLAMA_MANAGER_MODE` to override the mode without editing the file.
+Set `NEURAXIS_CONFIG` to a YAML file path. Set `NEURAXIS_MODE` to override the mode without editing the file.
 
 ```yaml
 mode: agent
@@ -44,7 +44,7 @@ nodes:
   mac-mini:
     url: http://127.0.0.1:9000
   windows-2080ti:
-    url: ${LLAMA_MANAGER_WINDOWS_2080TI_AGENT_URL}
+    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
 ```
 
 ## Split Config Files
@@ -69,7 +69,7 @@ files:
 
 Linked paths are resolved relative to the root config file. Linked file values
 are loaded first, then inline values in the root config override linked values.
-Environment placeholders such as `${LLAMA_MANAGER_AGENT_URL}` are expanded
+Environment placeholders such as `${NEURAXIS_AGENT_URL}` are expanded
 after the files are merged.
 
 `models`, `nodes`, `agent_tools`, and `memory` are direct section files. Their
@@ -95,16 +95,16 @@ python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
-controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}
+controller_url: ${NEURAXIS_CONTROLLER_URL}
 node_name: mac-mini
-agent_url: ${LLAMA_MANAGER_AGENT_URL}
+agent_url: ${NEURAXIS_AGENT_URL}
 heartbeat_interval_seconds: 30
 ```
 
 ```yaml
 # config/auth.yaml
-agent_api_key: ${LLAMA_MANAGER_AGENT_API_KEY}
-controller_registration_key_outbound: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}
+agent_api_key: ${NEURAXIS_AGENT_API_KEY}
+controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
 ```
 
 ```yaml
@@ -237,7 +237,7 @@ nodes:
   mac-mini:
     url: http://127.0.0.1:9000
   windows-2080ti:
-    url: ${LLAMA_MANAGER_WINDOWS_2080TI_AGENT_URL}
+    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
     api_key: your-agent-api-key-if-enabled
     verify_tls: true
     max_running_models: 1   # optional — limits concurrent model instances on this node
@@ -302,7 +302,7 @@ scripts/start_controller.sh
 mode: controller
 log_dir: /home/{user_name}/llama-manager/logs
 
-controller_registration_key: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 controller_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/controller_state.db
@@ -312,22 +312,22 @@ chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/ch
 
 nodes:
   mac-mini:
-    url: ${LLAMA_MANAGER_MAC_MINI_AGENT_URL}
-    api_key: ${LLAMA_MANAGER_MAC_MINI_AGENT_API_KEY}
+    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
+    api_key: ${NEURAXIS_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
-    url: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_URL}
-    api_key: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_API_KEY}
+    url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}
+    api_key: ${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 ```
 
 Manual startup is also available:
 
 ```bash
-LLAMA_MANAGER_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9137
+NEURAXIS_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9137
 ```
 
-Agents should run `scripts/onboard_agent.sh --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" --agent-url "$LLAMA_MANAGER_AGENT_URL"`, or manually keep `controller_url` as `${LLAMA_MANAGER_CONTROLLER_URL}`, keep `agent_url` as `${LLAMA_MANAGER_AGENT_URL}`, and send the same registration key through `controller_registration_key_outbound`.
+Agents should run `scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"`, or manually keep `controller_url` as `${NEURAXIS_CONTROLLER_URL}`, keep `agent_url` as `${NEURAXIS_AGENT_URL}`, and send the same registration key through `controller_registration_key_outbound`.
 
 For the current Raspberry Pi controller topology and smoke checks, see
 [Raspberry Pi Controller Topology](pi-controller-topology.md).
@@ -489,7 +489,7 @@ tail -f ./logs/agent_tool_calls.jsonl
 ```bash
 curl -s http://127.0.0.1:9137/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [

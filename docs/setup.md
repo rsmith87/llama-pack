@@ -30,11 +30,11 @@ Script-first setup for an agent:
 
 ```bash
 uv sync
-export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" \
-  --agent-url "$LLAMA_MANAGER_AGENT_URL"
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL"
 scripts/start_agent.sh
 ```
 
@@ -46,7 +46,7 @@ Manual setup remains available:
 ```bash
 uv sync
 cp config.example.yaml config.yaml
-export LLAMA_MANAGER_CONFIG=config.yaml
+export NEURAXIS_CONFIG=config.yaml
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
 alembic -x db=audit upgrade audit@head
@@ -54,7 +54,7 @@ alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
 uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
-LLAMA_MANAGER_CONFIG=config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
+NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
 ```
 
 `uv sync` is the recommended install path because this repository includes a
@@ -85,17 +85,17 @@ scripts/onboard_controller.sh
 ```
 
 The controller onboarding script writes local secrets to `.llama-manager.env`,
-including `LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY` and the first generated
+including `NEURAXIS_CONTROLLER_REGISTRATION_KEY` and the first generated
 admin API key when migrations are enabled.
 
 Onboard a fresh agent:
 
 ```bash
-export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" \
-  --agent-url "$LLAMA_MANAGER_AGENT_URL"
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL"
 ```
 
 The agent onboarding script keeps `controller_url` and `agent_url` as
@@ -108,15 +108,15 @@ Regenerate a local key and print the matching update for the other machines:
 
 ```bash
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_MANAGER_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
 ```
 
 Script defaults:
 
 ```text
-LLAMA_MANAGER_HOST=127.0.0.1
-LLAMA_MANAGER_PORT=9137
-LLAMA_MANAGER_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
+NEURAXIS_HOST=127.0.0.1
+NEURAXIS_PORT=9137
+NEURAXIS_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
 ```
 
 ## First Admin Key
@@ -140,9 +140,9 @@ rotation scripts:
 
 ```bash
 scripts/onboard_controller.sh
-scripts/onboard_agent.sh --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" --agent-url "$LLAMA_MANAGER_AGENT_URL"
+scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_MANAGER_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
 ```
 
 For one-off manual values, generate a strong URL-safe value with:
@@ -158,10 +158,10 @@ Use the printed value for matching config fields such as `agent_api_key`, `nodes
 Linux agent smoke test for the `linux-2080ti` setup:
 
 ```bash
-export LLAMA_MANAGER_AGENT_API_KEY=...
-export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export NEURAXIS_AGENT_API_KEY=...
+export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 # Required if the controller protects GET /nodes with an admin/API key:
-export LLAMA_MANAGER_CONTROLLER_API_KEY=...
+export NEURAXIS_CONTROLLER_API_KEY=...
 scripts/linux_agent_smoke.py --config linux-agent.config.example.yaml
 ```
 
@@ -235,7 +235,7 @@ Frontend development workflow:
 - `scripts/start_controller_stack.sh` starts the controller backend + React Vite dev server, or reports that the stack is currently up.
 - `scripts/start_agent_stack.sh` starts the agent backend + React Vite dev server, or reports that the stack is currently up.
 - `scripts/dev_fullstack.sh` starts backend + React Vite dev server in one command and auto-detects agent/controller mode from config.
-- `LLAMA_MANAGER_START_FRONTEND=1 scripts/start_controller.sh` starts the
+- `NEURAXIS_START_FRONTEND=1 scripts/start_controller.sh` starts the
   backend and the React Vite dev server together for local development.
 - `scripts/start_frontend.sh` starts only the React Vite dev server when a
   backend is already running.

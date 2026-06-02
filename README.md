@@ -27,11 +27,11 @@ Agent:
 
 ```bash
 uv sync
-export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" \
-  --agent-url "$LLAMA_MANAGER_AGENT_URL"
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL"
 scripts/start_agent.sh
 ```
 
@@ -76,7 +76,7 @@ scripts/start_controller.sh
 scripts/start_agent.sh
 scripts/stop_server.sh
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_MANAGER_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
 uv run pytest -v
 ```
 

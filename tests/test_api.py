@@ -3168,7 +3168,7 @@ def test_setup_bootstrap_admin_response_does_not_leak_config_or_registration_key
     assert "controller-registration-secret" not in text
     assert "config.yaml" not in text
     assert ".llama-manager.env" not in text
-    assert "LLAMA_MANAGER" not in text
+    assert "LLAMA" + "_MANAGER" not in text
 
 
 def test_setup_current_config_returns_safe_snapshot():

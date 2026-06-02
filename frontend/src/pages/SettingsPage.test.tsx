@@ -36,7 +36,7 @@ it("generates config and env exports from settings fields", async () => {
 
   expect(screen.getByText(/mode: agent/)).toBeInTheDocument();
   expect(screen.getByText(/controller_url: "http:\/\/controller:9137"/)).toBeInTheDocument();
-  expect(screen.getByText(/LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND='reg-key'/)).toBeInTheDocument();
+  expect(screen.getByText(/NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND='reg-key'/)).toBeInTheDocument();
 });
 
 it("copies and downloads generated config utilities", async () => {

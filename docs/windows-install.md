@@ -74,7 +74,7 @@ environment such as Git Bash or WSL.
 PowerShell environment variables only apply to the current terminal:
 
 ```powershell
-$env:LLAMA_MANAGER_CONFIG = "config.yaml"
+$env:NEURAXIS_CONFIG = "config.yaml"
 uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
 ```
 
@@ -85,7 +85,7 @@ curl.exe http://127.0.0.1:9000/health
 curl.exe http://127.0.0.1:9000/models
 ```
 
-If `/models` still shows Mac paths, the running process is not using the config file you edited. Stop uvicorn, set `$env:LLAMA_MANAGER_CONFIG` again in the same PowerShell window, and restart it.
+If `/models` still shows Mac paths, the running process is not using the config file you edited. Stop uvicorn, set `$env:NEURAXIS_CONFIG` again in the same PowerShell window, and restart it.
 
 ## 5. Open Firewall Ports
 
@@ -136,7 +136,7 @@ node_heartbeat_timeout_seconds: 90
 Start the controller on a different port than any local Mac agent:
 
 ```bash
-LLAMA_MANAGER_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
+NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
 ```
 
 If `.llama-manager.env` points at the controller config, use:
@@ -147,7 +147,7 @@ scripts/start_controller.sh
 
 ## 7. Common Causes Of Mac Paths In The UI
 
-- The Windows agent was launched without `$env:LLAMA_MANAGER_CONFIG = "config.yaml"`.
+- The Windows agent was launched without `$env:NEURAXIS_CONFIG = "config.yaml"`.
 - The app was started from a different directory and `config.yaml` points somewhere else.
 - An old uvicorn process is still running with the previous config.
 - You are viewing the local Mac agent at `http://127.0.0.1:9137`, not the Windows agent or Mac controller.
@@ -159,7 +159,7 @@ scripts/start_controller.sh
 Run this on Windows:
 
 ```powershell
-$env:LLAMA_MANAGER_CONFIG
+$env:NEURAXIS_CONFIG
 curl.exe http://127.0.0.1:9000/models
 ```
 
@@ -206,11 +206,11 @@ models:
 If you prefer agent-driven registration instead of maintaining the node list manually, add this to the Windows agent config:
 
 ```yaml
-controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}
+controller_url: ${NEURAXIS_CONTROLLER_URL}
 node_name: windows-2080ti
-agent_url: ${LLAMA_MANAGER_AGENT_URL}
+agent_url: ${NEURAXIS_AGENT_URL}
 heartbeat_interval_seconds: 30
-controller_registration_key_outbound: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 ```
 
 Set the same `controller_registration_key` on the controller. On startup, the agent registers itself and then sends heartbeats on the configured interval.
@@ -219,4 +219,4 @@ For Mac/Linux agents, `scripts/onboard_agent.sh` writes these placeholder fields
 to the generated config and stores the real LAN URLs in `.llama-manager.env`.
 For Windows, set the matching environment variables locally and copy the
 controller registration key printed by `scripts/onboard_controller.sh` into
-`LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
+`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.

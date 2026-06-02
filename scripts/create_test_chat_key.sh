@@ -74,7 +74,7 @@ import sys
 
 path = Path(sys.argv[1])
 value = sys.argv[2]
-key = "LLAMA_MANAGER_TEST_CHAT_API_KEY"
+key = "NEURAXIS_TEST_CHAT_API_KEY"
 line = f"export {key}={shlex.quote(value)}\n"
 prefix = f"export {key}="
 lines = path.read_text(encoding="utf-8").splitlines(keepends=True) if path.exists() else []
@@ -94,5 +94,5 @@ PY
 chmod 600 "$ENV_FILE"
 echo "$OUTPUT"
 echo
-echo "Updated LLAMA_MANAGER_TEST_CHAT_API_KEY in $ENV_FILE"
+echo "Updated NEURAXIS_TEST_CHAT_API_KEY in $ENV_FILE"
 echo "Source this env file and restart the controller before opening /ui/test-chat."

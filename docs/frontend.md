@@ -16,7 +16,7 @@ Do not commit `frontend/node_modules`.
 Start FastAPI in another terminal:
 
 ```bash
-LLAMA_MANAGER_CONFIG=config.example.yaml uv run uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
+NEURAXIS_CONFIG=config.example.yaml uv run uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
 ```
 
 Use your normal controller or agent config instead of `config.example.yaml` when testing real nodes and model workflows.
@@ -51,8 +51,8 @@ scripts/dev_fullstack.sh
 ```
 
 `scripts/dev_fullstack.sh` auto-detects backend mode from your active config
-(`LLAMA_MANAGER_CONFIG` or `config.yaml`) and starts `agent` or `controller`
-accordingly. Set `LLAMA_MANAGER_MODE` explicitly if you want to override this.
+(`NEURAXIS_CONFIG` or `config.yaml`) and starts `agent` or `controller`
+accordingly. Set `NEURAXIS_MODE` explicitly if you want to override this.
 
 Use `scripts/start_controller.sh` or `scripts/start_agent.sh` when you only
 want to start the backend.

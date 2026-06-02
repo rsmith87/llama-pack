@@ -17,9 +17,9 @@ Generate a replacement key, write it to .llama-manager.env, and print the
 value or config snippet needed on the other machines.
 
 Types:
-  controller-registration   Rotate LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY.
-  agent-api                 Rotate LLAMA_MANAGER_AGENT_API_KEY.
-  agent-registration        Rotate LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND.
+  controller-registration   Rotate NEURAXIS_CONTROLLER_REGISTRATION_KEY.
+  agent-api                 Rotate NEURAXIS_AGENT_API_KEY.
+  agent-registration        Rotate NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND.
 
 Options:
   --env-file PATH           Local secrets file to update. Default: ./.llama-manager.env
@@ -71,13 +71,13 @@ done
 
 case "$KEY_TYPE" in
   controller-registration)
-    ENV_KEY="LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY"
+    ENV_KEY="NEURAXIS_CONTROLLER_REGISTRATION_KEY"
     ;;
   agent-api)
-    ENV_KEY="LLAMA_MANAGER_AGENT_API_KEY"
+    ENV_KEY="NEURAXIS_AGENT_API_KEY"
     ;;
   agent-registration)
-    ENV_KEY="LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND"
+    ENV_KEY="NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND"
     ;;
   "")
     echo "--type is required." >&2
@@ -133,10 +133,10 @@ case "$KEY_TYPE" in
   controller-registration)
     cat <<EOF
 New controller registration key:
-  export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
+  export NEURAXIS_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
 
 On each agent, update:
-  export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
+  export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
 
 Then restart the controller and each agent.
 EOF
@@ -144,7 +144,7 @@ EOF
   agent-api)
     cat <<EOF
 New agent API key:
-  export LLAMA_MANAGER_AGENT_API_KEY='$NEW_KEY'
+  export NEURAXIS_AGENT_API_KEY='$NEW_KEY'
 
 On the controller, update this node entry:
   nodes:
@@ -159,10 +159,10 @@ EOF
   agent-registration)
     cat <<EOF
 New outbound controller registration key for this agent:
-  export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
+  export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
 
 On the controller, update:
-  export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
+  export NEURAXIS_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
 
 Then restart the controller and this agent.
 EOF

@@ -74,10 +74,10 @@ GROUPED_FILE_FIELDS: dict[str, frozenset[str]] = {
 }
 
 EXAMPLE_SECRET_PLACEHOLDERS: dict[str, str] = {
-    "agent_api_key": "${LLAMA_MANAGER_AGENT_API_KEY}",
-    "test_chat_api_key": "${LLAMA_MANAGER_TEST_CHAT_API_KEY}",
-    "controller_registration_key": "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}",
-    "controller_registration_key_outbound": "${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
+    "agent_api_key": "${NEURAXIS_AGENT_API_KEY}",
+    "test_chat_api_key": "${NEURAXIS_TEST_CHAT_API_KEY}",
+    "controller_registration_key": "${NEURAXIS_CONTROLLER_REGISTRATION_KEY}",
+    "controller_registration_key_outbound": "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
 }
 
 # ---------------------------------------------------------------------------
@@ -236,7 +236,7 @@ def _dump_split_config(config: AppConfig) -> None:
 
 def load_config(source: str | Path | dict[str, Any] | None = None) -> AppConfig:
     if source is None:
-        source = os.getenv("LLAMA_MANAGER_CONFIG")
+        source = os.getenv("NEURAXIS_CONFIG")
         if source is None:
             local_config = Path("config.yaml")
             if local_config.exists():
@@ -269,10 +269,10 @@ def load_config(source: str | Path | dict[str, Any] | None = None) -> AppConfig:
             data = {k: v for k, v in root_data.items() if k != "files"}
         config_source = str(config_path.resolve())
 
-    mode_override = os.getenv("LLAMA_MANAGER_MODE")
+    mode_override = os.getenv("NEURAXIS_MODE")
     if mode_override:
         data = {**data, "mode": mode_override}
-    test_chat_key = os.getenv("LLAMA_MANAGER_TEST_CHAT_API_KEY")
+    test_chat_key = os.getenv("NEURAXIS_TEST_CHAT_API_KEY")
     if test_chat_key:
         data = {**data, "test_chat_api_key": test_chat_key}
 

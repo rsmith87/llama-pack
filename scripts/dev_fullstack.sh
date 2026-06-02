@@ -6,7 +6,7 @@ DEFAULT_CONFIG="$ROOT_DIR/config.example.yaml"
 if [[ -f "$ROOT_DIR/config.yaml" ]]; then
 	DEFAULT_CONFIG="$ROOT_DIR/config.yaml"
 fi
-CONFIG="${LLAMA_MANAGER_CONFIG:-$DEFAULT_CONFIG}"
+CONFIG="${NEURAXIS_CONFIG:-$DEFAULT_CONFIG}"
 
 if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
 	PYTHON="$ROOT_DIR/.venv/bin/python"
@@ -14,13 +14,13 @@ else
 	PYTHON="${PYTHON:-python3}"
 fi
 
-MODE="${LLAMA_MANAGER_MODE:-}"
+MODE="${NEURAXIS_MODE:-}"
 if [[ -z "$MODE" ]]; then
-	MODE="$(LLAMA_MANAGER_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
+	MODE="$(NEURAXIS_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
 import os
 from llama_manager.core.config import load_config
 
-os.environ.pop("LLAMA_MANAGER_MODE", None)
+os.environ.pop("NEURAXIS_MODE", None)
 print(load_config().mode)
 PY
 )"
@@ -32,10 +32,10 @@ echo "Tip: stop with scripts/stop_server.sh ${MODE} && scripts/stop_frontend.sh"
 
 case "$MODE" in
 	"agent")
-		LLAMA_MANAGER_START_FRONTEND=1 exec "$ROOT_DIR/scripts/start_agent.sh"
+		NEURAXIS_START_FRONTEND=1 exec "$ROOT_DIR/scripts/start_agent.sh"
 		;;
 	"controller")
-		LLAMA_MANAGER_START_FRONTEND=1 exec "$ROOT_DIR/scripts/start_controller.sh"
+		NEURAXIS_START_FRONTEND=1 exec "$ROOT_DIR/scripts/start_controller.sh"
 		;;
 	*)
 		echo "Unsupported mode '$MODE'. Expected 'agent' or 'controller'." >&2

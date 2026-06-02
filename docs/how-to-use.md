@@ -40,7 +40,7 @@ scripts/start_controller.sh
 ```
 
 `scripts/onboard_controller.sh` creates `config.yaml` when needed, writes
-`.llama-manager.env`, generates `LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY`,
+`.llama-manager.env`, generates `NEURAXIS_CONTROLLER_REGISTRATION_KEY`,
 runs migrations, and creates the first admin API key. Use
 `--skip-migrations` only when you want to handle migrations/admin-key creation
 manually.
@@ -48,16 +48,16 @@ manually.
 For an agent host:
 
 ```bash
-export LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 scripts/onboard_agent.sh \
   --node mac-agent \
-  --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" \
-  --agent-url "$LLAMA_MANAGER_AGENT_URL"
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL"
 scripts/start_agent.sh
 ```
 
 `scripts/onboard_agent.sh` creates an agent config, writes
-`.llama-manager.env`, generates `LLAMA_MANAGER_AGENT_API_KEY`, and prints the
+`.llama-manager.env`, generates `NEURAXIS_AGENT_API_KEY`, and prints the
 controller `nodes:` entry that must use that agent key. The generated config
 keeps `controller_url` and `agent_url` as environment placeholders; the real
 LAN URLs passed to `--controller-url` and `--agent-url` are written only to
@@ -67,7 +67,7 @@ To rotate keys later:
 
 ```bash
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$LLAMA_MANAGER_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$NEURAXIS_AGENT_URL"
 ```
 
 The startup and stop scripts source `.llama-manager.env` automatically:
@@ -125,7 +125,7 @@ If `hf_models_dirs` is present, it is used instead of the legacy single-root fie
 Before creating admin keys or starting the service, apply migrations:
 
 ```bash
-export LLAMA_MANAGER_CONFIG=config.yaml
+export NEURAXIS_CONFIG=config.yaml
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
 alembic -x db=audit upgrade audit@head
@@ -146,13 +146,13 @@ steps for fresh controller setup.
 ## 5. Start An Agent
 
 ```bash
-LLAMA_MANAGER_CONFIG=config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
+NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:LLAMA_MANAGER_CONFIG = "config.yaml"
+$env:NEURAXIS_CONFIG = "config.yaml"
 uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
 ```
 
@@ -292,7 +292,7 @@ log_dir: ./logs
 
 nodes:
   windows-2080ti:
-    url: ${LLAMA_MANAGER_WINDOWS_2080TI_AGENT_URL}
+    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
     api_key: windows-agent-key-if-enabled
     verify_tls: true
 
@@ -303,11 +303,11 @@ node_heartbeat_timeout_seconds: 90
 Run controller (different port from local agent):
 
 ```bash
-LLAMA_MANAGER_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
+NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
 ```
 
 If `controller.yaml` is recorded in `.llama-manager.env` as
-`LLAMA_MANAGER_CONFIG`, you can also use:
+`NEURAXIS_CONFIG`, you can also use:
 
 ```bash
 scripts/start_controller.sh
@@ -317,7 +317,7 @@ For local React UI development, start the controller and Vite dev server
 together:
 
 ```bash
-LLAMA_MANAGER_START_FRONTEND=1 scripts/start_controller.sh
+NEURAXIS_START_FRONTEND=1 scripts/start_controller.sh
 ```
 
 The React dev site runs at `http://127.0.0.1:5173/ui/react/`. See
@@ -346,21 +346,21 @@ Pi controller config essentials:
 ```yaml
 mode: controller
 log_dir: /home/{user_name}/llama-manager/logs
-controller_registration_key: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 nodes:
   mac-mini:
-    url: ${LLAMA_MANAGER_MAC_MINI_AGENT_URL}
-    api_key: ${LLAMA_MANAGER_MAC_MINI_AGENT_API_KEY}
+    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
+    api_key: ${NEURAXIS_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
-    url: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_URL}
-    api_key: ${LLAMA_MANAGER_LINUX_2080TI_AGENT_API_KEY}
+    url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}
+    api_key: ${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 ```
 
-On each agent, run `scripts/onboard_agent.sh --controller-url "$LLAMA_MANAGER_CONTROLLER_URL" --agent-url "$LLAMA_MANAGER_AGENT_URL"`. If the agent worker is enabled, make sure the agent's generated `LLAMA_MANAGER_AGENT_API_KEY` matches the corresponding `nodes.<name>.api_key` value on the Pi controller.
+On each agent, run `scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"`. If the agent worker is enabled, make sure the agent's generated `NEURAXIS_AGENT_API_KEY` matches the corresponding `nodes.<name>.api_key` value on the Pi controller.
 
 ## 13. Enable Agent Worker Jobs
 
@@ -385,11 +385,11 @@ Agent config:
 
 ```yaml
 mode: agent
-controller_url: ${LLAMA_MANAGER_CONTROLLER_URL}
+controller_url: ${NEURAXIS_CONTROLLER_URL}
 node_name: mac-agent
-agent_url: ${LLAMA_MANAGER_AGENT_URL}
-agent_api_key: ${LLAMA_MANAGER_AGENT_API_KEY}
-controller_registration_key_outbound: ${LLAMA_MANAGER_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+agent_url: ${NEURAXIS_AGENT_URL}
+agent_api_key: ${NEURAXIS_AGENT_API_KEY}
+controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 agent_worker_enabled: true
 agent_worker_poll_interval_seconds: 2
 agent_worker_max_jobs: 1

@@ -13,7 +13,7 @@ operator, node, model, auth, audit, or settings endpoints.
 ```bash
 curl -X POST http://127.0.0.1:9137/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [
@@ -46,7 +46,7 @@ app key boundary applies here:
 ```bash
 curl -X POST http://127.0.0.1:9137/api/chat \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [
@@ -321,7 +321,7 @@ orchestration job, and targets it at the destination node's worker:
 ```bash
 curl -X POST http://127.0.0.1:9137/lm-api/v1/nodes/mac-mini/transfers \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_MANAGER_API_KEY" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
   -d '{
     "destination_node": "linux-2080ti",
     "source_file_id": "<gguf-file-id>",

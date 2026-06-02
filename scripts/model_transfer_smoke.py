@@ -161,7 +161,7 @@ def select_source_file(files: list[dict[str, Any]], selector: str) -> dict[str, 
 
 def start_agent(config_path: Path, host: str, port: int) -> subprocess.Popen[str]:
     env = os.environ.copy()
-    env["LLAMA_MANAGER_CONFIG"] = str(config_path)
+    env["NEURAXIS_CONFIG"] = str(config_path)
     return subprocess.Popen(
         [
             sys.executable,
@@ -280,19 +280,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--node", default="linux-2080ti")
-    parser.add_argument("--host", default=os.getenv("LLAMA_MANAGER_HOST", "0.0.0.0"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("LLAMA_MANAGER_PORT", "9137")))
+    parser.add_argument("--host", default=os.getenv("NEURAXIS_HOST", "0.0.0.0"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("NEURAXIS_PORT", "9137")))
     parser.add_argument("--timeout", type=float, default=90)
-    parser.add_argument("--controller-api-key", default=os.getenv("LLAMA_MANAGER_CONTROLLER_API_KEY"))
+    parser.add_argument("--controller-api-key", default=os.getenv("NEURAXIS_CONTROLLER_API_KEY"))
     parser.add_argument("--source-node", required=True, help="Controller node name for the source agent.")
     parser.add_argument(
         "--source-agent-url",
-        default=os.getenv("LLAMA_MANAGER_SOURCE_AGENT_URL"),
+        default=os.getenv("NEURAXIS_SOURCE_AGENT_URL"),
         help="Direct source agent URL used to resolve the selected GGUF from /library/ggufs.",
     )
     parser.add_argument(
         "--source-agent-api-key",
-        default=os.getenv("LLAMA_MANAGER_SOURCE_AGENT_API_KEY"),
+        default=os.getenv("NEURAXIS_SOURCE_AGENT_API_KEY"),
         help="API key for the direct source agent /library/ggufs request.",
     )
     parser.add_argument(

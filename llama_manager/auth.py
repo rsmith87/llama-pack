@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m llama_manager.auth")
     parser.add_argument(
         "--config",
-        help="Path to a Neuraxis config file. Defaults to LLAMA_MANAGER_CONFIG/config.yaml/config.example.yaml.",
+        help="Path to a Neuraxis config file. Defaults to NEURAXIS_CONFIG/config.yaml/config.example.yaml.",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
 
@@ -45,7 +45,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Created test chat key for {created['username']}")
         print(f"Key ID: {created['id']}")
         print(f"API key: {created['key']}")
-        print("Set LLAMA_MANAGER_TEST_CHAT_API_KEY to this value for /ui/test-chat bootstrap injection.")
+        print("Set NEURAXIS_TEST_CHAT_API_KEY to this value for /ui/test-chat bootstrap injection.")
         print("Store this key now; it will not be shown again by the auth database.")
         return 0
 

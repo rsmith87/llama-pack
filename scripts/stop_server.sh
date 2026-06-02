@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${LLAMA_MANAGER_ENV_FILE:-$ROOT_DIR/.llama-manager.env}"
+ENV_FILE="${NEURAXIS_ENV_FILE:-$ROOT_DIR/.llama-manager.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -32,8 +32,8 @@ pid_file_for_target() {
   esac
 }
 
-if [[ -n "${LLAMA_MANAGER_PID_FILE:-}" ]]; then
-  PID_FILE="$LLAMA_MANAGER_PID_FILE"
+if [[ -n "${NEURAXIS_PID_FILE:-}" ]]; then
+  PID_FILE="$NEURAXIS_PID_FILE"
 elif [[ "$TARGET" == "auto" ]]; then
   PID_FILE=""
   for candidate in \
