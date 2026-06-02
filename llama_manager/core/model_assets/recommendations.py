@@ -69,10 +69,10 @@ CATALOG: tuple[RecommendationCatalogItem, ...] = (
         include_file="Qwen3-4B-Instruct-Q4_K_M.gguf",
         quant="Q4_K_M",
         min_ram_gb=8,
-        min_vram_gb=None,
+        min_vram_gb=4,
         estimated_size_gb=3,
-        fit_label="Small machine pick",
-        use_case="Fast local chat/coding on lower-memory laptops.",
+        fit_label="Small GPU pick",
+        use_case="Fast local chat/coding with modest GPU offload headroom.",
     ),
     RecommendationCatalogItem(
         repo_id="bartowski/Qwen3-8B-Instruct-GGUF",
@@ -80,10 +80,10 @@ CATALOG: tuple[RecommendationCatalogItem, ...] = (
         include_file="Qwen3-8B-Instruct-Q4_K_M.gguf",
         quant="Q4_K_M",
         min_ram_gb=12,
-        min_vram_gb=None,
+        min_vram_gb=6,
         estimated_size_gb=5,
-        fit_label="Balanced local chat",
-        use_case="General local assistant workloads on 16 GB-class machines.",
+        fit_label="Balanced GPU chat",
+        use_case="General local assistant workloads with practical GPU acceleration.",
     ),
     RecommendationCatalogItem(
         repo_id="bartowski/gemma-4-E2B-it-GGUF",
@@ -91,10 +91,10 @@ CATALOG: tuple[RecommendationCatalogItem, ...] = (
         include_file="gemma-4-E2B-it-Q4_K_M.gguf",
         quant="Q4_K_M",
         min_ram_gb=12,
-        min_vram_gb=None,
+        min_vram_gb=6,
         estimated_size_gb=5,
         fit_label="Instruction-tuned alternative",
-        use_case="Useful second opinion for text-only assistant tasks.",
+        use_case="Useful GPU-friendly second opinion for text-only assistant tasks.",
     ),
     RecommendationCatalogItem(
         repo_id="bartowski/Qwen3-14B-Instruct-GGUF",
@@ -114,6 +114,7 @@ def recommend_downloads(system: dict[str, Any] | None, *, hf_api: Any | None = N
     machine = _machine_from_system(system)
     ram_gb = float(machine["ram_gb"])
     vram_gb = float(machine["vram_gb"])
+    gpu_memory_gb = _gpu_fit_memory_gb(machine)
     unknown_capacity = ram_gb <= 0 and vram_gb <= 0
     catalog = _catalog_with_hugging_face_discoveries(hf_api)
 
@@ -121,11 +122,15 @@ def recommend_downloads(system: dict[str, Any] | None, *, hf_api: Any | None = N
     excluded: list[dict[str, object]] = []
     for item in catalog:
         conservative_default = unknown_capacity and item.min_ram_gb <= 12
-        fits = ram_gb >= item.min_ram_gb or (item.min_vram_gb is not None and vram_gb >= item.min_vram_gb) or conservative_default
+        fits = (
+            (item.min_vram_gb is not None and gpu_memory_gb >= item.min_vram_gb)
+            or ram_gb >= item.min_ram_gb
+            or conservative_default
+        )
         payload = _item_payload(
             item,
-            score=_score(item, ram_gb, vram_gb, conservative_default=conservative_default) if fits else 0,
-            fit_reason=_fit_reason(item, ram_gb, vram_gb, fits=fits, conservative_default=conservative_default),
+            score=_score(item, ram_gb, gpu_memory_gb, conservative_default=conservative_default) if fits else 0,
+            fit_reason=_fit_reason(item, ram_gb, gpu_memory_gb, machine, fits=fits, conservative_default=conservative_default),
         )
         if fits:
             recommendations.append(payload)
@@ -258,11 +263,29 @@ def _machine_from_system(system: dict[str, Any] | None) -> dict[str, object]:
     data = system if isinstance(system, dict) else {}
     ram = data.get("ram") if isinstance(data.get("ram"), dict) else {}
     platform = str(data.get("platform") or "unknown")
+    architecture = str(data.get("architecture") or data.get("machine") or "unknown")
     return {
         "ram_gb": round(max(_gb_from_bytes(ram.get("total")), _number(data.get("memory_gb")), _number(data.get("ram_gb"))), 1),
         "vram_gb": round(max(_vram_total_gb(data.get("vram")), _number(data.get("vram_gb"))), 1),
         "platform": platform,
+        "architecture": architecture,
     }
+
+
+def _gpu_fit_memory_gb(machine: dict[str, object]) -> float:
+    vram_gb = float(machine["vram_gb"])
+    if vram_gb > 0:
+        return vram_gb
+    if _has_unified_gpu_memory(machine):
+        # Apple Silicon reports unified memory instead of discrete VRAM.
+        return float(machine["ram_gb"])
+    return 0.0
+
+
+def _has_unified_gpu_memory(machine: dict[str, object]) -> bool:
+    platform_name = str(machine["platform"]).lower()
+    architecture = str(machine.get("architecture", "")).lower()
+    return platform_name == "darwin" and architecture in {"arm64", "aarch64"}
 
 
 def _vram_total_gb(value: Any) -> float:
@@ -287,24 +310,42 @@ def _number(value: Any) -> float:
     return numeric if numeric > 0 else 0.0
 
 
-def _score(item: RecommendationCatalogItem, ram_gb: float, vram_gb: float, *, conservative_default: bool) -> int:
+def _score(item: RecommendationCatalogItem, ram_gb: float, gpu_memory_gb: float, *, conservative_default: bool) -> int:
     if conservative_default:
         return max(10, 70 - int(item.min_ram_gb))
+    if item.min_vram_gb is not None and gpu_memory_gb < item.min_vram_gb:
+        ram_headroom = max(0.0, ram_gb - item.min_ram_gb)
+        return max(10, min(45, int(45 - item.min_ram_gb * 0.25 + min(5, ram_headroom * 0.1))))
     ram_headroom = max(0.0, ram_gb - item.min_ram_gb)
-    vram_headroom = max(0.0, vram_gb - (item.min_vram_gb or item.estimated_size_gb))
-    return min(100, int(60 + ram_headroom * 2 + vram_headroom * 3))
+    gpu_headroom = max(0.0, gpu_memory_gb - (item.min_vram_gb or item.estimated_size_gb))
+    gpu_fit_bonus = 10 if item.min_vram_gb is not None and gpu_memory_gb >= item.min_vram_gb else 0
+    quality_bias = item.min_ram_gb * 2
+    return min(100, int(40 + quality_bias + gpu_fit_bonus + min(10, gpu_headroom * 0.2) + min(5, ram_headroom * 0.1)))
 
 
-def _fit_reason(item: RecommendationCatalogItem, ram_gb: float, vram_gb: float, *, fits: bool, conservative_default: bool) -> str:
+def _fit_reason(
+    item: RecommendationCatalogItem,
+    ram_gb: float,
+    gpu_memory_gb: float,
+    machine: dict[str, object],
+    *,
+    fits: bool,
+    conservative_default: bool,
+) -> str:
     if conservative_default:
         return "Conservative pick shown until hardware capacity is available."
+    if fits and item.min_vram_gb is not None and gpu_memory_gb >= item.min_vram_gb:
+        if float(machine["vram_gb"]) > 0:
+            return f"Fits {gpu_memory_gb:g} GB VRAM with conservative GPU headroom."
+        if _has_unified_gpu_memory(machine):
+            return f"Fits {gpu_memory_gb:g} GB Apple unified memory for GPU offload."
     if fits and ram_gb >= item.min_ram_gb:
-        return f"Fits {ram_gb:g} GB RAM with conservative headroom."
-    if fits and item.min_vram_gb is not None and vram_gb >= item.min_vram_gb:
-        return f"Fits {vram_gb:g} GB VRAM with conservative headroom."
+        if float(machine["vram_gb"]) > 0 and item.min_vram_gb is not None:
+            return f"Fits {ram_gb:g} GB RAM, but only {float(machine['vram_gb']):g} GB GPU memory was detected."
+        return f"Fits {ram_gb:g} GB RAM, but GPU memory was not detected."
     if item.min_vram_gb is None:
         return f"Needs at least {item.min_ram_gb:g} GB RAM."
-    return f"Needs at least {item.min_ram_gb:g} GB RAM or {item.min_vram_gb:g} GB VRAM."
+    return f"Needs at least {item.min_vram_gb:g} GB GPU memory or {item.min_ram_gb:g} GB RAM."
 
 
 def _item_payload(item: RecommendationCatalogItem, *, score: int, fit_reason: str) -> dict[str, object]:

@@ -3625,6 +3625,7 @@ def test_download_recommendations_route_returns_machine_fit_models(tmp_path):
         "llama_manager.core.runtime.health_check.get_system_metrics",
         return_value={
             "platform": "Darwin",
+            "architecture": "arm64",
             "ram": {"total": 16 * 1024**3, "available": 12 * 1024**3},
             "vram": [{"memory_total_mb": 8192, "memory_free_mb": 6144}],
         },
@@ -3632,7 +3633,7 @@ def test_download_recommendations_route_returns_machine_fit_models(tmp_path):
         client = TestClient(app)
         payload = client.get("/lm-api/v1/downloads/recommendations").json()
 
-    assert payload["machine"] == {"ram_gb": 16.0, "vram_gb": 8.0, "platform": "Darwin"}
+    assert payload["machine"] == {"ram_gb": 16.0, "vram_gb": 8.0, "platform": "Darwin", "architecture": "arm64"}
     titles = [item["title"] for item in payload["recommendations"]]
     assert "Qwen3 8B Instruct" in titles
     assert "Qwen3 14B Instruct" not in titles
@@ -3650,6 +3651,7 @@ def test_download_recommendations_route_works_for_controller(tmp_path):
         "llama_manager.core.runtime.health_check.get_system_metrics",
         return_value={
             "platform": "Linux",
+            "architecture": "x86_64",
             "ram": {"total": 32 * 1024**3, "available": 28 * 1024**3},
             "vram": [{"memory_total_mb": 12288, "memory_free_mb": 10240}],
         },
@@ -3697,7 +3699,7 @@ def test_download_recommendations_route_includes_multimodal_discoveries_with_mmp
 
     with patch(
         "llama_manager.core.runtime.health_check.get_system_metrics",
-        return_value={"platform": "Darwin", "ram": {"total": 16 * 1024**3}, "vram": None},
+        return_value={"platform": "Darwin", "architecture": "arm64", "ram": {"total": 16 * 1024**3}, "vram": None},
     ):
         client = TestClient(app)
         payload = client.get("/lm-api/v1/downloads/recommendations").json()

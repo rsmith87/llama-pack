@@ -24,6 +24,22 @@ it("renders quantizable GGUF files", async () => {
   expect(screen.getByText("ready")).toBeInTheDocument();
 });
 
+it("hides already quantized GGUF files by filename suffix", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
+    { id: "file-1", model_dir: "Qwen", filename: "qwen.gguf", size_gb: 12, quantize_bin: "/bin/llama-quantize" },
+    { id: "file-2", model_dir: "Qwen", filename: "qwen-Q4_K_M.gguf", size_gb: 4, quantize_bin: "/bin/llama-quantize" },
+    { id: "file-3", model_dir: "Qwen", filename: "qwen.IQ2_XS.gguf", size_gb: 2, quantize_bin: "/bin/llama-quantize" },
+    { id: "file-4", model_dir: "Qwen", filename: "qwen.Q8_0.gguf", size_gb: 8, quantize_bin: "/bin/llama-quantize" },
+  ])));
+
+  render(<QuantizationPage />);
+
+  expect(await screen.findByText("qwen.gguf")).toBeInTheDocument();
+  expect(screen.queryByText("qwen-Q4_K_M.gguf")).not.toBeInTheDocument();
+  expect(screen.queryByText("qwen.IQ2_XS.gguf")).not.toBeInTheDocument();
+  expect(screen.queryByText("qwen.Q8_0.gguf")).not.toBeInTheDocument();
+});
+
 it("starts quantization with the selected type", async () => {
   vi.stubGlobal(
     "fetch",

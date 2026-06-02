@@ -15,6 +15,7 @@ def get_system_metrics() -> dict[str, Any]:
     if psutil is None:
         return {
             "platform": platform.system(),
+            "architecture": platform.machine(),
             "ram": None,
             "cpu": None,
             "vram": _nvidia_smi_metrics(),
@@ -23,6 +24,7 @@ def get_system_metrics() -> dict[str, Any]:
     memory = psutil.virtual_memory()
     metrics: dict[str, Any] = {
         "platform": platform.system(),
+        "architecture": platform.machine(),
         "ram": {
             "total": memory.total,
             "available": memory.available,

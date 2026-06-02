@@ -351,6 +351,7 @@ def test_download_recommendations_fit_16gb_ram_and_8gb_vram():
     payload = recommend_downloads(
         {
             "platform": "Darwin",
+            "architecture": "arm64",
             "ram": {"total": 16 * 1024**3, "available": 12 * 1024**3},
             "vram": [{"memory_total_mb": 8192, "memory_free_mb": 6144}],
         }
@@ -362,13 +363,14 @@ def test_download_recommendations_fit_16gb_ram_and_8gb_vram():
     assert "Gemma 4 E2B IT" in titles
     assert "Qwen3 14B Instruct" not in titles
     assert [item["title"] for item in payload["excluded"]] == ["Qwen3 14B Instruct"]
-    assert payload["machine"] == {"ram_gb": 16.0, "vram_gb": 8.0, "platform": "Darwin"}
+    assert payload["machine"] == {"ram_gb": 16.0, "vram_gb": 8.0, "platform": "Darwin", "architecture": "arm64"}
 
 
 def test_download_recommendations_include_14b_for_large_machine():
     payload = recommend_downloads(
         {
             "platform": "Linux",
+            "architecture": "x86_64",
             "ram": {"total": 32 * 1024**3, "available": 28 * 1024**3},
             "vram": [{"memory_total_mb": 12288, "memory_free_mb": 10240}],
         }
@@ -376,6 +378,64 @@ def test_download_recommendations_include_14b_for_large_machine():
 
     assert "Qwen3 14B Instruct" in [item["title"] for item in payload["recommendations"]]
     assert payload["excluded"] == []
+
+
+def test_download_recommendations_prefer_vram_fit_reason_when_gpu_memory_is_detected():
+    payload = recommend_downloads(
+        {
+            "platform": "Linux",
+            "architecture": "x86_64",
+            "ram": {"total": 64 * 1024**3},
+            "vram": [{"memory_total_mb": 24 * 1024}],
+        }
+    )
+
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    assert qwen["fit_reason"] == "Fits 24 GB VRAM with conservative GPU headroom."
+
+
+def test_download_recommendations_report_apple_unified_memory_for_gpu_offload():
+    payload = recommend_downloads(
+        {
+            "platform": "Darwin",
+            "architecture": "arm64",
+            "ram": {"total": 64 * 1024**3},
+            "vram": None,
+        }
+    )
+
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    assert qwen["fit_reason"] == "Fits 64 GB Apple unified memory for GPU offload."
+
+
+def test_download_recommendations_do_not_treat_intel_macos_ram_as_gpu_memory():
+    payload = recommend_downloads(
+        {
+            "platform": "Darwin",
+            "architecture": "x86_64",
+            "ram": {"total": 64 * 1024**3},
+            "vram": None,
+        }
+    )
+
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    assert qwen["fit_reason"] == "Fits 64 GB RAM, but GPU memory was not detected."
+
+
+def test_download_recommendations_demote_large_models_without_gpu_memory():
+    payload = recommend_downloads(
+        {
+            "platform": "Linux",
+            "architecture": "x86_64",
+            "ram": {"total": 64 * 1024**3},
+            "vram": None,
+        }
+    )
+
+    titles = [item["title"] for item in payload["recommendations"]]
+    assert titles.index("Qwen3 4B Instruct") < titles.index("Qwen3 14B Instruct")
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    assert qwen["fit_reason"] == "Fits 64 GB RAM, but GPU memory was not detected."
 
 
 def test_download_recommendations_use_conservative_defaults_without_metrics():
@@ -386,20 +446,21 @@ def test_download_recommendations_use_conservative_defaults_without_metrics():
         "Qwen3 8B Instruct",   # score 58, title > "Gemma 4 E2B IT" descending
         "Gemma 4 E2B IT",      # score 58
     ]
-    assert payload["machine"] == {"ram_gb": 0.0, "vram_gb": 0.0, "platform": "Unknown"}
+    assert payload["machine"] == {"ram_gb": 0.0, "vram_gb": 0.0, "platform": "Unknown", "architecture": "unknown"}
 
 
 def test_download_recommendations_tolerate_malformed_metrics():
     payload = recommend_downloads(
         {
             "platform": "Darwin",
+            "architecture": "arm64",
             "ram": {"total": "not-a-number"},
             "vram": [{"memory_total_mb": "bad"}],
         }
     )
 
     assert payload["recommendations"]
-    assert payload["machine"] == {"ram_gb": 0.0, "vram_gb": 0.0, "platform": "Darwin"}
+    assert payload["machine"] == {"ram_gb": 0.0, "vram_gb": 0.0, "platform": "Darwin", "architecture": "arm64"}
 
 
 class FakeHfModel:
@@ -468,6 +529,7 @@ def test_download_recommendations_include_hugging_face_discoveries_for_machine()
     payload = recommend_downloads(
         {
             "platform": "Darwin",
+            "architecture": "arm64",
             "ram": {"total": 16 * 1024**3},
             "vram": None,
         },
@@ -489,7 +551,7 @@ def test_download_recommendations_fall_back_when_hugging_face_discovery_fails():
         def list_models(self, **kwargs):
             raise RuntimeError("offline")
 
-    payload = recommend_downloads({"platform": "Darwin", "ram": {"total": 16 * 1024**3}}, hf_api=FailingHfApi())
+    payload = recommend_downloads({"platform": "Darwin", "architecture": "arm64", "ram": {"total": 16 * 1024**3}}, hf_api=FailingHfApi())
 
     assert "Qwen3 8B Instruct" in [item["title"] for item in payload["recommendations"]]
 
@@ -499,6 +561,7 @@ def test_download_recommendations_include_multimodal_hugging_face_repos_with_mmp
     payload = recommend_downloads(
         {
             "platform": "Darwin",
+            "architecture": "arm64",
             "ram": {"total": 16 * 1024**3},
             "vram": None,
         },
@@ -516,7 +579,7 @@ def test_download_recommendations_include_multimodal_hugging_face_repos_with_mmp
 def test_download_manager_caches_hugging_face_recommendations(tmp_path):
     api = FakeRecommendationHfApi()
     manager, _store, _unused_api = make_manager(tmp_path, hf_api=api)
-    system = {"platform": "Darwin", "ram": {"total": 16 * 1024**3}}
+    system = {"platform": "Darwin", "architecture": "arm64", "ram": {"total": 16 * 1024**3}}
 
     first = manager.recommendations(system)
     second = manager.recommendations(system)

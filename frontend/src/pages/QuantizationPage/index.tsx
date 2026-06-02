@@ -5,6 +5,7 @@ import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Butt
 import type { QuantizationFile } from "../../types/api";
 
 const DEFAULT_TYPES = ["Q4_K_M"];
+const QUANTIZED_GGUF_SUFFIX = /(?:^|[-._])(?:Q[2-8](?:_[0-9A-Z]+)*|IQ[1-4](?:_[0-9A-Z]+)*|TQ[1-2](?:_[0-9A-Z]+)*)\.gguf$/i;
 
 function asFiles(payload: unknown): QuantizationFile[] {
   if (Array.isArray(payload)) return payload as QuantizationFile[];
@@ -22,6 +23,10 @@ function fileId(file: QuantizationFile) {
 
 function fileName(file: QuantizationFile) {
   return text(file, "filename", text(file, "name", fileId(file)));
+}
+
+function isAlreadyQuantizedGguf(file: QuantizationFile) {
+  return QUANTIZED_GGUF_SUFFIX.test(fileName(file));
 }
 
 function sizeGb(file: QuantizationFile) {
@@ -122,6 +127,7 @@ export function QuantizationPage() {
     for (const file of files) next[fileId(file)] = selectedTypes[fileId(file)] || String(file.type || supportedTypes(file)[0]);
     return next;
   }, [files, selectedTypes]);
+  const sourceFiles = useMemo(() => files.filter((file) => !isAlreadyQuantizedGguf(file)), [files]);
 
   async function quantize(file: QuantizationFile) {
     await startQuantization(fileId(file), { type: rowTypes[fileId(file)] || supportedTypes(file)[0] });
@@ -142,16 +148,16 @@ export function QuantizationPage() {
               <FormField label="Target VRAM (GB)"><input value={vramGb} onChange={(event) => setVramGb(Number(event.target.value || 0))} type="number" /></FormField>
               <FormField label="Latency Goal"><select value={latencyGoal} onChange={(event) => setLatencyGoal(event.target.value)}><option value="low">Low</option><option value="balanced">Balanced</option><option value="throughput">Throughput</option></select></FormField>
               <FormField label="Quality Goal"><select value={qualityGoal} onChange={(event) => setQualityGoal(event.target.value)}><option value="balanced">Balanced</option><option value="high">High</option><option value="max">Max</option></select></FormField>
-              <Button type="button" className="btn btn-primary" onClick={() => setAdvisorOutput(recommend(files, vramGb, latencyGoal, qualityGoal))}>Recommend</Button>
+              <Button type="button" className="btn btn-primary" onClick={() => setAdvisorOutput(recommend(sourceFiles, vramGb, latencyGoal, qualityGoal))}>Recommend</Button>
             </div>
             <pre className="detail-json">{advisorOutput}</pre>
           </div>
         </Panel>
 
         <Panel title="Quantization Files" eyebrow="Source GGUFs">
-          {files.length === 0 && loading ? <EmptyState message="Loading quantization files..." /> : (
+          {sourceFiles.length === 0 && loading ? <EmptyState message="Loading quantization files..." /> : (
             <DataTable
-              rows={files}
+              rows={sourceFiles}
               emptyMessage="No GGUF files found for quantization."
               getRowKey={(row, index) => fileId(row) || String(index)}
               columns={[

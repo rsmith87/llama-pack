@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -10,6 +11,16 @@ from llama_manager.core.config import AppConfig
 
 
 PopenFactory = Callable[..., subprocess.Popen]
+
+
+QUANTIZED_GGUF_SUFFIX_RE = re.compile(
+    r"(?:^|[-._])(?:Q[2-8](?:_[0-9A-Z]+)*|IQ[1-4](?:_[0-9A-Z]+)*|TQ[1-2](?:_[0-9A-Z]+)*)\.gguf$",
+    re.IGNORECASE,
+)
+
+
+def is_quantized_gguf_filename(filename: str) -> bool:
+    return QUANTIZED_GGUF_SUFFIX_RE.search(filename) is not None
 
 
 class QuantizationManager:
@@ -112,7 +123,7 @@ class QuantizationManager:
         paths = []
         for root in self.config.model_roots:
             if root.exists():
-                paths.extend(root.glob("*/*.gguf"))
+                paths.extend(path for path in root.glob("*/*.gguf") if not is_quantized_gguf_filename(path.name))
         return sorted(paths, key=lambda item: str(item).lower())
 
     def _output_path(self, path: Path, quant_type: str) -> Path:

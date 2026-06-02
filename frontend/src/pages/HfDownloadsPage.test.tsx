@@ -16,16 +16,16 @@ function mockHfDownloadsFetch(overrides: Record<string, unknown> = {}) {
   const payloads: Record<string, unknown> = {
     "/lm-api/v1/downloads/history?limit=200": [],
     "/lm-api/v1/downloads/recommendations": {
-      machine: { ram_gb: 16, vram_gb: 8, platform: "Darwin" },
+      machine: { ram_gb: 16, vram_gb: 8, platform: "Darwin", architecture: "arm64" },
       recommendations: [
         {
           repo_id: "bartowski/Qwen3-8B-Instruct-GGUF",
           title: "Qwen3 8B Instruct",
           include_file: "Qwen3-8B-Instruct-Q4_K_M.gguf",
           quant: "Q4_K_M",
-          fit_label: "Balanced local chat",
-          use_case: "General local assistant workloads on 16 GB-class machines.",
-          fit_reason: "Fits 16 GB RAM with conservative headroom.",
+          fit_label: "Balanced GPU chat",
+          use_case: "General local assistant workloads with practical GPU acceleration.",
+          fit_reason: "Fits 8 GB VRAM with conservative GPU headroom.",
           score: 80,
         },
         {
@@ -35,7 +35,7 @@ function mockHfDownloadsFetch(overrides: Record<string, unknown> = {}) {
           quant: "Q4_K_M",
           fit_label: "Instruction-tuned alternative",
           use_case: "Useful second opinion for text-only assistant tasks.",
-          fit_reason: "Fits 16 GB RAM with conservative headroom.",
+          fit_reason: "Fits 8 GB VRAM with conservative GPU headroom.",
           score: 78,
         },
       ],
@@ -47,7 +47,7 @@ function mockHfDownloadsFetch(overrides: Record<string, unknown> = {}) {
           quant: "Q4_K_M",
           fit_label: "Larger local model",
           use_case: "Higher quality local chat on larger desktops and controllers.",
-          fit_reason: "Needs at least 24 GB RAM or 12 GB VRAM.",
+          fit_reason: "Needs at least 12 GB GPU memory or 24 GB RAM.",
           score: 0,
         },
       ],
@@ -107,7 +107,7 @@ it("renders machine-fit recommended download cards", async () => {
   expect(screen.getByText("Qwen3 8B Instruct")).toBeInTheDocument();
   expect(screen.getByText("Gemma 4 E2B IT")).toBeInTheDocument();
   expect(screen.queryByText("Qwen3 14B Instruct")).not.toBeInTheDocument();
-  expect(screen.getAllByText("Fits 16 GB RAM with conservative headroom.").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Fits 8 GB VRAM with conservative GPU headroom.").length).toBeGreaterThan(0);
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/downloads/recommendations", expect.objectContaining({ method: "GET" }));
 });
 
@@ -133,7 +133,7 @@ it("starts a recommended model download with the suggested quant file", async ()
 it("shows and downloads the matching mmproj for recommended vision models", async () => {
   mockHfDownloadsFetch({
     "/lm-api/v1/downloads/recommendations": {
-      machine: { ram_gb: 32, vram_gb: 12, platform: "Darwin" },
+      machine: { ram_gb: 32, vram_gb: 12, platform: "Darwin", architecture: "arm64" },
       recommendations: [
         {
           repo_id: "bad/Qwen2.5-VL-7B-Instruct-GGUF",
@@ -301,16 +301,16 @@ it("keeps manual downloads available when recommendations fail", async () => {
 it("does not render multimodal recommendations from the backend payload", async () => {
   mockHfDownloadsFetch({
     "/lm-api/v1/downloads/recommendations": {
-      machine: { ram_gb: 16, vram_gb: 8, platform: "Darwin" },
+      machine: { ram_gb: 16, vram_gb: 8, platform: "Darwin", architecture: "arm64" },
       recommendations: [
         {
           repo_id: "bartowski/Qwen3-8B-Instruct-GGUF",
           title: "Qwen3 8B Instruct",
           include_file: "Qwen3-8B-Instruct-Q4_K_M.gguf",
           quant: "Q4_K_M",
-          fit_label: "Balanced local chat",
-          use_case: "General local assistant workloads on 16 GB-class machines.",
-          fit_reason: "Fits 16 GB RAM with conservative headroom.",
+          fit_label: "Balanced GPU chat",
+          use_case: "General local assistant workloads with practical GPU acceleration.",
+          fit_reason: "Fits 8 GB VRAM with conservative GPU headroom.",
           score: 80,
         },
       ],

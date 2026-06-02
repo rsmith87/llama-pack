@@ -63,6 +63,32 @@ def test_quantization_manager_lists_gguf_sources(tmp_path):
     ]
 
 
+def test_quantization_manager_excludes_already_quantized_gguf_files(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "qwen"
+    model_dir.mkdir(parents=True)
+    source = model_dir / "qwen.gguf"
+    source.write_bytes(b"1234")
+    (model_dir / "qwen-Q4_K_M.gguf").write_bytes(b"1234")
+    (model_dir / "qwen.IQ2_XS.gguf").write_bytes(b"1234")
+    (model_dir / "qwen.Q8_0.gguf").write_bytes(b"1234")
+    make_quantize_binary(tmp_path / "llama.cpp" / "build" / "bin" / "llama-quantize")
+
+    manager = QuantizationManager(
+        load_config(
+            {
+                "hf_models_dir": str(hf_dir),
+                "llama_cpp_dir": str(tmp_path / "llama.cpp"),
+                "log_dir": str(tmp_path / "logs"),
+            }
+        )
+    )
+
+    files = manager.list_files()
+
+    assert [item["filename"] for item in files] == ["qwen.gguf"]
+
+
 def test_quantization_manager_starts_quantize_job(tmp_path):
     spawned = []
     hf_dir = tmp_path / "HFModels"

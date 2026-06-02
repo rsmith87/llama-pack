@@ -20,6 +20,7 @@ export type DownloadRecommendationsResponse = {
     ram_gb?: number;
     vram_gb?: number;
     platform?: string;
+    architecture?: string;
   };
   recommendations?: DownloadRecommendation[];
   excluded?: DownloadRecommendation[];

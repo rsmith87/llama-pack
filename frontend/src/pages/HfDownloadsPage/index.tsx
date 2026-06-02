@@ -151,7 +151,12 @@ function recommendationMachineText(payload: DownloadRecommendationsResponse | nu
   const machine = payload?.machine;
   const ramGb = Number(machine?.ram_gb || 0);
   const vramGb = Number(machine?.vram_gb || 0);
+  const platform = String(machine?.platform || "");
+  const architecture = String(machine?.architecture || "");
   if (ramGb || vramGb) {
+    if (!vramGb && platform.toLowerCase() === "darwin" && ["arm64", "aarch64"].includes(architecture.toLowerCase())) {
+      return `${Math.round(ramGb || 0)} GB Apple unified memory detected`;
+    }
     return `${Math.round(ramGb || 0)} GB RAM${vramGb ? `, ${Math.round(vramGb)} GB VRAM` : ""} detected`;
   }
   return "Conservative picks shown until hardware details are available.";
