@@ -232,6 +232,35 @@ async def test_agent_worker_does_not_duplicate_api_prefix():
 
 
 @pytest.mark.asyncio
+async def test_agent_worker_authenticates_work_requests_with_agent_api_key():
+    calls = []
+
+    async def request(method, url, payload=None, headers=None):
+        calls.append((method, url, payload, headers))
+        return []
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_api_key": "agent-key",
+                "controller_registration_key_outbound": "registration-key",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+    )
+
+    processed = await worker.run_once()
+
+    assert processed == 0
+    assert calls[0][1] == "http://controller/lm-api/v1/nodes/agent-a/work/claim"
+    assert calls[0][3] == {"X-Llama-Manager-Key": "agent-key"}
+
+
+@pytest.mark.asyncio
 async def test_agent_worker_fails_unsupported_job_type_non_retryable():
     calls = []
 

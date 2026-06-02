@@ -411,7 +411,7 @@ transparent to the agent — it sees a normal chat request with enriched context
 - `agent_worker_labels`: labels advertised to the controller claim matcher.
 - `agent_worker_capacity`: numeric/string capacity advertised to the controller claim matcher.
 
-Agent workers must be registered/configured on the controller under `nodes.<name>` with an `api_key`. The agent sends that same value with `controller_registration_key_outbound` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
+Agent workers must be registered/configured on the controller under `nodes.<name>` with an `api_key`. The agent sends its `agent_api_key` as `X-Llama-Manager-Key` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
 
 The first typed worker contract is `llm.generate`. It is intentionally narrow and reuses the existing chat payload shape (`model`, `messages`, sampling fields, structured-output fields, `reasoning`, and optional `target`/`requirements`). Future typed contracts are tracked in `superpowers/plans/2026-05-12-execution-substrate.md`.
 

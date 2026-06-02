@@ -385,8 +385,8 @@ class AgentWorker:
         return base
 
     def _headers(self) -> dict[str, str]:
-        if self.config.controller_registration_key_outbound:
-            return {"X-Llama-Manager-Key": self.config.controller_registration_key_outbound}
+        if self.config.agent_api_key:
+            return {"X-Llama-Manager-Key": self.config.agent_api_key}
         return {}
 
     @staticmethod
