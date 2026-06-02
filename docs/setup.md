@@ -88,6 +88,18 @@ The controller onboarding script writes local secrets to `.neuraxis.env`,
 including `NEURAXIS_CONTROLLER_REGISTRATION_KEY` and the first generated
 admin API key when migrations are enabled.
 
+To enable controller semantic memory during the same setup step:
+
+```bash
+scripts/onboard_controller.sh --enable-memory
+```
+
+That installs the `controller-memory` extras, downloads the default embedding
+model to `./models/embedding/all-MiniLM-L6-v2`, writes a working `memory:`
+block to the controller config, and records `NEURAXIS_MEMORY_MODEL_PATH` in
+`.neuraxis.env`. Use `--memory-model-path PATH` or `--memory-store-path PATH`
+to choose different local paths.
+
 Onboard a fresh agent:
 
 ```bash

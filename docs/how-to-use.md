@@ -45,6 +45,17 @@ runs migrations, and creates the first admin API key. Use
 `--skip-migrations` only when you want to handle migrations/admin-key creation
 manually.
 
+To opt into controller semantic memory in the same setup command:
+
+```bash
+scripts/onboard_controller.sh --enable-memory
+```
+
+The memory option installs `.[controller-memory]`, downloads the default
+embedding model, and writes the required `memory:` config. If the host already
+has the extras and model, pass `--skip-memory-install --memory-model-path PATH`
+to only write and validate config.
+
 For an agent host:
 
 ```bash

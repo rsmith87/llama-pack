@@ -10,7 +10,7 @@ export function modelName(model: { name?: string; id?: string; model?: string; p
 
 export function statusTone(status: string): "success" | "warning" | "danger" | "muted" {
   const normalized = status.toLowerCase();
-  if (["running", "ready", "available", "loaded"].includes(normalized)) return "success";
+  if (["running", "ready", "available", "loaded", "reachable"].includes(normalized)) return "success";
   if (["starting", "stopping", "loading"].includes(normalized)) return "warning";
   if (["failed", "error", "offline"].includes(normalized)) return "danger";
   return "muted";

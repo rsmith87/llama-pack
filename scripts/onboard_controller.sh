@@ -10,6 +10,10 @@ PORT="9137"
 ADMIN_USER="${USER:-admin}"
 FORCE="false"
 RUN_MIGRATIONS="true"
+ENABLE_MEMORY="false"
+MEMORY_MODEL_PATH="./models/embedding/all-MiniLM-L6-v2"
+MEMORY_STORE_PATH="./logs/agent_memory"
+INSTALL_MEMORY="true"
 
 usage() {
   cat <<'USAGE'
@@ -25,6 +29,12 @@ Options:
   --host HOST            Host used in the printed start command. Default: 0.0.0.0
   --port PORT            Port used in the printed start command. Default: 9137
   --admin-user NAME      Admin key username shown in the create-admin command. Default: $USER
+  --enable-memory        Install controller-memory extras, install the embedding model, and write memory config.
+  --memory-model-path PATH
+                         Embedding model directory for memory. Default: ./models/embedding/all-MiniLM-L6-v2
+  --memory-store-path PATH
+                         ChromaDB persistence directory for memory. Default: ./logs/agent_memory
+  --skip-memory-install  Write/validate memory config without installing extras or downloading the model.
   --skip-migrations      Do not run Alembic migrations.
   --force                Overwrite --config if it already exists.
   -h, --help             Show this help.
@@ -57,6 +67,22 @@ while [[ $# -gt 0 ]]; do
       ADMIN_USER="$2"
       shift 2
       ;;
+    --enable-memory)
+      ENABLE_MEMORY="true"
+      shift
+      ;;
+    --memory-model-path)
+      MEMORY_MODEL_PATH="$2"
+      shift 2
+      ;;
+    --memory-store-path)
+      MEMORY_STORE_PATH="$2"
+      shift 2
+      ;;
+    --skip-memory-install)
+      INSTALL_MEMORY="false"
+      shift
+      ;;
     --skip-migrations)
       RUN_MIGRATIONS="false"
       shift
@@ -79,6 +105,11 @@ done
 
 cd "$ROOT_DIR"
 
+PYTHON="python3"
+if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
+  PYTHON="$ROOT_DIR/.venv/bin/python"
+fi
+
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -90,6 +121,44 @@ if [[ -n "$TEMPLATE" && ! -f "$TEMPLATE" ]]; then
   echo "Controller template not found: $TEMPLATE" >&2
   exit 1
 fi
+
+configure_memory() {
+  "$PYTHON" - "$CONFIG" "$MEMORY_STORE_PATH" "$MEMORY_MODEL_PATH" <<'PY'
+from pathlib import Path
+import sys
+
+try:
+    import yaml
+except ImportError as exc:
+    raise SystemExit("Memory setup failed: PyYAML is required to update controller memory config.") from exc
+
+path = Path(sys.argv[1])
+store_path = sys.argv[2]
+model_path = sys.argv[3]
+data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+if not isinstance(data, dict):
+    raise SystemExit("Memory setup failed: controller config must be a YAML mapping.")
+memory = data.get("memory")
+if memory is None:
+    memory = {}
+elif not isinstance(memory, dict):
+    raise SystemExit("Memory setup failed: existing memory config must be a YAML mapping.")
+memory.update(
+    {
+        "enabled": True,
+        "path": store_path,
+        "embedding_model_path": model_path,
+        "auto_inject": True,
+        "top_k": 3,
+        "soft_cap": 500,
+        "ephemeral_ttl_days": 7,
+        "durable_ttl_days": 90,
+    }
+)
+data["memory"] = memory
+path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+PY
+}
 
 if [[ -f "$CONFIG" && "$FORCE" != "true" ]]; then
   echo "Config already exists: $CONFIG"
@@ -122,7 +191,26 @@ controller_archive_dir: ./logs/archives
 nodes: {}
 YAML
   fi
+  if [[ "$ENABLE_MEMORY" == "true" ]]; then
+    cat >> "$CONFIG" <<YAML
+
+memory:
+  enabled: true
+  path: $MEMORY_STORE_PATH
+  embedding_model_path: $MEMORY_MODEL_PATH
+  auto_inject: true
+  top_k: 3
+  soft_cap: 500
+  ephemeral_ttl_days: 7
+  durable_ttl_days: 90
+YAML
+  fi
   echo "Wrote controller config: $CONFIG"
+fi
+
+if [[ -f "$CONFIG" && "$ENABLE_MEMORY" == "true" ]]; then
+  configure_memory
+  echo "Configured controller memory in: $CONFIG"
 fi
 
 if [[ -z "${NEURAXIS_CONTROLLER_REGISTRATION_KEY:-}" ]]; then
@@ -135,11 +223,6 @@ else
 fi
 
 mkdir -p logs
-
-PYTHON="python3"
-if [[ -x "$ROOT_DIR/.venv/bin/python" ]]; then
-  PYTHON="$ROOT_DIR/.venv/bin/python"
-fi
 
 upsert_env() {
   local key="$1"
@@ -171,6 +254,28 @@ path.chmod(0o600)
 PY
 }
 
+if [[ "$ENABLE_MEMORY" == "true" && "$INSTALL_MEMORY" == "true" ]]; then
+  if ! command -v uv >/dev/null 2>&1; then
+    echo "Memory setup failed: uv is required to install the controller-memory extras." >&2
+    echo "Install uv, then rerun scripts/onboard_controller.sh --enable-memory." >&2
+    exit 1
+  fi
+  if ! uv pip install -e '.[controller-memory]'; then
+    echo "Memory setup failed: could not install the controller-memory extras." >&2
+    echo "Retry manually with: uv pip install -e '.[controller-memory]'" >&2
+    exit 1
+  fi
+  if ! scripts/install_embedding_model.sh "$MEMORY_MODEL_PATH"; then
+    echo "Memory setup failed: could not install or validate the embedding model at $MEMORY_MODEL_PATH." >&2
+    echo "Retry manually with: scripts/install_embedding_model.sh '$MEMORY_MODEL_PATH'" >&2
+    exit 1
+  fi
+elif [[ "$ENABLE_MEMORY" == "true" && ! -d "$MEMORY_MODEL_PATH" ]]; then
+  echo "Memory setup failed: embedding model path does not exist: $MEMORY_MODEL_PATH" >&2
+  echo "Rerun without --skip-memory-install, or run: scripts/install_embedding_model.sh '$MEMORY_MODEL_PATH'" >&2
+  exit 1
+fi
+
 NEURAXIS_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
 from llama_manager.core.config import load_config
 
@@ -179,6 +284,8 @@ if config.mode != "controller":
     raise SystemExit(f"Expected controller mode, got {config.mode!r}")
 if not config.controller_registration_key:
     raise SystemExit("controller_registration_key is required")
+if config.memory.enabled and not config.memory.embedding_model_path:
+    raise SystemExit("memory.embedding_model_path is required when memory is enabled")
 print(f"Controller config OK: {config.config_source}")
 print(f"Configured nodes: {len(config.nodes)}")
 PY
@@ -193,6 +300,9 @@ upsert_env "NEURAXIS_CONFIG" "$CONFIG"
 upsert_env "NEURAXIS_CONTROLLER_REGISTRATION_KEY" "$CONTROLLER_REGISTRATION_KEY"
 upsert_env "NEURAXIS_HOST" "$HOST"
 upsert_env "NEURAXIS_PORT" "$PORT"
+if [[ "$ENABLE_MEMORY" == "true" ]]; then
+  upsert_env "NEURAXIS_MEMORY_MODEL_PATH" "$MEMORY_MODEL_PATH"
+fi
 
 if [[ "$RUN_MIGRATIONS" == "true" && -z "${NEURAXIS_CONTROLLER_ADMIN_API_KEY:-}" ]]; then
   ADMIN_OUTPUT="$(NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m llama_manager.auth --config "$CONFIG" create-admin "$ADMIN_USER")"
@@ -221,6 +331,10 @@ Give this controller-owned registration key to agents:
 
 Start the controller:
   scripts/start_controller.sh
+
+Memory:
+  enabled: $ENABLE_MEMORY
+  embedding_model_path: $MEMORY_MODEL_PATH
 
 Agents should use:
   export NEURAXIS_CONTROLLER_URL='http://<controller-host>:$PORT'

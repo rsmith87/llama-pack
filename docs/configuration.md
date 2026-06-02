@@ -362,15 +362,23 @@ load ChromaDB or `sentence-transformers` directly.
 
 The memory store is disabled by default. To enable it:
 
-1. Install the optional extras on the controller:
-   ```bash
-   uv pip install -e '.[controller-memory]'
-   ```
-2. Download the embedding model once:
-   ```bash
-   bash scripts/install_embedding_model.sh
-   ```
-3. Add a `memory:` block to `config.yaml`:
+```bash
+scripts/onboard_controller.sh --enable-memory
+```
+
+The onboarding script installs the optional `controller-memory` extras,
+downloads the default embedding model, writes the `memory:` block, validates
+the controller config, and stores `NEURAXIS_MEMORY_MODEL_PATH` in
+`.neuraxis.env`. Override paths when needed:
+
+```bash
+scripts/onboard_controller.sh \
+  --enable-memory \
+  --memory-model-path ./models/embedding/all-MiniLM-L6-v2 \
+  --memory-store-path ./logs/agent_memory
+```
+
+The resulting config includes:
 
 ```yaml
 memory:
@@ -383,6 +391,17 @@ memory:
   ephemeral_ttl_days: 7              # TTL for ephemeral-tier entries
   durable_ttl_days: 90               # TTL for durable-tier entries
 ```
+
+If extras or model installation fails, rerun the printed recovery command:
+
+```bash
+uv pip install -e '.[controller-memory]'
+scripts/install_embedding_model.sh ./models/embedding/all-MiniLM-L6-v2
+```
+
+For offline hosts where the extras and model are already present, use
+`--skip-memory-install --memory-model-path PATH`; onboarding will still fail
+clearly if the embedding model directory does not exist.
 
 If `enabled: false` or the embedding model path does not exist at startup, the
 store self-disables with a warning and all memory operations become silent

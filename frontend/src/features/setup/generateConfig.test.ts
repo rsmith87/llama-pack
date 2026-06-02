@@ -238,6 +238,16 @@ describe("generateCommands", () => {
     expect(cmds).toContain("start_controller.sh");
   });
 
+  it("controller memory setup uses one-step onboarding flags", () => {
+    const state = baseState();
+    state.controllerMemory.enabled = true;
+    state.controllerMemory.embedding_model_path = "./models/custom-embedder";
+    const cmds = generateCommands(state);
+    expect(cmds).toContain("onboard_controller.sh --enable-memory");
+    expect(cmds).toContain("--memory-model-path ./models/custom-embedder");
+    expect(cmds).not.toContain("install_embedding_model.sh");
+  });
+
   it("agent includes NODE_NAME and start_agent.sh", () => {
     const state = baseState();
     state.mode = "agent";

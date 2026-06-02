@@ -76,9 +76,8 @@ export function ControllerMemory({ nav }: { nav: WizardNav }) {
           </div>
 
           <div className="wizard-callout">
-            <strong>Install required extras first:</strong>
-            <pre className="wizard-code-block">{`uv pip install -e '.[controller-memory]'
-bash scripts/install_embedding_model.sh`}</pre>
+            <strong>Use controller onboarding to install and configure memory:</strong>
+            <pre className="wizard-code-block">{`bash scripts/onboard_controller.sh --enable-memory --memory-model-path ${s.embedding_model_path}`}</pre>
           </div>
         </>
       ) : null}

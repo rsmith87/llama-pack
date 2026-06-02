@@ -140,6 +140,107 @@ def test_runtime_shell_scripts_are_executable() -> None:
         assert (ROOT_DIR / script).stat().st_mode & S_IXUSR
 
 
+def test_onboard_controller_exposes_one_step_memory_setup_options() -> None:
+    contents = read_script("onboard_controller.sh")
+
+    assert "--enable-memory" in contents
+    assert "--memory-model-path PATH" in contents
+    assert "--skip-memory-install" in contents
+    assert "controller-memory" in contents
+    assert "install_embedding_model.sh" in contents
+
+
+def test_onboard_controller_generated_config_includes_opt_in_memory_block() -> None:
+    contents = read_script("onboard_controller.sh")
+
+    assert 'if [[ "$ENABLE_MEMORY" == "true" ]]; then' in contents
+    assert "memory:" in contents
+    assert "enabled: true" in contents
+    assert "embedding_model_path: $MEMORY_MODEL_PATH" in contents
+    assert "Memory setup failed" in contents
+
+
+def test_onboard_controller_enable_memory_writes_working_config(tmp_path: Path) -> None:
+    config = tmp_path / "controller.config.yaml"
+    env_file = tmp_path / ".neuraxis.env"
+    model_dir = tmp_path / "models" / "embedding" / "all-MiniLM-L6-v2"
+    store_dir = tmp_path / "memory"
+    model_dir.mkdir(parents=True)
+    env = {
+        **os.environ,
+        "NEURAXIS_CONTROLLER_REGISTRATION_KEY": "controller-key",
+        "NEURAXIS_CONTROLLER_ADMIN_API_KEY": "admin-key",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "onboard_controller.sh"),
+            "--config",
+            str(config),
+            "--env-file",
+            str(env_file),
+            "--enable-memory",
+            "--skip-memory-install",
+            "--skip-migrations",
+            "--memory-model-path",
+            str(model_dir),
+            "--memory-store-path",
+            str(store_dir),
+        ],
+        cwd=ROOT_DIR,
+        env=env,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    config_text = config.read_text(encoding="utf-8")
+    assert "memory:" in config_text
+    assert "enabled: true" in config_text
+    assert f"embedding_model_path: {model_dir}" in config_text
+    assert f"path: {store_dir}" in config_text
+    assert "Memory:\n  enabled: true" in result.stdout
+
+    env_text = env_file.read_text(encoding="utf-8")
+    assert f"export NEURAXIS_MEMORY_MODEL_PATH={model_dir}" in env_text
+
+
+def test_onboard_controller_enable_memory_reports_missing_model_path(tmp_path: Path) -> None:
+    config = tmp_path / "controller.config.yaml"
+    env_file = tmp_path / ".neuraxis.env"
+    missing_model_dir = tmp_path / "missing-model"
+    env = {
+        **os.environ,
+        "NEURAXIS_CONTROLLER_REGISTRATION_KEY": "controller-key",
+        "NEURAXIS_CONTROLLER_ADMIN_API_KEY": "admin-key",
+    }
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "onboard_controller.sh"),
+            "--config",
+            str(config),
+            "--env-file",
+            str(env_file),
+            "--enable-memory",
+            "--skip-memory-install",
+            "--skip-migrations",
+            "--memory-model-path",
+            str(missing_model_dir),
+        ],
+        cwd=ROOT_DIR,
+        env=env,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "Memory setup failed: embedding model path does not exist" in result.stderr
+    assert "scripts/install_embedding_model.sh" in result.stderr
+
+
 def test_onboard_agent_keeps_lan_urls_in_env_not_config(tmp_path: Path) -> None:
     config = tmp_path / "agent.config.yaml"
     env_file = tmp_path / ".neuraxis.env"

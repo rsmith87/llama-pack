@@ -201,9 +201,12 @@ export function generateCommands(state: WizardState): string {
   const ac = state.agentConnection;
 
   if (mode === "controller") {
+    const memoryFlags = state.controllerMemory.enabled
+      ? ` --enable-memory --memory-model-path ${state.controllerMemory.embedding_model_path}`
+      : "";
     return [
       "# 1. Run migrations and create the first admin key",
-      "bash scripts/onboard_controller.sh",
+      `bash scripts/onboard_controller.sh${memoryFlags}`,
       "",
       "# 2. Start the controller",
       "bash scripts/start_controller.sh",
