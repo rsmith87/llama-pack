@@ -210,7 +210,7 @@ models:
 Nested `profiles` are optional. When present, the model key is the logical
 family and each profile is a concrete runtime instance such as
 `qwen-coder:fast` or `qwen-coder:long`. Profile values override the base model
-for startup; if a profile omits `port`, Llama Manager derives one from the base
+for startup; if a profile omits `port`, Neuraxis derives one from the base
 port plus the profile `order`.
 
 Optional `strengths` and `cost_tier` metadata help the route preview explain

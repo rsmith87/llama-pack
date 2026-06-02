@@ -1,6 +1,6 @@
 # Model Downloads
 
-Llama Manager can download GGUF model artifacts from Hugging Face into the
+Neuraxis can download GGUF model artifacts from Hugging Face into the
 configured model library. Downloads are started through the UI or the
 `/lm-api/v1/downloads/*` API and are recorded in the downloads database.
 

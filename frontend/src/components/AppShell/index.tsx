@@ -18,7 +18,7 @@ type AppShellProps = {
 
 function LlamaManagerLogo() {
   return (
-    <svg className="brand-logo" viewBox="0 0 64 64" role="img" aria-label="Llama Manager logo">
+    <svg className="brand-logo" viewBox="0 0 64 64" role="img" aria-label="Neuraxis logo">
       <path className="logo-chip" d="M17 14h26c7.2 0 13 5.8 13 13v20H30c-7.2 0-13-5.8-13-13V14Z" />
       <path className="logo-neck" d="M9 43V18c0-4.4 3.6-8 8-8h4v33H9Z" />
       <path className="logo-ear" d="M16 10 21 3l4 9" />
@@ -183,7 +183,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
         <div className="brand-lockup">
           <div className="brand-mark" aria-hidden="true"><LlamaManagerLogo /></div>
           <div>
-            <h1>Llama Manager</h1>
+            <h1>Neuraxis</h1>
             <p>{globalMode === "agent" ? "Agent runtime" : globalMode === "controller" ? "Private AI gateway" : "Gateway console"}</p>
           </div>
         </div>

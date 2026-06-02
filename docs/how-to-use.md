@@ -1,6 +1,6 @@
-# How To Use Llama Manager
+# How To Use Neuraxis
 
-This guide shows how to run Llama Manager as a secure local/private LLM gateway
+This guide shows how to run Neuraxis as a secure local/private LLM gateway
 with an operations console. A controller provides the stable API surface for
 your apps, while agents run on model hosts and manage local `llama-server`
 processes.

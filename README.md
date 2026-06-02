@@ -1,6 +1,6 @@
-# Llama Manager
+# Neuraxis
 
-Llama Manager is a secure local/private LLM gateway with an operations console.
+Neuraxis is a secure local/private LLM gateway with an operations console.
 It gives your apps one stable private AI backend while giving you an operator UI
 for the machines, models, keys, routing, logs, and jobs behind it.
 

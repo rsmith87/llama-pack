@@ -121,7 +121,7 @@ LLAMA_MANAGER_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
 
 ## First Admin Key
 
-Llama Manager fails closed until you create an admin key or configure
+Neuraxis fails closed until you create an admin key or configure
 `agent_api_key`. `scripts/onboard_controller.sh` creates the first admin key
 for fresh controller setup and stores it in `.llama-manager.env`.
 

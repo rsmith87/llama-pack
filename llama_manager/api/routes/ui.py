@@ -41,7 +41,7 @@ def index():
     path = index_path()
     if not path.exists():
         return PlainTextResponse(
-            "Llama Manager UI build not found. Run the frontend build or install a package that includes llama_manager/ui.",
+            "Neuraxis UI build not found. Run the frontend build or install a package that includes llama_manager/ui.",
             status_code=503,
         )
     return FileResponse(path)

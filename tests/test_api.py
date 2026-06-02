@@ -834,7 +834,7 @@ def test_ui_index_is_served(monkeypatch, tmp_path):
 
     ui_dir = tmp_path / "ui"
     ui_dir.mkdir(parents=True, exist_ok=True)
-    (ui_dir / "index.html").write_text("<html><body>Llama Manager</body></html>", encoding="utf-8")
+    (ui_dir / "index.html").write_text("<html><body>Neuraxis</body></html>", encoding="utf-8")
     monkeypatch.setattr(ui, "UI_DIR", ui_dir)
     app = create_app(
         config=load_config({"mode": "agent"}),
@@ -847,7 +847,7 @@ def test_ui_index_is_served(monkeypatch, tmp_path):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Llama Manager" in response.text
+    assert "Neuraxis" in response.text
 
 
 def test_conversion_routes():

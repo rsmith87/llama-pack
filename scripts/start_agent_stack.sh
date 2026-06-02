@@ -81,18 +81,18 @@ fi
 print_debug_config_keys
 
 if [[ "$AGENT_RUNNING" == "1" && "$FRONTEND_RUNNING" == "1" ]]; then
-  echo "Llama Manager agent stack is currently up."
+  echo "Neuraxis agent stack is currently up."
   exit 0
 fi
 
 if [[ "$AGENT_RUNNING" == "1" ]]; then
-  echo "Llama Manager agent is currently up."
+  echo "Neuraxis agent is currently up."
 else
   "$ROOT_DIR/scripts/start_agent.sh"
 fi
 
 if [[ "$FRONTEND_RUNNING" == "1" ]]; then
-  echo "Llama Manager React frontend is currently up."
+  echo "Neuraxis React frontend is currently up."
 else
   "$ROOT_DIR/scripts/start_frontend.sh"
 fi

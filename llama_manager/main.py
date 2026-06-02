@@ -395,7 +395,7 @@ def create_app(
     heartbeat_request: Callable[[str, str, dict[str, Any] | None], Awaitable[dict[str, Any]]] | None = None,
 ) -> FastAPI:
     app_config = config or load_config()
-    app = FastAPI(title="Llama Manager", version="0.1.0")
+    app = FastAPI(title="Neuraxis", version="0.1.0")
     _configure_app_state(
         app,
         app_config,
@@ -418,7 +418,7 @@ def _create_module_app() -> FastAPI:
     try:
         return create_app()
     except RuntimeError as exc:
-        app = FastAPI(title="Llama Manager", version="0.1.0")
+        app = FastAPI(title="Neuraxis", version="0.1.0")
         message = str(exc)
 
         def _startup_error_response() -> JSONResponse:

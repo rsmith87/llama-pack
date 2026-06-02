@@ -43,7 +43,7 @@ echo "Building frontend..."
 if [[ -f "$PID_FILE" ]]; then
   PID="$(cat "$PID_FILE")"
   if kill -0 "$PID" 2>/dev/null; then
-    echo "Llama Manager React frontend is already running on PID $PID."
+    echo "Neuraxis React frontend is already running on PID $PID."
     echo "URL: http://$FRONTEND_HOST:$FRONTEND_PORT$FRONTEND_BASE_PATH"
     echo "API proxy: $API_PROXY_TARGET"
     exit 0
@@ -60,7 +60,7 @@ fi
 
 PID="$(cat "$PID_FILE")"
 
-echo "Started Llama Manager React frontend on PID $PID."
+echo "Started Neuraxis React frontend on PID $PID."
 echo "URL: http://$FRONTEND_HOST:$FRONTEND_PORT$FRONTEND_BASE_PATH"
 echo "API proxy: $API_PROXY_TARGET"
 echo "Log: $LOG_FILE"

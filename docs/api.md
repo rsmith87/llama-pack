@@ -1,7 +1,7 @@
 # API
 
 This page lists the main HTTP endpoints and documents the gateway surface for
-applications that call Llama Manager as a private AI backend.
+applications that call Neuraxis as a private AI backend.
 
 ## External Chat Compatibility
 
@@ -26,7 +26,7 @@ curl -X POST http://127.0.0.1:9137/v1/chat/completions \
 
 On a controller, `request_type` routes the call through
 `nodes.<name>.request_types` using the same values as threaded chat, such as
-`general`, `coding`, or `research`. Llama Manager creates a durable thread by
+`general`, `coding`, or `research`. Neuraxis creates a durable thread by
 default and returns routing metadata in response headers:
 
 ```text
@@ -376,8 +376,8 @@ Source-agent transfer endpoints:
   worker with the bearer token. Streams one allowed file from the source node.
 
 The source-agent endpoints are not the normal public API for users. They are
-protected by the generated transfer token in addition to normal Llama Manager
-API authentication, and grants are held in source-node memory.
+protected by the generated transfer token in addition to normal Neuraxis API 
+authentication, and grants are held in source-node memory.
 
 ## Thread Endpoints
 

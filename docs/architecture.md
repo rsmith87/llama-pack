@@ -1,6 +1,6 @@
 # Architecture Overview
 
-Llama Manager is a secure local/private LLM gateway with an operations console.
+Neuraxis is a secure local/private LLM gateway with an operations console.
 The controller owns the gateway surface for apps and operators; agents own local
 model host work such as `llama-server` process lifecycle, model utilities, and
 future agent-runtime execution.

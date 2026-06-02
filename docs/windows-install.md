@@ -1,6 +1,6 @@
 # Windows Install And Troubleshooting
 
-This guide runs Llama Manager as a Windows agent. The Mac controller should only show Windows model paths when it is talking to the Windows agent and the Windows agent was started with the Windows config.
+This guide runs Neuraxis as a Windows agent. The Mac controller should only show Windows model paths when it is talking to the Windows agent and the Windows agent was started with the Windows config.
 
 ## 1. Install Python Dependencies
 
@@ -30,7 +30,7 @@ C:\llama.cpp\build\bin\Release\llama-server.exe
 C:\llama.cpp\build\bin\Debug\llama-server.exe
 ```
 
-For quantization, Llama Manager looks for:
+For quantization, Neuraxis looks for:
 
 ```text
 C:\llama.cpp\build\bin\Release\llama-quantize.exe
@@ -94,7 +94,7 @@ The Mac controller needs inbound access to the Windows manager port and each mod
 For the manager:
 
 ```powershell
-New-NetFirewallRule -DisplayName "Llama Manager 9000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9000
+New-NetFirewallRule -DisplayName "Neuraxis 9000" -Direction Inbound -Action Allow -Protocol TCP -LocalPort 9000
 ```
 
 For a model on port 8080:

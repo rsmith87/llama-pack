@@ -74,7 +74,7 @@ kill "$PID"
 for _ in {1..30}; do
   if ! kill -0 "$PID" 2>/dev/null; then
     rm -f "$PID_FILE"
-    echo "Stopped Llama Manager process $PID."
+    echo "Stopped Neuraxis process $PID."
     exit 0
   fi
   sleep 0.2
@@ -83,4 +83,4 @@ done
 echo "Process $PID did not stop after SIGTERM; sending SIGKILL."
 kill -9 "$PID" 2>/dev/null || true
 rm -f "$PID_FILE"
-echo "Stopped Llama Manager process $PID."
+echo "Stopped Neuraxis process $PID."

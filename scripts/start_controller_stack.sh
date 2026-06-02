@@ -81,18 +81,18 @@ fi
 print_debug_config_keys
 
 if [[ "$CONTROLLER_RUNNING" == "1" && "$FRONTEND_RUNNING" == "1" ]]; then
-  echo "Llama Manager controller stack is currently up."
+  echo "Neuraxis controller stack is currently up."
   exit 0
 fi
 
 if [[ "$CONTROLLER_RUNNING" == "1" ]]; then
-  echo "Llama Manager controller is currently up."
+  echo "Neuraxis controller is currently up."
 else
   "$ROOT_DIR/scripts/start_controller.sh"
 fi
 
 if [[ "$FRONTEND_RUNNING" == "1" ]]; then
-  echo "Llama Manager React frontend is currently up."
+  echo "Neuraxis React frontend is currently up."
 else
   "$ROOT_DIR/scripts/start_frontend.sh"
 fi

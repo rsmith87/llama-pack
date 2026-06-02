@@ -12,7 +12,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="python -m llama_manager.auth")
     parser.add_argument(
         "--config",
-        help="Path to a Llama Manager config file. Defaults to LLAMA_MANAGER_CONFIG/config.yaml/config.example.yaml.",
+        help="Path to a Neuraxis config file. Defaults to LLAMA_MANAGER_CONFIG/config.yaml/config.example.yaml.",
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
 

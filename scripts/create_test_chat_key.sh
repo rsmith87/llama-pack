@@ -14,7 +14,7 @@ Create a scoped test-chat API key, store its hash in the configured auth DB,
 and write the raw key to the local env file for /ui/test-chat bootstrap.
 
 Options:
-  --config PATH      Llama Manager config path passed to python -m llama_manager.auth.
+  --config PATH      Neuraxis config path passed to python -m llama_manager.auth.
   --env-file PATH    Secrets file to update. Default: ./.llama-manager.env
   --username NAME    Auth username for the key. Default: test-chat
   -h, --help         Show this help.

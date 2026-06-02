@@ -27,7 +27,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 if [[ -f "$PID_FILE" ]]; then
   PID="$(cat "$PID_FILE")"
   if kill -0 "$PID" 2>/dev/null; then
-    echo "Llama Manager agent is already running on PID $PID."
+    echo "Neuraxis agent is already running on PID $PID."
     echo "URL: http://$HOST:$PORT"
     exit 0
   fi
@@ -58,7 +58,7 @@ LLAMA_MANAGER_CONFIG="$CONFIG" LLAMA_MANAGER_MODE=agent nohup "$PYTHON" -m uvico
 PID="$!"
 echo "$PID" > "$PID_FILE"
 
-echo "Started Llama Manager agent on PID $PID."
+echo "Started Neuraxis agent on PID $PID."
 echo "URL: http://$HOST:$PORT"
 echo "Config: $CONFIG"
 echo "Log: $LOG_FILE"
