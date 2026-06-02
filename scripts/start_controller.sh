@@ -17,8 +17,8 @@ if [[ -f "$ROOT_DIR/config.yaml" ]]; then
   DEFAULT_CONFIG="$ROOT_DIR/config.yaml"
 fi
 CONFIG="${NEURAXIS_CONFIG:-$DEFAULT_CONFIG}"
-PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.llama_manager_controller.pid}"
-LOG_FILE="${NEURAXIS_LOG_FILE:-$ROOT_DIR/logs/llama_manager_controller_uvicorn.log}"
+PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.neuraxis_controller.pid}"
+LOG_FILE="${NEURAXIS_LOG_FILE:-$ROOT_DIR/logs/neuraxis_controller_uvicorn.log}"
 RUN_MIGRATIONS="${NEURAXIS_RUN_MIGRATIONS:-1}"
 START_FRONTEND="${NEURAXIS_START_FRONTEND:-0}"
 

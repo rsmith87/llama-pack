@@ -18,8 +18,8 @@ def test_start_agent_script_uses_agent_specific_runtime_defaults() -> None:
 
     assert script.exists()
     contents = script.read_text(encoding="utf-8")
-    assert ".llama_manager_agent.pid" in contents
-    assert "llama_manager_agent_uvicorn.log" in contents
+    assert ".neuraxis_agent.pid" in contents
+    assert "neuraxis_agent_uvicorn.log" in contents
     assert "NEURAXIS_MODE=agent" in contents
     assert "Expected agent config" in contents
     assert "NEURAXIS_START_FRONTEND" in contents
@@ -36,10 +36,10 @@ def test_start_server_is_deprecated_agent_wrapper() -> None:
 def test_stop_server_knows_agent_controller_and_legacy_targets() -> None:
     contents = read_script("stop_server.sh")
 
-    assert ".llama_manager_agent.pid" in contents
-    assert ".llama_manager_controller.pid" in contents
-    assert ".llama_manager_frontend.pid" in contents
-    assert ".llama_manager.pid" in contents
+    assert ".neuraxis_agent.pid" in contents
+    assert ".neuraxis_controller.pid" in contents
+    assert ".neuraxis_frontend.pid" in contents
+    assert ".neuraxis.pid" in contents
     assert '"agent")' in contents
     assert '"controller")' in contents
     assert '"frontend")' in contents
@@ -49,8 +49,8 @@ def test_stop_server_knows_agent_controller_and_legacy_targets() -> None:
 def test_start_controller_script_uses_controller_specific_runtime_defaults() -> None:
     contents = read_script("start_controller.sh")
 
-    assert ".llama_manager_controller.pid" in contents
-    assert "llama_manager_controller_uvicorn.log" in contents
+    assert ".neuraxis_controller.pid" in contents
+    assert "neuraxis_controller_uvicorn.log" in contents
     assert "NEURAXIS_MODE=controller" in contents
     assert "Expected controller config" in contents
     assert "NEURAXIS_START_FRONTEND" in contents
@@ -60,8 +60,8 @@ def test_start_controller_script_uses_controller_specific_runtime_defaults() -> 
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     contents = read_script("start_frontend.sh")
 
-    assert ".llama_manager_frontend.pid" in contents
-    assert "llama_manager_frontend_vite.log" in contents
+    assert ".neuraxis_frontend.pid" in contents
+    assert "neuraxis_frontend_vite.log" in contents
     assert "VITE_API_PROXY_TARGET" in contents
     assert "npm run dev" in contents
     assert 'NEURAXIS_FRONTEND_HOST:-127.0.0.1' in contents
@@ -72,8 +72,8 @@ def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
 def test_start_controller_stack_script_starts_controller_and_frontend() -> None:
     contents = read_script("start_controller_stack.sh")
 
-    assert ".llama_manager_controller.pid" in contents
-    assert ".llama_manager_frontend.pid" in contents
+    assert ".neuraxis_controller.pid" in contents
+    assert ".neuraxis_frontend.pid" in contents
     assert "currently up" in contents
     assert 'scripts/start_controller.sh' in contents
     assert 'scripts/start_frontend.sh' in contents
@@ -82,8 +82,8 @@ def test_start_controller_stack_script_starts_controller_and_frontend() -> None:
 def test_start_agent_stack_script_starts_agent_and_frontend() -> None:
     contents = read_script("start_agent_stack.sh")
 
-    assert ".llama_manager_agent.pid" in contents
-    assert ".llama_manager_frontend.pid" in contents
+    assert ".neuraxis_agent.pid" in contents
+    assert ".neuraxis_frontend.pid" in contents
     assert "currently up" in contents
     assert 'scripts/start_agent.sh' in contents
     assert 'scripts/start_frontend.sh' in contents

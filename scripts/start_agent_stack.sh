@@ -16,8 +16,8 @@ if [[ -f "$VENV_ACTIVATE" ]]; then
   source "$VENV_ACTIVATE"
 fi
 
-AGENT_PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.llama_manager_agent.pid}"
-FRONTEND_PID_FILE="${NEURAXIS_FRONTEND_PID_FILE:-$ROOT_DIR/.llama_manager_frontend.pid}"
+AGENT_PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.neuraxis_agent.pid}"
+FRONTEND_PID_FILE="${NEURAXIS_FRONTEND_PID_FILE:-$ROOT_DIR/.neuraxis_frontend.pid}"
 DEFAULT_CONFIG="$ROOT_DIR/config.example.yaml"
 if [[ -f "$ROOT_DIR/config.yaml" ]]; then
   DEFAULT_CONFIG="$ROOT_DIR/config.yaml"

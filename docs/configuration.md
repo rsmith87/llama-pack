@@ -447,7 +447,7 @@ agent_tools:
   tool_timeout_seconds: 10
   safe_roots:
     - ./logs
-    - /Users/{user_name}/Apps/llama_manager
+    - /Users/{user_name}/Apps/neuraxis
   tools:
     list_runtime_status:
       type: shell
@@ -460,11 +460,11 @@ agent_tools:
     read_project_file:
       type: file_read_dynamic
       description: Read a project or log file by relative path.
-      path: /Users/{user_name}/Apps/llama_manager
+      path: /Users/{user_name}/Apps/neuraxis
     list_project_files:
       type: directory_list
       description: List top-level and one-level-deep project files.
-      path: /Users/{user_name}/Apps/llama_manager
+      path: /Users/{user_name}/Apps/neuraxis
       recursive: true
       max_depth: 1
       max_entries: 200

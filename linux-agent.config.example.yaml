@@ -140,7 +140,7 @@ agent_tools:
     inference_log:
       type: log_tail
       description: Tail the most recent lines from the inference server log.
-      path: /home/{user_name}/Apps/neuraxis/logs/llama_manager_agent_uvicorn.log
+      path: /home/{user_name}/Apps/neuraxis/logs/neuraxis_agent_uvicorn.log
       max_lines: 100
 
     query_app_db:

@@ -15,16 +15,16 @@ TARGET="${1:-auto}"
 pid_file_for_target() {
   case "$1" in
     "agent")
-      echo "$ROOT_DIR/.llama_manager_agent.pid"
+      echo "$ROOT_DIR/.neuraxis_agent.pid"
       ;;
     "controller")
-      echo "$ROOT_DIR/.llama_manager_controller.pid"
+      echo "$ROOT_DIR/.neuraxis_controller.pid"
       ;;
     "frontend")
-      echo "$ROOT_DIR/.llama_manager_frontend.pid"
+      echo "$ROOT_DIR/.neuraxis_frontend.pid"
       ;;
     "server"|"legacy")
-      echo "$ROOT_DIR/.llama_manager.pid"
+      echo "$ROOT_DIR/.neuraxis.pid"
       ;;
     *)
       return 1
@@ -37,10 +37,10 @@ if [[ -n "${NEURAXIS_PID_FILE:-}" ]]; then
 elif [[ "$TARGET" == "auto" ]]; then
   PID_FILE=""
   for candidate in \
-    "$ROOT_DIR/.llama_manager_agent.pid" \
-    "$ROOT_DIR/.llama_manager_controller.pid" \
-    "$ROOT_DIR/.llama_manager_frontend.pid" \
-    "$ROOT_DIR/.llama_manager.pid"; do
+    "$ROOT_DIR/.neuraxis_agent.pid" \
+    "$ROOT_DIR/.neuraxis_controller.pid" \
+    "$ROOT_DIR/.neuraxis_frontend.pid" \
+    "$ROOT_DIR/.neuraxis.pid"; do
     if [[ -f "$candidate" ]]; then
       PID_FILE="$candidate"
       break

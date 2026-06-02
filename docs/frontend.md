@@ -69,8 +69,8 @@ Open:
 http://127.0.0.1:5173/ui/react/
 ```
 
-The script writes its PID to `.llama_manager_frontend.pid` and logs to
-`logs/llama_manager_frontend_vite.log`. Stop it with:
+The script writes its PID to `.neuraxis_frontend.pid` and logs to
+`logs/neuraxis_frontend_vite.log`. Stop it with:
 
 ```bash
 scripts/stop_frontend.sh
