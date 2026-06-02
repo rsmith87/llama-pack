@@ -277,6 +277,7 @@ def test_controller_create_transfer_creates_model_transfer_job(tmp_path):
     assert len(payload["payload"]["transfer_token"]) >= 32
     assert grant_calls[0][0] == "POST"
     assert grant_calls[0][1] == "http://source/lm-api/v1/transfer-source/grants"
+    assert grant_calls[0][2] == "source-key"
 
 
 def test_controller_create_transfer_rejects_unknown_destination(tmp_path):

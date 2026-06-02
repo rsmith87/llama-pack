@@ -48,3 +48,4 @@ node_modules
 .neuraxis_agent.pid
 .neuraxis_frontend.pid
 neuraxis.egg-info
+models/*

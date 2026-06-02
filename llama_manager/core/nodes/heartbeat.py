@@ -74,6 +74,7 @@ class AgentHeartbeatClient:
         payload = {
             "name": self.config.node_name,
             "url": self.config.agent_url,
+            "api_key": self.config.agent_api_key,
             "registration_key": self.config.controller_registration_key_outbound,
         }
         await self._request("POST", f"{url}/lm-api/v1/nodes/register", payload)

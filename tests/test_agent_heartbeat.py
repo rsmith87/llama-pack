@@ -20,6 +20,7 @@ async def test_agent_heartbeat_registers_and_beats():
             "controller_url": "http://controller:9100",
             "node_name": "win-1",
             "agent_url": "http://10.0.0.2:9000",
+            "agent_api_key": "agent-secret",
             "heartbeat_interval_seconds": 1,
             "controller_registration_key_outbound": "join-key",
         }
@@ -33,6 +34,7 @@ async def test_agent_heartbeat_registers_and_beats():
     assert calls[0][1] == "http://controller:9100/lm-api/v1/nodes/register"
     assert calls[0][2]["name"] == "win-1"
     assert calls[0][2]["url"] == "http://127.0.0.1:9000" or calls[0][2]["url"] == "http://10.0.0.2:9000"
+    assert calls[0][2]["api_key"] == "agent-secret"
     assert any(url.endswith("/nodes/win-1/heartbeat") for _, url, _ in calls[1:])
 
 
