@@ -43,3 +43,7 @@ config/*.yaml
 !config/*.example.yaml
 !.gitkeep
 docs/personal-testing-plan.md
+node_modules
+.llama_manager_controller.pid
+.llama_manager_agent.pid
+.llama_manager_frontend.pid
