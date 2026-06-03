@@ -51,3 +51,5 @@ node_modules
 .neuraxis_frontend.pid
 neuraxis.egg-info
 models/*
+docs/superpowers/specs/*
+docs/tls-caddy-plan.md
