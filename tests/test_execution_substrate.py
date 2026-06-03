@@ -106,6 +106,40 @@ def test_validate_model_transfer_payload_rejects_same_node():
         )
 
 
+def test_model_download_job_validates_required_payload(tmp_path):
+    app = _create_controller_app(tmp_path, {})
+    client = TestClient(app)
+
+    missing_repo = client.post(
+        "/lm-api/v1/jobs",
+        json={"type": "model.download", "payload": {"include_file": "model.gguf"}},
+    )
+    assert missing_repo.status_code == 422
+
+    invalid_include = client.post(
+        "/lm-api/v1/jobs",
+        json={"type": "model.download", "payload": {"repo_id": "owner/model", "include_file": "../model.gguf"}},
+    )
+    assert invalid_include.status_code == 422
+
+    valid = client.post(
+        "/lm-api/v1/jobs",
+        json={
+            "type": "model.download",
+            "target": "node:agent-a",
+            "payload": {
+                "repo_id": "owner/model-GGUF",
+                "revision": "main",
+                "include_file": "model-Q4_K_M.gguf",
+                "mmproj_file": "mmproj-F16.gguf",
+            },
+        },
+    )
+    assert valid.status_code == 201
+    assert valid.json()["type"] == "model.download"
+    assert valid.json()["payload"]["repo_id"] == "owner/model-GGUF"
+
+
 def test_cancel_running_job_records_cancel_requested(tmp_path):
     app = _create_controller_app(tmp_path, worker_nodes("win"))
     client = TestClient(app)
@@ -349,6 +383,185 @@ async def test_agent_worker_completes_llm_embed_job():
     assert complete_payload["result"]["response"]["data"][0]["embedding"] == [0.1, 0.2]
     assert complete_payload["result"]["worker_node"] == "agent-a"
     assert complete_payload["result"]["target"] == "auto"
+
+
+class FakeDownloadManager:
+    def __init__(self, statuses):
+        self.statuses = list(statuses)
+        self.started = []
+        self.cancelled = []
+
+    def start(self, repo_id, **kwargs):
+        self.started.append((repo_id, kwargs))
+        return self.statuses.pop(0)
+
+    def status(self, download_id):
+        return self.statuses.pop(0)
+
+    def cancel(self, download_id):
+        self.cancelled.append(download_id)
+        return {
+            "id": download_id,
+            "repo_id": "owner/model-GGUF",
+            "status": "cancelled",
+            "local_path": "/models/owner__model-GGUF",
+            "bytes_downloaded": 128,
+            "bytes_total": 1024,
+            "progress_percent": 12,
+        }
+
+
+@pytest.mark.asyncio
+async def test_agent_worker_completes_model_download_job():
+    calls = []
+    manager = FakeDownloadManager(
+        [
+            {
+                "id": "download-1",
+                "repo_id": "owner/model-GGUF",
+                "status": "running",
+                "local_path": "/models/owner__model-GGUF",
+                "bytes_downloaded": 128,
+                "bytes_total": 1024,
+                "progress_percent": 12,
+            },
+            {
+                "id": "download-1",
+                "repo_id": "owner/model-GGUF",
+                "status": "succeeded",
+                "local_path": "/models/owner__model-GGUF",
+                "bytes_downloaded": 1024,
+                "bytes_total": 1024,
+                "progress_percent": 100,
+            },
+        ]
+    )
+
+    async def request(method, url, payload=None, headers=None):
+        calls.append((method, url, payload))
+        if url.endswith("/nodes/agent-a/work/claim"):
+            return [
+                {
+                    "attempt_id": "attempt-1",
+                    "job": {
+                        "id": "job-download-1",
+                        "type": "model.download",
+                        "status": "assigned",
+                        "payload": {
+                            "repo_id": "owner/model-GGUF",
+                            "revision": "main",
+                            "include_file": "model-Q4_K_M.gguf",
+                            "mmproj_file": "mmproj-F16.gguf",
+                        },
+                    },
+                }
+            ]
+        if url.endswith("/nodes/agent-a/work/jobs/job-download-1/cancellation"):
+            return {"id": "job-download-1", "cancellation_requested": False}
+        if url.endswith("/progress"):
+            return {"ok": True}
+        if url.endswith("/complete"):
+            return {"id": "job-download-1", "status": "completed"}
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+        download_manager=manager,
+    )
+
+    processed = await worker.run_once()
+
+    assert processed == 1
+    assert manager.started == [
+        (
+            "owner/model-GGUF",
+            {
+                "triggered_by": "job:job-download-1",
+                "revision": "main",
+                "include_file": "model-Q4_K_M.gguf",
+                "mmproj_file": "mmproj-F16.gguf",
+            },
+        )
+    ]
+    progress_payloads = [call[2]["progress"] for call in calls if call[1].endswith("/progress")]
+    assert progress_payloads[0]["stage"] == "started"
+    assert progress_payloads[-1]["progress_percent"] == 100
+    complete_payload = next(call[2] for call in calls if call[1].endswith("/complete"))
+    assert complete_payload["result"]["download_id"] == "download-1"
+    assert complete_payload["result"]["status"] == "succeeded"
+    assert complete_payload["result"]["worker_node"] == "agent-a"
+
+
+@pytest.mark.asyncio
+async def test_agent_worker_cancels_running_model_download_job():
+    calls = []
+    manager = FakeDownloadManager(
+        [
+            {
+                "id": "download-2",
+                "repo_id": "owner/model-GGUF",
+                "status": "running",
+                "local_path": "/models/owner__model-GGUF",
+                "bytes_downloaded": 128,
+                "bytes_total": 1024,
+                "progress_percent": 12,
+            },
+        ]
+    )
+    cancel_checks = 0
+
+    async def request(method, url, payload=None, headers=None):
+        nonlocal cancel_checks
+        calls.append((method, url, payload))
+        if url.endswith("/nodes/agent-a/work/claim"):
+            return [
+                {
+                    "attempt_id": "attempt-1",
+                    "job": {
+                        "id": "job-download-2",
+                        "type": "model.download",
+                        "status": "assigned",
+                        "payload": {"repo_id": "owner/model-GGUF"},
+                    },
+                }
+            ]
+        if url.endswith("/nodes/agent-a/work/jobs/job-download-2/cancellation"):
+            cancel_checks += 1
+            return {"id": "job-download-2", "cancellation_requested": cancel_checks > 1}
+        if url.endswith("/progress"):
+            return {"ok": True}
+        if url.endswith("/fail"):
+            return {"id": "job-download-2", "status": "canceled"}
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+        download_manager=manager,
+    )
+
+    processed = await worker.run_once()
+
+    assert processed == 1
+    assert manager.cancelled == ["download-2"]
+    fail_payload = next(call[2] for call in calls if call[1].endswith("/fail"))
+    assert fail_payload["error_code"] == "CANCELED"
+    assert fail_payload["retryable"] is False
 
 
 def test_agent_worker_config_defaults_disabled():

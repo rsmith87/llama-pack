@@ -255,6 +255,7 @@ def _configure_app_state(
     app.state.agent_worker = AgentWorker(
         app_config,
         chat=app.state.chat_proxy.chat_with_meta,
+        download_manager=app.state.download_manager,
     )
     app.state.controller_sweeper_task = None
     app.state.controller_sweeper_stop_event = asyncio.Event()

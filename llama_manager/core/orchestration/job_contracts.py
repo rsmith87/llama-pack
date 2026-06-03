@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
+import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+
+
+REPO_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
 
 class ChatMessage(BaseModel):
@@ -78,6 +83,48 @@ class ModelTransferJobPayload(BaseModel):
         return self
 
 
+class ModelDownloadJobPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    repo_id: str = Field(min_length=1)
+    revision: str | None = None
+    include_file: str | None = None
+    mmproj_file: str | None = None
+    requirements: JobRequirements | None = None
+
+    @field_validator("repo_id")
+    @classmethod
+    def validate_repo_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not REPO_ID_PATTERN.match(normalized):
+            raise ValueError("repo_id must be in owner/name format")
+        return normalized
+
+    @field_validator("revision")
+    @classmethod
+    def normalize_revision(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+    @field_validator("include_file", "mmproj_file")
+    @classmethod
+    def validate_include_file(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        if (
+            not normalized
+            or normalized.startswith("/")
+            or "\\" in normalized
+            or ".." in Path(normalized).parts
+            or not normalized.lower().endswith(".gguf")
+        ):
+            raise ValueError("include_file must be a relative .gguf path")
+        return normalized
+
+
 class LlmEmbedJobPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -122,6 +169,8 @@ def validate_job_payload(job_type: str, payload: dict[str, Any]) -> dict[str, An
         return LlmGenerateJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "model.transfer":
         return ModelTransferJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
+    if job_type == "model.download":
+        return ModelDownloadJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "llm.embed":
         return LlmEmbedJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "llm.batch":
@@ -146,6 +195,13 @@ def embed_payload_from_llm_embed(payload: dict[str, Any]) -> tuple[str, list[str
     if not normalized:
         raise ValueError("input must include at least one non-empty string")
     return model, normalized, target
+
+
+def download_payload_from_model_download(payload: dict[str, Any]) -> dict[str, Any]:
+    parsed = ModelDownloadJobPayload.model_validate(payload)
+    data = parsed.model_dump(mode="json", exclude_none=True)
+    data.pop("requirements", None)
+    return data
 
 
 def batch_cases_from_llm_batch(payload: dict[str, Any]) -> list[ResolvedBatchCase]:

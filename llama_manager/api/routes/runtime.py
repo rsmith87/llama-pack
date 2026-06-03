@@ -91,6 +91,7 @@ def _worker_summary(config, worker) -> dict[str, object]:
             "chat": bool(worker is not None and getattr(worker, "_chat", None) is not None),
             "embeddings": bool(worker is not None and getattr(worker, "_embeddings", None) is not None),
             "model_transfer": bool(worker is not None and getattr(worker, "_transfer_stream", None) is not None),
+            "model_download": bool(worker is not None and getattr(worker, "_download_manager", None) is not None),
         },
     }
 

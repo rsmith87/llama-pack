@@ -311,6 +311,29 @@ The completed job has one `llm.batch.case` artifact per case (with `response`,
 `elapsed_ms`, and error if the case failed) and one `llm.batch.summary`
 artifact. Cases that fail are recorded but do not abort the remaining cases.
 
+**`model.download`** — Download a GGUF model repo or selected GGUF files from
+Hugging Face on the target worker node. The agent uses its configured
+`hf_models_dirs` destination and local Hugging Face credentials/environment.
+
+```json
+{
+  "type": "model.download",
+  "target": "node:mac-agent",
+  "payload": {
+    "repo_id": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+    "revision": "main",
+    "include_file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    "mmproj_file": null
+  }
+}
+```
+
+`repo_id` must be in `owner/name` format. `include_file` and `mmproj_file` are
+optional relative `.gguf` paths. Progress events include `download_id`,
+`bytes_downloaded`, `bytes_total`, `progress_percent`, and `local_path`.
+Cancelling the orchestration job cancels the local download process
+cooperatively.
+
 **`model.transfer`** — Transfer a GGUF file from one registered node to another.
 
 Most callers should start transfers through the controller helper endpoint

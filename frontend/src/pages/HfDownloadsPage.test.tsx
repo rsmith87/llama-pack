@@ -2,6 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { HfDownloadsPage } from "./HfDownloadsPage";
+import { AppModeProvider } from "../features/appMode/appModeContext";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -189,6 +190,60 @@ it("discovers quants and starts a selected quant download", async () => {
     method: "POST",
     body: JSON.stringify({ revision: null, include_file: "model-Q4.gguf" }),
   })));
+});
+
+it("shows controller-only node target selector and queues an agent download job", async () => {
+  mockHfDownloadsFetch({
+    "/lm-api/v1/nodes/models": [
+      { name: "agent-a", reachable: true, models: [] },
+      { name: "offline", reachable: false, models: [] },
+    ],
+    "/lm-api/v1/downloads/quants?repo_id=owner%2Fmodel": [{ path: "model-Q4.gguf", filename: "model-Q4.gguf", size: 1000 }],
+  });
+  const user = userEvent.setup();
+
+  render(
+    <AppModeProvider appMode="controller">
+      <HfDownloadsPage />
+    </AppModeProvider>,
+  );
+
+  await user.type(screen.getByPlaceholderText("owner/model"), "owner/model");
+  expect(await screen.findByLabelText("Target node")).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "agent-a" })).toBeInTheDocument();
+  expect(screen.queryByRole("option", { name: "offline" })).not.toBeInTheDocument();
+
+  await user.selectOptions(screen.getByLabelText("Target node"), "agent-a");
+  await user.click(screen.getByRole("button", { name: "Find Quants" }));
+  await user.click(await screen.findByRole("button", { name: "Download model-Q4.gguf" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/jobs", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({
+      type: "model.download",
+      target: "node:agent-a",
+      payload: {
+        repo_id: "owner/model",
+        revision: null,
+        include_file: "model-Q4.gguf",
+      },
+    }),
+  })));
+});
+
+it("hides node target selector outside controller mode", async () => {
+  mockHfDownloadsFetch({
+    "/lm-api/v1/nodes/models": [{ name: "agent-a", reachable: true, models: [] }],
+  });
+
+  render(
+    <AppModeProvider appMode="agent">
+      <HfDownloadsPage />
+    </AppModeProvider>,
+  );
+
+  await screen.findByText("Recommended for this machine");
+  expect(screen.queryByLabelText("Target node")).not.toBeInTheDocument();
 });
 
 it("shows and downloads the matching mmproj for discovered vision quants", async () => {

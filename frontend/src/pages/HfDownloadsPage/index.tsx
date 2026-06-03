@@ -1,9 +1,11 @@
 import "./styles.css";
 import { useEffect, useState, type FormEvent } from "react";
+import { createJob } from "../../api/controller";
 import { cancelDownload, deleteDownload, discoverQuants, listDownloadHistory, listDownloadRecommendations, startDownload } from "../../api/downloads";
 import { createGgufTransfer, listGgufs } from "../../api/library";
 import { getNodeModels } from "../../api/nodes";
 import { DataTable, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
+import { useAppMode } from "../../features/appMode/appModeContext";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/api";
 import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferState, RecommendedDownload } from "../../types/downloads";
@@ -210,6 +212,7 @@ function inventoryForRecommended(item: RecommendedDownload, localGgufs: GgufFile
 }
 
 export function HfDownloadsPage() {
+  const appMode = useAppMode();
   const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
   const [recommendationPayload, setRecommendationPayload] = useState<DownloadRecommendationsResponse | null>(null);
   const [recommendationError, setRecommendationError] = useState("");
@@ -218,6 +221,7 @@ export function HfDownloadsPage() {
   const [transfer, setTransfer] = useState<HfTransferState | null>(null);
   const [repoId, setRepoId] = useState("");
   const [revision, setRevision] = useState("");
+  const [targetNode, setTargetNode] = useState("");
   const [quants, setQuants] = useState<QuantRecord[]>([]);
   const [quantStatus, setQuantStatus] = useState("Select a repo to query remote GGUF quants.");
   const [loading, setLoading] = useState(true);
@@ -279,7 +283,18 @@ export function HfDownloadsPage() {
     if (!repo.trim()) return;
     const payload: Record<string, unknown> = { revision: revision.trim() || null, include_file: includeFile || null };
     if (mmprojFile) payload.mmproj_file = mmprojFile;
-    await startDownload(repo.trim(), payload);
+    if (appMode === "controller" && targetNode) {
+      await createJob({
+        type: "model.download",
+        target: `node:${targetNode}`,
+        payload: {
+          repo_id: repo.trim(),
+          ...payload,
+        },
+      });
+    } else {
+      await startDownload(repo.trim(), payload);
+    }
     await refresh();
   }
 
@@ -330,6 +345,9 @@ export function HfDownloadsPage() {
   );
   const allRecommendedModelsLocal = backendRecommendations.length > 0 && recommendations.length === 0 && !recommendationError;
   const machineText = recommendationMachineText(recommendationPayload);
+  const downloadTargetNodes = nodes
+    .filter((node) => node.name && node.reachable)
+    .sort((a, b) => String(a.name).localeCompare(String(b.name)));
 
   return (
     <div className="hf-downloads-page-react">
@@ -382,6 +400,14 @@ export function HfDownloadsPage() {
         <form className="filter-bar download-form" onSubmit={onSubmit}>
           <FormField label="Repo ID"><input value={repoId} onChange={(event) => setRepoId(event.target.value)} placeholder="owner/model" /></FormField>
           <FormField label="Revision"><input value={revision} onChange={(event) => setRevision(event.target.value)} placeholder="revision (optional)" /></FormField>
+          {appMode === "controller" ? (
+            <FormField label="Target node">
+              <select value={targetNode} onChange={(event) => setTargetNode(event.target.value)}>
+                <option value="">This controller</option>
+                {downloadTargetNodes.map((node) => <option key={node.name} value={node.name}>{node.name}</option>)}
+              </select>
+            </FormField>
+          ) : null}
           <Button type="button" onClick={() => void onDiscover()}>Find Quants</Button>
           <Button type="submit">Download</Button>
           <span className="muted download-form-status">{quantStatus}</span>

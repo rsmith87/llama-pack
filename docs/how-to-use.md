@@ -458,7 +458,10 @@ curl -X POST http://127.0.0.1:9100/jobs/{job_id}/cancel
 
 Queued jobs cancel immediately. Assigned or running jobs move to `cancel_requested`; workers check before and after local model execution and then report a terminal state.
 
-The only typed worker contract in this milestone is `llm.generate`. Additional contracts such as embeddings, quantization, conversion, or tool/workflow execution should be designed separately before implementation.
+Typed worker contracts include `llm.generate`, `llm.embed`, `llm.batch`,
+`model.transfer`, and `model.download`. `model.download` jobs run Hugging Face
+downloads on the target worker node using that agent's configured model roots
+and Hugging Face credentials.
 
 ## 14. Run Tests
 

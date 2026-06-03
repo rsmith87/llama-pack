@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from pydantic import BaseModel, Field
@@ -35,7 +36,7 @@ def create_job(body: CreateJobRequest, orchestrator: Orchestrator = Depends(get_
     try:
         payload = validate_job_payload(body.type, body.payload)
     except ValidationError as exc:
-        raise HTTPException(status_code=422, detail=exc.errors()) from exc
+        raise HTTPException(status_code=422, detail=jsonable_encoder(exc.errors())) from exc
     return orchestrator.create_job(
         job_type=body.type,
         payload=payload,
