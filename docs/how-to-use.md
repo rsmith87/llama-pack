@@ -115,7 +115,7 @@ models:
     port: 8081
     ctx: 16384
     gpu_layers: 999
-    host: 0.0.0.0
+    host: 127.0.0.1
     reasoning: auto
     reasoning_budget: 2048
     extra_args: []
@@ -157,14 +157,14 @@ steps for fresh controller setup.
 ## 5. Start An Agent
 
 ```bash
-NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
+NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
 ```
 
 On Windows PowerShell:
 
 ```powershell
 $env:NEURAXIS_CONFIG = "config.yaml"
-uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
+uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
 ```
 
 Check health:
@@ -246,7 +246,7 @@ curl -X POST http://127.0.0.1:9000/library/ggufs/{file_id}/add-model \
     "port": 8080,
     "ctx": 8192,
     "gpu_layers": 999,
-    "host": "0.0.0.0"
+    "host": "127.0.0.1"
   }'
 ```
 
@@ -314,7 +314,7 @@ node_heartbeat_timeout_seconds: 90
 Run controller (different port from local agent):
 
 ```bash
-NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9100
+NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9100
 ```
 
 If `controller.yaml` is recorded in `.neuraxis.env` as

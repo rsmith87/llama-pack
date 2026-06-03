@@ -200,7 +200,7 @@ models: {}
 #     port: 8081
 #     ctx: 16384
 #     gpu_layers: 999
-#     host: 0.0.0.0
+#     host: 127.0.0.1
 #     reasoning: auto
 #     reasoning_budget: 2048
 #     extra_args: []

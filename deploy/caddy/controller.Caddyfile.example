@@ -1,0 +1,13 @@
+{
+    email admin@example.com
+}
+
+# Replace pi-controller.local with the controller hostname that agents and
+# mobile clients will use. The fullchain file should contain the node leaf
+# certificate followed by the intermediate CA certificate.
+pi-controller.local {
+    tls /etc/caddy/certs/pi-controller-fullchain.crt /etc/caddy/certs/pi-controller.key
+
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:9137
+}

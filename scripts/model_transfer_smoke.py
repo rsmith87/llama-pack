@@ -280,7 +280,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--node", default="linux-2080ti")
-    parser.add_argument("--host", default=os.getenv("NEURAXIS_HOST", "0.0.0.0"))
+    parser.add_argument("--host", default=os.getenv("NEURAXIS_HOST", "127.0.0.1"))
     parser.add_argument("--port", type=int, default=int(os.getenv("NEURAXIS_PORT", "9137")))
     parser.add_argument("--timeout", type=float, default=90)
     parser.add_argument("--controller-api-key", default=os.getenv("NEURAXIS_CONTROLLER_API_KEY"))

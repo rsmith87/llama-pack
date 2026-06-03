@@ -38,6 +38,8 @@ llama_manager/ui/assets/
 .superpowers
 llama_manager/ui/index.htmlmodels/embedding/
 *.BAK
+*.crt
+*.key
 llama_manager/ui/index.html
 config/*.yaml
 !config/*.example.yaml

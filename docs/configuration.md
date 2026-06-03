@@ -18,7 +18,7 @@ models:
     port: 8081
     ctx: 16384
     gpu_layers: 999
-    host: 0.0.0.0
+    host: 127.0.0.1
     profiles:
       fast:
         ctx: 8192
@@ -168,7 +168,7 @@ models:
     port: 8081
     ctx: 16384
     gpu_layers: 999
-    host: 0.0.0.0
+    host: 127.0.0.1
     reasoning: auto
     reasoning_budget: 2048
     extra_args: []
@@ -324,7 +324,7 @@ nodes:
 Manual startup is also available:
 
 ```bash
-NEURAXIS_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9137
+NEURAXIS_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
 ```
 
 Agents should run `scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"`, or manually keep `controller_url` as `${NEURAXIS_CONTROLLER_URL}`, keep `agent_url` as `${NEURAXIS_AGENT_URL}`, and send the same registration key through `controller_registration_key_outbound`.

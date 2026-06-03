@@ -1,0 +1,13 @@
+{
+    email admin@example.com
+}
+
+# Replace mac-mini.local with this agent's stable LAN hostname. The fullchain
+# file should contain the node leaf certificate followed by the intermediate CA
+# certificate.
+mac-mini.local {
+    tls /etc/caddy/certs/mac-mini-fullchain.crt /etc/caddy/certs/mac-mini.key
+
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:9137
+}

@@ -122,7 +122,7 @@ it("renders rich model card runtime and configuration details", async () => {
         pid: 4321,
         ctx: 16384,
         gpu_layers: 999,
-        host: "0.0.0.0",
+        host: "127.0.0.1",
         reasoning: "auto",
         reasoning_budget: 2048,
         prompt_template: "chatml",

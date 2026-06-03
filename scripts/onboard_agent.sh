@@ -8,7 +8,7 @@ TEMPLATE="$ROOT_DIR/linux-agent.config.example.yaml"
 NODE_NAME="$(hostname -s 2>/dev/null || hostname)"
 CONTROLLER_URL=""
 AGENT_URL=""
-HOST="0.0.0.0"
+HOST="127.0.0.1"
 PORT="9137"
 FORCE="false"
 RUN_SMOKE="false"
@@ -26,9 +26,9 @@ Options:
   --env-file PATH               Local secrets file to create/update. Default: ./.neuraxis.env
   --template PATH               Agent template. Default: ./linux-agent.config.example.yaml
   --node NAME                   Agent node name. Default: local hostname
-  --controller-url URL          Controller URL, for example http://192.168.1.104:9137
+  --controller-url URL          Controller URL, for example https://pi-controller.local
   --agent-url URL               URL the controller should use to reach this agent
-  --host HOST                   Host used in the printed start command. Default: 0.0.0.0
+  --host HOST                   Host used in the printed start command. Default: 127.0.0.1
   --port PORT                   Port used in the printed start command. Default: 9137
   --run-smoke                   Run scripts/linux_agent_smoke.py after config creation.
   --skip-runtime-path-check     Pass through to the smoke test.

@@ -187,7 +187,7 @@ export function GgufLibraryPage({ onNavigate }: GgufLibraryPageProps = {}) {
       port,
       ctx,
       gpu_layers: gpuLayers,
-      host: "0.0.0.0",
+      host: "127.0.0.1",
       reasoning,
       reasoning_budget: reasoningBudget,
       prompt_template: promptTemplate || null,

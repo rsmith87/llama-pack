@@ -15,7 +15,7 @@ class AddModelRequest(BaseModel):
     port: int
     ctx: int = 4096
     gpu_layers: int = 0
-    host: str = "0.0.0.0"
+    host: str = "127.0.0.1"
     reasoning: Literal["on", "off", "auto"] | None = None
     reasoning_budget: int | None = None
     prompt_template: str | None = None

@@ -40,6 +40,10 @@ scripts/start_agent.sh
 
 The onboarding scripts write local secrets to `.neuraxis.env`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
+For encrypted controller/agent traffic, set up Caddy before switching
+`NEURAXIS_CONTROLLER_URL` and `NEURAXIS_AGENT_URL` to HTTPS; see
+`docs/caddy-local-tls.md` for the operator checklist and
+`docs/tls-caddy-plan.md` for the design rationale.
 
 Manual setup remains available:
 
@@ -54,7 +58,7 @@ alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
 uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
-NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 0.0.0.0 --port 9000
+NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
 ```
 
 `uv sync` is the recommended install path because this repository includes a

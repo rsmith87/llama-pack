@@ -10,7 +10,7 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-HOST="${NEURAXIS_HOST:-0.0.0.0}"
+HOST="${NEURAXIS_HOST:-127.0.0.1}"
 PORT="${NEURAXIS_PORT:-9137}"
 DEFAULT_CONFIG="$ROOT_DIR/config.example.yaml"
 if [[ -f "$ROOT_DIR/config.yaml" ]]; then

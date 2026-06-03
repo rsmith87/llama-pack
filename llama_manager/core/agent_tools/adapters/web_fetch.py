@@ -10,7 +10,7 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 from llama_manager.core.agent_tools.common import MAX_RESULT_CHARS, truncate
 from llama_manager.core.config.models import AgentToolDefinitionConfig, AppConfig
 
-_SSRF_BLOCKED_HOSTS = {"localhost", "0.0.0.0", "::1"}
+_SSRF_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "::1"}
 _PRIVATE_NETWORKS = [
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("10.0.0.0/8"),
