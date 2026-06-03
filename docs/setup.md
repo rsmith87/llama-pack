@@ -30,7 +30,15 @@ Script-first setup for an agent:
 
 ```bash
 uv sync
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+cp .neuraxis.env.example .neuraxis.env
+# Edit .neuraxis.env before onboarding:
+# - NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
+#   NEURAXIS_CONTROLLER_REGISTRATION_KEY from the controller .neuraxis.env.
+# - NEURAXIS_CONTROLLER_URL should point at the controller.
+# - NEURAXIS_AGENT_URL should be the URL the controller uses for this agent.
+set -a
+source .neuraxis.env
+set +a
 scripts/onboard_agent.sh \
   --node linux-2080ti \
   --controller-url "$NEURAXIS_CONTROLLER_URL" \
@@ -115,7 +123,12 @@ to choose different local paths.
 Onboard a fresh agent:
 
 ```bash
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+cp .neuraxis.env.example .neuraxis.env
+# Edit .neuraxis.env and set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND
+# to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY.
+set -a
+source .neuraxis.env
+set +a
 scripts/onboard_agent.sh \
   --node linux-2080ti \
   --controller-url "$NEURAXIS_CONTROLLER_URL" \
@@ -127,6 +140,16 @@ environment placeholders in the generated config, and writes the real LAN URLs
 to `.neuraxis.env` alongside the agent API key, controller registration
 key, config path, host, and port. `scripts/start_agent.sh` and
 `scripts/stop_server.sh` source `.neuraxis.env` automatically.
+
+The controller registration key comes from the controller machine's
+`.neuraxis.env` after `scripts/onboard_controller.sh` runs:
+
+```bash
+grep NEURAXIS_CONTROLLER_REGISTRATION_KEY .neuraxis.env
+```
+
+Copy that value to each agent as
+`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
 
 Regenerate a local key and print the matching update for the other machines:
 

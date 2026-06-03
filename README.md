@@ -27,11 +27,23 @@ scripts/onboard_controller.sh
 scripts/start_controller.sh
 ```
 
+The controller onboarding script writes `.neuraxis.env`, including
+`NEURAXIS_CONTROLLER_REGISTRATION_KEY`. Give that registration key to each
+agent as `NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
+
 Agent:
 
 ```bash
 uv sync
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+cp .neuraxis.env.example .neuraxis.env
+# Edit .neuraxis.env:
+# - set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND to the controller's
+#   NEURAXIS_CONTROLLER_REGISTRATION_KEY
+# - set NEURAXIS_CONTROLLER_URL to the controller URL
+# - set NEURAXIS_AGENT_URL to this agent's URL
+set -a
+source .neuraxis.env
+set +a
 scripts/onboard_agent.sh \
   --node linux-2080ti \
   --controller-url "$NEURAXIS_CONTROLLER_URL" \
