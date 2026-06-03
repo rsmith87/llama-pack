@@ -6,7 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
-from llama_manager.core.chat.proxy import ChatProxy
+from llama_manager.core.chat.scheduler import ChatAdmissionError
 from llama_manager.core.config import AppConfig
 from llama_manager.core.threads.service import ThreadChatError, ThreadService
 
@@ -44,7 +44,7 @@ async def controller_chat(
     request: Request,
     config: AppConfig,
     service: ThreadService,
-    proxy: ChatProxy,
+    proxy: Any,
     model: str,
     messages: list[dict[str, Any]],
     payload: dict[str, Any],
@@ -53,8 +53,12 @@ async def controller_chat(
     metadata: dict[str, Any] | None,
     target: str,
 ) -> tuple[dict[str, Any], dict[str, str]]:
+    payload = _with_admission_session(payload, request)
     if config.mode != "controller":
-        response, meta = await proxy.chat_with_meta(model, payload)
+        try:
+            response, meta = await proxy.chat_with_meta(model, payload)
+        except ChatAdmissionError as exc:
+            raise CompatChatHTTPError(exc.status_code, str(exc), {}) from exc
         return response, compatibility_headers(None, None, meta)
 
     try:
@@ -74,6 +78,8 @@ async def controller_chat(
     request_payload = await _inject_memories(request.app.state.memory_store, config, request_payload)
     try:
         response, meta = await proxy.chat_with_meta(compat["model"], request_payload)
+    except ChatAdmissionError as exc:
+        raise CompatChatHTTPError(exc.status_code, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
     except Exception as exc:
         service.record_compat_error(compat["thread_id"], exc)
         raise CompatChatHTTPError(502, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
@@ -91,7 +97,7 @@ async def controller_stream(
     request: Request,
     config: AppConfig,
     service: ThreadService,
-    proxy: ChatProxy,
+    proxy: Any,
     model: str,
     messages: list[dict[str, Any]],
     payload: dict[str, Any],
@@ -100,8 +106,12 @@ async def controller_stream(
     metadata: dict[str, Any] | None,
     target: str,
 ) -> tuple[AsyncIterator[bytes], dict[str, str]]:
+    payload = _with_admission_session(payload, request)
     if config.mode != "controller":
-        stream, meta = await proxy.stream_with_meta(model, payload)
+        try:
+            stream, meta = await proxy.stream_with_meta(model, payload)
+        except ChatAdmissionError as exc:
+            raise CompatChatHTTPError(exc.status_code, str(exc), {}) from exc
         return stream, compatibility_headers(None, None, meta)
 
     try:
@@ -121,6 +131,8 @@ async def controller_stream(
     request_payload = await _inject_memories(request.app.state.memory_store, config, request_payload)
     try:
         stream, meta = await proxy.stream_with_meta(compat["model"], request_payload)
+    except ChatAdmissionError as exc:
+        raise CompatChatHTTPError(exc.status_code, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
     except Exception as exc:
         service.record_compat_error(compat["thread_id"], exc)
         raise CompatChatHTTPError(502, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
@@ -199,6 +211,13 @@ def _request_metadata(request_type: str | None, metadata: dict[str, Any] | None)
     if request_type:
         values["request_type"] = request_type
     return values
+
+
+def _with_admission_session(payload: dict[str, Any], request: Request) -> dict[str, Any]:
+    session_id = getattr(request.state, "test_chat_visitor_id", None)
+    if not session_id:
+        return payload
+    return {**payload, "_admission_session_id": session_id}
 
 
 async def _inject_memories(

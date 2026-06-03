@@ -11,6 +11,7 @@ if TYPE_CHECKING:
     from llama_manager.core.benchmarks.runner import BenchmarkRunner
     from llama_manager.core.chat.profile_activation import ProfileActivationService
     from llama_manager.core.chat.proxy import ChatProxy
+    from llama_manager.core.chat.scheduler import ChatScheduler
     from llama_manager.core.memory.store import ChromaMemoryStore
     from llama_manager.core.model_assets.conversions import ConversionManager
     from llama_manager.core.model_assets.library import GgufLibrary
@@ -46,6 +47,10 @@ def get_node_registry(request: Request) -> NodeRegistry:
 
 def get_chat_proxy(request: Request) -> ChatProxy:
     return request.app.state.chat_proxy
+
+
+def get_chat_scheduler(request: Request) -> ChatScheduler:
+    return request.app.state.chat_scheduler
 
 
 def get_memory_store(request: Request) -> ChromaMemoryStore:

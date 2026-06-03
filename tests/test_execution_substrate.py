@@ -411,6 +411,28 @@ class FakeDownloadManager:
         }
 
 
+class FakeGgufLibrary:
+    def __init__(self, files):
+        self.files = list(files)
+        self.added = []
+
+    def list_files(self, *args, **kwargs):
+        return self.files
+
+    def add_model(self, **kwargs):
+        self.added.append(kwargs)
+        return {"name": kwargs["name"], "path": next(file["path"] for file in self.files if file["id"] == kwargs["file_id"])}
+
+
+class FakeProcessManager:
+    def __init__(self):
+        self.started = []
+
+    def start(self, name):
+        self.started.append(name)
+        return {"name": name, "running": True, "pid": 1234}
+
+
 @pytest.mark.asyncio
 async def test_agent_worker_completes_model_download_job():
     calls = []
@@ -562,6 +584,141 @@ async def test_agent_worker_cancels_running_model_download_job():
     fail_payload = next(call[2] for call in calls if call[1].endswith("/fail"))
     assert fail_payload["error_code"] == "CANCELED"
     assert fail_payload["retryable"] is False
+
+
+def test_model_install_job_validates_required_payload(tmp_path):
+    app = _create_controller_app(tmp_path, {})
+    client = TestClient(app)
+
+    missing_name = client.post(
+        "/lm-api/v1/jobs",
+        json={"type": "model.install", "payload": {"repo_id": "owner/model", "include_file": "model.gguf", "port": 8081}},
+    )
+    assert missing_name.status_code == 422
+
+    valid = client.post(
+        "/lm-api/v1/jobs",
+        json={
+            "type": "model.install",
+            "target": "node:agent-a",
+            "payload": {
+                "repo_id": "owner/model",
+                "include_file": "model-Q4.gguf",
+                "model_name": "model-q4",
+                "port": 8081,
+                "ctx": 8192,
+                "gpu_layers": 999,
+            },
+        },
+    )
+    assert valid.status_code == 201
+    assert valid.json()["payload"]["model_name"] == "model-q4"
+    assert valid.json()["payload"]["start"] is True
+
+
+@pytest.mark.asyncio
+async def test_agent_worker_installs_downloaded_model_and_starts_it():
+    calls = []
+    download_manager = FakeDownloadManager(
+        [
+            {
+                "id": "download-install-1",
+                "repo_id": "owner/model-GGUF",
+                "status": "running",
+                "local_path": "/models/owner__model-GGUF",
+                "bytes_downloaded": 128,
+                "bytes_total": 1024,
+                "progress_percent": 12,
+            },
+            {
+                "id": "download-install-1",
+                "repo_id": "owner/model-GGUF",
+                "status": "succeeded",
+                "local_path": "/models/owner__model-GGUF",
+                "bytes_downloaded": 1024,
+                "bytes_total": 1024,
+                "progress_percent": 100,
+            },
+        ]
+    )
+    library = FakeGgufLibrary([
+        {"id": "file-1", "path": "/models/owner__model-GGUF/model-Q4.gguf", "filename": "model-Q4.gguf"},
+        {"id": "mmproj", "path": "/models/owner__model-GGUF/mmproj-F16.gguf", "filename": "mmproj-F16.gguf"},
+    ])
+    process_manager = FakeProcessManager()
+
+    async def request(method, url, payload=None, headers=None):
+        calls.append((method, url, payload))
+        if url.endswith("/nodes/agent-a/work/claim"):
+            return [
+                {
+                    "attempt_id": "attempt-1",
+                    "job": {
+                        "id": "job-install-1",
+                        "type": "model.install",
+                        "status": "assigned",
+                        "payload": {
+                            "repo_id": "owner/model-GGUF",
+                            "include_file": "model-Q4.gguf",
+                            "mmproj_file": "mmproj-F16.gguf",
+                            "model_name": "model-q4",
+                            "port": 8081,
+                            "ctx": 8192,
+                            "gpu_layers": 999,
+                            "vision": True,
+                        },
+                    },
+                }
+            ]
+        if url.endswith("/nodes/agent-a/work/jobs/job-install-1/cancellation"):
+            return {"id": "job-install-1", "cancellation_requested": False}
+        if url.endswith("/progress"):
+            return {"ok": True}
+        if url.endswith("/complete"):
+            return {"id": "job-install-1", "status": "completed"}
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+        download_manager=download_manager,
+        gguf_library=library,
+        process_manager=process_manager,
+    )
+
+    processed = await worker.run_once()
+
+    assert processed == 1
+    assert library.added == [
+        {
+            "file_id": "file-1",
+            "name": "model-q4",
+            "port": 8081,
+            "ctx": 8192,
+            "gpu_layers": 999,
+            "host": "127.0.0.1",
+            "reasoning": None,
+            "reasoning_budget": None,
+            "prompt_template": None,
+            "vision": True,
+            "mmproj": "/models/owner__model-GGUF/mmproj-F16.gguf",
+        }
+    ]
+    assert process_manager.started == ["model-q4"]
+    progress_stages = [call[2]["progress"]["stage"] for call in calls if call[1].endswith("/progress")]
+    assert "verified" in progress_stages
+    assert "registered" in progress_stages
+    assert "started" in progress_stages
+    complete_payload = next(call[2] for call in calls if call[1].endswith("/complete"))
+    assert complete_payload["result"]["model"]["name"] == "model-q4"
+    assert complete_payload["result"]["start_status"]["running"] is True
 
 
 def test_agent_worker_config_defaults_disabled():

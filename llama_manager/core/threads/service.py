@@ -39,6 +39,17 @@ class ThreadService:
             model_artifact_presence=model_artifact_presence,
             node_startup_allowed=node_startup_allowed,
         )
+        self._turn_locks: dict[str, asyncio.Lock] = {}
+        self._turn_locks_guard = asyncio.Lock()
+
+    async def acquire_turn_lock(self, thread_id: str) -> asyncio.Lock:
+        async with self._turn_locks_guard:
+            lock = self._turn_locks.get(thread_id)
+            if lock is None:
+                lock = asyncio.Lock()
+                self._turn_locks[thread_id] = lock
+        await lock.acquire()
+        return lock
 
     def create_thread(
         self,

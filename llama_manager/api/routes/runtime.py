@@ -92,6 +92,12 @@ def _worker_summary(config, worker) -> dict[str, object]:
             "embeddings": bool(worker is not None and getattr(worker, "_embeddings", None) is not None),
             "model_transfer": bool(worker is not None and getattr(worker, "_transfer_stream", None) is not None),
             "model_download": bool(worker is not None and getattr(worker, "_download_manager", None) is not None),
+            "model_install": bool(
+                worker is not None
+                and getattr(worker, "_download_manager", None) is not None
+                and getattr(worker, "_gguf_library", None) is not None
+                and getattr(worker, "_process_manager", None) is not None
+            ),
         },
     }
 

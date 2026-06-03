@@ -53,6 +53,7 @@ async def post_message(
     body: ThreadMessageRequest,
     service: ThreadService = Depends(get_thread_service),
 ):
+    lock = await service.acquire_turn_lock(thread_id)
     try:
         return await service.post_message_async(
             thread_id=thread_id,
@@ -68,6 +69,8 @@ async def post_message(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        lock.release()
 
 
 @router.post("/{thread_id}/messages/stream")
@@ -76,6 +79,7 @@ async def post_message_stream(
     body: ThreadMessageRequest,
     service: ThreadService = Depends(get_thread_service),
 ):
+    lock = await service.acquire_turn_lock(thread_id)
     try:
         stream, _route = await service.stream_message_async(
             thread_id=thread_id,
@@ -88,10 +92,20 @@ async def post_message_stream(
             metadata=body.metadata.model_dump() if body.metadata is not None else None,
         )
     except KeyError as exc:
+        lock.release()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
+        lock.release()
         raise HTTPException(status_code=409, detail=str(exc)) from exc
-    return StreamingResponse(stream, media_type="text/event-stream")
+    return StreamingResponse(_release_lock_after_stream(stream, lock), media_type="text/event-stream")
+
+
+async def _release_lock_after_stream(stream, lock):
+    try:
+        async for chunk in stream:
+            yield chunk
+    finally:
+        lock.release()
 
 
 @router.post("/{thread_id}/workflow")

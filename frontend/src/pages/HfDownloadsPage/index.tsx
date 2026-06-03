@@ -41,6 +41,15 @@ function quantPath(quant: QuantRecord) {
   return String(quant.path || quant.filename || "model.gguf");
 }
 
+function suggestedModelAlias(repo: string, includeFile = "") {
+  const source = includeFile || repo.split("/").pop() || "model";
+  return source
+    .replace(/\.gguf$/i, "")
+    .replace(/[^A-Za-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    || "model";
+}
+
 function mmprojPath(record: Record<string, unknown>) {
   const direct = record.mmproj_file;
   if (typeof direct === "string" && direct) return direct;
@@ -222,6 +231,8 @@ export function HfDownloadsPage() {
   const [repoId, setRepoId] = useState("");
   const [revision, setRevision] = useState("");
   const [targetNode, setTargetNode] = useState("");
+  const [installModelName, setInstallModelName] = useState("");
+  const [installPort, setInstallPort] = useState("8080");
   const [quants, setQuants] = useState<QuantRecord[]>([]);
   const [quantStatus, setQuantStatus] = useState("Select a repo to query remote GGUF quants.");
   const [loading, setLoading] = useState(true);
@@ -285,11 +296,16 @@ export function HfDownloadsPage() {
     if (mmprojFile) payload.mmproj_file = mmprojFile;
     if (appMode === "controller" && targetNode) {
       await createJob({
-        type: "model.download",
+        type: "model.install",
         target: `node:${targetNode}`,
         payload: {
           repo_id: repo.trim(),
           ...payload,
+          model_name: installModelName.trim() || suggestedModelAlias(repo.trim(), includeFile),
+          port: Number(installPort) || 8080,
+          ctx: 4096,
+          gpu_layers: 0,
+          start: true,
         },
       });
     } else {
@@ -407,6 +423,16 @@ export function HfDownloadsPage() {
                 {downloadTargetNodes.map((node) => <option key={node.name} value={node.name}>{node.name}</option>)}
               </select>
             </FormField>
+          ) : null}
+          {appMode === "controller" && targetNode ? (
+            <>
+              <FormField label="Model alias">
+                <input value={installModelName} onChange={(event) => setInstallModelName(event.target.value)} placeholder={suggestedModelAlias(repoId)} />
+              </FormField>
+              <FormField label="Port">
+                <input type="number" min={1024} max={65535} value={installPort} onChange={(event) => setInstallPort(event.target.value)} />
+              </FormField>
+            </>
           ) : null}
           <Button type="button" onClick={() => void onDiscover()}>Find Quants</Button>
           <Button type="submit">Download</Button>

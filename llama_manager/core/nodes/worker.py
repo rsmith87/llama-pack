@@ -5,19 +5,23 @@ import io
 import logging
 from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
+from pathlib import Path
 from time import monotonic
 from typing import Any
 
 import httpx
 
 from llama_manager.core.config import AppConfig
+from llama_manager.core.model_assets.library import GgufLibrary
 from llama_manager.core.model_assets.transfers import TransferManager
 from llama_manager.core.orchestration.job_contracts import (
     batch_cases_from_llm_batch,
     chat_payload_from_llm_generate,
     download_payload_from_model_download,
     embed_payload_from_llm_embed,
+    install_payload_from_model_install,
 )
+from llama_manager.core.runtime.process_manager import ProcessManager
 
 
 WorkerRequest = Callable[[str, str, dict[str, Any] | None, dict[str, str] | None], Awaitable[Any]]
@@ -37,6 +41,8 @@ class AgentWorker:
         embeddings: WorkerEmbeddings | None = None,
         transfer_stream: WorkerTransferStream | None = None,
         download_manager: WorkerDownloadManager | None = None,
+        gguf_library: Any | None = None,
+        process_manager: Any | None = None,
     ):
         self.config = config
         self._request = request or self._default_request
@@ -45,6 +51,8 @@ class AgentWorker:
         self._transfer_stream = transfer_stream or self._default_transfer_stream
         self._transfer_manager = TransferManager(config)
         self._download_manager = download_manager
+        self._gguf_library = gguf_library or GgufLibrary(config)
+        self._process_manager = process_manager or ProcessManager(config)
         self._task: asyncio.Task | None = None
         self._stop_event: asyncio.Event | None = None
 
@@ -122,6 +130,9 @@ class AgentWorker:
             return
         if job_type == "model.download":
             await self._run_model_download(attempt_id, job)
+            return
+        if job_type == "model.install":
+            await self._run_model_install(attempt_id, job)
             return
         if job_type == "llm.embed":
             await self._run_llm_embed(attempt_id, job)
@@ -285,6 +296,92 @@ class AgentWorker:
             await self._fail(attempt_id, "INVALID_JOB_PAYLOAD", str(exc), retryable=False)
         except Exception as exc:
             await self._fail(attempt_id, "DOWNLOAD_ERROR", str(exc), retryable=True)
+
+    async def _run_model_install(self, attempt_id: str, job: dict[str, Any]) -> None:
+        job_id = str(job.get("id", ""))
+        if await self._is_cancel_requested(job_id):
+            await self._fail(attempt_id, "CANCELED", "Job canceled before install", retryable=False)
+            return
+        if self._download_manager is None:
+            await self._fail(attempt_id, "EXECUTION_ERROR", "Agent worker download manager is not configured", retryable=False)
+            return
+        await self._progress(attempt_id, {"stage": "started", "job_type": "model.install"})
+        try:
+            payload = install_payload_from_model_install(job.get("payload", {}))
+            download = await self._download_to_terminal(attempt_id, job_id, payload, job_type="model.install")
+            if download is None:
+                return
+            if str(download.get("status")) != "succeeded":
+                await self._fail(
+                    attempt_id,
+                    "DOWNLOAD_FAILED",
+                    str(download.get("error_detail") or f"Download ended with status {download.get('status')}"),
+                    retryable=True,
+                )
+                return
+            main_file = self._find_downloaded_file(download, str(payload.get("include_file") or ""))
+            mmproj_path = self._find_downloaded_file(download, str(payload.get("mmproj_file") or ""), required=False)
+            await self._progress(
+                attempt_id,
+                {
+                    "stage": "verified",
+                    "job_type": "model.install",
+                    "download_id": download.get("id"),
+                    "file_id": main_file["id"],
+                    "path": main_file["path"],
+                },
+            )
+            model = self._gguf_library.add_model(
+                file_id=str(main_file["id"]),
+                name=str(payload["model_name"]),
+                port=int(payload["port"]),
+                ctx=int(payload.get("ctx", 4096)),
+                gpu_layers=int(payload.get("gpu_layers", 0)),
+                host=str(payload.get("host", "127.0.0.1")),
+                reasoning=payload.get("reasoning"),
+                reasoning_budget=payload.get("reasoning_budget"),
+                prompt_template=payload.get("prompt_template"),
+                vision=bool(payload.get("vision", False)),
+                mmproj=str(mmproj_path["path"]) if mmproj_path else None,
+            )
+            await self._progress(
+                attempt_id,
+                {
+                    "stage": "registered",
+                    "job_type": "model.install",
+                    "model_name": model.get("name"),
+                    "path": model.get("path"),
+                },
+            )
+            start_status = None
+            if payload.get("start", True):
+                start_status = self._process_manager.start(str(payload["model_name"]))
+                await self._progress(
+                    attempt_id,
+                    {
+                        "stage": "started",
+                        "job_type": "model.install",
+                        "model_name": payload["model_name"],
+                        "running": getattr(start_status, "running", None) if not isinstance(start_status, dict) else start_status.get("running"),
+                    },
+                )
+            await self._complete(
+                attempt_id,
+                {
+                    "download": self._download_result(download),
+                    "file": main_file,
+                    "model": model,
+                    "start_status": self._status_payload(start_status),
+                    "worker_node": self.config.node_name,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                },
+            )
+        except ValueError as exc:
+            await self._fail(attempt_id, "INVALID_JOB_PAYLOAD", str(exc), retryable=False)
+        except KeyError as exc:
+            await self._fail(attempt_id, "INSTALL_NOT_FOUND", str(exc), retryable=False)
+        except Exception as exc:
+            await self._fail(attempt_id, "INSTALL_ERROR", str(exc), retryable=True)
 
     async def _run_llm_embed(self, attempt_id: str, job: dict[str, Any]) -> None:
         job_id = str(job.get("id", ""))
@@ -466,6 +563,64 @@ class AgentWorker:
             "progress_percent": download.get("progress_percent"),
             "log_path": download.get("log_path"),
         }
+
+    async def _download_to_terminal(
+        self,
+        attempt_id: str,
+        job_id: str,
+        payload: dict[str, Any],
+        *,
+        job_type: str,
+    ) -> dict[str, Any] | None:
+        download = self._download_manager.start(
+            str(payload["repo_id"]),
+            triggered_by=f"job:{job_id or 'unknown'}",
+            revision=payload.get("revision"),
+            include_file=payload.get("include_file"),
+            mmproj_file=payload.get("mmproj_file"),
+        )
+        download_id = str(download["id"])
+        await self._progress(attempt_id, {**self._download_progress(download), "job_type": job_type})
+        while str(download.get("status")) in {"queued", "running"}:
+            if await self._is_cancel_requested(job_id):
+                cancelled = self._download_manager.cancel(download_id)
+                await self._progress(attempt_id, {**self._download_progress(cancelled), "job_type": job_type})
+                await self._fail(attempt_id, "CANCELED", "Job canceled during download", retryable=False)
+                return None
+            download = self._download_manager.status(download_id)
+            await self._progress(attempt_id, {**self._download_progress(download), "job_type": job_type})
+            if str(download.get("status")) in {"queued", "running"}:
+                await asyncio.sleep(1)
+        return download
+
+    def _find_downloaded_file(self, download: dict[str, Any], include_file: str, *, required: bool = True) -> dict[str, Any] | None:
+        local_path = Path(str(download.get("local_path") or ""))
+        expected = str(local_path / include_file) if include_file else ""
+        matches = []
+        for file in self._gguf_library.list_files():
+            file_path = str(file.get("path") or "")
+            filename = str(file.get("filename") or Path(file_path).name)
+            if include_file:
+                if file_path == expected or file_path.endswith(f"/{include_file}") or filename == Path(include_file).name:
+                    matches.append(file)
+            elif file_path.startswith(str(local_path)) and "mmproj" not in filename.lower():
+                matches.append(file)
+        if matches:
+            return matches[0]
+        if required:
+            raise KeyError(f"Downloaded GGUF not found: {include_file or local_path}")
+        return None
+
+    def _status_payload(self, status: Any) -> dict[str, Any] | None:
+        if status is None:
+            return None
+        if isinstance(status, dict):
+            return status
+        if hasattr(status, "to_dict"):
+            return status.to_dict()
+        if hasattr(status, "__dict__"):
+            return dict(status.__dict__)
+        return {"status": str(status)}
 
     @staticmethod
     def _api_base_url(url: str) -> str:

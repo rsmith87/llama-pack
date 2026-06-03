@@ -38,6 +38,7 @@ from llama_manager.api.routes import (
 )
 from llama_manager.core.config import AppConfig, load_config
 from llama_manager.core.chat.proxy import ChatProxy
+from llama_manager.core.chat.scheduler import ChatScheduler
 from llama_manager.core.memory.store import ChromaMemoryStore
 from llama_manager.core.nodes.heartbeat import AgentHeartbeatClient
 from llama_manager.core.model_assets.conversions import ConversionManager
@@ -228,10 +229,18 @@ def _configure_app_state(
         request=chat_request,
         stream_request=chat_stream_request,
     )
+    app.state.chat_scheduler = ChatScheduler(
+        app.state.chat_proxy,
+        max_active_per_target=app_config.chat_max_active_per_target,
+        max_queue_per_target=app_config.chat_max_queue_per_target,
+        max_active_per_session=app_config.chat_max_active_per_session,
+        max_queue_per_session=app_config.chat_max_queue_per_session,
+        admission_timeout_seconds=app_config.chat_admission_timeout_seconds,
+    )
     app.state.thread_service = ThreadService(
         config=app_config,
         store=ThreadStore(default_state_dir(app_config) / "threads.db"),
-        chat_proxy=app.state.chat_proxy,
+        chat_proxy=app.state.chat_scheduler,
         model_running=lambda node, model: _thread_model_running(app.state.node_registry, node, model),
         model_available=lambda node, model: _thread_model_available(app.state.node_registry, node, model),
         model_artifact_presence=lambda node, model: _thread_model_artifact_presence(app.state.node_registry, node, model),
@@ -256,6 +265,8 @@ def _configure_app_state(
         app_config,
         chat=app.state.chat_proxy.chat_with_meta,
         download_manager=app.state.download_manager,
+        gguf_library=app.state.gguf_library,
+        process_manager=app.state.process_manager,
     )
     app.state.controller_sweeper_task = None
     app.state.controller_sweeper_stop_event = asyncio.Event()

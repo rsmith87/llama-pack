@@ -125,6 +125,27 @@ class ModelDownloadJobPayload(BaseModel):
         return normalized
 
 
+class ModelInstallJobPayload(ModelDownloadJobPayload):
+    model_name: str = Field(min_length=1)
+    port: int = Field(ge=1024, le=65535)
+    ctx: int = Field(default=4096, ge=512)
+    gpu_layers: int = Field(default=0, ge=0)
+    host: str = "127.0.0.1"
+    reasoning: Literal["on", "off", "auto"] | None = None
+    reasoning_budget: int | None = None
+    prompt_template: str | None = None
+    vision: bool = False
+    start: bool = True
+
+    @field_validator("model_name", "host", "prompt_template")
+    @classmethod
+    def normalize_optional_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip()
+        return normalized or None
+
+
 class LlmEmbedJobPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -171,6 +192,8 @@ def validate_job_payload(job_type: str, payload: dict[str, Any]) -> dict[str, An
         return ModelTransferJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "model.download":
         return ModelDownloadJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
+    if job_type == "model.install":
+        return ModelInstallJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "llm.embed":
         return LlmEmbedJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "llm.batch":
@@ -199,6 +222,13 @@ def embed_payload_from_llm_embed(payload: dict[str, Any]) -> tuple[str, list[str
 
 def download_payload_from_model_download(payload: dict[str, Any]) -> dict[str, Any]:
     parsed = ModelDownloadJobPayload.model_validate(payload)
+    data = parsed.model_dump(mode="json", exclude_none=True)
+    data.pop("requirements", None)
+    return data
+
+
+def install_payload_from_model_install(payload: dict[str, Any]) -> dict[str, Any]:
+    parsed = ModelInstallJobPayload.model_validate(payload)
     data = parsed.model_dump(mode="json", exclude_none=True)
     data.pop("requirements", None)
     return data

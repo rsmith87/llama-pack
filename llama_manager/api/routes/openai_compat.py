@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from llama_manager.api.dependencies import get_chat_proxy, get_config, get_process_manager, get_profile_activation_service, get_thread_service
+from llama_manager.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_process_manager, get_profile_activation_service, get_thread_service
 from llama_manager.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_manager.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_manager.core.agent_tools.registry import ToolRegistry
@@ -22,6 +22,7 @@ from llama_manager.api.routes.chat.common import (
 )
 from llama_manager.core.chat.profile_activation import ProfileActivationService
 from llama_manager.core.chat.proxy import ChatProxy
+from llama_manager.core.chat.scheduler import ChatScheduler
 from llama_manager.core.agent_tools.runtime import AgentToolLoop
 from llama_manager.core.config import AppConfig
 from llama_manager.core.runtime.process_manager import ProcessManager
@@ -65,6 +66,7 @@ async def openai_chat_completions(
     request: Request,
     config: AppConfig = Depends(get_config),
     proxy: ChatProxy = Depends(get_chat_proxy),
+    scheduler: ChatScheduler = Depends(get_chat_scheduler),
     manager: ProcessManager = Depends(get_process_manager),
     profile_activation: ProfileActivationService = Depends(get_profile_activation_service),
     thread_service: ThreadService = Depends(get_thread_service),
@@ -103,7 +105,7 @@ async def openai_chat_completions(
                 request=request,
                 config=config,
                 service=thread_service,
-                proxy=proxy,
+                proxy=scheduler,
                 model=model_name,
                 messages=[message.model_dump() for message in body.messages],
                 payload=payload,
@@ -133,7 +135,7 @@ async def openai_chat_completions(
                     request=request,
                     config=config,
                     service=thread_service,
-                    proxy=proxy,
+                    proxy=scheduler,
                     model=model_name,
                     messages=[message.model_dump() for message in body.messages],
                     payload=payload,
@@ -147,7 +149,7 @@ async def openai_chat_completions(
                 request=request,
                 config=config,
                 service=thread_service,
-                proxy=proxy,
+                proxy=scheduler,
                 model=model_name,
                 messages=[message.model_dump() for message in body.messages],
                 payload=payload,

@@ -62,7 +62,7 @@ def test_runtime_overview_reports_agent_runtime_state(tmp_path):
         "claim_url": "http://controller/lm-api/v1/nodes/agent-a/work/claim",
         "labels": {"os": "mac", "transfer": "enabled"},
         "capacity": {"gpu": 1, "disk_gb": 500},
-        "executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True},
+        "executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True, "model_install": True},
     }
     assert body["threads"]["available"] is False
     assert body["nodes"]["available"] is False
@@ -99,7 +99,7 @@ def test_runtime_overview_reports_controller_runtime_state(tmp_path):
                 "claim_url": "http://controller/lm-api/v1/nodes/linux/work/claim",
                 "labels": {"role": "transfer"},
                 "capacity": {"disk_gb": 800},
-                "executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True},
+                "executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True, "model_install": True},
             },
         }
 
@@ -157,7 +157,7 @@ def test_runtime_overview_reports_controller_runtime_state(tmp_path):
             "worker_max_jobs": 2,
             "worker_labels": {"role": "transfer"},
             "worker_capacity": {"disk_gb": 800},
-            "worker_executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True},
+            "worker_executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True, "model_install": True},
         }
     ]
     assert body["running_models"]["available"] is False

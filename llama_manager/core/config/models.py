@@ -211,6 +211,11 @@ class AppConfig(BaseModel):
     routing_fanout_enabled: bool = False
     routing_fanout_max: int = 2
     routing_plugin_path: str | None = None
+    chat_max_active_per_target: int = Field(default=1, ge=1, le=128)
+    chat_max_queue_per_target: int = Field(default=32, ge=0, le=10000)
+    chat_max_active_per_session: int = Field(default=1, ge=1, le=32)
+    chat_max_queue_per_session: int = Field(default=4, ge=0, le=1000)
+    chat_admission_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
     agent_tools: AgentToolsConfig = Field(default_factory=AgentToolsConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     config_source: str = "(defaults)"

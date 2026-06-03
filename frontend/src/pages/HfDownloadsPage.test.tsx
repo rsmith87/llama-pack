@@ -192,7 +192,7 @@ it("discovers quants and starts a selected quant download", async () => {
   })));
 });
 
-it("shows controller-only node target selector and queues an agent download job", async () => {
+it("shows controller-only node target selector and queues an agent install job", async () => {
   mockHfDownloadsFetch({
     "/lm-api/v1/nodes/models": [
       { name: "agent-a", reachable: true, models: [] },
@@ -214,18 +214,25 @@ it("shows controller-only node target selector and queues an agent download job"
   expect(screen.queryByRole("option", { name: "offline" })).not.toBeInTheDocument();
 
   await user.selectOptions(screen.getByLabelText("Target node"), "agent-a");
+  await user.clear(screen.getByLabelText("Model alias"));
+  await user.type(screen.getByLabelText("Model alias"), "model-q4");
   await user.click(screen.getByRole("button", { name: "Find Quants" }));
   await user.click(await screen.findByRole("button", { name: "Download model-Q4.gguf" }));
 
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/jobs", expect.objectContaining({
     method: "POST",
     body: JSON.stringify({
-      type: "model.download",
+      type: "model.install",
       target: "node:agent-a",
       payload: {
         repo_id: "owner/model",
         revision: null,
         include_file: "model-Q4.gguf",
+        model_name: "model-q4",
+        port: 8080,
+        ctx: 4096,
+        gpu_layers: 0,
+        start: true,
       },
     }),
   })));

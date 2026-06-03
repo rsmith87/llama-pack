@@ -334,6 +334,33 @@ optional relative `.gguf` paths. Progress events include `download_id`,
 Cancelling the orchestration job cancels the local download process
 cooperatively.
 
+**`model.install`** — Download, verify, register, and optionally start a GGUF
+model on the target worker node. This is the controller-to-agent workflow for
+making a Hugging Face model usable on a specific agent.
+
+```json
+{
+  "type": "model.install",
+  "target": "node:mac-agent",
+  "payload": {
+    "repo_id": "bartowski/Qwen2.5-7B-Instruct-GGUF",
+    "revision": "main",
+    "include_file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+    "mmproj_file": null,
+    "model_name": "qwen2.5-7b-q4",
+    "port": 8080,
+    "ctx": 4096,
+    "gpu_layers": 0,
+    "start": true
+  }
+}
+```
+
+The worker emits progress stages for download progress, `verified`,
+`registered`, and `started` when `start` is true. Registration uses the agent's
+local model library configuration and persists config on agents that were
+started from a writable config file.
+
 **`model.transfer`** — Transfer a GGUF file from one registered node to another.
 
 Most callers should start transfers through the controller helper endpoint
