@@ -4,12 +4,16 @@ Neuraxis is a secure local/private LLM gateway with an operations console.
 It gives your apps one stable private AI backend while giving you an operator UI
 for the machines, models, keys, routing, logs, and jobs behind it.
 
-The app can run in two modes:
+The app can run in three modes:
 
+- `standalone`: runs on one machine as a self-contained local gateway and
+  operations console for that host's models.
 - `agent`: runs on each model host and manages local `llama-server` processes.
-- `controller`: runs on a central host, routes app traffic, and aggregates operations across known agents.
+- `controller`: runs on a central host, routes app traffic, and aggregates
+  operations across known agents.
 
-The controller is the gateway and operations surface. Agents provide local
+Standalone is the simplest single-machine setup. In a multi-machine deployment,
+the controller is the gateway and operations surface. Agents provide local
 compute, model lifecycle control, and the foundation for a private agent
 runtime.
 
