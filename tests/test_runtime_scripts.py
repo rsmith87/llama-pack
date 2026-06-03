@@ -119,6 +119,7 @@ def test_runtime_shell_scripts_parse_cleanly() -> None:
         "scripts/stop_frontend.sh",
         "scripts/stop_server.sh",
         "scripts/create_test_chat_key.sh",
+        "scripts/install_caddy_fullchain.sh",
     ]:
         subprocess.run(["bash", "-n", str(ROOT_DIR / script)], check=True)
 
@@ -136,8 +137,73 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/stop_frontend.sh",
         "scripts/stop_server.sh",
         "scripts/create_test_chat_key.sh",
+        "scripts/install_caddy_fullchain.sh",
     ]:
         assert (ROOT_DIR / script).stat().st_mode & S_IXUSR
+
+
+def test_install_caddy_fullchain_dry_run_builds_chain_and_reports_install_commands(tmp_path: Path) -> None:
+    leaf = tmp_path / "pi-controller.crt"
+    key = tmp_path / "pi-controller.key"
+    intermediate = tmp_path / "intermediate_ca.crt"
+    cert_dir = tmp_path / "caddy-certs"
+    leaf.write_text("leaf\n", encoding="utf-8")
+    key.write_text("key\n", encoding="utf-8")
+    intermediate.write_text("intermediate\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "install_caddy_fullchain.sh"),
+            "--name",
+            "pi-controller",
+            "--leaf",
+            str(leaf),
+            "--key",
+            str(key),
+            "--intermediate",
+            str(intermediate),
+            "--cert-dir",
+            str(cert_dir),
+            "--dry-run",
+        ],
+        cwd=ROOT_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    fullchain = tmp_path / "pi-controller-fullchain.crt"
+    assert fullchain.read_text(encoding="utf-8") == "leaf\nintermediate\n"
+    assert "sudo install -d -o root -g caddy -m 750" in result.stdout
+    assert f"sudo install -o root -g caddy -m 644 {leaf}" in result.stdout
+    assert f"sudo install -o root -g caddy -m 644 {fullchain}" in result.stdout
+    assert f"sudo install -o root -g caddy -m 640 {key}" in result.stdout
+    assert str(cert_dir / "pi-controller-fullchain.crt") in result.stdout
+
+
+def test_install_caddy_fullchain_reports_missing_inputs(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "install_caddy_fullchain.sh"),
+            "--name",
+            "pi-controller",
+            "--leaf",
+            str(tmp_path / "missing.crt"),
+            "--key",
+            str(tmp_path / "missing.key"),
+            "--intermediate",
+            str(tmp_path / "missing-intermediate.crt"),
+            "--dry-run",
+        ],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 1
+    assert "Leaf certificate not found" in result.stderr
 
 
 def test_onboard_controller_exposes_one_step_memory_setup_options() -> None:

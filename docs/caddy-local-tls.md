@@ -246,20 +246,24 @@ work in some environments while Python/httpx fails with
 Linux and Raspberry Pi:
 
 ```bash
-sudo mkdir -p /etc/caddy/certs
-sudo cp pi-controller.crt /etc/caddy/certs/pi-controller.crt
-sudo cp pi-controller.key /etc/caddy/certs/pi-controller.key
-sudo cp /etc/caddy/certs/pi-controller.crt /etc/caddy/certs/pi-controller-fullchain.crt
-sudo sh -c 'cat /home/rsmith/neuraxis-certs/intermediate_ca.crt >> /etc/caddy/certs/pi-controller-fullchain.crt'
-sudo chown root:caddy /etc/caddy/certs
-sudo chown root:caddy /etc/caddy/certs/pi-controller.*
-sudo chmod 750 /etc/caddy/certs
-sudo chmod 644 /etc/caddy/certs/pi-controller.crt
-sudo chmod 644 /etc/caddy/certs/pi-controller-fullchain.crt
-sudo chmod 640 /etc/caddy/certs/pi-controller.key
+scripts/install_caddy_fullchain.sh \
+  --name pi-controller \
+  --leaf pi-controller.crt \
+  --key pi-controller.key \
+  --intermediate ~/neuraxis-certs/intermediate_ca.crt
 ```
 
-For `linux-2080ti.local`, replace `pi-controller` with `linux-2080ti`.
+The script builds `pi-controller-fullchain.crt` from the user-writable leaf and
+intermediate files, then uses `sudo install` to write:
+
+- `/etc/caddy/certs/pi-controller.crt` with mode `644`
+- `/etc/caddy/certs/pi-controller-fullchain.crt` with mode `644`
+- `/etc/caddy/certs/pi-controller.key` with mode `640`
+- `/etc/caddy/certs/` with owner `root:caddy` and mode `750`
+
+Use `--dry-run` to preview the `sudo install` commands after building the local
+fullchain. For `linux-2080ti.local`, replace `pi-controller` with
+`linux-2080ti`.
 
 macOS with Homebrew on Apple Silicon:
 
