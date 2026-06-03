@@ -76,6 +76,11 @@ function modelOptionLabel(model: LocalModel) {
   return nodeTarget ? `${name} on ${nodeTarget.slice("node:".length)}` : name;
 }
 
+function modelIsLoaded(model: LocalModel) {
+  const status = String(model.status || "").toLowerCase();
+  return !status || status === "running" || status === "loaded";
+}
+
 function modelSupportsVision(model: LocalModel | undefined) {
   return Boolean(model?.vision || model?.supports?.vision);
 }
@@ -273,9 +278,10 @@ export function ChatPage() {
       if (!items.length) {
         items = nodeModelsToChatModels(asNodes(await getNodeModels()));
       }
+      const loadedItems = items.filter((model) => modelName(model) && modelIsLoaded(model));
       setModels(items);
-      setSelectedModel((current) => current || modelName(items[0] || {}));
-      setTarget((current) => current === "auto" && modelTarget(items[0] || {}) ? modelTarget(items[0] || {}) : current);
+      setSelectedModel((current) => loadedItems.some((model) => modelName(model) === current) ? current : modelName(loadedItems[0] || {}));
+      setTarget((current) => current === "auto" && modelTarget(loadedItems[0] || {}) ? modelTarget(loadedItems[0] || {}) : current);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to load chat models");
     }
@@ -823,13 +829,14 @@ export function ChatPage() {
     localStorage.setItem(ACTIVE_CHAT_SESSION_STORAGE_KEY, localStorage.getItem(ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
   }
 
-  const runningModels = models.filter((model) => modelName(model));
+  const runningModels = models.filter((model) => modelName(model) && modelIsLoaded(model));
+  const noModelLoaded = runningModels.length === 0;
   const selectedRunningModel = runningModels.find((model) => modelName(model) === selectedModel);
   const selectedModelSupportsVision = modelSupportsVision(selectedRunningModel);
   const isThreadMode = chatMode === "thread";
   const showImageUpload = selectedModelSupportsVision && !isThreadMode;
-  const canSend = Boolean(selectedModel && prompt.trim() && !pending);
-  const canSendThread = Boolean(prompt.trim() && !pending);
+  const canSend = Boolean(!noModelLoaded && selectedModel && prompt.trim() && !pending);
+  const canSendThread = Boolean(!noModelLoaded && prompt.trim() && !pending);
   const profileFamilies = profileCatalog.families.filter((family) => family.family && family.profiles.length);
   const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
   const targetOptions = ["auto", "local", target, ...runningModels.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
@@ -890,7 +897,7 @@ export function ChatPage() {
             </div>
             <form className="chat-composer" onSubmit={onSubmit}>
               <FormField label="Prompt">
-                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKeyDown} rows={4} />
+                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKeyDown} rows={4} disabled={noModelLoaded} />
               </FormField>
               {showImageUpload ? (
                 <div className="chat-image-upload">
@@ -917,13 +924,14 @@ export function ChatPage() {
           </Panel>
         </div>
 
-        <Panel title="Controls" eyebrow="Route and defaults" className="side-panel">
-          <div className="stacked-controls">
+        <Panel title="Controls" eyebrow="Route and defaults" className={`side-panel${noModelLoaded ? " chat-controls-unavailable" : ""}`}>
+          {noModelLoaded ? <p className="chat-controls-warning" role="status">Load a model before using chat controls.</p> : null}
+          <fieldset className="stacked-controls chat-controls-fieldset" disabled={noModelLoaded} aria-disabled={noModelLoaded}>
             <FormField label="Model"><select value={selectedModel} onChange={(event) => {
               const nextModel = runningModels.find((model) => modelName(model) === event.target.value);
               selectModel(event.target.value);
               if (nextModel && modelTarget(nextModel)) setTarget(modelTarget(nextModel));
-            }}>{runningModels.map((model) => <option key={`${modelName(model)}-${modelTarget(model) || "local"}`} value={modelName(model)}>{modelOptionLabel(model)}</option>)}</select></FormField>
+            }}>{runningModels.length ? runningModels.map((model) => <option key={`${modelName(model)}-${modelTarget(model) || "local"}`} value={modelName(model)}>{modelOptionLabel(model)}</option>) : <option value="">No loaded models</option>}</select></FormField>
             {profileFamilies.length ? (
               <>
                 <FormField label="Model Family"><select value={selectedFamily} onChange={(event) => {
@@ -989,7 +997,7 @@ export function ChatPage() {
                 <pre className="detail-json">{threadRouteDetail}</pre>
               </div>
             ) : null}
-          </div>
+          </fieldset>
         </Panel>
       </div>
     </div>

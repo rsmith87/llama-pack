@@ -166,6 +166,27 @@
   background: var(--button);
 }
 
+.chat-controls-unavailable {
+  opacity: 0.68;
+}
+
+.chat-controls-warning {
+  margin: 0 0 12px;
+  border: 1px solid var(--danger-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-weight: 700;
+}
+
+.chat-controls-fieldset {
+  margin: 0;
+  border: 0;
+  padding: 0;
+  min-width: 0;
+}
+
 @media (max-width: 980px) {
   .chat-layout {
     grid-template-columns: 1fr;

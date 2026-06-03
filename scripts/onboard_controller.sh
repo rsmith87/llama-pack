@@ -26,7 +26,8 @@ Options:
   --config PATH          Controller config to create/update. Default: ./config.yaml
   --env-file PATH        Local secrets file to create/update. Default: ./.neuraxis.env
   --template PATH        Optional controller template to copy instead of generating a portable config.
-  --host HOST            Host used in the printed start command. Default: 127.0.0.1
+  --host HOST            Uvicorn bind host. Default: 127.0.0.1 for Caddy/TLS.
+                         Use 0.0.0.0 only for direct LAN HTTP without Caddy.
   --port PORT            Port used in the printed start command. Default: 9137
   --admin-user NAME      Admin key username shown in the create-admin command. Default: $USER
   --enable-memory        Install controller-memory extras, install the embedding model, and write memory config.

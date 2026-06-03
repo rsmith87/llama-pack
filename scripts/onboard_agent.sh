@@ -28,7 +28,8 @@ Options:
   --node NAME                   Agent node name. Default: local hostname
   --controller-url URL          Controller URL, for example https://pi-controller.local
   --agent-url URL               URL the controller should use to reach this agent
-  --host HOST                   Host used in the printed start command. Default: 127.0.0.1
+  --host HOST                   Uvicorn bind host. Default: 127.0.0.1 for Caddy/TLS.
+                                Use 0.0.0.0 only for direct LAN HTTP without Caddy.
   --port PORT                   Port used in the printed start command. Default: 9137
   --run-smoke                   Run scripts/linux_agent_smoke.py after config creation.
   --skip-runtime-path-check     Pass through to the smoke test.

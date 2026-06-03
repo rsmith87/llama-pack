@@ -2,6 +2,19 @@
 
 Set `NEURAXIS_CONFIG` to a YAML file path. Set `NEURAXIS_MODE` to override the mode without editing the file.
 
+## Network Exposure
+
+Neuraxis can run in either direct HTTP mode or behind Caddy:
+
+| Mode | Uvicorn bind | URLs | Notes |
+| --- | --- | --- | --- |
+| Direct LAN HTTP | `NEURAXIS_HOST=0.0.0.0` | `http://<host>:9137` | Simple setup, but controller/agent traffic is plaintext. |
+| Caddy/local TLS | `NEURAXIS_HOST=127.0.0.1` | `https://<host>.local` | Recommended for encrypted inter-machine traffic. Caddy listens on `443` and proxies to local uvicorn. |
+
+The `models.*.host` fields below control `llama-server` bind addresses, not the
+Neuraxis FastAPI/uvicorn bind address. Prefer `127.0.0.1` for model hosts when
+Neuraxis proxies model access.
+
 ```yaml
 mode: agent
 llama_server_bin: llama-server

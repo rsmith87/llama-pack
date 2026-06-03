@@ -45,6 +45,14 @@ For encrypted controller/agent traffic, set up Caddy before switching
 `docs/caddy-local-tls.md` for the operator checklist and
 `docs/tls-caddy-plan.md` for the design rationale.
 
+Two network exposure modes are supported:
+
+- Direct LAN HTTP: set `NEURAXIS_HOST=0.0.0.0` and use `http://<host>:9137`
+  URLs. This is simpler but sends API keys and traffic in plaintext.
+- Caddy/local TLS: set `NEURAXIS_HOST=127.0.0.1` and use
+  `https://<host>.local` URLs. Uvicorn is reachable only from the local
+  machine, and Caddy is the LAN-facing listener.
+
 Manual setup remains available:
 
 ```bash

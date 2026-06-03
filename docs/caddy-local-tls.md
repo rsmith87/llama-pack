@@ -3,6 +3,19 @@
 This is the operator checklist for running Neuraxis controller and agent nodes
 over local HTTPS with Caddy.
 
+You can run Neuraxis without this TLS setup by exposing uvicorn directly on the
+LAN:
+
+```bash
+export NEURAXIS_HOST=0.0.0.0
+export NEURAXIS_PORT=9137
+```
+
+In that direct HTTP mode, controller and agent URLs use
+`http://<host>:9137`. That is simpler, but API keys, prompts, responses, and
+heartbeats travel in plaintext. For local TLS, change `NEURAXIS_HOST` to
+`127.0.0.1`, use `https://<host>.local` URLs, and expose Caddy on `443`.
+
 The target shape is:
 
 ```text
@@ -31,6 +44,79 @@ The same hostname must be used in:
 
 After changing `/etc/hosts`, restart the affected Neuraxis process so long-lived
 HTTP clients do not keep stale resolution behavior.
+
+## Public Controller, Private Agents
+
+For external user or mobile access, the best default topology is a public
+controller domain with private agents reachable only over a VPN/private network.
+
+```text
+public users/mobile apps
+        |
+        v
+https://controller.example.com  ->  Caddy on controller  ->  127.0.0.1:9137
+        |
+        | controller-to-agent over VPN/private DNS
+        v
+https://linux-2080ti.tailnet-name.ts.net or https://linux-2080ti.internal
+https://mac-mini.tailnet-name.ts.net or https://mac-mini.internal
+```
+
+In this topology:
+
+- The controller has a public DNS name and public HTTPS certificate, preferably
+  from ACME/Let's Encrypt through Caddy.
+- Agents stay off the public internet. Their Caddy listeners are reachable only
+  from the controller over Tailscale, WireGuard, a private subnet, or a private
+  DNS/VPN name.
+- Public clients use only the controller URL.
+- The controller `nodes:` URLs use the private/VPN agent names.
+- Agents set `NEURAXIS_CONTROLLER_URL` to the public controller URL, because
+  their heartbeat and work-claim traffic goes outbound to the controller.
+- Agents set `NEURAXIS_AGENT_URL` to their private/VPN URL, because that is the
+  URL the controller uses to call them.
+
+Example controller `.neuraxis.env`:
+
+```bash
+export NEURAXIS_HOST=127.0.0.1
+export NEURAXIS_MAC_MINI_AGENT_URL=https://mac-mini.tailnet-name.ts.net
+export NEURAXIS_LINUX_2080TI_AGENT_URL=https://linux-2080ti.tailnet-name.ts.net
+```
+
+Example Mac agent `.neuraxis.env`:
+
+```bash
+export NEURAXIS_HOST=127.0.0.1
+export NEURAXIS_CONTROLLER_URL=https://controller.example.com
+export NEURAXIS_AGENT_URL=https://mac-mini.tailnet-name.ts.net
+```
+
+Example Linux agent `.neuraxis.env`:
+
+```bash
+export NEURAXIS_HOST=127.0.0.1
+export NEURAXIS_CONTROLLER_URL=https://controller.example.com
+export NEURAXIS_AGENT_URL=https://linux-2080ti.tailnet-name.ts.net
+```
+
+Controller Caddy with a public ACME cert can be as simple as:
+
+```caddyfile
+controller.example.com {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:9137
+}
+```
+
+Agent Caddy can still use private CA certs, Tailscale HTTPS certs, or any
+certificate trusted by the controller's Python runtime. If agent certs are
+private CA certs, the controller must still set `SSL_CERT_FILE` and
+`REQUESTS_CA_BUNDLE` to the private CA chain bundle.
+
+Do not expose agent Caddy listeners publicly unless the controller cannot reach
+them privately. Public agents increase the attack surface and require tighter
+firewall, monitoring, and key-rotation discipline.
 
 ## Certificate Files
 

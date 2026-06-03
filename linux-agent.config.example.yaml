@@ -200,6 +200,8 @@ models: {}
 #     port: 8081
 #     ctx: 16384
 #     gpu_layers: 999
+#     # This is the llama-server bind address. Prefer 127.0.0.1 when Neuraxis
+#     # proxies model access; use 0.0.0.0 only for direct LAN model access.
 #     host: 127.0.0.1
 #     reasoning: auto
 #     reasoning_budget: 2048

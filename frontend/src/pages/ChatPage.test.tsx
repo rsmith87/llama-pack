@@ -41,6 +41,21 @@ it("loads models and preserves chat localStorage keys", async () => {
   expect(localStorage.getItem("lm_active_chat_session_id")).toBe("session-1");
 });
 
+it("disables chat controls and warns when no model is loaded", async () => {
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "stopped" }] });
+    if (url === "/lm-api/v1/nodes/models") return okJson([]);
+    return okJson({});
+  }));
+
+  render(<ChatPage />);
+
+  expect(await screen.findByText("Load a model before using chat controls.")).toBeInTheDocument();
+  expect(screen.getByLabelText("Model")).toBeDisabled();
+  expect(screen.getByLabelText("Prompt")).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+});
+
 it("renders model family and context profile selectors from catalog and sends them", async () => {
   const stream = streamResponse(['data: {"choices":[{"delta":{"content":"profile reply"}}]}\n\n']);
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {

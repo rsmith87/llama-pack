@@ -5,6 +5,12 @@ mobile-app traffic using Caddy as a TLS-terminating reverse proxy and a private
 certificate authority.
 
 For the command-oriented local setup checklist, see `docs/caddy-local-tls.md`.
+For simpler trusted-LAN testing without TLS, Neuraxis can instead bind uvicorn
+to `0.0.0.0` and use `http://<host>:9137` URLs. Switch that bind address to
+`127.0.0.1` before putting Caddy in front of the app.
+For public access, prefer a public controller domain with agents kept private
+behind Tailscale, WireGuard, or another VPN/private network; the checklist
+documents that topology.
 
 ## Why This Matters
 
@@ -66,6 +72,10 @@ For the current inter-machine encryption goal, the private CA path is enough.
 For the mobile app, prefer a public ACME certificate when the controller is
 reachable through a real domain. If the mobile app is LAN-only or VPN-only,
 the private CA root must be installed on the phone.
+
+Agents do not need public DNS names unless the controller must reach them over
+the public internet. Prefer private/VPN agent URLs in the controller `nodes:`
+configuration.
 
 ## Step 2: Private CA with step-ca
 
