@@ -5,9 +5,9 @@ filesystem paths. The initial plugin runtime is intentionally local-path only:
 there is no Python package entrypoint discovery, sandboxed execution, remote
 frontend JavaScript, or automatic plugin migration execution yet.
 
-Use the checked-in `plugins/hello_plugin/` as the reference sample. The
-`plugins/neuraxis_business/` plugin is a controller-only skeleton reserved for
-future business-domain features.
+Use the checked-in `plugins/hello_plugin/` as the reference sample. Paid or
+private plugins, such as a future `neuraxis_business` plugin, should live
+outside this repository and be loaded from configured local paths.
 
 ## Enable A Plugin
 
@@ -336,22 +336,30 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
    requests that route through `ChatScheduler` should be rejected before
    scheduler capacity is consumed.
 
-## Business Plugin Skeleton
+## Private Plugin Repositories
 
-`plugins/neuraxis_business/` is checked in as a real plugin skeleton, but it
-does not implement business domains yet. It currently provides:
+Paid or private plugins should be tracked in separate private repositories.
+Keep this repository focused on the core runtime, public extension contracts,
+and the minimal `hello_plugin` sample.
 
-- Controller-only manifest metadata.
-- Optional `organization_name` config.
-- `GET /lm-api/v1/plugins/neuraxis_business/status`.
-- A `Business` placeholder route through backend-provided frontend metadata.
-- Static frontend asset metadata.
-- Health check metadata.
-- Current migration target metadata.
+Recommended local development setup:
 
-Use it as the place to add future business-owned backend domains incrementally,
-such as usage accounting, quotas, organization settings, document permissions,
-or business-specific admin workflows.
+```yaml
+enabled_plugins:
+  - neuraxis_business
+
+plugins:
+  neuraxis_business:
+    path: /Users/robertsmith/Apps/neuraxis-business-plugin
+    enabled: true
+    config:
+      organization_name: Acme
+```
+
+That private plugin can still use the same manifest schema, backend extension
+API, frontend metadata contract, health checks, and migration metadata described
+above. It should carry its own tests and CI, while this repository keeps
+fixture-based coverage for the generic plugin runtime.
 
 ## Deferred Work
 

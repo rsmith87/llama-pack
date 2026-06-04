@@ -1,1 +1,0 @@
-"""Neuraxis business plugin skeleton."""
