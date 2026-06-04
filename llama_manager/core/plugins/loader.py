@@ -36,6 +36,8 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         record.navigation.extend(manifest.navigation)
         record.secondary_navigation.extend(manifest.secondary_navigation)
         record.ui_routes.extend(manifest.ui_routes)
+        if manifest.frontend and manifest.frontend.static_dir:
+            record.static_dir = (path / manifest.frontend.static_dir).resolve()
         registry.add_record(record)
         if (
             manifest.requires_core != CORE_PLUGIN_API_VERSION

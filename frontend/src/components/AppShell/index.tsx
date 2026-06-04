@@ -1,7 +1,8 @@
 import "./styles.css";
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getControllerStatus, getHealth } from "../../api/health";
 import { listNodes } from "../../api/nodes";
+import { getEnabledPlugins, type EnabledPlugin } from "../../api/plugins";
 import { getSetupStatus } from "../../api/setup";
 import { AuthLoginForm } from "../../features/auth/authSession";
 import { AppModeProvider, type AppMode } from "../../features/appMode/appModeContext";
@@ -68,11 +69,13 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
   const [globalControllerUrl, setGlobalControllerUrl] = useState<string | null>(null);
   const [globalControllerReachable, setGlobalControllerReachable] = useState<boolean | null>(null);
   const [globalAgentNodes, setGlobalAgentNodes] = useState<Array<{ name: string; url: string; reachable: boolean }>>([]); 
-  const visibleSections = pagesBySectionForMode(globalMode);
-  const visiblePages = visibleSections.flatMap((section) => section.pages);
+  const [enabledPlugins, setEnabledPlugins] = useState<EnabledPlugin[]>([]);
+  const pluginPages = useMemo(() => enabledPlugins.flatMap((plugin) => pluginPagesForPlugin(plugin)), [enabledPlugins]);
+  const visibleSections = useMemo(() => pagesBySectionForMode(globalMode, pluginPages), [globalMode, pluginPages]);
+  const visiblePages = useMemo(() => visibleSections.flatMap((section) => section.pages), [visibleSections]);
 
   function navigate(pageKey: PageKey, options: PageNavigationOptions = {}) {
-    const nextPage = pageForKey(pageKey);
+    const nextPage = pageForKey(pageKey, pluginPages);
     const nextPath = pathForPage(nextPage, options);
     setActivePage(nextPage);
     setNavOpen(false);
@@ -133,7 +136,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 
   useEffect(() => {
     function onPopState() {
-      setActivePage(pageForPath(window.location.pathname));
+      setActivePage(pageForPath(window.location.pathname, pluginPages));
       setNavOpen(false);
     }
     window.addEventListener("popstate", onPopState);
@@ -148,6 +151,21 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
   useEffect(() => {
     void refreshGlobal(false);
   }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void getEnabledPlugins()
+      .then((plugins) => {
+        if (!alive) return;
+        setEnabledPlugins(Array.isArray(plugins) ? plugins : []);
+      })
+      .catch(() => {
+        if (alive) setEnabledPlugins([]);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [authRefreshKey]);
 
   useEffect(() => {
     let alive = true;
@@ -172,9 +190,17 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 
   useEffect(() => {
     if (globalMode && !visiblePages.some((page) => page.key === activePage.key)) {
-      navigate("dashboard");
+      if (activePage.key !== "dashboard") navigate("dashboard");
     }
   }, [activePage.key, globalMode, visiblePages]);
+
+  useEffect(() => {
+    if (activePage.pluginId) return;
+    const pluginPage = pageForPath(window.location.pathname, pluginPages);
+    if (pluginPage.pluginId) {
+      setActivePage(pluginPage);
+    }
+  }, [activePage.pluginId, pluginPages]);
 
   return (
     <AppModeProvider appMode={globalMode}>
@@ -199,7 +225,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
                   onClick={() => navigate(item.key)}
                 >
                   <MenuIcon icon={item.icon} />
-                  <span>{item.label}</span>
+                  <span>{item.navLabel || item.label}</span>
                 </button>
               ))}
               {section.key === "operations" ? (
@@ -290,6 +316,24 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
           </div>
         </header>
         <main className="layout" key={`${activePage.key}-${refreshKey}`}>
+          {activePage.pluginId && activePage.secondaryNavigation?.length ? (
+            <nav className="plugin-secondary-nav" aria-label={`${activePage.pluginName || activePage.label} navigation`}>
+              {activePage.secondaryNavigation.map((item) => (
+                <button
+                  key={item.path}
+                  className={`plugin-secondary-button ${window.location.pathname === item.path ? "active" : ""}`}
+                  type="button"
+                  onClick={() => {
+                    const nextPage = pageForPath(item.path, pluginPages);
+                    setActivePage(nextPage.pluginId ? nextPage : { ...activePage, path: item.path, label: item.label });
+                    window.history.pushState({ page: item.path }, "", item.path);
+                  }}
+                >
+                  {item.label}
+                </button>
+              ))}
+            </nav>
+          ) : null}
           {setupStatusPending ? <div className="muted">Checking setup status...</div> : renderPage(activePage, navigate, refreshKey, openLogs)}
         </main>
       </div>
@@ -301,3 +345,63 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 }
 
 export type { PageKey };
+
+export function pluginPagesForPlugin(plugin: EnabledPlugin): PageDefinition[] {
+  const secondaryNavigation = (plugin.secondary_navigation || [])
+    .map((item) => normalizePluginNavItem(item))
+    .filter((item): item is { label: string; path: string } => item !== null);
+  const primary = (plugin.navigation || [])
+    .map((item, index) => normalizePluginNavItem(item, plugin.name, `/ui/plugins/${plugin.id}`, index))
+    .filter((item): item is { label: string; path: string } => item !== null);
+  const routeItems = (plugin.ui_routes || [])
+    .map((item, index) => normalizePluginNavItem(item, plugin.name, `/ui/plugins/${plugin.id}`, index))
+    .filter((item): item is { label: string; path: string } => item !== null);
+  const pages = new Map<string, PageDefinition>();
+  for (const item of primary) {
+    const route = routeItems.find((candidate) => candidate.path === item.path);
+    pages.set(item.path, pluginPage(plugin, item.path, route?.label || item.label, secondaryNavigation, { navLabel: item.label }));
+  }
+  for (const item of routeItems) {
+    if (!pages.has(item.path)) {
+      pages.set(item.path, pluginPage(plugin, item.path, item.label, secondaryNavigation, { hideFromPrimary: true }));
+    }
+  }
+  for (const item of secondaryNavigation) {
+    if (!pages.has(item.path)) {
+      pages.set(item.path, pluginPage(plugin, item.path, item.label, secondaryNavigation, { hideFromPrimary: true }));
+    }
+  }
+  return Array.from(pages.values());
+}
+
+function pluginPage(
+  plugin: EnabledPlugin,
+  path: string,
+  label: string,
+  secondaryNavigation: Array<{ label: string; path: string }>,
+  options: Pick<PageDefinition, "hideFromPrimary" | "navLabel"> = {},
+): PageDefinition {
+  return {
+    key: `plugin:${plugin.id}:${path}`,
+    label,
+    path,
+    icon: "settings",
+    section: "plugins",
+    pluginId: plugin.id,
+    pluginName: plugin.name,
+    secondaryNavigation,
+    ...options,
+  };
+}
+
+function normalizePluginNavItem(
+  item: { label?: string; path?: string },
+  fallbackLabel = "Plugin",
+  fallbackPath = "",
+  index = 0,
+): { label: string; path: string } | null {
+  const path = typeof item.path === "string" && item.path.startsWith("/ui/") ? item.path : fallbackPath;
+  if (!path) return null;
+  const label = typeof item.label === "string" && item.label.trim() ? item.label.trim() : index === 0 ? fallbackLabel : path;
+  return { label, path };
+}

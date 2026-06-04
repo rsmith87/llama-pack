@@ -18,6 +18,16 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TestChatPage } from "./pages/TestChatPage";
 
+function PluginPlaceholderPage({ page }: { page: { label: string; pluginName?: string; path: string } }) {
+  return (
+    <section className="panel plugin-placeholder">
+      <span className="eyebrow">{page.pluginName || "Plugin"}</span>
+      <h2>{page.label}</h2>
+      <p className="muted">Plugin route placeholder</p>
+    </section>
+  );
+}
+
 function RoutedApp() {
   const { authToken } = useAuthSession();
   if (window.location.pathname === "/ui/test-chat") {
@@ -71,6 +81,9 @@ function RoutedApp() {
         }
         if (page.key === "settings") {
           return <SettingsPage />;
+        }
+        if (page.pluginId) {
+          return <PluginPlaceholderPage page={page} />;
         }
         return <DashboardPage onNavigate={setPage} onOpenLogs={openLogs} />;
       }}

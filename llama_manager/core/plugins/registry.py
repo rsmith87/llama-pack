@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
@@ -24,6 +25,7 @@ class PluginRecord:
     navigation: list[dict[str, Any]] = field(default_factory=list)
     secondary_navigation: list[dict[str, Any]] = field(default_factory=list)
     ui_routes: list[dict[str, Any]] = field(default_factory=list)
+    static_dir: Path | None = None
 
 
 class PluginRegistry:
@@ -89,6 +91,7 @@ class PluginRegistry:
     def _frontend_payload(self, record: PluginRecord) -> dict[str, Any]:
         manifest = record.manifest
         frontend = manifest.frontend.model_dump(mode="json") if manifest and manifest.frontend else {"entry": None, "style": None}
+        frontend.pop("static_dir", None)
         return {
             "id": record.id,
             "name": record.name,

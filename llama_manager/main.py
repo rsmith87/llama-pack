@@ -281,6 +281,7 @@ def _configure_app_state(
 
 def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.include_router(ui.router)
+    app.include_router(plugins.assets_router)
     app.mount("/ui", ui.static_app, name="ui")
     app.include_router(health.router)  # /health stays at root for Docker/orchestration compat
     app.include_router(health.router, prefix=LM_API_PREFIX)  # /lm-api/v1/health alias

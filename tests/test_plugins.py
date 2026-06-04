@@ -18,6 +18,9 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
     plugin_dir = root / plugin_id
     package_dir = plugin_dir / plugin_id
     package_dir.mkdir(parents=True)
+    static_dir = package_dir / "static"
+    static_dir.mkdir()
+    (static_dir / "hello-entry.js").write_text("export const hello = true;\n", encoding="utf-8")
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
     (plugin_dir / "plugin.yaml").write_text(
         textwrap.dedent(
@@ -29,6 +32,9 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
             backend_api_version: "1.0"
             frontend_api_version: "1.0"
             entrypoint: {plugin_id}.plugin:plugin
+            frontend:
+              static_dir: {plugin_id}/static
+              entry: /plugin-assets/{plugin_id}/hello-entry.js
             {manifest_extra}
             """
         ),
@@ -95,7 +101,9 @@ def test_enabled_plugin_loads_registers_route_and_frontend_metadata(tmp_path: Pa
     client = authenticated_client(app)
 
     assert client.get("/lm-api/v1/plugins/sample_plugin/hello").json() == {"message": "hello"}
-    assert client.get("/lm-api/v1/plugins/enabled").json()[0]["id"] == "sample_plugin"
+    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
+    assert metadata["id"] == "sample_plugin"
+    assert metadata["frontend"]["entry"] == "/plugin-assets/sample_plugin/hello-entry.js"
     status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
     assert status["status"] == "enabled"
     assert status["warnings"] == []
@@ -111,6 +119,51 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
     assert metadata["id"] == "hello_plugin"
     assert metadata["navigation"][0]["label"] == "Hello"
+    assert metadata["frontend"]["entry"] == "/plugin-assets/hello_plugin/hello-entry.js"
+    assert client.get("/plugin-assets/hello_plugin/hello-entry.js").status_code == 200
+
+
+def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.get("/plugin-assets/sample_plugin/hello-entry.js")
+
+    assert response.status_code == 200
+    assert "export const hello" in response.text
+
+
+def test_disabled_failed_and_unknown_plugin_assets_are_not_served(tmp_path: Path):
+    disabled_dir = write_plugin(tmp_path, "disabled_plugin")
+    failed_dir = write_plugin(tmp_path, "failed_plugin", body="raise RuntimeError('boom')\n")
+    config = plugin_config(
+        tmp_path,
+        disabled_dir,
+        failed_dir,
+        enabled=["failed_plugin"],
+        plugins={
+            "disabled_plugin": {"path": str(disabled_dir), "enabled": False},
+            "failed_plugin": {"path": str(failed_dir), "enabled": True},
+        },
+    )
+    app = create_app(config=config)
+    client = authenticated_client(app)
+
+    assert client.get("/plugin-assets/disabled_plugin/hello-entry.js").status_code == 404
+    assert client.get("/plugin-assets/failed_plugin/hello-entry.js").status_code == 404
+    assert client.get("/plugin-assets/missing_plugin/hello-entry.js").status_code == 404
+
+
+def test_plugin_asset_path_traversal_is_rejected(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    (plugin_dir / "secret.txt").write_text("secret", encoding="utf-8")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.get("/plugin-assets/sample_plugin/../secret.txt")
+
+    assert response.status_code in {400, 404}
 
 
 def test_disabled_plugin_is_ignored_and_not_registered(tmp_path: Path):

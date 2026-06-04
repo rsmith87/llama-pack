@@ -134,6 +134,23 @@ FastAPI serves `/` from `llama_manager/ui/react/index.html` when the React build
 - `src/routes/pages.ts`: canonical React navigation model.
 - `src/test/`: Vitest setup and app-level smoke coverage.
 
+## Plugin Frontend Metadata
+
+Core loads enabled plugin metadata from `/lm-api/v1/plugins/enabled`.
+The React shell uses that metadata to add plugin primary navigation, scoped
+secondary navigation, and placeholder pages for plugin UI routes. Dynamic
+plugin bundle imports are intentionally deferred; plugin frontend entry files
+are exposed in metadata now so the backend contract is ready.
+
+Plugin assets are served by FastAPI from each plugin's declared static
+directory under:
+
+```text
+/plugin-assets/{plugin_id}/...
+```
+
+Core serves those files but does not bundle them into the core React build.
+
 ## Release Notes
 
 - `frontend` is the canonical frontend test/build package.

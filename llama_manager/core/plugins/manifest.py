@@ -13,6 +13,7 @@ PLUGIN_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 class PluginFrontend(BaseModel):
     entry: str | None = None
     style: str | None = None
+    static_dir: str | None = None
 
 
 class PluginManifest(BaseModel):

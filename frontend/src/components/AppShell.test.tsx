@@ -1,7 +1,8 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import App from "../App";
+import { pluginPagesForPlugin } from "./AppShell";
 
 afterEach(() => {
   localStorage.clear();
@@ -10,6 +11,24 @@ afterEach(() => {
   window.history.pushState({}, "", "/ui");
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("maps enabled plugin metadata into shell page definitions", () => {
+  const pages = pluginPagesForPlugin({
+    id: "hello_plugin",
+    name: "Hello Plugin",
+    version: "1.0",
+    status: "enabled",
+    navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
+    secondary_navigation: [{ label: "Settings", path: "/ui/plugins/hello_plugin/settings" }],
+    ui_routes: [{ path: "/ui/plugins/hello_plugin", label: "Hello Plugin" }],
+  });
+
+  expect(pages.map((page) => [page.label, page.path, page.pluginId])).toContainEqual([
+    "Hello Plugin",
+    "/ui/plugins/hello_plugin",
+    "hello_plugin",
+  ]);
 });
 
 function stubDashboardFetches() {
@@ -93,6 +112,63 @@ it("hides controller navigation when the backend is running as an agent", async 
   expect(screen.queryByRole("button", { name: "Controller Ops" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Audit" })).not.toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+});
+
+it("renders enabled plugin navigation and a placeholder route", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "hello_plugin",
+              name: "Hello Plugin",
+              version: "1.0",
+              status: "enabled",
+              frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+              navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
+              secondary_navigation: [{ label: "Settings", path: "/ui/plugins/hello_plugin/settings" }],
+              ui_routes: [{ path: "/ui/plugins/hello_plugin", label: "Hello Plugin" }],
+            },
+          ]),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+  const user = userEvent.setup();
+
+  render(<App />);
+
+  await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/enabled", expect.anything()));
+  expect(await screen.findByRole("button", { name: "Hello" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Hello" }));
+
+  expect(screen.getByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
+  expect(screen.getByText("Plugin route placeholder")).toBeInTheDocument();
+  expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("button", { name: "Settings" })).toBeInTheDocument();
+});
+
+it("hides plugin navigation when no plugin metadata is enabled", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+
+  render(<App />);
+
+  expect(await screen.findByRole("heading", { name: "System Snapshot" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Hello" })).not.toBeInTheDocument();
 });
 
 it("toggles dark mode from the shell header", async () => {

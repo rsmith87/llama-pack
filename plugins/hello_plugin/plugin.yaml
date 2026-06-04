@@ -6,6 +6,9 @@ backend_api_version: "1.0"
 frontend_api_version: "1.0"
 entrypoint: hello_plugin.plugin:plugin
 description: Minimal sample plugin for the Neuraxis plugin runtime.
+frontend:
+  static_dir: hello_plugin/static
+  entry: /plugin-assets/hello_plugin/hello-entry.js
 navigation:
   - label: Hello
     path: /ui/plugins/hello_plugin

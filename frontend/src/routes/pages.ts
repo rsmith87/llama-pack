@@ -1,4 +1,5 @@
-export type PageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "audit" | "benchmarks" | "api-keys" | "settings";
+export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "audit" | "benchmarks" | "api-keys" | "settings";
+export type PageKey = BuiltInPageKey | string;
 export type PageIcon =
   | "dashboard"
   | "setup"
@@ -16,9 +17,21 @@ export type PageIcon =
   | "api-keys"
   | "settings";
 export type AppMode = "agent" | "controller";
-export type NavSectionKey = "gateway" | "operations" | "models" | "runtime" | "system";
+export type NavSectionKey = "gateway" | "operations" | "models" | "runtime" | "plugins" | "system";
 export type NavSection = { key: NavSectionKey; label: string };
-export type PageDefinition = { key: PageKey; label: string; path: string; icon: PageIcon; section: NavSectionKey; hideInModes?: AppMode[] };
+export type PageDefinition = {
+  key: PageKey;
+  label: string;
+  path: string;
+  icon: PageIcon;
+  section: NavSectionKey;
+  hideInModes?: AppMode[];
+  hideFromPrimary?: boolean;
+  navLabel?: string;
+  pluginId?: string;
+  pluginName?: string;
+  secondaryNavigation?: Array<{ label: string; path: string }>;
+};
 export type PageNavigationOptions = { search?: string };
 
 export const navSections: NavSection[] = [
@@ -26,6 +39,7 @@ export const navSections: NavSection[] = [
   { key: "operations", label: "Operations" },
   { key: "models", label: "Models" },
   { key: "runtime", label: "Runtime" },
+  { key: "plugins", label: "Plugins" },
   { key: "system", label: "System" },
 ];
 
@@ -52,22 +66,22 @@ export function pagesForMode(mode: string): PageDefinition[] {
   return pages.filter((page) => !normalizedMode || !page.hideInModes?.includes(normalizedMode));
 }
 
-export function pagesBySectionForMode(mode: string): Array<NavSection & { pages: PageDefinition[] }> {
-  const visible = pagesForMode(mode);
+export function pagesBySectionForMode(mode: string, extraPages: PageDefinition[] = []): Array<NavSection & { pages: PageDefinition[] }> {
+  const visible = [...pagesForMode(mode), ...extraPages];
   return navSections
     .map((section) => ({
       ...section,
-      pages: visible.filter((page) => page.section === section.key),
+      pages: visible.filter((page) => page.section === section.key && !page.hideFromPrimary),
     }))
     .filter((section) => section.pages.length > 0);
 }
 
-export function pageForKey(key: PageKey): PageDefinition {
-  return pages.find((page) => page.key === key) || pages.find((page) => page.key === "dashboard") || pages[0];
+export function pageForKey(key: PageKey, extraPages: PageDefinition[] = []): PageDefinition {
+  return [...pages, ...extraPages].find((page) => page.key === key) || pages.find((page) => page.key === "dashboard") || pages[0];
 }
 
-export function pageForPath(pathname: string): PageDefinition {
-  return pages.find((page) => page.path === pathname) || pageForKey("dashboard");
+export function pageForPath(pathname: string, extraPages: PageDefinition[] = []): PageDefinition {
+  return [...pages, ...extraPages].find((page) => page.path === pathname) || pageForKey("dashboard");
 }
 
 export function pathForPage(page: PageDefinition, options: PageNavigationOptions = {}): string {

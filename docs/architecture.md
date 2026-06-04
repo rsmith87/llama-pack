@@ -46,6 +46,7 @@ Both modes share the same codebase and routes; mode-specific routes enforce beha
 - `core/runtime`: local process lifecycle and health payload construction.
 - `core/chat`: target resolution, transport building, capability inspection, and chat proxying.
 - `core/nodes`: controller node registry plus agent heartbeat and worker loops.
+- `core/plugins`: local-path plugin manifest loading, registration, events, policy hooks, route metadata, and plugin static asset ownership.
 - `core/model_assets`: GGUF library registration, HF conversion, and quantization workflows.
 - `core/orchestration`: durable job queue, attempts, events, contracts, retries, retention, archive export, and controller coordination.
 - `core/persistence`: focused SQLite-backed persistence for auth, chat sessions, and audit events.

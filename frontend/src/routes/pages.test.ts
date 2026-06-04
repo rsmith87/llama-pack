@@ -48,7 +48,7 @@ describe("page route model", () => {
   });
 
   it("groups navigation by product area", () => {
-    expect(navSections.map((section) => section.key)).toEqual(["gateway", "operations", "models", "runtime", "system"]);
+    expect(navSections.map((section) => section.key)).toEqual(["gateway", "operations", "models", "runtime", "plugins", "system"]);
     expect(pagesBySectionForMode("controller").map((section) => ({
       label: section.label,
       pages: section.pages.map((page) => page.key),
