@@ -273,6 +273,10 @@ not executed by the core React app yet.
 The shell also reads `/lm-api/v1/plugins/status` and shows administrator-facing
 alerts for failed, incompatible, warning, or error plugin states.
 
+Administrators can inspect configured plugins at `/ui/plugins`. That page
+shows plugin status, health, frontend metadata, redacted config metadata, and
+registered migration targets.
+
 ## Testing Plugins
 
 Backend plugin behavior should have focused tests in `tests/test_plugins.py`.
