@@ -12,6 +12,7 @@ from fastapi import APIRouter
 from llama_manager.core.plugins.events import EventBus
 from llama_manager.core.plugins.hooks import HookRegistry
 from llama_manager.core.plugins.manifest import PluginManifest
+from llama_manager.core.plugins.migrations import PluginMigrationTarget
 
 
 @dataclass
@@ -25,6 +26,7 @@ class PluginRecord:
     errors: list[str] = field(default_factory=list)
     health: list[dict[str, str]] = field(default_factory=list)
     health_checks: list[Callable[[], Any]] = field(default_factory=list)
+    migration_targets: list[PluginMigrationTarget] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
     routers: list[tuple[str, APIRouter]] = field(default_factory=list)
     navigation: list[dict[str, Any]] = field(default_factory=list)
@@ -115,6 +117,12 @@ class PluginRegistry:
                     warnings.append(item["message"])
                 elif item["level"] == "error":
                     errors.append(item["message"])
+            for item in self._migration_health(record):
+                health.append(item)
+                if item["level"] == "warning":
+                    warnings.append(item["message"])
+                elif item["level"] == "error":
+                    errors.append(item["message"])
             plugins.append(
                 {
                     "id": record.id,
@@ -127,6 +135,25 @@ class PluginRegistry:
                 }
             )
         return {"plugins": plugins}
+
+    def migration_status_payload(self, plugin_id: str) -> dict[str, Any] | None:
+        record = self.records.get(plugin_id)
+        if record is None or record.status != "enabled":
+            return None
+        return {
+            "plugin_id": plugin_id,
+            "targets": [target.payload() for target in record.migration_targets],
+        }
+
+    def _migration_health(self, record: PluginRecord) -> list[dict[str, str]]:
+        if record.status != "enabled":
+            return []
+        health: list[dict[str, str]] = []
+        for target in record.migration_targets:
+            warning = target.health_warning()
+            if warning:
+                health.append({"level": "warning", "message": warning})
+        return health
 
     async def _run_health_checks(self, record: PluginRecord) -> list[dict[str, str]]:
         results: list[dict[str, str]] = []

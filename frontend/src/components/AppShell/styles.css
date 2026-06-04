@@ -346,6 +346,32 @@
   padding: 18px 20px;
 }
 
+.plugin-status-alert {
+  border: 1px solid color-mix(in srgb, var(--warning) 52%, var(--line));
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
+  color: var(--ink);
+}
+
+.plugin-status-alert strong {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.plugin-status-alert ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.plugin-status-alert li + li {
+  margin-top: 4px;
+}
+
 .panel {
   border: 1px solid var(--line);
   border-radius: 8px;

@@ -2,7 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import App from "../App";
-import { pluginPagesForPlugin } from "./AppShell";
+import { pluginPagesForPlugin, pluginStatusIssuesFromPayload } from "./AppShell";
 
 afterEach(() => {
   localStorage.clear();
@@ -28,6 +28,34 @@ it("maps enabled plugin metadata into shell page definitions", () => {
     "Hello Plugin",
     "/ui/plugins/hello_plugin",
     "hello_plugin",
+  ]);
+});
+
+it("maps plugin status payloads into operator-facing issue summaries", () => {
+  expect(pluginStatusIssuesFromPayload({
+    plugins: [
+      {
+        id: "future_plugin",
+        status: "incompatible",
+        version: "1.0",
+        health: [],
+        warnings: ["Plugin requires core 2.0"],
+        errors: [],
+      },
+      {
+        id: "business_plugin",
+        status: "enabled",
+        version: "1.0",
+        health: [{ level: "warning", message: "Plugin migration target usage is pending" }],
+        warnings: [],
+        errors: ["health check failed"],
+      },
+    ],
+  })).toEqual([
+    "future_plugin is incompatible",
+    "future_plugin: Plugin requires core 2.0",
+    "business_plugin: health check failed",
+    "business_plugin: Plugin migration target usage is pending",
   ]);
 });
 
@@ -152,6 +180,52 @@ it("renders enabled plugin navigation and a placeholder route", async () => {
   expect(screen.getByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
   expect(screen.getByText("Plugin route placeholder")).toBeInTheDocument();
   expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("button", { name: "Settings" })).toBeInTheDocument();
+});
+
+it("shows plugin status failures and warnings in the shell", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ({
+            plugins: [
+              {
+                id: "broken_plugin",
+                status: "failed",
+                version: "1.0",
+                health: [],
+                warnings: [],
+                errors: ["import boom"],
+              },
+              {
+                id: "business_plugin",
+                status: "enabled",
+                version: "1.0",
+                health: [{ level: "warning", message: "Plugin migration target usage is pending" }],
+                warnings: [],
+                errors: [],
+              },
+            ],
+          }),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+
+  render(<App />);
+
+  const alert = await screen.findByRole("alert", { name: "Plugin status" });
+  expect(alert).toHaveTextContent("Plugin attention needed");
+  expect(alert).toHaveTextContent("broken_plugin is failed");
+  expect(alert).toHaveTextContent("broken_plugin: import boom");
+  expect(alert).toHaveTextContent("business_plugin: Plugin migration target usage is pending");
 });
 
 it("hides plugin navigation when no plugin metadata is enabled", async () => {

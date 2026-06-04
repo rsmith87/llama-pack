@@ -142,6 +142,10 @@ secondary navigation, and placeholder pages for plugin UI routes. Dynamic
 plugin bundle imports are intentionally deferred; plugin frontend entry files
 are exposed in metadata now so the backend contract is ready.
 
+The shell also reads `/lm-api/v1/plugins/status` and shows a compact
+administrator-facing alert when plugins are failed, incompatible, or reporting
+health warnings/errors such as pending migration metadata.
+
 Plugin assets are served by FastAPI from each plugin's declared static
 directory under:
 

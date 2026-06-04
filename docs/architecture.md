@@ -95,6 +95,12 @@ The status endpoint runs enabled-plugin health checks dynamically, merges
 returned warnings/errors into the status payload, and reports health-check
 exceptions as plugin health errors without failing the core status route.
 
+Plugins can register migration metadata with
+`PluginContext.add_migration_target()`. Core exposes the registered targets at
+`/lm-api/v1/plugins/{plugin_id}/migrations/status` and adds health warnings for
+missing or pending plugin migrations. Core does not run plugin migrations during
+startup; migration execution remains an explicit future command/workflow.
+
 ## Review Heuristics
 
 When reviewing changes, keep responsibilities narrow:

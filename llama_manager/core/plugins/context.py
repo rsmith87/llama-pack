@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from fastapi import APIRouter
 
 from llama_manager.core.plugins.events import EventEnvelope
+from llama_manager.core.plugins.migrations import PluginMigrationTarget, normalize_migration_directory
 from llama_manager.core.plugins.registry import PluginRecord, PluginRegistry
 
 
@@ -37,6 +39,29 @@ class PluginContext:
 
     def add_health_check(self, handler: Callable[[], Any]) -> None:
         self.record.health_checks.append(handler)
+
+    def add_migration_target(
+        self,
+        target_id: str,
+        *,
+        directory: str | Path,
+        database_url: str | None = None,
+        current_revision: str | None = None,
+        head_revision: str | None = None,
+        runner: Callable[[], Any] | None = None,
+    ) -> None:
+        if any(target.id == target_id for target in self.record.migration_targets):
+            raise ValueError(f"Plugin migration target collision: {target_id}")
+        self.record.migration_targets.append(
+            PluginMigrationTarget(
+                id=target_id,
+                directory=normalize_migration_directory(directory),
+                database_url=database_url,
+                current_revision=current_revision,
+                head_revision=head_revision,
+                runner=runner,
+            )
+        )
 
     def get_plugin_config(self) -> dict[str, Any]:
         return dict(self.config)

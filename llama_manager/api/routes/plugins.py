@@ -19,6 +19,14 @@ async def plugin_status(request: Request):
     return await request.app.state.plugin_registry.status_payload_async()
 
 
+@router.get("/{plugin_id}/migrations/status")
+async def plugin_migration_status(plugin_id: str, request: Request):
+    payload = request.app.state.plugin_registry.migration_status_payload(plugin_id)
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return payload
+
+
 @assets_router.get("/plugin-assets/{plugin_id}/{asset_path:path}", include_in_schema=False)
 async def plugin_asset(plugin_id: str, asset_path: str, request: Request):
     record = request.app.state.plugin_registry.records.get(plugin_id)

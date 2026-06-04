@@ -128,6 +128,8 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert metadata["navigation"][0]["label"] == "Hello"
     assert metadata["frontend"]["entry"] == "/plugin-assets/hello_plugin/hello-entry.js"
     assert client.get("/plugin-assets/hello_plugin/hello-entry.js").status_code == 200
+    migration_status = client.get("/lm-api/v1/plugins/hello_plugin/migrations/status").json()
+    assert migration_status["targets"][0]["status"] == "current"
 
 
 def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
@@ -383,6 +385,138 @@ def test_plugin_health_check_failure_is_reported_without_crashing_status(tmp_pat
     assert status["status"] == "enabled"
     assert {"level": "error", "message": "health boom"} in status["health"]
     assert "health boom" in status["errors"]
+
+
+def test_plugin_migration_target_status_endpoint_reports_registered_target(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                context.add_migration_target(
+                    "migration_plugin",
+                    directory="migrations",
+                    database_url="sqlite:///plugin.db",
+                    current_revision="001_initial",
+                    head_revision="001_initial",
+                )
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.get("/lm-api/v1/plugins/migration_plugin/migrations/status")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "plugin_id": "migration_plugin",
+        "targets": [
+            {
+                "id": "migration_plugin",
+                "directory": "migrations",
+                "database_url": "sqlite:///plugin.db",
+                "current_revision": "001_initial",
+                "head_revision": "001_initial",
+                "status": "current",
+                "pending": False,
+            }
+        ],
+    }
+
+
+def test_pending_plugin_migration_target_produces_status_health_warning(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "pending_migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                context.add_migration_target(
+                    "usage",
+                    directory="migrations/usage",
+                    database_url="sqlite:///usage.db",
+                    current_revision="001_initial",
+                    head_revision="002_usage",
+                )
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    migration_status = client.get("/lm-api/v1/plugins/pending_migration_plugin/migrations/status").json()
+    plugin_status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+
+    assert migration_status["targets"][0]["status"] == "pending"
+    assert migration_status["targets"][0]["pending"] is True
+    assert {
+        "level": "warning",
+        "message": "Plugin migration target usage is pending: current 001_initial, head 002_usage",
+    } in plugin_status["health"]
+    assert "Plugin migration target usage is pending" in plugin_status["warnings"][0]
+
+
+def test_plugin_migration_status_endpoint_returns_404_for_unknown_or_disabled_plugin(tmp_path: Path):
+    disabled_dir = write_plugin(
+        tmp_path,
+        "disabled_migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                context.add_migration_target("target", directory="migrations")
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(
+        config=plugin_config(
+            tmp_path,
+            disabled_dir,
+            enabled=[],
+            plugins={"disabled_migration_plugin": {"path": str(disabled_dir), "enabled": False}},
+        )
+    )
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/missing_plugin/migrations/status").status_code == 404
+    assert client.get("/lm-api/v1/plugins/disabled_migration_plugin/migrations/status").status_code == 404
+
+
+def test_plugin_migration_registration_does_not_auto_run_migrations(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "manual_migration_plugin",
+        body="""
+        migrations_run = False
+
+        def run_migrations():
+            global migrations_run
+            migrations_run = True
+
+        class Plugin:
+            def register(self, context):
+                context.add_migration_target(
+                    "manual",
+                    directory="migrations",
+                    current_revision=None,
+                    head_revision="001_initial",
+                    runner=run_migrations,
+                )
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/manual_migration_plugin/migrations/status").status_code == 200
+    import manual_migration_plugin.plugin as module
+
+    assert module.migrations_run is False
 
 
 def test_plugin_route_outside_namespace_and_collision_are_rejected(tmp_path: Path):

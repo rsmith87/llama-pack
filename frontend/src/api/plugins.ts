@@ -27,6 +27,7 @@ export type PluginStatus = {
     health: Array<Record<string, string>>;
     warnings: string[];
     errors: string[];
+    config?: Record<string, unknown>;
   }>;
 };
 

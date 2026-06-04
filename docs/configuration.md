@@ -190,6 +190,28 @@ config_schema:
     - api_key
 ```
 
+Plugins can also register migration metadata during `register()`:
+
+```python
+context.add_migration_target(
+    "usage",
+    directory="migrations/usage",
+    database_url="sqlite:///usage.db",
+    current_revision="001_initial",
+    head_revision="002_usage",
+)
+```
+
+Core reports those targets through:
+
+```text
+GET /lm-api/v1/plugins/{plugin_id}/migrations/status
+```
+
+Pending or missing plugin migrations appear as warnings in
+`/lm-api/v1/plugins/status`. Core records this metadata only; it does not
+auto-run plugin migrations during startup.
+
 ## Agent Config
 
 Use `mode: agent` on each machine that actually runs `llama-server` processes. Agent mode owns:

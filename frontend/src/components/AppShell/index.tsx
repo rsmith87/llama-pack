@@ -2,7 +2,7 @@ import "./styles.css";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { getControllerStatus, getHealth } from "../../api/health";
 import { listNodes } from "../../api/nodes";
-import { getEnabledPlugins, type EnabledPlugin } from "../../api/plugins";
+import { getEnabledPlugins, getPluginStatus, type EnabledPlugin, type PluginStatus } from "../../api/plugins";
 import { getSetupStatus } from "../../api/setup";
 import { AuthLoginForm } from "../../features/auth/authSession";
 import { AppModeProvider, type AppMode } from "../../features/appMode/appModeContext";
@@ -70,6 +70,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
   const [globalControllerReachable, setGlobalControllerReachable] = useState<boolean | null>(null);
   const [globalAgentNodes, setGlobalAgentNodes] = useState<Array<{ name: string; url: string; reachable: boolean }>>([]); 
   const [enabledPlugins, setEnabledPlugins] = useState<EnabledPlugin[]>([]);
+  const [pluginStatusIssues, setPluginStatusIssues] = useState<string[]>([]);
   const pluginPages = useMemo(() => enabledPlugins.flatMap((plugin) => pluginPagesForPlugin(plugin)), [enabledPlugins]);
   const visibleSections = useMemo(() => pagesBySectionForMode(globalMode, pluginPages), [globalMode, pluginPages]);
   const visiblePages = useMemo(() => visibleSections.flatMap((section) => section.pages), [visibleSections]);
@@ -161,6 +162,14 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
       })
       .catch(() => {
         if (alive) setEnabledPlugins([]);
+      });
+    void getPluginStatus()
+      .then((status) => {
+        if (!alive) return;
+        setPluginStatusIssues(pluginStatusIssuesFromPayload(status));
+      })
+      .catch(() => {
+        if (alive) setPluginStatusIssues([]);
       });
     return () => {
       alive = false;
@@ -316,6 +325,14 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
           </div>
         </header>
         <main className="layout" key={`${activePage.key}-${refreshKey}`}>
+          {pluginStatusIssues.length ? (
+            <section className="plugin-status-alert" role="alert" aria-label="Plugin status">
+              <strong>Plugin attention needed</strong>
+              <ul>
+                {pluginStatusIssues.map((issue) => <li key={issue}>{issue}</li>)}
+              </ul>
+            </section>
+          ) : null}
           {activePage.pluginId && activePage.secondaryNavigation?.length ? (
             <nav className="plugin-secondary-nav" aria-label={`${activePage.pluginName || activePage.label} navigation`}>
               {activePage.secondaryNavigation.map((item) => (
@@ -345,6 +362,31 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 }
 
 export type { PageKey };
+
+export function pluginStatusIssuesFromPayload(status: PluginStatus | null | undefined): string[] {
+  const plugins = Array.isArray(status?.plugins) ? status.plugins : [];
+  const issues: string[] = [];
+  for (const plugin of plugins) {
+    const label = plugin.id || "unknown plugin";
+    if (plugin.status && !["enabled", "disabled"].includes(plugin.status)) {
+      issues.push(`${label} is ${plugin.status}`);
+    }
+    for (const warning of plugin.warnings || []) {
+      issues.push(`${label}: ${warning}`);
+    }
+    for (const error of plugin.errors || []) {
+      issues.push(`${label}: ${error}`);
+    }
+    for (const item of plugin.health || []) {
+      const level = String(item.level || "").toLowerCase();
+      const message = String(item.message || "");
+      if (message && ["warning", "error"].includes(level)) {
+        issues.push(`${label}: ${message}`);
+      }
+    }
+  }
+  return Array.from(new Set(issues)).slice(0, 5);
+}
 
 export function pluginPagesForPlugin(plugin: EnabledPlugin): PageDefinition[] {
   const secondaryNavigation = (plugin.secondary_navigation || [])
