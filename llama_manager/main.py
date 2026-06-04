@@ -240,6 +240,7 @@ def _configure_app_state(
         max_queue_per_session=app_config.chat_max_queue_per_session,
         admission_timeout_seconds=app_config.chat_admission_timeout_seconds,
         hooks=app.state.plugin_registry.hooks,
+        event_bus=app.state.plugin_registry.events,
     )
     app.state.thread_service = ThreadService(
         config=app_config,
