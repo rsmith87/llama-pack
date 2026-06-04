@@ -1,0 +1,323 @@
+from __future__ import annotations
+
+import textwrap
+from pathlib import Path
+
+import pytest
+
+from llama_manager.core.config import AppConfig, load_config
+from llama_manager.core.chat.scheduler import ChatAdmissionError, ChatScheduler
+from llama_manager.main import create_app
+from tests.helpers import authenticated_client
+from tests.persistence_db_setup import prepare_all_persistence_dbs
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+
+
+def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: str = "") -> Path:
+    plugin_dir = root / plugin_id
+    package_dir = plugin_dir / plugin_id
+    package_dir.mkdir(parents=True)
+    (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    (plugin_dir / "plugin.yaml").write_text(
+        textwrap.dedent(
+            f"""
+            id: {plugin_id}
+            name: {plugin_id.replace("_", " ").title()}
+            version: "1.0"
+            requires_core: "1.0"
+            backend_api_version: "1.0"
+            frontend_api_version: "1.0"
+            entrypoint: {plugin_id}.plugin:plugin
+            {manifest_extra}
+            """
+        ),
+        encoding="utf-8",
+    )
+    (package_dir / "plugin.py").write_text(
+        textwrap.dedent(
+            body
+            or """
+            from fastapi import APIRouter
+
+            class Plugin:
+                id = "sample_plugin"
+                name = "Sample Plugin"
+                version = "1.0"
+
+                def register(self, context):
+                    router = APIRouter()
+
+                    @router.get("/hello")
+                    async def hello():
+                        return {"message": "hello"}
+
+                    context.add_api_router(router)
+                    context.add_navigation_item({"label": "Sample", "path": "/ui/plugins/sample_plugin"})
+
+            plugin = Plugin()
+            """
+        ),
+        encoding="utf-8",
+    )
+    return plugin_dir
+
+
+def plugin_config(tmp_path: Path, *paths: Path, enabled: list[str] | None = None, plugins: dict | None = None) -> AppConfig:
+    log_dir = tmp_path / "logs"
+    prepare_all_persistence_dbs(log_dir)
+    return load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(log_dir),
+            "enabled_plugins": [path.name for path in paths] if enabled is None else enabled,
+            "plugins": {
+                **{path.name: {"path": str(path), "enabled": True} for path in paths},
+                **(plugins or {}),
+            },
+        }
+    )
+
+
+def test_core_starts_with_no_plugins_configured(tmp_path: Path):
+    log_dir = tmp_path / "logs"
+    prepare_all_persistence_dbs(log_dir)
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(log_dir)}))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/enabled").json() == []
+    assert client.get("/lm-api/v1/plugins/status").json() == {"plugins": []}
+
+
+def test_enabled_plugin_loads_registers_route_and_frontend_metadata(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/sample_plugin/hello").json() == {"message": "hello"}
+    assert client.get("/lm-api/v1/plugins/enabled").json()[0]["id"] == "sample_plugin"
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "enabled"
+    assert status["warnings"] == []
+    assert status["errors"] == []
+
+
+def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
+    plugin_dir = REPO_ROOT / "plugins" / "hello_plugin"
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/hello_plugin/hello").json() == {"message": "hello from plugin"}
+    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
+    assert metadata["id"] == "hello_plugin"
+    assert metadata["navigation"][0]["label"] == "Hello"
+
+
+def test_disabled_plugin_is_ignored_and_not_registered(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    config = plugin_config(
+        tmp_path,
+        plugin_dir,
+        enabled=[],
+        plugins={"sample_plugin": {"path": str(plugin_dir), "enabled": False}},
+    )
+    app = create_app(config=config)
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 404
+    assert client.get("/lm-api/v1/plugins/enabled").json() == []
+    assert client.get("/lm-api/v1/plugins/status").json()["plugins"][0]["status"] == "disabled"
+
+
+def test_invalid_plugin_id_is_rejected_by_config():
+    with pytest.raises(ValueError):
+        load_config({"enabled_plugins": ["../bad"], "plugins": {"../bad": {"path": "/tmp/bad"}}})
+
+
+def test_incompatible_plugin_is_disabled_with_warning(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "future_plugin", manifest_extra='requires_core: "2.0"')
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "incompatible"
+    assert "requires core 2.0" in status["warnings"][0]
+    assert client.get("/lm-api/v1/plugins/enabled").json() == []
+
+
+def test_failed_plugin_import_is_disabled_with_warning(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "broken_plugin", body="raise RuntimeError('boom')\n")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "boom" in status["errors"][0]
+    assert client.get("/lm-api/v1/plugins/broken_plugin/hello").status_code == 404
+
+
+def test_plugin_route_outside_namespace_and_collision_are_rejected(tmp_path: Path):
+    bad_dir = write_plugin(
+        tmp_path,
+        "bad_route_plugin",
+        body="""
+        from fastapi import APIRouter
+        class Plugin:
+            id = "bad_route_plugin"
+            name = "Bad Route Plugin"
+            version = "1.0"
+            def register(self, context):
+                context.add_api_router(APIRouter(), prefix="/outside")
+        plugin = Plugin()
+        """,
+    )
+    one_dir = write_plugin(tmp_path, "one_plugin")
+    two_dir = write_plugin(
+        tmp_path,
+        "two_plugin",
+        body="""
+        from fastapi import APIRouter
+        class Plugin:
+            id = "two_plugin"
+            name = "Two Plugin"
+            version = "1.0"
+            def register(self, context):
+                context.add_api_router(APIRouter())
+                context.add_api_router(APIRouter())
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, bad_dir, one_dir, two_dir))
+    client = authenticated_client(app)
+    statuses = {item["id"]: item for item in client.get("/lm-api/v1/plugins/status").json()["plugins"]}
+
+    assert statuses["bad_route_plugin"]["status"] == "failed"
+    assert "outside" in statuses["bad_route_plugin"]["errors"][0]
+    assert statuses["two_plugin"]["status"] == "failed"
+    assert "collision" in statuses["two_plugin"]["errors"][0].lower()
+
+
+@pytest.mark.asyncio
+async def test_event_bus_delivers_events_and_isolates_subscriber_failures(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "event_plugin",
+        body="""
+        events = []
+        class Plugin:
+            id = "event_plugin"
+            name = "Event Plugin"
+            version = "1.0"
+            def register(self, context):
+                async def record(event):
+                    events.append(event.type)
+                async def fail(event):
+                    raise RuntimeError("subscriber boom")
+                context.subscribe("test.event", fail)
+                context.subscribe("test.event", record)
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+
+    await app.state.plugin_registry.events.emit("test.event", payload={"ok": True})
+
+    import event_plugin.plugin as module
+
+    assert module.events == ["test.event"]
+    status = app.state.plugin_registry.status_payload()["plugins"][0]
+    assert "subscriber boom" in status["errors"][0]
+
+
+@pytest.mark.asyncio
+async def test_event_envelope_metadata_and_subscriber_timeout_health(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "slow_plugin",
+        body="""
+        import asyncio
+        class Plugin:
+            id = "slow_plugin"
+            name = "Slow Plugin"
+            version = "1.0"
+            def register(self, context):
+                async def slow(event):
+                    await asyncio.sleep(1)
+                context.subscribe("test.slow", slow)
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    app.state.plugin_registry.events.timeout_seconds = 0.01
+
+    event = await app.state.plugin_registry.events.emit("test.slow", correlation_id="abc-123")
+
+    assert event.id
+    assert event.version == "1.0"
+    assert event.correlation_id == "abc-123"
+    status = app.state.plugin_registry.status_payload()["plugins"][0]
+    assert status["errors"]
+
+
+@pytest.mark.asyncio
+async def test_chat_admission_hook_rejects_before_capacity_is_consumed(tmp_path: Path):
+    class Proxy:
+        calls = 0
+
+        async def chat_with_meta(self, model_name, payload):
+            self.calls += 1
+            return {"ok": True}, {}
+
+    plugin_dir = write_plugin(
+        tmp_path,
+        "policy_plugin",
+        body="""
+        class Plugin:
+            id = "policy_plugin"
+            name = "Policy Plugin"
+            version = "1.0"
+            def register(self, context):
+                async def reject(payload):
+                    return {"allowed": False, "message": "quota exceeded"}
+                context.add_policy_hook("neuraxis.chat_admission", reject)
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    proxy = Proxy()
+    scheduler = ChatScheduler(proxy, hooks=app.state.plugin_registry.hooks, max_active_per_target=1)
+
+    with pytest.raises(ChatAdmissionError, match="quota exceeded"):
+        await scheduler.chat_with_meta("qwen", {"messages": []})
+
+    assert proxy.calls == 0
+
+
+@pytest.mark.asyncio
+async def test_policy_hooks_run_in_registration_order(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "ordered_plugin",
+        body="""
+        calls = []
+        class Plugin:
+            id = "ordered_plugin"
+            name = "Ordered Plugin"
+            version = "1.0"
+            def register(self, context):
+                async def first(payload):
+                    calls.append("first")
+                async def second(payload):
+                    calls.append("second")
+                context.add_policy_hook("neuraxis.chat_admission", first)
+                context.add_policy_hook("neuraxis.chat_admission", second)
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+
+    await app.state.plugin_registry.hooks.run_policy_hooks("neuraxis.chat_admission", {})
+
+    import ordered_plugin.plugin as module
+
+    assert module.calls == ["first", "second"]

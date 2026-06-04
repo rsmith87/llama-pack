@@ -4,12 +4,13 @@ from pathlib import Path
 import re
 from typing import Any, Literal
 
-from pydantic import BaseModel, Field, PrivateAttr, model_validator
+from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
 
 Mode = Literal["agent", "controller"]
 ReasoningMode = Literal["on", "off", "auto"]
 AgentToolType = Literal["shell", "file_read", "file_read_dynamic", "file_write", "http", "directory_list", "file_search", "text_search", "git_status", "git_diff", "git_log", "process_status", "http_json", "log_tail", "web_fetch", "sqlite_query", "memory_write", "memory_search"]
+PLUGIN_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
 
 class ModelProfileConfig(BaseModel):
@@ -63,6 +64,12 @@ class NodeConfig(BaseModel):
     default_model: str | None = None
     request_types: dict[str, NodeRequestTypeConfig] = Field(default_factory=dict)
     max_running_models: int | None = None
+
+
+class PluginConfig(BaseModel):
+    enabled: bool = True
+    path: Path | None = None
+    config: dict[str, Any] = Field(default_factory=dict)
 
 
 class AgentToolDefinitionConfig(BaseModel):
@@ -211,6 +218,8 @@ class AppConfig(BaseModel):
     routing_fanout_enabled: bool = False
     routing_fanout_max: int = 2
     routing_plugin_path: str | None = None
+    enabled_plugins: list[str] = Field(default_factory=list)
+    plugins: dict[str, PluginConfig] = Field(default_factory=dict)
     chat_max_active_per_target: int = Field(default=1, ge=1, le=128)
     chat_max_queue_per_target: int = Field(default=32, ge=0, le=10000)
     chat_max_active_per_session: int = Field(default=1, ge=1, le=32)
@@ -232,6 +241,22 @@ class AppConfig(BaseModel):
         if isinstance(raw_single, list) and "hf_models_dirs" not in data:
             data = {**data, "hf_models_dirs": raw_single, "hf_models_dir": None}
         return data
+
+    @field_validator("enabled_plugins")
+    @classmethod
+    def validate_enabled_plugin_ids(cls, value: list[str]) -> list[str]:
+        for plugin_id in value:
+            if not PLUGIN_ID_PATTERN.fullmatch(plugin_id):
+                raise ValueError(f"Invalid plugin id {plugin_id!r}")
+        return value
+
+    @field_validator("plugins")
+    @classmethod
+    def validate_plugin_config_ids(cls, value: dict[str, PluginConfig]) -> dict[str, PluginConfig]:
+        for plugin_id in value:
+            if not PLUGIN_ID_PATTERN.fullmatch(plugin_id):
+                raise ValueError(f"Invalid plugin id {plugin_id!r}")
+        return value
 
     @property
     def model_roots(self) -> list[Path]:

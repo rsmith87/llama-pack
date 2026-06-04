@@ -5,6 +5,8 @@ from collections.abc import AsyncIterator
 from dataclasses import dataclass
 from typing import Any
 
+from llama_manager.core.plugins.hooks import HookRegistry, PolicyHookRejected
+
 
 class ChatAdmissionError(RuntimeError):
     def __init__(self, message: str, *, status_code: int = 503) -> None:
@@ -34,6 +36,7 @@ class ChatScheduler:
         max_active_per_session: int = 1,
         max_queue_per_session: int = 4,
         admission_timeout_seconds: float = 120.0,
+        hooks: HookRegistry | None = None,
     ) -> None:
         self.proxy = proxy
         self.max_active_per_target = max(1, max_active_per_target)
@@ -41,11 +44,13 @@ class ChatScheduler:
         self.max_active_per_session = max(1, max_active_per_session)
         self.max_queue_per_session = max(0, max_queue_per_session)
         self.admission_timeout_seconds = max(0.1, admission_timeout_seconds)
+        self.hooks = hooks
         self._limiters: dict[str, _Limiter] = {}
         self._lock = asyncio.Lock()
 
     async def chat_with_meta(self, model_name: str, payload: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
         clean_payload, session_id = self._clean_payload(payload)
+        await self._run_chat_admission_hooks(model_name, clean_payload, session_id)
         acquired = await self._acquire(model_name, clean_payload, session_id)
         try:
             return await self.proxy.chat_with_meta(model_name, clean_payload)
@@ -54,6 +59,7 @@ class ChatScheduler:
 
     async def stream_with_meta(self, model_name: str, payload: dict[str, Any]) -> tuple[AsyncIterator[bytes], dict[str, str]]:
         clean_payload, session_id = self._clean_payload(payload)
+        await self._run_chat_admission_hooks(model_name, clean_payload, session_id)
         acquired = await self._acquire(model_name, clean_payload, session_id)
         try:
             stream, meta = await self.proxy.stream_with_meta(model_name, clean_payload)
@@ -117,3 +123,14 @@ class ChatScheduler:
         clean = dict(payload)
         session_id = clean.pop("_admission_session_id", None)
         return clean, str(session_id) if session_id else None
+
+    async def _run_chat_admission_hooks(self, model_name: str, payload: dict[str, Any], session_id: str | None) -> None:
+        if self.hooks is None:
+            return
+        try:
+            await self.hooks.run_policy_hooks(
+                "neuraxis.chat_admission",
+                {"model": model_name, "payload": payload, "session_id": session_id},
+            )
+        except PolicyHookRejected as exc:
+            raise ChatAdmissionError(str(exc), status_code=403) from exc

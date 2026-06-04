@@ -28,6 +28,7 @@ from llama_manager.api.routes import (
     nodes,
     ollama_compat,
     openai_compat,
+    plugins,
     quantizations,
     runtime,
     settings,
@@ -70,6 +71,7 @@ from llama_manager.core.app.auth_policy import (
     should_enforce_agent_key,
     should_validate_ui_session,
 )
+from llama_manager.core.plugins import load_plugins
 
 LM_API_PREFIX = "/lm-api/v1"
 
@@ -207,6 +209,7 @@ def _configure_app_state(
     heartbeat_request: Callable[[str, str, dict[str, Any] | None], Awaitable[dict[str, Any]]] | None,
 ) -> None:
     app.state.config = app_config
+    app.state.plugin_registry = load_plugins(app_config)
     app.state.process_manager = process_manager or ProcessManager(app_config)
     app.state.conversion_manager = conversion_manager or ConversionManager(app_config)
     app.state.quantization_manager = quantization_manager or QuantizationManager(app_config)
@@ -236,6 +239,7 @@ def _configure_app_state(
         max_active_per_session=app_config.chat_max_active_per_session,
         max_queue_per_session=app_config.chat_max_queue_per_session,
         admission_timeout_seconds=app_config.chat_admission_timeout_seconds,
+        hooks=app.state.plugin_registry.hooks,
     )
     app.state.thread_service = ThreadService(
         config=app_config,
@@ -297,6 +301,12 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.include_router(auth.router, prefix=LM_API_PREFIX)
     app.include_router(external_keys.router, prefix=LM_API_PREFIX)
     app.include_router(ui.api_router, prefix=LM_API_PREFIX)
+    app.include_router(plugins.router, prefix=LM_API_PREFIX)
+    for record in app.state.plugin_registry.records.values():
+        if record.status != "enabled":
+            continue
+        for route_prefix, router in record.routers:
+            app.include_router(router, prefix=f"{LM_API_PREFIX}/plugins{route_prefix}")
     if app_config.mode == "controller":
         app.include_router(benchmarks.router, prefix=LM_API_PREFIX)
         app.include_router(threads.router, prefix=LM_API_PREFIX)

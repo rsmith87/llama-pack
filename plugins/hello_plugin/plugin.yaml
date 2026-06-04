@@ -1,0 +1,14 @@
+id: hello_plugin
+name: Hello Plugin
+version: "1.0"
+requires_core: "1.0"
+backend_api_version: "1.0"
+frontend_api_version: "1.0"
+entrypoint: hello_plugin.plugin:plugin
+description: Minimal sample plugin for the Neuraxis plugin runtime.
+navigation:
+  - label: Hello
+    path: /ui/plugins/hello_plugin
+ui_routes:
+  - path: /ui/plugins/hello_plugin
+    label: Hello Plugin
