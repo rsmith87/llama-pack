@@ -66,6 +66,22 @@ Both modes share the same codebase and routes; mode-specific routes enforce beha
 - Persistence stores have focused ORM tests, including auth, audit, chat sessions, app state, benchmark, and database infrastructure coverage.
 - Frontend/static packaging is covered by `tests/test_frontend_tests.py`, `tests/test_ui_static_serving.py`, and `tests/test_package_data.py`, with React/Vite tests invoked through the Python suite.
 
+## Plugin Runtime
+
+Plugins are enabled through `enabled_plugins` and `plugins` config entries and
+are loaded from configured local paths. Plugin manifests can declare supported
+runtime modes with:
+
+```yaml
+modes:
+  - controller
+```
+
+If `modes` is omitted, the plugin is compatible with both `agent` and
+`controller`. If the current runtime mode is not listed, core leaves the plugin
+disabled as incompatible and reports that state through
+`/lm-api/v1/plugins/status`.
+
 ## Review Heuristics
 
 When reviewing changes, keep responsibilities narrow:

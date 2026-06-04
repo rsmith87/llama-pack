@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal
 
 import yaml
 from pydantic import BaseModel, Field, field_validator
 
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+PluginMode = Literal["agent", "controller"]
 
 
 class PluginFrontend(BaseModel):
@@ -25,6 +26,7 @@ class PluginManifest(BaseModel):
     frontend_api_version: str = "1.0"
     entrypoint: str
     description: str | None = None
+    modes: list[PluginMode] = Field(default_factory=lambda: ["agent", "controller"])
     frontend: PluginFrontend | None = None
     navigation: list[dict[str, Any]] = Field(default_factory=list)
     secondary_navigation: list[dict[str, Any]] = Field(default_factory=list)
@@ -36,6 +38,13 @@ class PluginManifest(BaseModel):
         if not PLUGIN_ID_PATTERN.fullmatch(value):
             raise ValueError(f"Invalid plugin id {value!r}")
         return value
+
+    @field_validator("modes")
+    @classmethod
+    def validate_modes(cls, value: list[PluginMode]) -> list[PluginMode]:
+        if not value:
+            raise ValueError("Plugin modes must include at least one runtime mode")
+        return list(dict.fromkeys(value))
 
 
 def load_manifest(path: Path) -> PluginManifest:

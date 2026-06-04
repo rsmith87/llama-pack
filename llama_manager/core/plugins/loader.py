@@ -23,11 +23,11 @@ def load_plugins(config: AppConfig) -> PluginRegistry:
         if plugin_config is None or plugin_config.path is None:
             registry.add_disabled(plugin_id, reason="Plugin path is not configured")
             continue
-        _load_one(registry, plugin_id, plugin_config.path, plugin_config.config)
+        _load_one(registry, plugin_id, plugin_config.path, plugin_config.config, config.mode)
     return registry
 
 
-def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_config: dict[str, Any]) -> None:
+def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_config: dict[str, Any], mode: str) -> None:
     try:
         manifest = load_manifest(path)
         if manifest.id != plugin_id:
@@ -46,6 +46,11 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         ):
             record.status = "incompatible"
             record.warnings.append(f"Plugin requires core {manifest.requires_core}; supported core is {CORE_PLUGIN_API_VERSION}")
+            return
+        if mode not in manifest.modes:
+            record.status = "incompatible"
+            modes = ", ".join(manifest.modes)
+            record.warnings.append(f"Plugin requires mode {modes}; current mode is {mode}")
             return
         plugin = _import_entrypoint(path, manifest.entrypoint)
         plugin.register(PluginContext(registry, record, plugin_config))

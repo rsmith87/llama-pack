@@ -22,6 +22,7 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
     static_dir.mkdir()
     (static_dir / "hello-entry.js").write_text("export const hello = true;\n", encoding="utf-8")
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
+    extra = textwrap.indent(manifest_extra.strip(), "            ") if manifest_extra.strip() else ""
     (plugin_dir / "plugin.yaml").write_text(
         textwrap.dedent(
             f"""
@@ -35,7 +36,7 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
             frontend:
               static_dir: {plugin_id}/static
               entry: /plugin-assets/{plugin_id}/hello-entry.js
-            {manifest_extra}
+{extra}
             """
         ),
         encoding="utf-8",
@@ -69,12 +70,18 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
     return plugin_dir
 
 
-def plugin_config(tmp_path: Path, *paths: Path, enabled: list[str] | None = None, plugins: dict | None = None) -> AppConfig:
+def plugin_config(
+    tmp_path: Path,
+    *paths: Path,
+    enabled: list[str] | None = None,
+    plugins: dict | None = None,
+    mode: str = "agent",
+) -> AppConfig:
     log_dir = tmp_path / "logs"
     prepare_all_persistence_dbs(log_dir)
     return load_config(
         {
-            "mode": "agent",
+            "mode": mode,
             "log_dir": str(log_dir),
             "enabled_plugins": [path.name for path in paths] if enabled is None else enabled,
             "plugins": {
@@ -112,7 +119,7 @@ def test_enabled_plugin_loads_registers_route_and_frontend_metadata(tmp_path: Pa
 
 def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     plugin_dir = REPO_ROOT / "plugins" / "hello_plugin"
-    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    app = create_app(config=plugin_config(tmp_path, plugin_dir, mode="controller"))
     client = authenticated_client(app)
 
     assert client.get("/lm-api/v1/plugins/hello_plugin/hello").json() == {"message": "hello from plugin"}
@@ -196,6 +203,35 @@ def test_incompatible_plugin_is_disabled_with_warning(tmp_path: Path):
     assert status["status"] == "incompatible"
     assert "requires core 2.0" in status["warnings"][0]
     assert client.get("/lm-api/v1/plugins/enabled").json() == []
+
+
+def test_controller_only_plugin_is_disabled_in_agent_mode(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "controller_plugin",
+        manifest_extra="modes:\n  - controller",
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir, mode="agent"))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/controller_plugin/hello").status_code == 404
+    assert client.get("/lm-api/v1/plugins/enabled").json() == []
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "incompatible"
+    assert "requires mode controller" in status["warnings"][0]
+
+
+def test_controller_only_plugin_loads_in_controller_mode(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "controller_plugin",
+        manifest_extra="modes:\n  - controller",
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir, mode="controller"))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/controller_plugin/hello").status_code == 200
+    assert client.get("/lm-api/v1/plugins/enabled").json()[0]["id"] == "controller_plugin"
 
 
 def test_failed_plugin_import_is_disabled_with_warning(tmp_path: Path):
