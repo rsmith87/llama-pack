@@ -256,6 +256,7 @@ scripts/renew_caddy_step_cert.sh \
   --ca-url https://pi-controller.local:8443 \
   --root ~/neuraxis-certs/ca-root.crt \
   --cert-dir /etc/caddy/certs \
+  --expires-in 24h \
   --reload systemd
 ```
 
@@ -274,6 +275,7 @@ scripts/renew_caddy_step_cert.sh \
   --cert-dir /opt/homebrew/etc/caddy/certs \
   --owner robertsmith \
   --group staff \
+  --expires-in 24h \
   --reload brew
 ```
 
@@ -287,6 +289,7 @@ scripts/renew_caddy_step_cert.sh \
   --intermediate ~/neuraxis-certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
   --root ~/neuraxis-certs/ca-root.crt \
+  --expires-in 24h \
   --dry-run
 ```
 
@@ -333,7 +336,7 @@ crontab -e
 Example entry for the Mac mini:
 
 ```cron
-0 3,15 * * * cd /Users/robertsmith/Apps/neuraxis && /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_step_cert.sh --name mac-mini --leaf /Users/robertsmith/neuraxis-certs/mac-mini.crt --key /Users/robertsmith/neuraxis-certs/mac-mini.key --intermediate /Users/robertsmith/neuraxis-certs/intermediate_ca.crt --ca-url https://pi-controller.local:8443 --root /Users/robertsmith/neuraxis-certs/ca-root.crt --cert-dir /opt/homebrew/etc/caddy/certs --owner robertsmith --group staff --reload brew >> /Users/robertsmith/Library/Logs/neuraxis-renew-caddy-cert.log 2>&1
+0 3,15 * * * cd /Users/robertsmith/Apps/neuraxis && /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_step_cert.sh --name mac-mini --leaf /Users/robertsmith/neuraxis-certs/mac-mini.crt --key /Users/robertsmith/neuraxis-certs/mac-mini.key --intermediate /Users/robertsmith/neuraxis-certs/intermediate_ca.crt --ca-url https://pi-controller.local:8443 --root /Users/robertsmith/neuraxis-certs/ca-root.crt --cert-dir /opt/homebrew/etc/caddy/certs --owner robertsmith --group staff --expires-in 24h --reload brew >> /Users/robertsmith/Library/Logs/neuraxis-renew-caddy-cert.log 2>&1
 ```
 
 Run the command manually once before adding it to cron. On macOS, cron has a
