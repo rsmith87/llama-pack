@@ -236,6 +236,110 @@ step ca certificate linux-2080ti.local linux-2080ti.crt linux-2080ti.key \
 The `--not-after 720h` example gives 30-day certs if the CA policy allows it.
 Shorter default certs work, but they need renewal sooner.
 
+## Automatic Certificate Renewal
+
+Smallstep certificates are often short-lived. For this Caddy setup, renewal has
+three steps:
+
+1. Renew the node leaf certificate with `step ca renew`.
+2. Rebuild the Caddy fullchain by appending the intermediate CA certificate.
+3. Reload Caddy so it serves the renewed certificate.
+
+Use the repo helper for all three:
+
+```bash
+scripts/renew_caddy_step_cert.sh \
+  --name pi-controller \
+  --leaf ~/neuraxis-certs/pi-controller.crt \
+  --key ~/neuraxis-certs/pi-controller.key \
+  --intermediate ~/neuraxis-certs/intermediate_ca.crt \
+  --ca-url https://pi-controller.local:8443 \
+  --root ~/neuraxis-certs/ca-root.crt \
+  --cert-dir /etc/caddy/certs \
+  --reload systemd
+```
+
+For Linux agents, replace `pi-controller` with the agent basename, such as
+`linux-2080ti`. For macOS Homebrew Caddy, use the Homebrew cert directory and
+reload mode:
+
+```bash
+scripts/renew_caddy_step_cert.sh \
+  --name mac-mini \
+  --leaf ~/neuraxis-certs/mac-mini.crt \
+  --key ~/neuraxis-certs/mac-mini.key \
+  --intermediate ~/neuraxis-certs/intermediate_ca.crt \
+  --ca-url https://pi-controller.local:8443 \
+  --root ~/neuraxis-certs/ca-root.crt \
+  --cert-dir /opt/homebrew/etc/caddy/certs \
+  --owner robertsmith \
+  --group staff \
+  --reload brew
+```
+
+Preview without changing anything:
+
+```bash
+scripts/renew_caddy_step_cert.sh \
+  --name pi-controller \
+  --leaf ~/neuraxis-certs/pi-controller.crt \
+  --key ~/neuraxis-certs/pi-controller.key \
+  --intermediate ~/neuraxis-certs/intermediate_ca.crt \
+  --ca-url https://pi-controller.local:8443 \
+  --root ~/neuraxis-certs/ca-root.crt \
+  --dry-run
+```
+
+### Linux/Pi systemd timer
+
+Copy the examples from `deploy/caddy/`:
+
+```bash
+sudo cp deploy/caddy/renew-caddy-cert.service.example \
+  /etc/systemd/system/neuraxis-renew-caddy-cert.service
+sudo cp deploy/caddy/renew-caddy-cert.timer.example \
+  /etc/systemd/system/neuraxis-renew-caddy-cert.timer
+```
+
+Edit `/etc/systemd/system/neuraxis-renew-caddy-cert.service` for the local
+node's paths, hostname, and cert basename. Then enable the timer:
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now neuraxis-renew-caddy-cert.timer
+sudo systemctl list-timers | grep neuraxis-renew-caddy-cert
+```
+
+Run once immediately:
+
+```bash
+sudo systemctl start neuraxis-renew-caddy-cert.service
+sudo journalctl -u neuraxis-renew-caddy-cert.service --no-pager -n 80
+```
+
+The timer assumes `step-ca` is reachable when renewal runs. If the CA server is
+not always running, either keep it available on the controller or schedule
+renewal windows when it is running.
+
+### macOS scheduled renewal
+
+For Homebrew Caddy on macOS, use the same renewal helper with
+`--reload brew`. A simple cron entry is enough:
+
+```bash
+crontab -e
+```
+
+Example entry for the Mac mini:
+
+```cron
+0 3,15 * * * cd /Users/robertsmith/Apps/neuraxis && /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_step_cert.sh --name mac-mini --leaf /Users/robertsmith/neuraxis-certs/mac-mini.crt --key /Users/robertsmith/neuraxis-certs/mac-mini.key --intermediate /Users/robertsmith/neuraxis-certs/intermediate_ca.crt --ca-url https://pi-controller.local:8443 --root /Users/robertsmith/neuraxis-certs/ca-root.crt --cert-dir /opt/homebrew/etc/caddy/certs --owner robertsmith --group staff --reload brew >> /Users/robertsmith/Library/Logs/neuraxis-renew-caddy-cert.log 2>&1
+```
+
+Run the command manually once before adding it to cron. On macOS, cron has a
+smaller environment than your shell, so use absolute paths in the scheduled
+entry.
+
 ## Install Certs For Caddy
 
 Caddy should serve a fullchain certificate: the node leaf certificate followed
