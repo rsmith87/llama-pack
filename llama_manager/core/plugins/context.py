@@ -12,10 +12,19 @@ from llama_manager.core.plugins.registry import PluginRecord, PluginRegistry
 
 
 class PluginContext:
-    def __init__(self, registry: PluginRegistry, record: PluginRecord, config: dict[str, Any]) -> None:
+    def __init__(self, registry: PluginRegistry, record: PluginRecord, config: dict[str, Any], state_dir: Path) -> None:
         self.registry = registry
         self.record = record
         self.config = config
+        self._state_dir = state_dir
+
+    def get_state_dir(self) -> Path:
+        """Return the plugin's private state directory (inside the plugin folder).
+
+        The directory is not created automatically — the plugin is responsible
+        for calling ``mkdir(parents=True, exist_ok=True)`` before writing to it.
+        """
+        return self._state_dir
 
     def add_api_router(self, router: APIRouter, *, prefix: str | None = None) -> None:
         resolved = prefix or f"/{self.record.id}"

@@ -23,11 +23,11 @@ def load_plugins(config: AppConfig) -> PluginRegistry:
         if plugin_config is None or plugin_config.path is None:
             registry.add_disabled(plugin_id, reason="Plugin path is not configured")
             continue
-        _load_one(registry, plugin_id, plugin_config.path, plugin_config.config, config.mode)
+        _load_one(registry, plugin_id, plugin_config.path, plugin_config.config, config.mode, config.log_dir)
     return registry
 
 
-def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_config: dict[str, Any], mode: str) -> None:
+def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_config: dict[str, Any], mode: str, log_dir: Path) -> None:
     try:
         manifest = load_manifest(path)
         if manifest.id != plugin_id:
@@ -60,7 +60,7 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
                 registry.disable(plugin_id, f"Invalid plugin config: {', '.join(config_errors)}")
                 return
         plugin = _import_entrypoint(path, manifest.entrypoint)
-        plugin.register(PluginContext(registry, record, plugin_config))
+        plugin.register(PluginContext(registry, record, plugin_config, state_dir=log_dir / "plugins" / plugin_id / "state"))
         record.status = "enabled"
     except Exception as exc:
         registry.mark_failed(plugin_id, str(exc))

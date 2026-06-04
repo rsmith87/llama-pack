@@ -149,6 +149,12 @@ Available `PluginContext` methods:
   `/lm-api/v1/plugins/status`.
 - `add_migration_target(...)`: registers read-only migration metadata.
 - `get_plugin_config()`: returns the plugin's configured config values.
+- `get_state_dir()`: returns a `Path` for the plugin's private persistent state
+  directory (`{log_dir}/plugins/{plugin_id}/state/`). The directory is **not**
+  created automatically; the plugin must call `mkdir(parents=True, exist_ok=True)`
+  before writing to it (or delegate that to a store class). Use this path to
+  locate plugin-owned SQLite databases or other data files. The directory is
+  scoped to the runtime `log_dir`, keeping plugin data alongside other app state.
 
 ## Events
 
