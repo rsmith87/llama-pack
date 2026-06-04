@@ -6,7 +6,7 @@ from tests.persistence_db_setup import prepare_auth_db
 
 
 def test_create_admin_cli_prints_one_time_key_and_stores_hash(tmp_path, capsys):
-    prepare_auth_db(tmp_path / "logs" / "auth_store.db")
+    prepare_auth_db(tmp_path / "state" / "auth_store.db")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         f"""
@@ -31,7 +31,7 @@ log_dir: {tmp_path / "logs"}
 
 
 def test_create_test_chat_cli_prints_one_time_key_and_stores_hash(tmp_path, capsys):
-    prepare_auth_db(tmp_path / "logs" / "auth_store.db")
+    prepare_auth_db(tmp_path / "state" / "auth_store.db")
     config_path = tmp_path / "config.yaml"
     config_path.write_text(
         f"""

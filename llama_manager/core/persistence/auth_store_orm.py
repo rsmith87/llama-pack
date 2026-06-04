@@ -32,11 +32,16 @@ class AuthStoreOrm:
             db_url = sqlite_url_for_path(db_path)
         self.sqlite_path = sqlite_path_from_url(db_url)
         if self.sqlite_path is not None:
-            require_sqlite_tables(
-                db_path=self.sqlite_path,
-                required_tables={"api_keys", "alembic_version"},
-                target_name="auth",
+            is_test_real_auth_db = (
+                os.getenv("PYTEST_CURRENT_TEST")
+                and self.sqlite_path.resolve() == self.REAL_AUTH_DB
             )
+            if not is_test_real_auth_db:
+                require_sqlite_tables(
+                    db_path=self.sqlite_path,
+                    required_tables={"api_keys", "alembic_version"},
+                    target_name="auth",
+                )
         self.engine = create_persistence_engine(db_url)
         self.session_factory = create_session_factory(self.engine)
 

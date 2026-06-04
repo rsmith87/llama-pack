@@ -4,6 +4,7 @@ from llama_manager.core.config import load_config
 from llama_manager.core.persistence.db_infra import (
     create_persistence_engine,
     create_session_factory,
+    default_state_dir,
     resolve_persistence_urls,
     session_scope,
 )
@@ -21,6 +22,12 @@ def test_resolve_persistence_urls_defaults_to_state_dir_paths(tmp_path):
     assert urls.chat_sessions == f"sqlite+pysqlite:///{state_dir / 'chat_sessions.db'}"
     assert urls.downloads == f"sqlite+pysqlite:///{state_dir / 'downloads.db'}"
     assert urls.benchmarks == f"sqlite+pysqlite:///{state_dir / 'benchmarks.db'}"
+
+
+def test_default_state_dir_stays_inside_non_logs_dir(tmp_path):
+    config = load_config({"log_dir": str(tmp_path)})
+
+    assert default_state_dir(config) == tmp_path / "state"
 
 
 def test_resolve_persistence_urls_respects_overrides(tmp_path):

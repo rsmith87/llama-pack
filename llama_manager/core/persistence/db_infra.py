@@ -36,7 +36,9 @@ class PersistenceUrls:
 
 
 def default_state_dir(config: AppConfig) -> Path:
-    return config.log_dir.parent / "state"
+    if config.log_dir.name == "logs":
+        return config.log_dir.parent / "state"
+    return config.log_dir / "state"
 
 
 def resolve_persistence_urls(config: AppConfig) -> PersistenceUrls:
