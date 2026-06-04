@@ -5,7 +5,9 @@ filesystem paths. The initial plugin runtime is intentionally local-path only:
 there is no Python package entrypoint discovery, sandboxed execution, remote
 frontend JavaScript, or automatic plugin migration execution yet.
 
-Use the checked-in `plugins/hello_plugin/` as the reference sample.
+Use the checked-in `plugins/hello_plugin/` as the reference sample. The
+`plugins/neuraxis_business/` plugin is a controller-only skeleton reserved for
+future business-domain features.
 
 ## Enable A Plugin
 
@@ -333,6 +335,23 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
 6. Set `reject_chat: true` to exercise the `neuraxis.chat_admission` hook. Chat
    requests that route through `ChatScheduler` should be rejected before
    scheduler capacity is consumed.
+
+## Business Plugin Skeleton
+
+`plugins/neuraxis_business/` is checked in as a real plugin skeleton, but it
+does not implement business domains yet. It currently provides:
+
+- Controller-only manifest metadata.
+- Optional `organization_name` config.
+- `GET /lm-api/v1/plugins/neuraxis_business/status`.
+- A `Business` placeholder route through backend-provided frontend metadata.
+- Static frontend asset metadata.
+- Health check metadata.
+- Current migration target metadata.
+
+Use it as the place to add future business-owned backend domains incrementally,
+such as usage accounting, quotas, organization settings, document permissions,
+or business-specific admin workflows.
 
 ## Deferred Work
 

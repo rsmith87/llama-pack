@@ -132,6 +132,54 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert migration_status["targets"][0]["status"] == "current"
 
 
+def test_checked_in_business_plugin_loads_as_controller_skeleton(tmp_path: Path):
+    plugin_dir = REPO_ROOT / "plugins" / "neuraxis_business"
+    app = create_app(
+        config=plugin_config(
+            tmp_path,
+            plugin_dir,
+            mode="controller",
+            plugins={
+                "neuraxis_business": {
+                    "path": str(plugin_dir),
+                    "enabled": True,
+                    "config": {"organization_name": "Acme"},
+                }
+            },
+        )
+    )
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/neuraxis_business/status").json() == {
+        "plugin_id": "neuraxis_business",
+        "organization_name": "Acme",
+        "features": [],
+    }
+    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
+    assert metadata["id"] == "neuraxis_business"
+    assert metadata["navigation"][0]["label"] == "Business"
+    assert metadata["frontend"]["entry"] == "/plugin-assets/neuraxis_business/business-entry.js"
+    assert client.get("/plugin-assets/neuraxis_business/business-entry.js").status_code == 200
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "enabled"
+    assert {"level": "ok", "message": "Business plugin skeleton ready"} in status["health"]
+    migration_status = client.get("/lm-api/v1/plugins/neuraxis_business/migrations/status").json()
+    assert migration_status["targets"][0]["id"] == "neuraxis_business"
+    assert migration_status["targets"][0]["status"] == "current"
+
+
+def test_checked_in_business_plugin_is_controller_only(tmp_path: Path):
+    plugin_dir = REPO_ROOT / "plugins" / "neuraxis_business"
+    app = create_app(config=plugin_config(tmp_path, plugin_dir, mode="agent"))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/neuraxis_business/status").status_code == 404
+    assert client.get("/lm-api/v1/plugins/enabled").json() == []
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "incompatible"
+    assert "requires mode controller" in status["warnings"][0]
+
+
 def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
     plugin_dir = write_plugin(tmp_path, "sample_plugin")
     app = create_app(config=plugin_config(tmp_path, plugin_dir))
