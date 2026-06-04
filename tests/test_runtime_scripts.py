@@ -120,6 +120,8 @@ def test_runtime_shell_scripts_parse_cleanly() -> None:
         "scripts/stop_server.sh",
         "scripts/create_test_chat_key.sh",
         "scripts/install_caddy_fullchain.sh",
+        "scripts/install_llama_cpp.sh",
+        "scripts/setup_neuraxis.sh",
     ]:
         subprocess.run(["bash", "-n", str(ROOT_DIR / script)], check=True)
 
@@ -138,8 +140,137 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/stop_server.sh",
         "scripts/create_test_chat_key.sh",
         "scripts/install_caddy_fullchain.sh",
+        "scripts/install_llama_cpp.sh",
+        "scripts/setup_neuraxis.py",
+        "scripts/setup_neuraxis.sh",
     ]:
         assert (ROOT_DIR / script).stat().st_mode & S_IXUSR
+
+
+def test_setup_neuraxis_controller_dry_run_builds_full_setup_plan(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "python3",
+            str(ROOT_DIR / "scripts" / "setup_neuraxis.py"),
+            "--non-interactive",
+            "--dry-run",
+            "--role",
+            "controller",
+            "--config",
+            str(tmp_path / "controller.config.yaml"),
+            "--env-file",
+            str(tmp_path / ".neuraxis.env"),
+            "--host",
+            "0.0.0.0",
+            "--port",
+            "9137",
+            "--enable-memory",
+            "--start",
+        ],
+        cwd=ROOT_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Setup role: controller" in result.stdout
+    assert "uv sync" in result.stdout
+    assert "scripts/onboard_controller.sh" in result.stdout
+    assert "--enable-memory" in result.stdout
+    assert "scripts/start_controller.sh" in result.stdout
+
+
+def test_setup_neuraxis_agent_dry_run_builds_gpu_first_setup_plan(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "python3",
+            str(ROOT_DIR / "scripts" / "setup_neuraxis.py"),
+            "--non-interactive",
+            "--dry-run",
+            "--role",
+            "agent",
+            "--config",
+            str(tmp_path / "agent.config.yaml"),
+            "--env-file",
+            str(tmp_path / ".neuraxis.env"),
+            "--node",
+            "linux-2080ti",
+            "--controller-url",
+            "http://controller.local:9137",
+            "--agent-url",
+            "http://agent.local:9137",
+            "--controller-registration-key",
+            "join-key",
+            "--llama-cpp-backend",
+            "auto",
+            "--start",
+        ],
+        cwd=ROOT_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Setup role: agent" in result.stdout
+    assert "uv sync" in result.stdout
+    assert "scripts/install_llama_cpp.sh" in result.stdout
+    assert "--backend auto" in result.stdout
+    assert "scripts/onboard_agent.sh" in result.stdout
+    assert "--llama-cpp-dir" in result.stdout
+    assert "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND" in result.stdout
+    assert "scripts/start_agent.sh" in result.stdout
+
+
+def test_install_llama_cpp_dry_run_reports_backend_commands(tmp_path: Path) -> None:
+    install_dir = tmp_path / "llama.cpp"
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "install_llama_cpp.sh"),
+            "--dir",
+            str(install_dir),
+            "--backend",
+            "cuda",
+            "--ref",
+            "b1234",
+            "--dry-run",
+        ],
+        cwd=ROOT_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Selected backend: cuda" in result.stdout
+    assert "git clone https://github.com/ggml-org/llama.cpp.git" in result.stdout
+    assert "git checkout b1234" in result.stdout
+    assert "-DGGML_CUDA=ON" in result.stdout
+    assert f"llama_server_bin: {install_dir}/build/bin/llama-server" in result.stdout
+    assert f"llama_cpp_dir: {install_dir}" in result.stdout
+    assert f"python_bin: {install_dir}/.venv/bin/python" in result.stdout
+
+
+def test_install_llama_cpp_cpu_dry_run_disables_higher_priority_backends(tmp_path: Path) -> None:
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "install_llama_cpp.sh"),
+            "--dir",
+            str(tmp_path / "llama.cpp"),
+            "--backend",
+            "cpu",
+            "--dry-run",
+        ],
+        cwd=ROOT_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert "Selected backend: cpu" in result.stdout
+    assert "-DGGML_METAL=OFF" in result.stdout
+    assert "-DGGML_CUDA=OFF" in result.stdout
 
 
 def test_install_caddy_fullchain_dry_run_builds_chain_and_reports_install_commands(tmp_path: Path) -> None:
@@ -351,3 +482,19 @@ def test_onboard_agent_keeps_lan_urls_in_env_not_config(tmp_path: Path) -> None:
     assert f"export NEURAXIS_AGENT_URL={agent_url}" in env_text
 
     assert "url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}" in result.stdout
+
+
+def test_onboard_agent_exposes_optional_llama_cpp_install() -> None:
+    contents = read_script("onboard_agent.sh")
+
+    assert "--install-llama-cpp" in contents
+    assert "--llama-cpp-backend BACKEND" in contents
+    assert "--llama-cpp-dir PATH" in contents
+    assert "install_llama_cpp.sh" in contents
+
+
+def test_onboard_agent_can_reuse_local_controller_registration_key() -> None:
+    contents = read_script("onboard_agent.sh")
+
+    assert "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=\"$NEURAXIS_CONTROLLER_REGISTRATION_KEY\"" in contents
+    assert "Using local NEURAXIS_CONTROLLER_REGISTRATION_KEY as outbound registration key." in contents

@@ -232,6 +232,23 @@ task labels such as `coding`, `summarization`, `structured`, `vision`, and
 `long_context`. `cost_tier` can be `low`, `medium`, or `high`. Profile values
 override the base model for preview scoring.
 
+For scripted setup, install llama.cpp before or during agent onboarding:
+
+```bash
+scripts/install_llama_cpp.sh --backend auto
+scripts/onboard_agent.sh \
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL" \
+  --install-llama-cpp \
+  --llama-cpp-backend auto
+```
+
+The `auto` backend is GPU-first: Apple Silicon selects Metal, hosts with
+`nvcc` select CUDA, and other machines fall back to CPU. Force a backend with
+`--backend cuda`, `--backend metal`, or `--backend cpu` when hardware detection
+is not the right choice. Onboarding writes the generated agent config to the
+same checkout paths used by the installer.
+
 ## Controller Config
 
 Use `mode: controller` on a central machine that coordinates agents. Controller mode owns:

@@ -13,6 +13,10 @@ PORT="9137"
 FORCE="false"
 RUN_SMOKE="false"
 SKIP_RUNTIME_PATH_CHECK="false"
+INSTALL_LLAMA_CPP="false"
+LLAMA_CPP_BACKEND="auto"
+LLAMA_CPP_DIR=""
+LLAMA_CPP_REF="master"
 
 usage() {
   cat <<'USAGE'
@@ -33,6 +37,10 @@ Options:
   --port PORT                   Port used in the printed start command. Default: 9137
   --run-smoke                   Run scripts/linux_agent_smoke.py after config creation.
   --skip-runtime-path-check     Pass through to the smoke test.
+  --install-llama-cpp           Download and build llama.cpp before writing config.
+  --llama-cpp-backend BACKEND   llama.cpp backend: auto, cuda, metal, or cpu. Default: auto
+  --llama-cpp-dir PATH          llama.cpp checkout directory. Default: $HOME/Apps/llama.cpp
+  --llama-cpp-ref REF           llama.cpp git tag, branch, or commit. Default: master
   --force                       Overwrite --config if it already exists.
   -h, --help                    Show this help.
 
@@ -84,6 +92,22 @@ while [[ $# -gt 0 ]]; do
       SKIP_RUNTIME_PATH_CHECK="true"
       shift
       ;;
+    --install-llama-cpp)
+      INSTALL_LLAMA_CPP="true"
+      shift
+      ;;
+    --llama-cpp-backend)
+      LLAMA_CPP_BACKEND="$2"
+      shift 2
+      ;;
+    --llama-cpp-dir)
+      LLAMA_CPP_DIR="$2"
+      shift 2
+      ;;
+    --llama-cpp-ref)
+      LLAMA_CPP_REF="$2"
+      shift 2
+      ;;
     --force)
       FORCE="true"
       shift
@@ -117,12 +141,31 @@ export NEURAXIS_CONTROLLER_URL="$CONTROLLER_URL"
 export NEURAXIS_AGENT_URL="$AGENT_URL"
 
 if [[ -z "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND:-}" ]]; then
-  echo "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND is required." >&2
-  echo "Set it to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY." >&2
-  exit 1
+  if [[ -n "${NEURAXIS_CONTROLLER_REGISTRATION_KEY:-}" ]]; then
+    export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND="$NEURAXIS_CONTROLLER_REGISTRATION_KEY"
+    echo "Using local NEURAXIS_CONTROLLER_REGISTRATION_KEY as outbound registration key."
+  else
+    echo "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND is required." >&2
+    echo "Set it to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY." >&2
+    exit 1
+  fi
 fi
 
 cd "$ROOT_DIR"
+
+if [[ -z "$LLAMA_CPP_DIR" ]]; then
+  LLAMA_CPP_DIR="$HOME/Apps/llama.cpp"
+fi
+LLAMA_CPP_DIR="${LLAMA_CPP_DIR/#\~/$HOME}"
+LLAMA_SERVER_BIN="$LLAMA_CPP_DIR/build/bin/llama-server"
+LLAMA_CPP_PYTHON_BIN="$LLAMA_CPP_DIR/.venv/bin/python"
+
+if [[ "$INSTALL_LLAMA_CPP" == "true" ]]; then
+  scripts/install_llama_cpp.sh \
+    --backend "$LLAMA_CPP_BACKEND" \
+    --dir "$LLAMA_CPP_DIR" \
+    --ref "$LLAMA_CPP_REF"
+fi
 
 if [[ ! -f "$TEMPLATE" ]]; then
   echo "Agent template not found: $TEMPLATE" >&2
@@ -146,6 +189,9 @@ else
   sed \
     -e "s|{user_name}|${USER:-llama-manager}|g" \
     -e "s|node_name: .*|node_name: $NODE_NAME|g" \
+    -e "s|^llama_server_bin: .*|llama_server_bin: $LLAMA_SERVER_BIN|g" \
+    -e "s|^llama_cpp_dir: .*|llama_cpp_dir: $LLAMA_CPP_DIR|g" \
+    -e "s|^python_bin: .*|python_bin: $LLAMA_CPP_PYTHON_BIN|g" \
     -e 's|controller_url: .*|controller_url: ${NEURAXIS_CONTROLLER_URL}|g' \
     -e 's|agent_url: .*|agent_url: ${NEURAXIS_AGENT_URL}|g' \
     "$TEMPLATE" > "$CONFIG"

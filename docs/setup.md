@@ -5,7 +5,42 @@ and local test/build commands.
 
 ## Quick Start
 
-UI-first setup for a fresh controller or agent:
+Guided terminal setup for a fresh controller or agent:
+
+```bash
+scripts/setup_neuraxis.sh
+```
+
+The wizard asks whether the machine is a controller, agent, or single-machine
+setup. It then runs dependency sync, onboarding, optional llama.cpp setup for
+agents, and optional service startup.
+
+Repeatable non-interactive controller setup:
+
+```bash
+scripts/setup_neuraxis.sh \
+  --non-interactive \
+  --role controller \
+  --host 127.0.0.1 \
+  --port 9137 \
+  --start
+```
+
+Repeatable non-interactive agent setup:
+
+```bash
+scripts/setup_neuraxis.sh \
+  --non-interactive \
+  --role agent \
+  --node linux-2080ti \
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL" \
+  --controller-registration-key "$NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND" \
+  --llama-cpp-backend auto \
+  --start
+```
+
+UI-first setup remains available for a fresh controller:
 
 ```bash
 uv sync
@@ -14,9 +49,9 @@ scripts/start_controller.sh
 
 Then open the web UI and follow **Setup**. On first run, the Setup Assistant
 creates the first admin key before showing controller/agent guidance. The UI
-does not write config files or run migrations in this version; it generates the
-same script-backed commands documented below and verifies backend, auth, mode,
-and node status after login.
+does not write config files or run migrations in this version; it generates
+script-backed commands and verifies backend, auth, mode, and node status after
+login.
 
 Script-first setup for a controller:
 
@@ -30,6 +65,7 @@ Script-first setup for an agent:
 
 ```bash
 uv sync
+scripts/install_llama_cpp.sh --backend auto
 cp .neuraxis.env.example .neuraxis.env
 # Edit .neuraxis.env before onboarding:
 # - NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
@@ -123,6 +159,7 @@ to choose different local paths.
 Onboard a fresh agent:
 
 ```bash
+scripts/install_llama_cpp.sh --backend auto
 cp .neuraxis.env.example .neuraxis.env
 # Edit .neuraxis.env and set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND
 # to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY.
@@ -140,6 +177,25 @@ environment placeholders in the generated config, and writes the real LAN URLs
 to `.neuraxis.env` alongside the agent API key, controller registration
 key, config path, host, and port. `scripts/start_agent.sh` and
 `scripts/stop_server.sh` source `.neuraxis.env` automatically.
+
+To make agent setup closer to one command, let onboarding install llama.cpp
+first:
+
+```bash
+scripts/onboard_agent.sh \
+  --node linux-2080ti \
+  --controller-url "$NEURAXIS_CONTROLLER_URL" \
+  --agent-url "$NEURAXIS_AGENT_URL" \
+  --install-llama-cpp \
+  --llama-cpp-backend auto
+```
+
+`scripts/install_llama_cpp.sh --backend auto` picks Metal on Apple Silicon,
+CUDA when `nvcc` is available, and CPU otherwise. Use `--backend cuda`,
+`--backend metal`, or `--backend cpu` to force a specific build. The installer
+prints the matching `llama_server_bin`, `llama_cpp_dir`, and `python_bin`
+values after it verifies `llama-server`, `llama-quantize`, the converter, and
+the llama.cpp Python venv.
 
 The controller registration key comes from the controller machine's
 `.neuraxis.env` after `scripts/onboard_controller.sh` runs:

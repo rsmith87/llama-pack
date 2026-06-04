@@ -19,7 +19,17 @@ runtime.
 
 ## Quick Start
 
-Controller:
+Guided setup:
+
+```bash
+scripts/setup_neuraxis.sh
+```
+
+The wizard asks whether this machine is a controller, agent, or single-machine
+setup, then runs dependency sync, onboarding, optional llama.cpp setup, and
+optional service startup.
+
+Script-first controller:
 
 ```bash
 uv sync
@@ -31,10 +41,11 @@ The controller onboarding script writes `.neuraxis.env`, including
 `NEURAXIS_CONTROLLER_REGISTRATION_KEY`. Give that registration key to each
 agent as `NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
 
-Agent:
+Script-first agent:
 
 ```bash
 uv sync
+scripts/install_llama_cpp.sh --backend auto
 cp .neuraxis.env.example .neuraxis.env
 # Edit .neuraxis.env:
 # - set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND to the controller's
