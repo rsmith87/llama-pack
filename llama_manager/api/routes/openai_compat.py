@@ -22,7 +22,7 @@ from llama_manager.api.routes.chat.common import (
 )
 from llama_manager.core.chat.profile_activation import ProfileActivationService
 from llama_manager.core.chat.proxy import ChatProxy
-from llama_manager.core.chat.scheduler import ChatScheduler
+from llama_manager.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 from llama_manager.core.agent_tools.runtime import AgentToolLoop
 from llama_manager.core.config import AppConfig
 from llama_manager.core.runtime.process_manager import ProcessManager
@@ -86,7 +86,7 @@ async def openai_chat_completions(
                 raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
             if body.stream:
                 tool_payload = {**payload, "tools": ToolRegistry(config.agent_tools).openai_tools()}
-                stream, headers = await proxy.stream_with_meta(model_name, tool_payload)
+                stream, headers = await scheduler.stream_with_meta(model_name, tool_payload)
                 return StreamingResponse(
                     _agent_tool_detection_stream(stream),
                     media_type="text/event-stream",
@@ -94,7 +94,7 @@ async def openai_chat_completions(
                 )
             with track_model_if_local(manager, model_name):
                 response, headers = await AgentToolLoop(
-                    config, proxy, process_manager=manager, memory_store=getattr(request.app.state, "memory_store", None)
+                    config, scheduler, process_manager=manager, memory_store=getattr(request.app.state, "memory_store", None)
                 ).run(model_name, payload)
             return JSONResponse(
                 content=response,
@@ -169,6 +169,8 @@ async def openai_chat_completions(
         return JSONResponse(content=response, headers={**headers, **profile_headers})
     except CompatChatHTTPError as exc:
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
+    except ChatAdmissionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:

@@ -1222,6 +1222,44 @@ def test_openai_compat_agent_tool_runtime_executes_local_tool_loop(tmp_path):
     assert trace["status"] == "ok"
 
 
+def test_openai_compat_agent_tool_runtime_uses_chat_scheduler_admission_hooks(tmp_path):
+    async def fake_chat_request(url, payload):
+        return {"choices": [{"message": {"role": "assistant", "content": "should be blocked"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    app.state.plugin_registry.hooks.add_policy_hook(
+        "test_plugin",
+        "neuraxis.chat_admission",
+        lambda payload: {"allowed": False, "message": "blocked by business policy"},
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "check status"}],
+            "tool_runtime": "agent",
+        },
+    )
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "blocked by business policy"
+
+
 def test_extract_openai_sse_json_ignores_done_and_bad_json():
     from llama_manager.api.routes.compat_chat import extract_openai_sse_json
 
