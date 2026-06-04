@@ -120,6 +120,7 @@ def test_runtime_shell_scripts_parse_cleanly() -> None:
         "scripts/stop_server.sh",
         "scripts/create_test_chat_key.sh",
         "scripts/install_caddy_fullchain.sh",
+        "scripts/renew_caddy_step_cert.sh",
         "scripts/install_llama_cpp.sh",
         "scripts/setup_neuraxis.sh",
     ]:
@@ -140,6 +141,7 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/stop_server.sh",
         "scripts/create_test_chat_key.sh",
         "scripts/install_caddy_fullchain.sh",
+        "scripts/renew_caddy_step_cert.sh",
         "scripts/install_llama_cpp.sh",
         "scripts/setup_neuraxis.py",
         "scripts/setup_neuraxis.sh",
@@ -335,6 +337,52 @@ def test_install_caddy_fullchain_reports_missing_inputs(tmp_path: Path) -> None:
 
     assert result.returncode == 1
     assert "Leaf certificate not found" in result.stderr
+
+
+def test_renew_caddy_step_cert_dry_run_reports_renew_install_and_reload(tmp_path: Path) -> None:
+    leaf = tmp_path / "pi-controller.crt"
+    key = tmp_path / "pi-controller.key"
+    intermediate = tmp_path / "intermediate_ca.crt"
+    root = tmp_path / "ca-root.crt"
+    cert_dir = tmp_path / "caddy-certs"
+    leaf.write_text("leaf\n", encoding="utf-8")
+    key.write_text("key\n", encoding="utf-8")
+    intermediate.write_text("intermediate\n", encoding="utf-8")
+    root.write_text("root\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "renew_caddy_step_cert.sh"),
+            "--name",
+            "pi-controller",
+            "--leaf",
+            str(leaf),
+            "--key",
+            str(key),
+            "--intermediate",
+            str(intermediate),
+            "--ca-url",
+            "https://pi-controller.local:8443",
+            "--root",
+            str(root),
+            "--cert-dir",
+            str(cert_dir),
+            "--dry-run",
+        ],
+        cwd=ROOT_DIR,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    assert f"step ca renew {leaf} {key} --expires-in 168h" in result.stdout
+    assert "--ca-url https://pi-controller.local:8443" in result.stdout
+    assert f"--root {root}" in result.stdout
+    assert "scripts/install_caddy_fullchain.sh" in result.stdout
+    assert f"--cert-dir {cert_dir}" in result.stdout
+    assert "--dry-run" in result.stdout
+    assert "sudo systemctl reload caddy" in result.stdout
 
 
 def test_onboard_controller_exposes_one_step_memory_setup_options() -> None:

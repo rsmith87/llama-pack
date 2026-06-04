@@ -1,0 +1,18 @@
+[Unit]
+Description=Renew Neuraxis Caddy certificate
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+# Copy this unit to /etc/systemd/system/neuraxis-renew-caddy-cert.service and
+# replace paths, name, and CA URL for the local node.
+ExecStart=/home/USER/Apps/neuraxis/scripts/renew_caddy_step_cert.sh \
+  --name pi-controller \
+  --leaf /home/USER/neuraxis-certs/pi-controller.crt \
+  --key /home/USER/neuraxis-certs/pi-controller.key \
+  --intermediate /home/USER/neuraxis-certs/intermediate_ca.crt \
+  --ca-url https://pi-controller.local:8443 \
+  --root /home/USER/neuraxis-certs/ca-root.crt \
+  --cert-dir /etc/caddy/certs \
+  --reload systemd
