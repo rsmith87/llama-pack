@@ -13,6 +13,11 @@ type PluginModuleLoader = (entry: string) => Promise<PluginFrontendModule>;
 
 const defaultLoader: PluginModuleLoader = (entry) => import(/* @vite-ignore */ entry) as Promise<PluginFrontendModule>;
 
+function cacheBustedEntry(entry: string, version: string | undefined, reloadCount: number): string {
+  const separator = entry.includes("?") ? "&" : "?";
+  return `${entry}${separator}v=${encodeURIComponent(version || "dev")}&r=${encodeURIComponent(String(reloadCount))}`;
+}
+
 export function PluginHostPage({
   page,
   onNavigate,
@@ -24,18 +29,18 @@ export function PluginHostPage({
   refreshKey?: string | number;
   loadModule?: PluginModuleLoader;
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const cleanupRef = useRef<(() => void) | null>(null);
-  const [plugin, setPlugin] = useState<EnabledPlugin | null>(null);
-  const [statusVersion, setStatusVersion] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+	  const containerRef = useRef<HTMLDivElement | null>(null);
+	  const cleanupRef = useRef<(() => void) | null>(null);
+	  const [plugin, setPlugin] = useState<EnabledPlugin | null>(null);
+	  const [reloadCount, setReloadCount] = useState(0);
+	  const [loading, setLoading] = useState(true);
+	  const [error, setError] = useState("");
 
   const hostApi = useMemo(() => createPluginHostApi({
-    pluginId: page.pluginId || "",
-    navigate: onNavigate,
-    refreshPluginStatus: () => setStatusVersion((value) => value + 1),
-  }), [onNavigate, page.pluginId]);
+	    pluginId: page.pluginId || "",
+	    navigate: onNavigate,
+	    refreshPluginStatus: () => undefined,
+	  }), [onNavigate, page.pluginId]);
 
   async function load() {
     if (!page.pluginId) return;
@@ -52,10 +57,10 @@ export function PluginHostPage({
       if (!current) {
         throw new Error(`Plugin ${page.pluginId} is not enabled`);
       }
-      if (!entry) {
-        throw new Error(`Plugin ${page.pluginId} does not declare a frontend entry`);
-      }
-      const module = await loadModule(entry);
+	      if (!entry) {
+	        throw new Error(`Plugin ${page.pluginId} does not declare a frontend entry`);
+	      }
+	      const module = await loadModule(cacheBustedEntry(entry, current.version, reloadCount));
       if (typeof module.mount !== "function") {
         throw new Error(`Plugin ${page.pluginId} frontend does not export mount()`);
       }
@@ -69,14 +74,13 @@ export function PluginHostPage({
     }
   }
 
-  useEffect(() => {
-    void statusVersion;
-    void load();
-    return () => {
-      cleanupRef.current?.();
-      cleanupRef.current = null;
-    };
-  }, [page.pluginId, refreshKey, statusVersion]);
+	  useEffect(() => {
+	    void load();
+	    return () => {
+	      cleanupRef.current?.();
+	      cleanupRef.current = null;
+	    };
+  }, [page.pluginId, refreshKey, reloadCount]);
 
   return (
     <div className="plugin-host-page">
@@ -86,7 +90,9 @@ export function PluginHostPage({
           <h2>{page.label}</h2>
           <p className="muted">Plugin frontend loaded from {plugin?.frontend?.entry || "plugin metadata"}.</p>
         </div>
-        <Button type="button" onClick={() => void load()} disabled={loading}>{loading ? "Loading" : "Reload"}</Button>
+	        <Button type="button" onClick={() => {
+	          setReloadCount((value) => value + 1);
+	        }} disabled={loading}>{loading ? "Loading" : "Reload"}</Button>
       </div>
       {error ? <ErrorBanner message={error} /> : null}
       <Panel className="plugin-host-panel">

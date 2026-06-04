@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { PluginHostPage } from "./PluginHostPage";
 import type { PageDefinition } from "../routes/pages";
@@ -53,7 +54,8 @@ it("loads a plugin frontend module and mounts it into the host container", async
   const { unmount } = render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
 
   expect(await screen.findByText("mounted hello_plugin")).toBeInTheDocument();
-  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js");
+  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
+  expect(screen.getByText("Plugin frontend loaded from /plugin-assets/hello_plugin/hello-entry.js.")).toBeInTheDocument();
 
   unmount();
   expect(cleanup).toHaveBeenCalled();
@@ -82,5 +84,23 @@ it("passes navigation and refresh helpers to the plugin module", async () => {
 
   expect(await screen.findByText("ready")).toBeInTheDocument();
   expect(navigate).toHaveBeenCalledWith("/ui/plugins/hello_plugin/settings");
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  expect(loadModule).toHaveBeenCalledTimes(1);
+});
+
+it("reloads the plugin module with a new cache-bust token", async () => {
+  stubEnabledPlugin();
+  const user = userEvent.setup();
+  const loadModule = vi.fn().mockResolvedValue({
+    mount(container: HTMLElement) {
+      container.textContent = "ready";
+    },
+  });
+
+  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+
+  expect(await screen.findByText("ready")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Reload" }));
+  await waitFor(() => expect(loadModule).toHaveBeenCalledTimes(2));
+  expect(loadModule).toHaveBeenNthCalledWith(2, "/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=1");
 });

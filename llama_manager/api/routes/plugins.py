@@ -40,4 +40,4 @@ async def plugin_asset(plugin_id: str, asset_path: str, request: Request):
         raise HTTPException(status_code=400, detail="Invalid plugin asset path") from exc
     if not candidate.is_file():
         raise HTTPException(status_code=404, detail="Not Found")
-    return FileResponse(candidate)
+    return FileResponse(candidate, headers={"Cache-Control": "no-store"})

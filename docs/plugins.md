@@ -298,6 +298,12 @@ Plugin frontend modules run in the core UI origin. Treat plugin frontend code as
 trusted extension code and keep private/paid plugin UI in the private plugin
 repository.
 
+Plugin assets are served with `Cache-Control: no-store`, and the React plugin
+host appends a version/reload query string when importing `frontend.entry`.
+During development, plugin frontend asset changes should only require a browser
+reload or the plugin page's Reload button. Core frontend rebuilds are only
+needed when the public host contract changes.
+
 The shell also reads `/lm-api/v1/plugins/status` and shows administrator-facing
 alerts for failed, incompatible, warning, or error plugin states.
 

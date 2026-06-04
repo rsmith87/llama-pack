@@ -141,6 +141,7 @@ def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
 
     assert response.status_code == 200
     assert "export const hello" in response.text
+    assert response.headers["cache-control"] == "no-store"
 
 
 def test_disabled_failed_and_unknown_plugin_assets_are_not_served(tmp_path: Path):
