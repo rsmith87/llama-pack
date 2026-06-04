@@ -17,6 +17,7 @@ describe("page route model", () => {
       "benchmarks",
       "runtime-overview",
       "embeddings",
+      "plugins",
       "setup",
       "settings",
     ]);
@@ -57,6 +58,7 @@ describe("page route model", () => {
       { label: "Operations", pages: ["dashboard", "nodes", "controller-ops"] },
       { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization", "benchmarks"] },
       { label: "Runtime", pages: ["runtime-overview", "embeddings"] },
+      { label: "Plugins", pages: ["plugins"] },
       { label: "System", pages: ["setup", "settings"] },
     ]);
     expect(pagesBySectionForMode("agent").map((section) => ({

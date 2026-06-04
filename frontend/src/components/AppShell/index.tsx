@@ -47,6 +47,7 @@ function MenuIcon({ icon }: { icon: PageIcon | "logs" | "menu" | "close" }) {
       {icon === "audit" ? <path d="M6 4h9l3 3v13H6V4Zm3 7h6M9 15h6" /> : null}
       {icon === "benchmark" ? <path d="M4 18h3v-6H4v6Zm6 0h3V8h-3v10Zm6 0h3V4h-3v14Z" /> : null}
       {icon === "api-keys" ? <path d="M7 11a4 4 0 1 1 8 0 4 4 0 0 1-8 0Zm4-6V3m0 16v-2m6-5h2M3 11h2m8.5-3.5 1.5-1.5M5 19l3-3m9 0 2 2M5 5l2 2" /> : null}
+      {icon === "plugins" ? <path d="M8 4h8v5H8V4Zm-3 11h6v5H5v-5Zm8 0h6v5h-6v-5Zm-1-6v3m-4 0h8M8 12v3m8-3v3" /> : null}
       {icon === "settings" ? <path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-4v3m0 10v3M4 12h3m10 0h3" /> : null}
       {icon === "logs" ? <path d="M5 5h14v14H5V5Zm4 5h6M9 14h4" /> : null}
       {icon === "menu" ? <path d="M5 7h14M5 12h14M5 17h14" /> : null}

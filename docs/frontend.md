@@ -146,6 +146,9 @@ The shell also reads `/lm-api/v1/plugins/status` and shows a compact
 administrator-facing alert when plugins are failed, incompatible, or reporting
 health warnings/errors such as pending migration metadata.
 
+The built-in `/ui/plugins` page lists configured plugin status, health,
+frontend metadata, redacted config metadata, and registered migration targets.
+
 For the full plugin frontend metadata contract, see
 [Plugin Author Guide](plugins.md).
 

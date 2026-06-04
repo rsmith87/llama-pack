@@ -1,4 +1,4 @@
-export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "audit" | "benchmarks" | "api-keys" | "settings";
+export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings";
 export type PageKey = BuiltInPageKey | string;
 export type PageIcon =
   | "dashboard"
@@ -15,6 +15,7 @@ export type PageIcon =
   | "audit"
   | "benchmark"
   | "api-keys"
+  | "plugins"
   | "settings";
 export type AppMode = "agent" | "controller";
 export type NavSectionKey = "gateway" | "operations" | "models" | "runtime" | "plugins" | "system";
@@ -57,6 +58,7 @@ export const pages: PageDefinition[] = [
   { key: "benchmarks", label: "Benchmarks", path: "/ui/benchmarks", icon: "benchmark", section: "models", hideInModes: ["agent"] },
   { key: "runtime-overview", label: "Overview", path: "/ui/runtime", icon: "runtime", section: "runtime" },
   { key: "embeddings", label: "Embeddings", path: "/ui/embeddings", icon: "embeddings", section: "runtime" },
+  { key: "plugins", label: "Plugins", path: "/ui/plugins", icon: "plugins", section: "plugins", hideInModes: ["agent"] },
   { key: "setup", label: "Setup", path: "/ui/setup", icon: "setup", section: "system" },
   { key: "settings", label: "Settings", path: "/ui/settings", icon: "settings", section: "system" },
 ];

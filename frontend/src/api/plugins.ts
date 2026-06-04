@@ -31,10 +31,27 @@ export type PluginStatus = {
   }>;
 };
 
+export type PluginMigrationStatus = {
+  plugin_id: string;
+  targets: Array<{
+    id: string;
+    directory: string;
+    database_url?: string | null;
+    current_revision?: string | null;
+    head_revision?: string | null;
+    status: string;
+    pending: boolean;
+  }>;
+};
+
 export function getEnabledPlugins() {
   return apiGet<EnabledPlugin[]>("/plugins/enabled");
 }
 
 export function getPluginStatus() {
   return apiGet<PluginStatus>("/plugins/status");
+}
+
+export function getPluginMigrationStatus(pluginId: string) {
+  return apiGet<PluginMigrationStatus>(`/plugins/${encodeURIComponent(pluginId)}/migrations/status`);
 }

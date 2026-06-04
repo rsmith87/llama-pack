@@ -80,6 +80,7 @@ it("renders primary React navigation and defaults to dashboard", async () => {
     "Operations",
     "Models",
     "Runtime",
+    "Plugins",
     "System",
   ]);
   expect(screen.getByRole("button", { name: "Dashboard" })).toHaveClass("active");

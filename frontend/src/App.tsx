@@ -14,6 +14,7 @@ import { RuntimeOverviewPage } from "./pages/RuntimeOverviewPage";
 import { AuditPage } from "./pages/AuditPage";
 import { BenchmarksPage } from "./pages/BenchmarksPage";
 import { ApiKeysPage } from "./pages/ApiKeysPage";
+import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TestChatPage } from "./pages/TestChatPage";
@@ -78,6 +79,9 @@ function RoutedApp() {
         }
         if (page.key === "api-keys") {
           return <ApiKeysPage />;
+        }
+        if (page.key === "plugins") {
+          return <PluginsPage />;
         }
         if (page.key === "settings") {
           return <SettingsPage />;
