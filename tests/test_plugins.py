@@ -245,6 +245,146 @@ def test_failed_plugin_import_is_disabled_with_warning(tmp_path: Path):
     assert client.get("/lm-api/v1/plugins/broken_plugin/hello").status_code == 404
 
 
+def test_invalid_plugin_config_disables_plugin_with_warning(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "configured_plugin",
+        manifest_extra="""
+        config_schema:
+          properties:
+            api_key:
+              type: string
+          required:
+            - api_key
+        """,
+    )
+    app = create_app(
+        config=plugin_config(
+            tmp_path,
+            plugin_dir,
+            plugins={"configured_plugin": {"path": str(plugin_dir), "enabled": True, "config": {}}},
+        )
+    )
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/configured_plugin/hello").status_code == 404
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "disabled"
+    assert "Invalid plugin config" in status["warnings"][0]
+    assert "api_key is required" in status["warnings"][0]
+
+
+def test_secret_plugin_config_is_redacted_from_status_but_available_to_plugin(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "secret_plugin",
+        manifest_extra="""
+        config_schema:
+          properties:
+            api_key:
+              type: string
+              secret: true
+            max_items:
+              type: integer
+          required:
+            - api_key
+        """,
+        body="""
+        from fastapi import APIRouter
+
+        class Plugin:
+            def register(self, context):
+                router = APIRouter()
+
+                @router.get("/config")
+                async def config():
+                    plugin_config = context.get_plugin_config()
+                    return {
+                        "api_key": plugin_config["api_key"],
+                        "max_items": plugin_config["max_items"],
+                    }
+
+                context.add_api_router(router)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(
+        config=plugin_config(
+            tmp_path,
+            plugin_dir,
+            plugins={
+                "secret_plugin": {
+                    "path": str(plugin_dir),
+                    "enabled": True,
+                    "config": {"api_key": "super-secret", "max_items": 4},
+                }
+            },
+        )
+    )
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/secret_plugin/config").json() == {
+        "api_key": "super-secret",
+        "max_items": 4,
+    }
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["config"] == {"api_key": "<redacted>", "max_items": 4}
+    assert "super-secret" not in str(status)
+
+
+def test_plugin_health_check_results_appear_in_status(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "health_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                async def health():
+                    return {"level": "warning", "message": "degraded"}
+
+                context.add_health_check(health)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+
+    assert status["status"] == "enabled"
+    assert {"level": "warning", "message": "degraded"} in status["health"]
+    assert "degraded" in status["warnings"]
+
+
+def test_plugin_health_check_failure_is_reported_without_crashing_status(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "broken_health_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                async def health():
+                    raise RuntimeError("health boom")
+
+                context.add_health_check(health)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.get("/lm-api/v1/plugins/status")
+    status = response.json()["plugins"][0]
+
+    assert response.status_code == 200
+    assert status["status"] == "enabled"
+    assert {"level": "error", "message": "health boom"} in status["health"]
+    assert "health boom" in status["errors"]
+
+
 def test_plugin_route_outside_namespace_and_collision_are_rejected(tmp_path: Path):
     bad_dir = write_plugin(
         tmp_path,

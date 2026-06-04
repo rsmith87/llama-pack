@@ -16,7 +16,7 @@ async def enabled_plugins(request: Request):
 
 @router.get("/status")
 async def plugin_status(request: Request):
-    return request.app.state.plugin_registry.status_payload()
+    return await request.app.state.plugin_registry.status_payload_async()
 
 
 @assets_router.get("/plugin-assets/{plugin_id}/{asset_path:path}", include_in_schema=False)

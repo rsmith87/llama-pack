@@ -17,6 +17,39 @@ class PluginFrontend(BaseModel):
     static_dir: str | None = None
 
 
+ConfigFieldType = Literal["string", "integer", "number", "boolean"]
+
+
+class PluginConfigField(BaseModel):
+    type: ConfigFieldType = "string"
+    secret: bool = False
+
+
+class PluginConfigSchema(BaseModel):
+    properties: dict[str, PluginConfigField] = Field(default_factory=dict)
+    required: list[str] = Field(default_factory=list)
+
+    def validation_errors(self, config: dict[str, Any]) -> list[str]:
+        errors: list[str] = []
+        for key in self.required:
+            if key not in config or config[key] is None:
+                errors.append(f"{key} is required")
+        for key, value in config.items():
+            field = self.properties.get(key)
+            if field is None or value is None:
+                continue
+            if not _matches_config_type(value, field.type):
+                errors.append(f"{key} must be {field.type}")
+        return errors
+
+    def redact(self, config: dict[str, Any]) -> dict[str, Any]:
+        redacted: dict[str, Any] = {}
+        for key, value in config.items():
+            field = self.properties.get(key)
+            redacted[key] = "<redacted>" if field and field.secret and value is not None else value
+        return redacted
+
+
 class PluginManifest(BaseModel):
     id: str
     name: str
@@ -27,6 +60,7 @@ class PluginManifest(BaseModel):
     entrypoint: str
     description: str | None = None
     modes: list[PluginMode] = Field(default_factory=lambda: ["agent", "controller"])
+    config_schema: PluginConfigSchema | None = None
     frontend: PluginFrontend | None = None
     navigation: list[dict[str, Any]] = Field(default_factory=list)
     secondary_navigation: list[dict[str, Any]] = Field(default_factory=list)
@@ -54,3 +88,15 @@ def load_manifest(path: Path) -> PluginManifest:
     if not isinstance(raw, dict):
         raise ValueError(f"Plugin manifest must be a YAML mapping: {manifest_path}")
     return PluginManifest.model_validate(raw)
+
+
+def _matches_config_type(value: Any, field_type: ConfigFieldType) -> bool:
+    if field_type == "string":
+        return isinstance(value, str)
+    if field_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if field_type == "number":
+        return (isinstance(value, int | float)) and not isinstance(value, bool)
+    if field_type == "boolean":
+        return isinstance(value, bool)
+    return False

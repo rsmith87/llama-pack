@@ -82,6 +82,19 @@ If `modes` is omitted, the plugin is compatible with both `agent` and
 disabled as incompatible and reports that state through
 `/lm-api/v1/plugins/status`.
 
+Manifests may declare a small `config_schema` for plugin-local config values.
+Core validates configured values before importing and registering the plugin.
+Invalid config leaves the plugin disabled with a warning in
+`/lm-api/v1/plugins/status`, so plugin code does not run with missing required
+settings. Schema fields can be marked `secret: true`; those values are still
+passed to the plugin through `PluginContext.get_plugin_config()` but are
+redacted in status metadata.
+
+Plugins can register health checks with `PluginContext.add_health_check()`.
+The status endpoint runs enabled-plugin health checks dynamically, merges
+returned warnings/errors into the status payload, and reports health-check
+exceptions as plugin health errors without failing the core status route.
+
 ## Review Heuristics
 
 When reviewing changes, keep responsibilities narrow:

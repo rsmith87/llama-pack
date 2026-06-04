@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import asyncio
+import inspect
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -21,6 +24,8 @@ class PluginRecord:
     warnings: list[str] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
     health: list[dict[str, str]] = field(default_factory=list)
+    health_checks: list[Callable[[], Any]] = field(default_factory=list)
+    config: dict[str, Any] = field(default_factory=dict)
     routers: list[tuple[str, APIRouter]] = field(default_factory=list)
     navigation: list[dict[str, Any]] = field(default_factory=list)
     secondary_navigation: list[dict[str, Any]] = field(default_factory=list)
@@ -42,6 +47,15 @@ class PluginRegistry:
 
     def add_disabled(self, plugin_id: str, *, reason: str = "Disabled") -> None:
         self.records[plugin_id] = PluginRecord(plugin_id, plugin_id, "", "disabled", warnings=[reason])
+
+    def disable(self, plugin_id: str, message: str) -> None:
+        record = self.records.get(plugin_id)
+        if record is None:
+            record = PluginRecord(plugin_id, plugin_id, "", "disabled")
+            self.records[plugin_id] = record
+        record.status = "disabled"
+        record.warnings.append(message)
+        record.routers.clear()
 
     def mark_failed(self, plugin_id: str, message: str) -> None:
         record = self.records.get(plugin_id)
@@ -83,10 +97,50 @@ class PluginRegistry:
                     "health": record.health,
                     "warnings": record.warnings,
                     "errors": record.errors,
+                    "config": record.config,
                 }
                 for record in self.records.values()
             ]
         }
+
+    async def status_payload_async(self) -> dict[str, Any]:
+        plugins = []
+        for record in self.records.values():
+            health = [*record.health]
+            warnings = [*record.warnings]
+            errors = [*record.errors]
+            for item in await self._run_health_checks(record):
+                health.append(item)
+                if item["level"] == "warning":
+                    warnings.append(item["message"])
+                elif item["level"] == "error":
+                    errors.append(item["message"])
+            plugins.append(
+                {
+                    "id": record.id,
+                    "status": record.status,
+                    "version": record.version,
+                    "health": health,
+                    "warnings": warnings,
+                    "errors": errors,
+                    "config": record.config,
+                }
+            )
+        return {"plugins": plugins}
+
+    async def _run_health_checks(self, record: PluginRecord) -> list[dict[str, str]]:
+        results: list[dict[str, str]] = []
+        if record.status != "enabled":
+            return results
+        for check in record.health_checks:
+            try:
+                value = check()
+                if inspect.isawaitable(value):
+                    value = await asyncio.wait_for(value, timeout=2.0)
+                results.extend(_normalize_health_result(value))
+            except Exception as exc:
+                results.append({"level": "error", "message": str(exc)})
+        return results
 
     def _frontend_payload(self, record: PluginRecord) -> dict[str, Any]:
         manifest = record.manifest
@@ -102,3 +156,23 @@ class PluginRegistry:
             "secondary_navigation": record.secondary_navigation,
             "ui_routes": record.ui_routes,
         }
+
+
+def _normalize_health_result(value: Any) -> list[dict[str, str]]:
+    if value is None:
+        return []
+    if isinstance(value, dict):
+        values = [value]
+    elif isinstance(value, list):
+        values = value
+    else:
+        return [{"level": "warning", "message": str(value)}]
+    results: list[dict[str, str]] = []
+    for item in values:
+        if not isinstance(item, dict):
+            results.append({"level": "warning", "message": str(item)})
+            continue
+        level = str(item.get("level") or "ok")
+        message = str(item.get("message") or "")
+        results.append({"level": level, "message": message})
+    return results

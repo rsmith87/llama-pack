@@ -8,6 +8,10 @@ entrypoint: hello_plugin.plugin:plugin
 description: Minimal sample plugin for the Neuraxis plugin runtime.
 modes:
   - controller
+config_schema:
+  properties:
+    reject_chat:
+      type: boolean
 frontend:
   static_dir: hello_plugin/static
   entry: /plugin-assets/hello_plugin/hello-entry.js

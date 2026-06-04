@@ -33,6 +33,8 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         if manifest.id != plugin_id:
             raise ValueError(f"Manifest id {manifest.id!r} does not match configured plugin id {plugin_id!r}")
         record = PluginRecord(manifest.id, manifest.name, manifest.version, "loading", manifest=manifest)
+        if manifest.config_schema:
+            record.config = manifest.config_schema.redact(plugin_config)
         record.navigation.extend(manifest.navigation)
         record.secondary_navigation.extend(manifest.secondary_navigation)
         record.ui_routes.extend(manifest.ui_routes)
@@ -52,6 +54,11 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
             modes = ", ".join(manifest.modes)
             record.warnings.append(f"Plugin requires mode {modes}; current mode is {mode}")
             return
+        if manifest.config_schema:
+            config_errors = manifest.config_schema.validation_errors(plugin_config)
+            if config_errors:
+                registry.disable(plugin_id, f"Invalid plugin config: {', '.join(config_errors)}")
+                return
         plugin = _import_entrypoint(path, manifest.entrypoint)
         plugin.register(PluginContext(registry, record, plugin_config))
         record.status = "enabled"

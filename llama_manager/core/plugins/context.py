@@ -35,5 +35,8 @@ class PluginContext:
     def add_policy_hook(self, hook_name: str, handler: Callable[[dict[str, Any]], Any]) -> None:
         self.registry.hooks.add_policy_hook(self.record.id, hook_name, handler)
 
+    def add_health_check(self, handler: Callable[[], Any]) -> None:
+        self.record.health_checks.append(handler)
+
     def get_plugin_config(self) -> dict[str, Any]:
         return dict(self.config)

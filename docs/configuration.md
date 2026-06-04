@@ -155,6 +155,41 @@ written back to their linked files and the root manifest keeps only root-owned
 fields plus the `files:` mapping. This keeps generated model, node, and tool
 updates out of the root file when those sections are split.
 
+## Plugin Config
+
+Plugins are discovered only from configured local paths. Enable a plugin by
+listing its id in `enabled_plugins` and providing a matching entry in
+`plugins`:
+
+```yaml
+enabled_plugins:
+  - hello_plugin
+
+plugins:
+  hello_plugin:
+    path: ./plugins/hello_plugin
+    enabled: true
+    config:
+      reject_chat: false
+```
+
+Plugin manifests can declare a `config_schema` with `string`, `integer`,
+`number`, and `boolean` fields. Required values are validated before plugin
+registration. Fields marked `secret: true` are passed to the plugin at runtime
+but redacted as `<redacted>` in plugin status metadata.
+
+```yaml
+config_schema:
+  properties:
+    api_key:
+      type: string
+      secret: true
+    max_items:
+      type: integer
+  required:
+    - api_key
+```
+
 ## Agent Config
 
 Use `mode: agent` on each machine that actually runs `llama-server` processes. Agent mode owns:

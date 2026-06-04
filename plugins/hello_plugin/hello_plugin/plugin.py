@@ -26,9 +26,13 @@ class HelloPlugin:
                 return {"allowed": False, "message": "Hello plugin rejected chat"}
             return {"allowed": True}
 
+        async def health_check():
+            return {"level": "ok", "message": "Hello plugin ready"}
+
         context.add_api_router(router)
         context.subscribe("neuraxis.plugin.loaded", record_event)
         context.add_policy_hook("neuraxis.chat_admission", chat_admission)
+        context.add_health_check(health_check)
 
 
 plugin = HelloPlugin()
