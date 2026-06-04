@@ -1,0 +1,12 @@
+.plugin-host-page {
+  display: grid;
+  gap: 18px;
+}
+
+.plugin-host-panel {
+  min-height: 320px;
+}
+
+.plugin-host-container {
+  min-height: 240px;
+}

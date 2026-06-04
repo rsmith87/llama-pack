@@ -14,20 +14,11 @@ import { RuntimeOverviewPage } from "./pages/RuntimeOverviewPage";
 import { AuditPage } from "./pages/AuditPage";
 import { BenchmarksPage } from "./pages/BenchmarksPage";
 import { ApiKeysPage } from "./pages/ApiKeysPage";
+import { PluginHostPage } from "./pages/PluginHostPage";
 import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TestChatPage } from "./pages/TestChatPage";
-
-function PluginPlaceholderPage({ page }: { page: { label: string; pluginName?: string; path: string } }) {
-  return (
-    <section className="panel plugin-placeholder">
-      <span className="eyebrow">{page.pluginName || "Plugin"}</span>
-      <h2>{page.label}</h2>
-      <p className="muted">Plugin route placeholder</p>
-    </section>
-  );
-}
 
 function RoutedApp() {
   const { authToken } = useAuthSession();
@@ -87,7 +78,7 @@ function RoutedApp() {
           return <SettingsPage />;
         }
         if (page.pluginId) {
-          return <PluginPlaceholderPage page={page} />;
+          return <PluginHostPage page={page} onNavigate={setPage} refreshKey={_refreshKey} />;
         }
         return <DashboardPage onNavigate={setPage} onOpenLogs={openLogs} />;
       }}

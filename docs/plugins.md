@@ -271,10 +271,32 @@ Core serves static files from the declared static directory under:
 /plugin-assets/{plugin_id}/...
 ```
 
-The React shell currently renders plugin navigation, scoped secondary
-navigation, and placeholder plugin pages. Dynamic frontend bundle loading from
-`frontend.entry` is intentionally deferred, so plugin JavaScript is served but
-not executed by the core React app yet.
+The React shell renders plugin navigation, scoped secondary navigation, and a
+generic plugin host page. For plugin routes, the host loads `frontend.entry` as
+an ES module and calls its exported `mount(container, host)` function.
+
+Minimal plugin frontend module:
+
+```js
+export function mount(container, host) {
+  container.textContent = `Mounted ${host.pluginId}`;
+  return () => {
+    container.textContent = "";
+  };
+}
+```
+
+The `host` object exposes:
+
+- `pluginId`: current plugin id.
+- `apiGet(path)`, `apiPost(path, body)`, `apiPut(path, body)`, and
+  `apiDelete(path)`: scoped helpers for `/lm-api/v1/plugins/{plugin_id}`.
+- `navigate(path)`: navigate inside the core UI.
+- `refreshPluginStatus()`: request a plugin status refresh.
+
+Plugin frontend modules run in the core UI origin. Treat plugin frontend code as
+trusted extension code and keep private/paid plugin UI in the private plugin
+repository.
 
 The shell also reads `/lm-api/v1/plugins/status` and shows administrator-facing
 alerts for failed, incompatible, warning, or error plugin states.

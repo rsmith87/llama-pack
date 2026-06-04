@@ -143,7 +143,7 @@ it("hides controller navigation when the backend is running as an agent", async 
   expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
 });
 
-it("renders enabled plugin navigation and a placeholder route", async () => {
+it("renders enabled plugin navigation and a generic hosted route", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
@@ -159,7 +159,7 @@ it("renders enabled plugin navigation and a placeholder route", async () => {
               name: "Hello Plugin",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+              frontend: { entry: null, style: null },
               navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
               secondary_navigation: [{ label: "Settings", path: "/ui/plugins/hello_plugin/settings" }],
               ui_routes: [{ path: "/ui/plugins/hello_plugin", label: "Hello Plugin" }],
@@ -179,7 +179,7 @@ it("renders enabled plugin navigation and a placeholder route", async () => {
   await user.click(screen.getByRole("button", { name: "Hello" }));
 
   expect(screen.getByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
-  expect(screen.getByText("Plugin route placeholder")).toBeInTheDocument();
+  expect(await screen.findByText(/does not declare a frontend entry/)).toBeInTheDocument();
   expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("button", { name: "Settings" })).toBeInTheDocument();
 });
 
