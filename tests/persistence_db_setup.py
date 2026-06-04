@@ -5,7 +5,14 @@ from pathlib import Path
 from sqlalchemy import Column, MetaData, String, Table, delete
 
 from llama_manager.core.persistence.alembic_config import Base
-from llama_manager.core.persistence.db_infra import create_persistence_engine, create_session_factory, session_scope, sqlite_url_for_path
+from llama_manager.core.config import load_config
+from llama_manager.core.persistence.db_infra import (
+    create_persistence_engine,
+    create_session_factory,
+    default_state_dir,
+    session_scope,
+    sqlite_url_for_path,
+)
 from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm
 from llama_manager.core.persistence.models.orchestration import (
     ArtifactOrm,
@@ -104,7 +111,7 @@ def prepare_controller_db(db_path: Path, revision: str = TARGET_REVISIONS["contr
 
 
 def prepare_all_persistence_dbs(log_dir: Path, revision: str | None = None) -> None:
-    state_dir = log_dir.parent / "state"
+    state_dir = default_state_dir(load_config({"log_dir": str(log_dir)}))
     prepare_controller_db(state_dir / "controller_state.db", revision=revision or TARGET_REVISIONS["controller"])
     prepare_auth_db(state_dir / "auth_store.db", revision=revision or TARGET_REVISIONS["auth"])
     prepare_audit_db(state_dir / "audit_events.db", revision=revision or TARGET_REVISIONS["audit"])

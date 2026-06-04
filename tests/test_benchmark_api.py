@@ -245,7 +245,7 @@ class TestBenchmarkRunExecution:
             "llama_manager.core.benchmarks.runner.run_inference",
             new=AsyncMock(return_value=mock_result),
         ):
-            asyncio.get_event_loop().run_until_complete(runner.execute_run(run["id"]))
+            asyncio.run(runner.execute_run(run["id"]))
 
         finished = store.get_run(run["id"])
         assert finished["status"] == "completed"
@@ -284,7 +284,7 @@ class TestBenchmarkRunExecution:
 
         runner = BenchmarkRunner(store, app.state.chat_proxy)
         with patch("llama_manager.core.benchmarks.runner.run_inference", new=flaky_inference):
-            asyncio.get_event_loop().run_until_complete(runner.execute_run(run["id"]))
+            asyncio.run(runner.execute_run(run["id"]))
 
         finished = store.get_run(run["id"])
         assert finished["status"] == "partial"
@@ -338,7 +338,7 @@ class TestBenchmarkRunExecution:
         app.state.chat_proxy.node_registry.request_node = request_node
         runner = BenchmarkRunner(store, app.state.chat_proxy)
         with patch("llama_manager.core.benchmarks.runner.run_inference", new=inference):
-            asyncio.get_event_loop().run_until_complete(runner.execute_run(run["id"]))
+            asyncio.run(runner.execute_run(run["id"]))
 
         finished = store.get_run(run["id"])
         assert finished["status"] == "completed"
@@ -381,7 +381,7 @@ class TestBenchmarkRunExecution:
 
         app.state.chat_proxy.node_registry.request_node = request_node
         runner = BenchmarkRunner(store, app.state.chat_proxy, model_start_timeout_seconds=0)
-        asyncio.get_event_loop().run_until_complete(runner.execute_run(run["id"]))
+        asyncio.run(runner.execute_run(run["id"]))
 
         finished = store.get_run(run["id"])
         assert finished["status"] == "failed"

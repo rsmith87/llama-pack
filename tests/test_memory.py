@@ -401,7 +401,7 @@ class TestMemoryEndpoint:
         client, store = _make_app(tmp_path)
         # Pre-populate via direct store call (sync equivalent)
         import asyncio
-        asyncio.get_event_loop().run_until_complete(store.write("user prefers Python", tier="durable"))
+        asyncio.run(store.write("user prefers Python", tier="durable"))
 
         resp = client.post("/lm-api/v1/memory/search", json={"query": "programming language preference"})
         assert resp.status_code == 200
