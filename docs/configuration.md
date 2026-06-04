@@ -212,6 +212,9 @@ Pending or missing plugin migrations appear as warnings in
 `/lm-api/v1/plugins/status`. Core records this metadata only; it does not
 auto-run plugin migrations during startup.
 
+For the full manifest and extension API reference, see
+[Plugin Author Guide](plugins.md).
+
 ## Agent Config
 
 Use `mode: agent` on each machine that actually runs `llama-server` processes. Agent mode owns:

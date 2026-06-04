@@ -101,6 +101,8 @@ Plugins can register migration metadata with
 missing or pending plugin migrations. Core does not run plugin migrations during
 startup; migration execution remains an explicit future command/workflow.
 
+For plugin authoring details, see [Plugin Author Guide](plugins.md).
+
 ## Review Heuristics
 
 When reviewing changes, keep responsibilities narrow:
