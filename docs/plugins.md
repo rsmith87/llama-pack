@@ -410,6 +410,13 @@ above. It should carry its own implementation tests and CI, while this
 repository keeps fixture-based coverage for the generic plugin runtime and the
 public `hello_plugin` sample.
 
+Private plugins that provide end-user auth or chat policy, such as
+`neuraxis_business`, should expose their client-facing availability through core
+client discovery rather than requiring clients to scrape plugin status or know
+private route details. Core discovery should advertise plugin auth endpoints
+only when the plugin is enabled and not reporting errors that make the
+advertised feature unusable.
+
 ## Deferred Work
 
 These are not part of the current plugin foundation:

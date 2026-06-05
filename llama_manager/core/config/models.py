@@ -218,6 +218,7 @@ class AppConfig(BaseModel):
     routing_fanout_enabled: bool = False
     routing_fanout_max: int = 2
     routing_plugin_path: str | None = None
+    client_cors_origins: list[str] = Field(default_factory=list)
     enabled_plugins: list[str] = Field(default_factory=list)
     plugins: dict[str, PluginConfig] = Field(default_factory=dict)
     chat_max_active_per_target: int = Field(default=1, ge=1, le=128)

@@ -242,6 +242,19 @@ def test_agent_tools_defaults_are_disabled():
     assert config.agent_tools.tools == {}
 
 
+def test_client_cors_origins_default_to_empty_and_load_from_config():
+    default_config = load_config({"mode": "controller"})
+    configured = load_config(
+        {
+            "mode": "controller",
+            "client_cors_origins": ["http://localhost:5173", "app://neuraxis-chat"],
+        }
+    )
+
+    assert default_config.client_cors_origins == []
+    assert configured.client_cors_origins == ["http://localhost:5173", "app://neuraxis-chat"]
+
+
 def test_agent_tools_accept_shell_file_http_and_directory_list_definitions(tmp_path):
     config = load_config(
         {

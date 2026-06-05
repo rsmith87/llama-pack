@@ -10,12 +10,14 @@ from typing import Any
 from datetime import UTC, datetime
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from fastapi.middleware.cors import CORSMiddleware
 
 from llama_manager.api.routes import (
     audit,
     auth,
     benchmarks,
     chat,
+    client_discovery,
     conversions,
     downloads,
     external_keys,
@@ -286,6 +288,7 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.mount("/ui", ui.static_app, name="ui")
     app.include_router(health.router)  # /health stays at root for Docker/orchestration compat
     app.include_router(health.router, prefix=LM_API_PREFIX)  # /lm-api/v1/health alias
+    app.include_router(client_discovery.router, prefix=LM_API_PREFIX)
     app.include_router(models.router, prefix=LM_API_PREFIX)
     app.include_router(chat.router, prefix=LM_API_PREFIX)
     app.include_router(openai_compat.router)
@@ -320,6 +323,21 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
 
 
 def _register_middleware(app: FastAPI) -> None:
+    if app.state.config.client_cors_origins:
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=app.state.config.client_cors_origins,
+            allow_credentials=True,
+            allow_methods=["GET", "POST", "OPTIONS"],
+            allow_headers=["Content-Type", "X-UI-Session", "X-Llama-Manager-Key"],
+            expose_headers=[
+                "X-Llama-Manager-Route",
+                "X-Llama-Manager-Thread-Id",
+                "X-Llama-Manager-Node",
+                "X-Llama-Manager-Model",
+            ],
+        )
+
     @app.middleware("http")
     async def enforce_plugin_activation(request: Request, call_next):
         path = request.url.path

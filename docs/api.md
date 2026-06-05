@@ -68,9 +68,55 @@ request type, routed node, and model. Prompt and response text are not written
 to the audit event. The external app key list also stores a latest-use summary
 for each key: last used time, endpoint, route, node, model, and request type.
 
+## Client Discovery
+
+Standalone clients should call `GET /lm-api/v1/client-discovery` before
+presenting setup or login options. The endpoint is public so a client can detect
+Neuraxis before it has credentials.
+
+Example response:
+
+```json
+{
+  "product": "neuraxis",
+  "version": "unknown",
+  "mode": "controller",
+  "capabilities": {
+    "openaiChatCompletions": true,
+    "streaming": true,
+    "localChatSessions": false,
+    "businessPlugin": false
+  },
+  "auth": {
+    "methods": ["neuraxis_api_key", "external_api_key"],
+    "sessionHeader": "X-UI-Session",
+    "apiKeyHeader": "X-Llama-Manager-Key"
+  },
+  "endpoints": {
+    "openaiChatCompletions": "/v1/chat/completions",
+    "openaiModels": "/v1/models",
+    "clientSession": "/v1/client/session",
+    "models": "/lm-api/v1/models",
+    "pluginsStatus": "/lm-api/v1/plugins/status",
+    "docs": "/ui/docs"
+  }
+}
+```
+
+When the private `neuraxis_business` plugin is enabled and healthy enough for
+client login, discovery adds `neuraxis_business` to `auth.methods` and reports a
+`businessAuth` endpoint. Clients should treat absent capability fields as
+unsupported and should prefer `/v1/chat/completions` for end-user chat.
+
+External chat-only keys can call `GET /v1/models` to retrieve an end-user-safe
+model list and `GET /v1/client/session` to retrieve the current client's auth
+method, chat capabilities, and usable model list. These routes intentionally
+avoid admin/runtime details from `/lm-api/v1/models`.
+
 ## Core Endpoints
 
 - `GET /health`
+- `GET /client-discovery`
 - `GET /models`
 - `GET /models/profiles`
 - `POST /models/profiles/activate`
@@ -83,6 +129,8 @@ for each key: last used time, endpoint, route, node, model, and request type.
 - `POST /chat/{name}`
 - `POST /chat/{name}/stream`
 - `POST /v1/chat/completions`
+- `GET /v1/models`
+- `GET /v1/client/session`
 - `POST /api/chat`
 - `GET /chat/capabilities/{name}`
 - `POST /chat/{name}/inspect`

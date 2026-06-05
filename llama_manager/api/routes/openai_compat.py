@@ -60,6 +60,24 @@ class OpenAIChatCompletionsRequest(BaseModel):
     tool_choice: dict[str, Any] | str | None = None
 
 
+@router.get("/models")
+async def openai_models(request: Request):
+    return {"object": "list", "data": _client_safe_models(request)}
+
+
+@router.get("/client/session")
+async def openai_client_session(request: Request):
+    return {
+        "auth": _client_auth_payload(request),
+        "capabilities": {
+            "openaiChatCompletions": True,
+            "streaming": True,
+            "serverHistory": False,
+        },
+        "models": _client_safe_models(request),
+    }
+
+
 @router.post("/chat/completions")
 async def openai_chat_completions(
     body: OpenAIChatCompletionsRequest,
@@ -195,3 +213,40 @@ async def _agent_tool_detection_stream(stream: AsyncIterator[bytes]) -> AsyncIte
                 yield b"data: [DONE]\n\n"
                 return
         yield chunk
+
+
+def _client_auth_payload(request: Request) -> dict[str, str]:
+    role = getattr(request.state, "ui_role", "")
+    username = getattr(request.state, "ui_user", "")
+    if role == "external":
+        return {"method": "external_key", "role": role, "username": username}
+    if role:
+        return {"method": "ui_session", "role": role, "username": username}
+    return {"method": "none", "role": "", "username": ""}
+
+
+def _client_safe_models(request: Request) -> list[dict[str, Any]]:
+    config = request.app.state.config
+    models: dict[str, set[str]] = {}
+    if config.mode == "controller":
+        for node in config.nodes.values():
+            if node.default_model:
+                models.setdefault(node.default_model, set())
+            for request_type, route in node.request_types.items():
+                if route.model:
+                    models.setdefault(route.model, set()).add(request_type)
+    else:
+        for status in request.app.state.process_manager.list_statuses():
+            name = str(status.get("name") or "")
+            if name:
+                models.setdefault(name, set())
+
+    return [
+        {
+            "id": model_id,
+            "object": "model",
+            "owned_by": "neuraxis",
+            "metadata": {"request_types": sorted(request_types)},
+        }
+        for model_id, request_types in sorted(models.items())
+    ]

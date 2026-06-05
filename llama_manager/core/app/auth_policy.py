@@ -4,6 +4,8 @@ LM_API_PREFIX = "/lm-api/v1"
 
 
 def should_bypass_middleware(path: str, method: str) -> bool:
+    if method == "OPTIONS":
+        return True
     if path.startswith("/ui") or path in {"/", "/favicon.ico"}:
         return True
     if method == "GET" and path.startswith("/plugin-assets/"):
@@ -11,6 +13,8 @@ def should_bypass_middleware(path: str, method: str) -> bool:
     if path == f"{LM_API_PREFIX}/setup/status" and method == "GET":
         return True
     if path == f"{LM_API_PREFIX}/setup/bootstrap-admin" and method == "POST":
+        return True
+    if path == f"{LM_API_PREFIX}/client-discovery" and method == "GET":
         return True
     if path == f"{LM_API_PREFIX}/test-chat/bootstrap":
         return True

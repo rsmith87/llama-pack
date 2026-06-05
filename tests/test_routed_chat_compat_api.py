@@ -204,6 +204,41 @@ def test_external_app_key_can_call_consumer_chat_apis_but_not_admin_routes(tmp_p
     assert client.get("/lm-api/v1/nodes").status_code == 403
 
 
+def test_external_app_key_can_list_client_safe_models(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    raw_key = app.state.auth_store.create_external_key("Home App", "https://home.local")["key"]
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": raw_key})
+
+    response = client.get("/v1/models")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "object": "list",
+        "data": [
+            {"id": "gemma", "object": "model", "owned_by": "neuraxis", "metadata": {"request_types": ["general"]}},
+            {"id": "qwen", "object": "model", "owned_by": "neuraxis", "metadata": {"request_types": ["coding"]}},
+        ],
+    }
+
+
+def test_external_app_key_can_read_client_session_capabilities(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": created["key"]})
+
+    response = client.get("/v1/client/session")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["auth"] == {"method": "external_key", "role": "external", "username": "Home App"}
+    assert payload["capabilities"]["openaiChatCompletions"] is True
+    assert payload["capabilities"]["streaming"] is True
+    assert payload["capabilities"]["serverHistory"] is False
+    assert [model["id"] for model in payload["models"]] == ["gemma", "qwen"]
+
+
 def test_external_app_key_chat_call_writes_safe_audit_metadata(tmp_path):
     app, _, _ = _controller_app(tmp_path)
     created = app.state.auth_store.create_external_key("Docs App", "https://docs.local")

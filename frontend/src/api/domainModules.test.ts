@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { login, logout } from "./auth";
 import { listAuditEvents } from "./audit";
 import { sendChat } from "./chat";
+import { getClientDiscovery } from "./clientDiscovery";
 import { listJobs } from "./controller";
 import { listDownloadHistory, listDownloadRecommendations } from "./downloads";
 import { createEmbeddings } from "./embeddings";
@@ -41,6 +42,7 @@ describe("domain API modules", () => {
     await listAuditEvents();
     await listJobs();
     await getSetupStatus();
+    await getClientDiscovery();
 
     expect(fetch).toHaveBeenNthCalledWith(1, "/lm-api/v1/health", expect.objectContaining({ method: "GET" }));
     expect(fetch).toHaveBeenNthCalledWith(2, "/lm-api/v1/models", expect.objectContaining({ method: "GET" }));
@@ -52,6 +54,7 @@ describe("domain API modules", () => {
     expect(fetch).toHaveBeenNthCalledWith(8, "/lm-api/v1/audit/events", expect.objectContaining({ method: "GET" }));
     expect(fetch).toHaveBeenNthCalledWith(9, "/lm-api/v1/jobs", expect.objectContaining({ method: "GET" }));
     expect(fetch).toHaveBeenNthCalledWith(10, "/lm-api/v1/setup/status", expect.objectContaining({ method: "GET" }));
+    expect(fetch).toHaveBeenNthCalledWith(11, "/lm-api/v1/client-discovery", expect.objectContaining({ method: "GET" }));
   });
 
   it("wraps mutation endpoints with JSON POST calls", async () => {

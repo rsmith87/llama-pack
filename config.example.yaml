@@ -46,6 +46,10 @@ agent_worker_capacity: {}
 # Multi-agent fanout routing (controller mode only):
 # routing_fanout_enabled: false
 # routing_fanout_max: 2
+# Browser-based external clients can be allowed explicitly. Leave empty unless
+# a web app on another origin needs to call Neuraxis directly.
+# client_cors_origins:
+#   - http://localhost:5173
 
 models:
   example-model:
