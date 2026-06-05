@@ -12,6 +12,8 @@ import { LogModal, type LogSelection } from "../LogModal";
 import { Button } from "../ui";
 import { IoRefreshSharp } from "react-icons/io5";
 
+const PLUGIN_NAV_CACHE_KEY = "neuraxis.pluginNavigation";
+
 type AppShellProps = {
   authRefreshKey?: string;
   renderPage: (page: PageDefinition, setPage: (page: PageKey, options?: PageNavigationOptions) => void, refreshKey: number, openLogs: (selection?: Omit<LogSelection, "requestId">) => void) => ReactNode;
@@ -71,7 +73,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
   const [globalControllerUrl, setGlobalControllerUrl] = useState<string | null>(null);
   const [globalControllerReachable, setGlobalControllerReachable] = useState<boolean | null>(null);
   const [globalAgentNodes, setGlobalAgentNodes] = useState<Array<{ name: string; url: string; reachable: boolean }>>([]); 
-  const [enabledPlugins, setEnabledPlugins] = useState<EnabledPlugin[]>([]);
+  const [enabledPlugins, setEnabledPlugins] = useState<EnabledPlugin[]>(() => readCachedPluginNavigation());
   const [pluginStatusIssues, setPluginStatusIssues] = useState<string[]>([]);
   const pluginPages = useMemo(() => enabledPlugins.flatMap((plugin) => pluginPagesForPlugin(plugin)), [enabledPlugins]);
   const visibleSections = useMemo(() => pagesBySectionForMode(globalMode, pluginPages), [globalMode, pluginPages]);
@@ -139,12 +141,13 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 
   useEffect(() => {
     function onPopState() {
-      setActivePage(pageForPath(window.location.pathname, pluginPages));
+      const page = pageForPath(window.location.pathname, pluginPages);
+      setActivePage(page.key === "dashboard" ? pageForPathOrPluginPlaceholder(window.location.pathname) : page);
       setNavOpen(false);
     }
     window.addEventListener("popstate", onPopState);
     return () => window.removeEventListener("popstate", onPopState);
-  }, []);
+  }, [pluginPages]);
 
   useEffect(() => {
     document.body.classList.toggle("nav-open", navOpen);
@@ -157,21 +160,19 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 
   useEffect(() => {
     let alive = true;
-    void getEnabledPlugins()
-      .then((plugins) => {
+    void Promise.allSettled([getEnabledPlugins(), getPluginStatus()])
+      .then(([enabledResult, statusResult]) => {
         if (!alive) return;
-        setEnabledPlugins(Array.isArray(plugins) ? plugins : []);
-      })
-      .catch(() => {
-        // Preserve the last known plugin navigation on transient auth/network failures.
-      });
-    void getPluginStatus()
-      .then((status) => {
-        if (!alive) return;
-        setPluginStatusIssues(pluginStatusIssuesFromPayload(status));
-      })
-      .catch(() => {
-        if (alive) setPluginStatusIssues([]);
+        const status = statusResult.status === "fulfilled" ? statusResult.value : null;
+        const enabled = enabledResult.status === "fulfilled" && Array.isArray(enabledResult.value) ? enabledResult.value : null;
+        if (enabled && enabled.length > 0) {
+          writeCachedPluginNavigation(enabled);
+          setEnabledPlugins(enabled);
+        } else if (enabled && pluginStatusExplicitlyEmpty(status)) {
+          writeCachedPluginNavigation([]);
+          setEnabledPlugins([]);
+        }
+        setPluginStatusIssues(statusResult.status === "fulfilled" ? pluginStatusIssuesFromPayload(statusResult.value) : []);
       });
     return () => {
       alive = false;
@@ -390,6 +391,39 @@ function pageForPathOrPluginPlaceholder(pathname: string): PageDefinition {
     [],
     { hideFromPrimary: true },
   );
+}
+
+function readCachedPluginNavigation(): EnabledPlugin[] {
+  try {
+    const raw = window.localStorage.getItem(PLUGIN_NAV_CACHE_KEY);
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed.filter(isEnabledPluginLike) : [];
+  } catch {
+    return [];
+  }
+}
+
+function writeCachedPluginNavigation(plugins: EnabledPlugin[]): void {
+  try {
+    if (plugins.length === 0) {
+      window.localStorage.removeItem(PLUGIN_NAV_CACHE_KEY);
+    } else {
+      window.localStorage.setItem(PLUGIN_NAV_CACHE_KEY, JSON.stringify(plugins));
+    }
+  } catch {
+    // Plugin navigation cache is a convenience fallback only.
+  }
+}
+
+function isEnabledPluginLike(value: unknown): value is EnabledPlugin {
+  if (!value || typeof value !== "object") return false;
+  const plugin = value as { id?: unknown; name?: unknown; version?: unknown; status?: unknown };
+  return typeof plugin.id === "string" && typeof plugin.name === "string" && typeof plugin.version === "string" && plugin.status === "enabled";
+}
+
+function pluginStatusExplicitlyEmpty(status: PluginStatus | null): boolean {
+  const plugins = Array.isArray(status?.plugins) ? status.plugins : [];
+  return plugins.length > 0 && plugins.every((plugin) => plugin.status !== "enabled");
 }
 
 export function pluginStatusIssuesFromPayload(status: PluginStatus | null | undefined): string[] {
