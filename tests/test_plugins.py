@@ -132,7 +132,11 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert "export function mount" in asset_response.text
     assert "host.pluginId" in asset_response.text
     migration_status = client.get("/lm-api/v1/plugins/hello_plugin/migrations/status").json()
-    assert migration_status["targets"][0]["status"] == "current"
+    target = migration_status["targets"][0]
+    assert target["id"] == "main"
+    assert target["database_name"] == "main"
+    assert target["database_path"].endswith("/logs/plugins/hello_plugin/state/hello_plugin.db")
+    assert target["status"] == "current"
 
 
 def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
@@ -458,6 +462,65 @@ def test_plugin_health_check_failure_is_reported_without_crashing_status(tmp_pat
     assert "health boom" in status["errors"]
 
 
+def test_plugin_context_provides_isolated_database_handle(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "database_plugin",
+        body="""
+        from fastapi import APIRouter
+
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                router = APIRouter()
+
+                @router.get("/db")
+                async def db():
+                    return {
+                        "name": database.name,
+                        "path": str(database.path),
+                        "url": database.url,
+                        "exists": database.path.exists(),
+                    }
+
+                context.add_api_router(router)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    payload = client.get("/lm-api/v1/plugins/database_plugin/db").json()
+
+    assert payload["name"] == "main"
+    assert payload["path"].endswith("/logs/plugins/database_plugin/state/database_plugin.db")
+    assert payload["url"].startswith("sqlite+pysqlite:///")
+    assert payload["url"].endswith("/logs/plugins/database_plugin/state/database_plugin.db")
+    assert payload["exists"] is False
+
+
+def test_plugin_context_rejects_unsafe_database_names(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "bad_database_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                context.get_database("../core")
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+
+    assert status["status"] == "failed"
+    assert "Invalid plugin database name" in status["errors"][0]
+
+
 def test_plugin_migration_target_status_endpoint_reports_registered_target(tmp_path: Path):
     plugin_dir = write_plugin(
         tmp_path,
@@ -482,20 +545,171 @@ def test_plugin_migration_target_status_endpoint_reports_registered_target(tmp_p
     response = client.get("/lm-api/v1/plugins/migration_plugin/migrations/status")
 
     assert response.status_code == 200
-    assert response.json() == {
+    payload = response.json()
+    assert payload == {
         "plugin_id": "migration_plugin",
         "targets": [
             {
                 "id": "migration_plugin",
                 "directory": "migrations",
+                "database_name": None,
+                "database_path": None,
                 "database_url": "sqlite:///plugin.db",
                 "current_revision": "001_initial",
                 "head_revision": "001_initial",
                 "status": "current",
                 "pending": False,
+                "last_error": payload["targets"][0]["last_error"],
             }
         ],
     }
+    assert payload["targets"][0]["last_error"]
+
+
+def test_plugin_migration_target_accepts_plugin_database_handle(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "database_migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("analytics")
+                context.add_migration_target(
+                    "analytics",
+                    directory="migrations/analytics",
+                    database=database,
+                    current_revision="001_initial",
+                    head_revision="001_initial",
+                )
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    target = client.get("/lm-api/v1/plugins/database_migration_plugin/migrations/status").json()["targets"][0]
+
+    assert target["id"] == "analytics"
+    assert target["database_name"] == "analytics"
+    assert target["database_path"].endswith("/logs/plugins/database_migration_plugin/state/analytics.db")
+    assert target["database_url"].endswith("/logs/plugins/database_migration_plugin/state/analytics.db")
+    assert target["status"] == "current"
+
+
+def test_plugin_migration_status_refreshes_from_alembic_database(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "refresh_migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                context.add_migration_target(
+                    "main",
+                    directory="migrations/main",
+                    database=database,
+                )
+
+        plugin = Plugin()
+        """,
+    )
+    migrations_dir = plugin_dir / "migrations" / "main"
+    migrations_dir.mkdir(parents=True)
+    (migrations_dir / "abc123_initial.py").write_text(
+        '''
+revision = "abc123"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    op.create_table("sample_rows", sa.Column("id", sa.Integer(), primary_key=True))
+
+def downgrade():
+    op.drop_table("sample_rows")
+''',
+        encoding="utf-8",
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    target = client.get("/lm-api/v1/plugins/refresh_migration_plugin/migrations/status").json()["targets"][0]
+
+    assert target["current_revision"] is None
+    assert target["head_revision"] == "abc123"
+    assert target["status"] == "missing"
+
+
+def test_plugin_migration_upgrade_endpoint_runs_selected_target(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "upgrade_migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                context.add_migration_target("main", directory="migrations/main", database=database)
+
+        plugin = Plugin()
+        """,
+    )
+    migrations_dir = plugin_dir / "migrations" / "main"
+    migrations_dir.mkdir(parents=True)
+    (migrations_dir / "001_initial.py").write_text(
+        '''
+revision = "001"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    op.create_table("sample_rows", sa.Column("id", sa.Integer(), primary_key=True))
+
+def downgrade():
+    op.drop_table("sample_rows")
+''',
+        encoding="utf-8",
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.post("/lm-api/v1/plugins/upgrade_migration_plugin/migrations/main/upgrade")
+
+    assert response.status_code == 200
+    target = response.json()["target"]
+    assert target["current_revision"] == "001"
+    assert target["head_revision"] == "001"
+    assert target["status"] == "current"
+    assert target["pending"] is False
+    assert target["last_error"] is None
+
+
+def test_plugin_migration_upgrade_endpoint_returns_404_for_unknown_target(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "unknown_target_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                context.add_migration_target("main", directory="migrations/main", database=database)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.post("/lm-api/v1/plugins/unknown_target_plugin/migrations/missing/upgrade")
+
+    assert response.status_code == 404
 
 
 def test_pending_plugin_migration_target_produces_status_health_warning(tmp_path: Path):

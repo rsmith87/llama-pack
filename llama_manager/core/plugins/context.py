@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import APIRouter
 
+from llama_manager.core.plugins.databases import PluginDatabase, resolve_plugin_database
 from llama_manager.core.plugins.events import EventEnvelope
 from llama_manager.core.plugins.migrations import PluginMigrationTarget, normalize_migration_directory
 from llama_manager.core.plugins.registry import PluginRecord, PluginRegistry
@@ -25,6 +26,10 @@ class PluginContext:
         for calling ``mkdir(parents=True, exist_ok=True)`` before writing to it.
         """
         return self._state_dir
+
+    def get_database(self, name: str = "main") -> PluginDatabase:
+        """Return a plugin-owned SQLite database handle inside the state directory."""
+        return resolve_plugin_database(self.record.id, self._state_dir, name)
 
     def add_api_router(self, router: APIRouter, *, prefix: str | None = None) -> None:
         resolved = prefix or f"/{self.record.id}"
@@ -54,6 +59,7 @@ class PluginContext:
         target_id: str,
         *,
         directory: str | Path,
+        database: PluginDatabase | None = None,
         database_url: str | None = None,
         current_revision: str | None = None,
         head_revision: str | None = None,
@@ -61,11 +67,16 @@ class PluginContext:
     ) -> None:
         if any(target.id == target_id for target in self.record.migration_targets):
             raise ValueError(f"Plugin migration target collision: {target_id}")
+        resolved_database_url = database.url if database else database_url
+        database_name = database.name if database else None
+        database_path = database.path if database else None
         self.record.migration_targets.append(
             PluginMigrationTarget(
                 id=target_id,
                 directory=normalize_migration_directory(directory),
-                database_url=database_url,
+                database_name=database_name,
+                database_path=database_path,
+                database_url=resolved_database_url,
                 current_revision=current_revision,
                 head_revision=head_revision,
                 runner=runner,

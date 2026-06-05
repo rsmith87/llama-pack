@@ -99,9 +99,14 @@ Plugins can register migration metadata with
 `PluginContext.add_migration_target()`. Core exposes the registered targets at
 `/lm-api/v1/plugins/{plugin_id}/migrations/status` and adds health warnings for
 missing or pending plugin migrations. Core does not run plugin migrations during
-startup; migration execution remains an explicit future command/workflow.
+startup; migration execution is explicit through the plugin migration API.
+Plugin-owned data should live in separate plugin databases under each plugin's
+state directory. Core provides the database location and migration lifecycle
+contract, but it does not import plugin models or mix plugin tables into core
+databases.
 
-For plugin authoring details, see [Plugin Author Guide](plugins.md).
+For plugin authoring details, see [Plugin Author Guide](plugins.md). For the
+plugin database boundary, see [Plugin Database Contract](plugin-databases.md).
 
 ## Review Heuristics
 

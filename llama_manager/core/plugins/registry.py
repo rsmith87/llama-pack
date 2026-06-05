@@ -33,6 +33,7 @@ class PluginRecord:
     secondary_navigation: list[dict[str, Any]] = field(default_factory=list)
     ui_routes: list[dict[str, Any]] = field(default_factory=list)
     static_dir: Path | None = None
+    root: Path | None = None
 
 
 class PluginRegistry:
@@ -166,16 +167,29 @@ class PluginRegistry:
         record = self.records.get(plugin_id)
         if record is None or record.status != "enabled":
             return None
+        for target in record.migration_targets:
+            target.refresh_status(plugin_root=record.root)
         return {
             "plugin_id": plugin_id,
             "targets": [target.payload() for target in record.migration_targets],
         }
+
+    def upgrade_migration_target(self, plugin_id: str, target_id: str) -> dict[str, Any] | None:
+        record = self.records.get(plugin_id)
+        if record is None or record.status != "enabled":
+            return None
+        for target in record.migration_targets:
+            if target.id == target_id:
+                target.upgrade(plugin_root=record.root)
+                return {"plugin_id": plugin_id, "target": target.payload()}
+        return None
 
     def _migration_health(self, record: PluginRecord) -> list[dict[str, str]]:
         if record.status != "enabled":
             return []
         health: list[dict[str, str]] = []
         for target in record.migration_targets:
+            target.refresh_status(plugin_root=record.root)
             warning = target.health_warning()
             if warning:
                 health.append({"level": "warning", "message": warning})

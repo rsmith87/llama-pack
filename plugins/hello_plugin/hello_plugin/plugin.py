@@ -33,9 +33,11 @@ class HelloPlugin:
         context.subscribe("neuraxis.plugin.loaded", record_event)
         context.add_policy_hook("neuraxis.chat_admission", chat_admission)
         context.add_health_check(health_check)
+        database = context.get_database("main")
         context.add_migration_target(
-            "hello_plugin",
+            "main",
             directory="hello_plugin/migrations",
+            database=database,
             current_revision="001_hello",
             head_revision="001_hello",
         )

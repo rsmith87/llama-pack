@@ -2,12 +2,12 @@
 
 Neuraxis plugins are trusted local Python packages loaded from configured
 filesystem paths. The initial plugin runtime is intentionally local-path only:
-there is no Python package entrypoint discovery, sandboxed execution, remote
-frontend JavaScript, or automatic plugin migration execution yet.
+there is no Python package entrypoint discovery, sandboxed execution, or remote
+frontend JavaScript.
 
 Use the checked-in `plugins/hello_plugin/` as the reference sample. Paid or
-private plugins, such as a future `neuraxis_business` plugin, should live
-outside this repository and be loaded from configured local paths.
+private plugins, including the private `neuraxis_business` add-on, live outside
+this repository and are loaded from configured local paths.
 
 ## Enable A Plugin
 
@@ -147,7 +147,10 @@ Available `PluginContext` methods:
 - `add_policy_hook(hook_name, handler)`: registers a policy hook.
 - `add_health_check(handler)`: registers a dynamic health check for
   `/lm-api/v1/plugins/status`.
-- `add_migration_target(...)`: registers read-only migration metadata.
+- `get_database(name="main")`: returns a plugin-owned SQLite database handle
+  rooted under `{log_dir}/plugins/{plugin_id}/state/`.
+- `add_migration_target(...)`: registers plugin migration metadata and optional
+  explicit migration execution for a plugin-owned database.
 - `get_plugin_config()`: returns the plugin's configured config values.
 - `get_state_dir()`: returns a `Path` for the plugin's private persistent state
   directory (`{log_dir}/plugins/{plugin_id}/state/`). The directory is **not**
@@ -221,24 +224,30 @@ Exceptions are caught and reported as health errors.
 Plugins can register migration targets for visibility:
 
 ```python
+database = context.get_database("main")
 context.add_migration_target(
-    "usage",
-    directory="migrations/usage",
-    database_url="sqlite:///usage.db",
-    current_revision="001_initial",
-    head_revision="002_usage",
+    "main",
+    directory="hello_plugin/migrations",
+    database=database,
 )
 ```
 
 Core reports those targets at:
 
 ```text
-GET /lm-api/v1/plugins/{plugin_id}/migrations/status
+GET  /lm-api/v1/plugins/{plugin_id}/migrations/status
+POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade
 ```
 
 Pending or missing migrations are also surfaced as warnings in
-`/lm-api/v1/plugins/status`. Core does not run plugin migrations during startup.
-Execution commands/workflows are deferred.
+`/lm-api/v1/plugins/status`. Core does not run plugin migrations during startup;
+migration execution is explicit through the plugin migration API.
+
+Plugins that need durable data should use plugin-owned databases under their
+private state directory, with plugin-owned schemas and migrations. Core provides
+the storage location and migration lifecycle contract, but does not import
+plugin models or place plugin tables in core databases. See
+[Plugin Database Contract](plugin-databases.md).
 
 ## Frontend Metadata
 
@@ -378,7 +387,8 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
 
 Paid or private plugins should be tracked in separate private repositories.
 Keep this repository focused on the core runtime, public extension contracts,
-and the minimal `hello_plugin` sample.
+and the minimal `hello_plugin` sample. The `neuraxis_business` add-on is a paid
+private plugin and should not become a core runtime dependency.
 
 Recommended local development setup:
 
@@ -394,10 +404,11 @@ plugins:
       organization_name: Acme
 ```
 
-That private plugin can still use the same manifest schema, backend extension
-API, frontend metadata contract, health checks, and migration metadata described
-above. It should carry its own tests and CI, while this repository keeps
-fixture-based coverage for the generic plugin runtime.
+That private plugin uses the same manifest schema, backend extension API,
+frontend metadata contract, health checks, and migration metadata described
+above. It should carry its own implementation tests and CI, while this
+repository keeps fixture-based coverage for the generic plugin runtime and the
+public `hello_plugin` sample.
 
 ## Deferred Work
 

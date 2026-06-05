@@ -17,6 +17,8 @@ tests/tmp
 docs/complete
 docs/superpowers
 docs/todo
+!docs/todo/
+!docs/todo/plugin-database-contract-implementation-plan.md
 llamacpp_handler.egg-info
 .env
 .neuraxis_agent.pid

@@ -44,6 +44,7 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         if manifest.id != plugin_id:
             raise ValueError(f"Manifest id {manifest.id!r} does not match configured plugin id {plugin_id!r}")
         record = PluginRecord(manifest.id, manifest.name, manifest.version, "loading", manifest=manifest)
+        record.root = path
         if manifest.config_schema:
             record.config = manifest.config_schema.redact(plugin_config)
         record.navigation.extend(manifest.navigation)

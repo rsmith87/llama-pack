@@ -51,6 +51,17 @@ async def plugin_migration_status(plugin_id: str, request: Request):
     return payload
 
 
+@router.post("/{plugin_id}/migrations/{target_id}/upgrade")
+async def plugin_migration_upgrade(plugin_id: str, target_id: str, request: Request):
+    try:
+        payload = request.app.state.plugin_registry.upgrade_migration_target(plugin_id, target_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if payload is None:
+        raise HTTPException(status_code=404, detail="Not Found")
+    return payload
+
+
 @assets_router.get("/plugin-assets/{plugin_id}/{asset_path:path}", include_in_schema=False)
 async def plugin_asset(plugin_id: str, asset_path: str, request: Request):
     record = request.app.state.plugin_registry.records.get(plugin_id)

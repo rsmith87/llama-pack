@@ -193,24 +193,24 @@ config_schema:
 Plugins can also register migration metadata during `register()`:
 
 ```python
+database = context.get_database("main")
 context.add_migration_target(
-    "usage",
-    directory="migrations/usage",
-    database_url="sqlite:///usage.db",
-    current_revision="001_initial",
-    head_revision="002_usage",
+    "main",
+    directory="hello_plugin/migrations",
+    database=database,
 )
 ```
 
 Core reports those targets through:
 
 ```text
-GET /lm-api/v1/plugins/{plugin_id}/migrations/status
+GET  /lm-api/v1/plugins/{plugin_id}/migrations/status
+POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade
 ```
 
 Pending or missing plugin migrations appear as warnings in
-`/lm-api/v1/plugins/status`. Core records this metadata only; it does not
-auto-run plugin migrations during startup.
+`/lm-api/v1/plugins/status`. Core does not run plugin migrations during startup;
+migration execution is explicit through the plugin migration API.
 
 For the full manifest and extension API reference, see
 [Plugin Author Guide](plugins.md).
