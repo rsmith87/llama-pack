@@ -737,7 +737,7 @@ cd /Users/robertsmith/Apps/neuraxis && scripts/renew_caddy_step_cert.sh \
   --key ~/neuraxis-certs/mac-mini.key \
   --intermediate ~/neuraxis-certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/ca-root.crt \
+  --root ~/neuraxis-certs/root_ca.crt \
   --cert-dir /opt/homebrew/etc/caddy/certs \
   --owner robertsmith \
   --group staff \
@@ -754,7 +754,7 @@ scripts/renew_caddy_step_cert.sh \
   --key ~/neuraxis-certs/pi-controller.key \
   --intermediate ~/neuraxis-certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/ca-root.crt \
+  --root ~/neuraxis-certs/root_ca.crt \
   --cert-dir /etc/caddy/certs \
   --expires-in 24h \
   --reload systemd \
@@ -769,7 +769,7 @@ scripts/renew_caddy_step_cert.sh \
   --key ~/neuraxis-certs/linux-2080ti.key \
   --intermediate ~/neuraxis-certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/ca-root.crt \
+  --root ~/neuraxis-certs/root_ca.crt \
   --cert-dir /etc/caddy/certs \
   --expires-in 24h \
   --reload systemd \
