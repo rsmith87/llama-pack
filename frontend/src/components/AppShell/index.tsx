@@ -162,7 +162,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
         setEnabledPlugins(Array.isArray(plugins) ? plugins : []);
       })
       .catch(() => {
-        if (alive) setEnabledPlugins([]);
+        // Preserve the last known plugin navigation on transient auth/network failures.
       });
     void getPluginStatus()
       .then((status) => {

@@ -2,7 +2,9 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import App from "../App";
-import { pluginPagesForPlugin, pluginStatusIssuesFromPayload } from "./AppShell";
+import { AuthSessionProvider } from "../features/auth/authSession";
+import { ThemeProvider } from "../features/theme/themeSession";
+import { AppShell, pluginPagesForPlugin, pluginStatusIssuesFromPayload } from "./AppShell";
 
 afterEach(() => {
   localStorage.clear();
@@ -217,6 +219,55 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
   expect(await screen.findByRole("button", { name: "Business" })).toHaveClass("active");
   expect(screen.getByRole("heading", { name: "Business" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/ui/plugins/neuraxis_business");
+});
+
+it("preserves plugin navigation when a metadata refresh fails", async () => {
+  let enabledCalls = 0;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled") {
+        enabledCalls += 1;
+        if (enabledCalls > 1) {
+          return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
+        }
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "neuraxis_business",
+              name: "Business",
+              version: "1.0",
+              status: "enabled",
+              frontend: { entry: null, style: null },
+              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              secondary_navigation: [],
+              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+            },
+          ]),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+  const renderPage = (page: { label: string }) => <h2>{page.label}</h2>;
+  const renderShell = (authRefreshKey: string) => (
+    <ThemeProvider>
+      <AuthSessionProvider>
+        <AppShell authRefreshKey={authRefreshKey} renderPage={renderPage} />
+      </AuthSessionProvider>
+    </ThemeProvider>
+  );
+  const { rerender } = render(renderShell("session-1"));
+
+  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+
+  rerender(renderShell("session-2"));
+
+  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
 });
 
 it("shows plugin status failures and warnings in the shell", async () => {
