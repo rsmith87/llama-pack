@@ -57,7 +57,7 @@ function MenuIcon({ icon }: { icon: PageIcon | "logs" | "menu" | "close" }) {
 }
 
 export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
-  const initialPage = pageForPath(window.location.pathname);
+  const initialPage = pageForPathOrPluginPlaceholder(window.location.pathname);
   const [activePage, setActivePage] = useState<PageDefinition>(() => initialPage);
   const [setupStatusPending, setSetupStatusPending] = useState(initialPage.key === "dashboard");
   const [logsOpen, setLogsOpen] = useState(false);
@@ -200,17 +200,22 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 
   useEffect(() => {
     if (globalMode && !visiblePages.some((page) => page.key === activePage.key)) {
+      if (activePage.pluginId) return;
       if (activePage.key !== "dashboard") navigate("dashboard");
     }
   }, [activePage.key, globalMode, visiblePages]);
 
   useEffect(() => {
-    if (activePage.pluginId) return;
     const pluginPage = pageForPath(window.location.pathname, pluginPages);
-    if (pluginPage.pluginId) {
+    if (pluginPage.pluginId && (
+      pluginPage.key !== activePage.key
+      || pluginPage.label !== activePage.label
+      || pluginPage.pluginName !== activePage.pluginName
+      || pluginPage.secondaryNavigation !== activePage.secondaryNavigation
+    )) {
       setActivePage(pluginPage);
     }
-  }, [activePage.pluginId, pluginPages]);
+  }, [activePage.key, pluginPages]);
 
   return (
     <AppModeProvider appMode={globalMode}>
@@ -363,6 +368,22 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
 }
 
 export type { PageKey };
+
+function pageForPathOrPluginPlaceholder(pathname: string): PageDefinition {
+  const page = pageForPath(pathname);
+  if (page.key !== "dashboard" || !pathname.startsWith("/ui/plugins/")) {
+    return page;
+  }
+  const pluginId = pathname.slice("/ui/plugins/".length).split("/")[0];
+  if (!pluginId) return page;
+  return pluginPage(
+    { id: pluginId, name: "Plugin", version: "", status: "enabled" },
+    pathname,
+    "Plugin",
+    [],
+    { hideFromPrimary: true },
+  );
+}
 
 export function pluginStatusIssuesFromPayload(status: PluginStatus | null | undefined): string[] {
   const plugins = Array.isArray(status?.plugins) ? status.plugins : [];

@@ -183,6 +183,42 @@ it("renders enabled plugin navigation and a generic hosted route", async () => {
   expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("button", { name: "Settings" })).toBeInTheDocument();
 });
 
+it("keeps a refreshed plugin URL on the plugin page after metadata loads", async () => {
+  window.history.pushState({}, "", "/ui/plugins/neuraxis_business");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "neuraxis_business",
+              name: "Business",
+              version: "1.0",
+              status: "enabled",
+              frontend: { entry: null, style: null },
+              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              secondary_navigation: [],
+              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+            },
+          ]),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+
+  render(<App />);
+
+  expect(await screen.findByRole("button", { name: "Business" })).toHaveClass("active");
+  expect(screen.getByRole("heading", { name: "Business" })).toBeInTheDocument();
+  expect(window.location.pathname).toBe("/ui/plugins/neuraxis_business");
+});
+
 it("shows plugin status failures and warnings in the shell", async () => {
   vi.stubGlobal(
     "fetch",
