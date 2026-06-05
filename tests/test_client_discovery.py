@@ -30,6 +30,7 @@ def test_client_discovery_is_public_without_auth_keys(tmp_path: Path):
     assert payload["endpoints"]["openaiChatCompletions"] == "/v1/chat/completions"
     assert payload["endpoints"]["openaiModels"] == "/v1/models"
     assert payload["endpoints"]["clientSession"] == "/v1/client/session"
+    assert payload["endpoints"]["clientChatDiagnostics"] == "/v1/client/diagnostics/chat"
     assert payload["endpoints"]["models"] == "/lm-api/v1/models"
     assert payload["endpoints"]["pluginsStatus"] == "/lm-api/v1/plugins/status"
     assert payload["endpoints"]["docs"] == "/ui/docs"

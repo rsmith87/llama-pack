@@ -216,8 +216,34 @@ def test_external_app_key_can_list_client_safe_models(tmp_path):
     assert response.json() == {
         "object": "list",
         "data": [
-            {"id": "gemma", "object": "model", "owned_by": "neuraxis", "metadata": {"request_types": ["general"]}},
-            {"id": "qwen", "object": "model", "owned_by": "neuraxis", "metadata": {"request_types": ["coding"]}},
+            {
+                "id": "gemma",
+                "object": "model",
+                "owned_by": "neuraxis",
+                "metadata": {
+                    "display_label": "gemma",
+                    "request_types": ["general"],
+                    "default_request_type": "general",
+                    "context_identity": "gemma",
+                    "model_family": "gemma",
+                    "context_profile": None,
+                    "capabilities": {"streaming": True, "json_schema": False, "grammar": False, "vision": False},
+                },
+            },
+            {
+                "id": "qwen",
+                "object": "model",
+                "owned_by": "neuraxis",
+                "metadata": {
+                    "display_label": "qwen",
+                    "request_types": ["coding"],
+                    "default_request_type": "coding",
+                    "context_identity": "qwen",
+                    "model_family": "qwen",
+                    "context_profile": None,
+                    "capabilities": {"streaming": True, "json_schema": False, "grammar": False, "vision": False},
+                },
+            },
         ],
     }
 
@@ -237,6 +263,78 @@ def test_external_app_key_can_read_client_session_capabilities(tmp_path):
     assert payload["capabilities"]["streaming"] is True
     assert payload["capabilities"]["serverHistory"] is False
     assert [model["id"] for model in payload["models"]] == ["gemma", "qwen"]
+
+
+def test_external_app_key_can_run_non_streaming_chat_diagnostics(tmp_path):
+    app, calls, _ = _controller_app(tmp_path, chat_responses=["diagnostic ok"])
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/diagnostics/chat",
+        json={"model": "qwen", "request_type": "coding", "stream": False},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["checks"] == {
+        "auth": True,
+        "modelUsable": True,
+        "routeResolved": True,
+        "chat": True,
+        "streaming": None,
+    }
+    assert payload["route"] == {"node": "linux-2080ti", "model": "qwen", "route": "node:linux-2080ti"}
+    assert payload["error"] is None
+    assert calls[0]["model_name"] == "qwen"
+    assert calls[0]["payload"]["messages"] == [{"role": "user", "content": "Neuraxis client diagnostic: reply with ok."}]
+
+
+def test_external_app_key_can_run_streaming_chat_diagnostics(tmp_path):
+    app, _, stream_calls = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/diagnostics/chat",
+        json={"model": "qwen", "request_type": "coding", "stream": True},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["checks"]["chat"] is True
+    assert payload["checks"]["streaming"] is True
+    assert payload["route"] == {"node": "linux-2080ti", "model": "qwen", "route": "node:linux-2080ti"}
+    assert stream_calls[0]["model_name"] == "qwen"
+
+
+def test_chat_diagnostics_reports_route_failure_without_raising(tmp_path):
+    app, _, _ = _controller_app(tmp_path, model_running=False)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/diagnostics/chat",
+        json={"model": "qwen", "request_type": "coding", "stream": False},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["checks"] == {
+        "auth": True,
+        "modelUsable": True,
+        "routeResolved": False,
+        "chat": False,
+        "streaming": None,
+    }
+    assert payload["route"] is None
+    assert "No eligible running model" in payload["error"]["detail"]
 
 
 def test_external_app_key_chat_call_writes_safe_audit_metadata(tmp_path):

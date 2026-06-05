@@ -26,6 +26,7 @@ class ClientEndpointDiscovery(BaseModel):
     openaiChatCompletions: str = "/v1/chat/completions"
     openaiModels: str = "/v1/models"
     clientSession: str = "/v1/client/session"
+    clientChatDiagnostics: str = "/v1/client/diagnostics/chat"
     models: str = "/lm-api/v1/models"
     pluginsStatus: str = "/lm-api/v1/plugins/status"
     docs: str = "/ui/docs"

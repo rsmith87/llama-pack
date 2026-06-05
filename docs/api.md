@@ -96,6 +96,7 @@ Example response:
     "openaiChatCompletions": "/v1/chat/completions",
     "openaiModels": "/v1/models",
     "clientSession": "/v1/client/session",
+    "clientChatDiagnostics": "/v1/client/diagnostics/chat",
     "models": "/lm-api/v1/models",
     "pluginsStatus": "/lm-api/v1/plugins/status",
     "docs": "/ui/docs"
@@ -108,10 +109,57 @@ client login, discovery adds `neuraxis_business` to `auth.methods` and reports a
 `businessAuth` endpoint. Clients should treat absent capability fields as
 unsupported and should prefer `/v1/chat/completions` for end-user chat.
 
-External chat-only keys can call `GET /v1/models` to retrieve an end-user-safe
-model list and `GET /v1/client/session` to retrieve the current client's auth
-method, chat capabilities, and usable model list. These routes intentionally
-avoid admin/runtime details from `/lm-api/v1/models`.
+External chat-only keys can call:
+
+- `GET /v1/models` to retrieve an end-user-safe model list.
+- `GET /v1/client/session` to retrieve the current client's auth method, chat
+  capabilities, and usable model list.
+- `POST /v1/client/diagnostics/chat` to verify auth, route resolution, and
+  non-streaming or streaming chat for setup flows.
+
+These routes intentionally avoid admin/runtime details from `/lm-api/v1/models`.
+For standalone end-user chat apps, prefer external app keys with the
+`X-Llama-Manager-Key` header. Use UI sessions for the built-in operator/admin
+UI. Plugin-provided auth modes should be discovered through client discovery and
+handled by plugin-owned routes.
+
+Example model list response:
+
+```json
+{
+  "object": "list",
+  "data": [
+    {
+      "id": "qwen",
+      "object": "model",
+      "owned_by": "neuraxis",
+      "metadata": {
+        "display_label": "qwen",
+        "request_types": ["coding"],
+        "default_request_type": "coding",
+        "context_identity": "qwen",
+        "model_family": "qwen",
+        "context_profile": null,
+        "capabilities": {
+          "streaming": true,
+          "json_schema": false,
+          "grammar": false,
+          "vision": false
+        }
+      }
+    }
+  ]
+}
+```
+
+Example diagnostics request:
+
+```bash
+curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \
+  -H "Content-Type: application/json" \
+  -H "X-Llama-Manager-Key: $NEURAXIS_EXTERNAL_APP_KEY" \
+  -d '{"model":"qwen","request_type":"coding","stream":false}'
+```
 
 ## Core Endpoints
 
@@ -131,6 +179,7 @@ avoid admin/runtime details from `/lm-api/v1/models`.
 - `POST /v1/chat/completions`
 - `GET /v1/models`
 - `GET /v1/client/session`
+- `POST /v1/client/diagnostics/chat`
 - `POST /api/chat`
 - `GET /chat/capabilities/{name}`
 - `POST /chat/{name}/inspect`

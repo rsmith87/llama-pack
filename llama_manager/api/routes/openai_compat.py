@@ -60,6 +60,14 @@ class OpenAIChatCompletionsRequest(BaseModel):
     tool_choice: dict[str, Any] | str | None = None
 
 
+class ClientChatDiagnosticsRequest(BaseModel):
+    model: str = Field(min_length=1)
+    request_type: str | None = None
+    stream: bool = False
+    message: str = "Neuraxis client diagnostic: reply with ok."
+    target: str = "auto"
+
+
 @router.get("/models")
 async def openai_models(request: Request):
     return {"object": "list", "data": _client_safe_models(request)}
@@ -76,6 +84,82 @@ async def openai_client_session(request: Request):
         },
         "models": _client_safe_models(request),
     }
+
+
+@router.post("/client/diagnostics/chat")
+async def openai_client_chat_diagnostics(
+    body: ClientChatDiagnosticsRequest,
+    request: Request,
+    config: AppConfig = Depends(get_config),
+    scheduler: ChatScheduler = Depends(get_chat_scheduler),
+    manager: ProcessManager = Depends(get_process_manager),
+    thread_service: ThreadService = Depends(get_thread_service),
+):
+    payload: dict[str, Any] = {
+        "messages": [{"role": "user", "content": body.message}],
+        "temperature": 0.0,
+        "max_tokens": 16,
+        "target": body.target,
+    }
+    try:
+        if body.stream:
+            stream, headers = await controller_stream(
+                request=request,
+                config=config,
+                service=thread_service,
+                proxy=scheduler,
+                model=body.model,
+                messages=payload["messages"],
+                payload=payload,
+                thread_id=None,
+                request_type=body.request_type,
+                metadata={"diagnostic": True},
+                target=body.target,
+            )
+            if config.mode != "controller":
+                stream = _track_stream(manager, body.model, stream)
+            async for _chunk in stream:
+                pass
+            return _diagnostic_payload(body, headers, chat_ok=True, streaming_ok=True)
+
+        response, headers = await controller_chat(
+            request=request,
+            config=config,
+            service=thread_service,
+            proxy=scheduler,
+            model=body.model,
+            messages=payload["messages"],
+            payload=payload,
+            thread_id=None,
+            request_type=body.request_type,
+            metadata={"diagnostic": True},
+            target=body.target,
+        )
+        return _diagnostic_payload(body, headers, chat_ok=bool(response), streaming_ok=None)
+    except CompatChatHTTPError as exc:
+        return _diagnostic_payload(
+            body,
+            exc.headers,
+            chat_ok=False,
+            streaming_ok=False if body.stream else None,
+            error={"status": exc.status_code, "detail": exc.detail},
+        )
+    except ChatAdmissionError as exc:
+        return _diagnostic_payload(
+            body,
+            {},
+            chat_ok=False,
+            streaming_ok=False if body.stream else None,
+            error={"status": exc.status_code, "detail": str(exc)},
+        )
+    except Exception as exc:
+        return _diagnostic_payload(
+            body,
+            {},
+            chat_ok=False,
+            streaming_ok=False if body.stream else None,
+            error={"status": 502, "detail": str(exc)},
+        )
 
 
 @router.post("/chat/completions")
@@ -227,26 +311,121 @@ def _client_auth_payload(request: Request) -> dict[str, str]:
 
 def _client_safe_models(request: Request) -> list[dict[str, Any]]:
     config = request.app.state.config
-    models: dict[str, set[str]] = {}
+    models: dict[str, dict[str, Any]] = {}
     if config.mode == "controller":
         for node in config.nodes.values():
             if node.default_model:
-                models.setdefault(node.default_model, set())
+                _ensure_client_model(models, node.default_model)
             for request_type, route in node.request_types.items():
                 if route.model:
-                    models.setdefault(route.model, set()).add(request_type)
+                    _ensure_client_model(models, route.model)["request_types"].add(request_type)
     else:
         for status in request.app.state.process_manager.list_statuses():
             name = str(status.get("name") or "")
             if name:
-                models.setdefault(name, set())
+                entry = _ensure_client_model(models, name)
+                entry["capabilities"] = {
+                    "streaming": True,
+                    "json_schema": bool(status.get("supports_json_schema")),
+                    "grammar": bool(status.get("supports_grammar")),
+                    "vision": bool(status.get("vision")),
+                }
 
     return [
         {
             "id": model_id,
             "object": "model",
             "owned_by": "neuraxis",
-            "metadata": {"request_types": sorted(request_types)},
+            "metadata": _client_model_metadata(model_id, values),
         }
-        for model_id, request_types in sorted(models.items())
+        for model_id, values in sorted(models.items())
     ]
+
+
+def _ensure_client_model(models: dict[str, dict[str, Any]], model_id: str) -> dict[str, Any]:
+    if model_id not in models:
+        models[model_id] = {
+            "request_types": set(),
+            "capabilities": {"streaming": True, "json_schema": False, "grammar": False, "vision": False},
+        }
+    return models[model_id]
+
+
+def _client_model_metadata(model_id: str, values: dict[str, Any]) -> dict[str, Any]:
+    request_types = sorted(values.get("request_types") or [])
+    family, profile = _split_context_identity(model_id)
+    return {
+        "display_label": model_id,
+        "request_types": request_types,
+        "default_request_type": request_types[0] if request_types else None,
+        "context_identity": model_id,
+        "model_family": family,
+        "context_profile": profile,
+        "capabilities": dict(values.get("capabilities") or {}),
+    }
+
+
+def _split_context_identity(model_id: str) -> tuple[str, str | None]:
+    family, separator, profile = model_id.partition(":")
+    if not separator:
+        return model_id, None
+    return family, profile
+
+
+def _diagnostic_payload(
+    body: ClientChatDiagnosticsRequest,
+    headers: dict[str, str],
+    *,
+    chat_ok: bool,
+    streaming_ok: bool | None,
+    error: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    route = _diagnostic_route(headers)
+    route_resolved = route is not None
+    checks = {
+        "auth": True,
+        "modelUsable": _diagnostic_model_usable(body, route, error),
+        "routeResolved": route_resolved,
+        "chat": chat_ok,
+        "streaming": streaming_ok,
+    }
+    return {
+        "ok": all(value is not False for value in checks.values()),
+        "model": body.model,
+        "requestType": body.request_type,
+        "checks": checks,
+        "route": route,
+        "error": error,
+    }
+
+
+def _diagnostic_route(headers: dict[str, str]) -> dict[str, str] | None:
+    route = headers.get("X-Llama-Manager-Route")
+    node = headers.get("X-Llama-Manager-Node")
+    model = headers.get("X-Llama-Manager-Model")
+    if not route:
+        return None
+    payload = {"route": route}
+    if node:
+        payload["node"] = node
+    if model:
+        payload["model"] = model
+    return payload
+
+
+def _diagnostic_model_usable(
+    body: ClientChatDiagnosticsRequest,
+    route: dict[str, str] | None,
+    error: dict[str, Any] | None,
+) -> bool:
+    if route is not None:
+        return True
+    if not error:
+        return False
+    detail = str(error.get("detail", "")).lower()
+    return (
+        "no eligible route" in detail
+        or "no eligible running model" in detail
+        or "not running" in detail
+        or "unavailable" in detail
+    )
