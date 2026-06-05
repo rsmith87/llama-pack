@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { activatePlugin, deactivatePlugin, getEnabledPlugins, getPluginMigrationStatus, getPluginStatus, type EnabledPlugin, type PluginMigrationStatus, type PluginStatus } from "../../api/plugins";
+import { activatePlugin, deactivatePlugin, getEnabledPlugins, getPluginMigrationStatus, getPluginStatus, upgradePluginMigrationTarget, type EnabledPlugin, type PluginMigrationStatus, type PluginStatus } from "../../api/plugins";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
 
 type PluginRow = {
@@ -72,6 +72,8 @@ export function PluginsPage() {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [actingPluginId, setActingPluginId] = useState("");
+  const [upgradingTargetKey, setUpgradingTargetKey] = useState("");
+  const [migrationActionMessage, setMigrationActionMessage] = useState("");
 
   async function load() {
     setLoading(true);
@@ -111,6 +113,7 @@ export function PluginsPage() {
     const actionLabel = actionLabelFor(plugin);
     setActingPluginId(plugin.id);
     setError("");
+    setMigrationActionMessage("");
     try {
       if (plugin.status === "enabled") {
         await deactivatePlugin(plugin.id);
@@ -122,6 +125,34 @@ export function PluginsPage() {
       setError(err instanceof Error ? err.message : `Failed to ${actionLabel.toLowerCase()} plugin`);
     } finally {
       setActingPluginId("");
+    }
+  }
+
+  async function refreshPluginMigrations(pluginId: string) {
+    try {
+      const migrationStatus = await getPluginMigrationStatus(pluginId);
+      setMigrations((existing) => ({ ...existing, [pluginId]: migrationStatus }));
+      return migrationStatus;
+    } catch {
+      setMigrations((existing) => ({ ...existing, [pluginId]: null }));
+      return null;
+    }
+  }
+
+  async function runMigrationUpgrade(pluginId: string, targetId: string) {
+    const actionKey = `${pluginId}:${targetId}`;
+    setUpgradingTargetKey(actionKey);
+    setError("");
+    setMigrationActionMessage("");
+    try {
+      await upgradePluginMigrationTarget(pluginId, targetId);
+      await refreshPluginMigrations(pluginId);
+      setMigrationActionMessage("Upgrade complete");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to upgrade migration target");
+      await refreshPluginMigrations(pluginId);
+    } finally {
+      setUpgradingTargetKey("");
     }
   }
 
@@ -206,6 +237,7 @@ export function PluginsPage() {
             ]}
           />
           <h4>Migrations</h4>
+          {migrationActionMessage ? <p className="muted">{migrationActionMessage}</p> : null}
           <DataTable
             rows={selected.migrationStatus?.targets || []}
             emptyMessage="No migration targets."
@@ -215,7 +247,26 @@ export function PluginsPage() {
               { key: "status", header: "Status", render: (row) => <StatusBadge tone={row.pending ? "warning" : row.status === "current" ? "success" : "muted"}>{row.status}</StatusBadge> },
               { key: "current", header: "Current", render: (row) => row.current_revision || "-" },
               { key: "head", header: "Head", render: (row) => row.head_revision || "-" },
+              { key: "last_error", header: "Last error", render: (row) => row.last_error || "-" },
               { key: "directory", header: "Directory", render: (row) => row.directory },
+              {
+                key: "actions",
+                header: "Actions",
+                render: (row) => {
+                  const actionKey = `${selected.id}:${row.id}`;
+                  if (!row.pending) return "-";
+                  return (
+                    <button
+                      className="plugin-action"
+                      type="button"
+                      onClick={() => void runMigrationUpgrade(selected.id, row.id)}
+                      disabled={loading || upgradingTargetKey === actionKey}
+                    >
+                      {upgradingTargetKey === actionKey ? "Upgrading" : "Upgrade"}
+                    </button>
+                  );
+                },
+              },
             ]}
           />
         </Panel>

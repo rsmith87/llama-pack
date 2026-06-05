@@ -148,3 +148,142 @@ it("activates and deactivates the selected plugin", async () => {
   await user.click(screen.getAllByRole("button", { name: "Deactivate" })[0]);
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/business_plugin/deactivate", expect.objectContaining({ method: "POST" }));
 });
+
+it("upgrades a pending migration target and refreshes migration status", async () => {
+  let upgraded = false;
+  let resolveUpgrade: (() => void) | undefined;
+  const fetch = vi.fn((url: string, options?: RequestInit) => {
+    if (url === "/lm-api/v1/plugins/enabled") {
+      return Promise.resolve({ ok: true, json: async () => ([{
+        id: "hello_plugin",
+        name: "Hello Plugin",
+        version: "1.0",
+        status: "enabled",
+        frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+        navigation: [],
+        ui_routes: [],
+      }]) });
+    }
+    if (url === "/lm-api/v1/plugins/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugins: [{
+          id: "hello_plugin",
+          status: "enabled",
+          version: "1.0",
+          health: [],
+          warnings: upgraded ? [] : ["Plugin migration target main is pending"],
+          errors: [],
+          config: {},
+        }],
+      }) });
+    }
+    if (url === "/lm-api/v1/plugins/hello_plugin/migrations/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugin_id: "hello_plugin",
+        targets: [{
+          id: "main",
+          directory: "hello_plugin/migrations",
+          database_url: null,
+          current_revision: upgraded ? "002_hello" : "001_hello",
+          head_revision: "002_hello",
+          status: upgraded ? "current" : "pending",
+          pending: !upgraded,
+          last_error: null,
+        }],
+      }) });
+    }
+    if (url === "/lm-api/v1/plugins/hello_plugin/migrations/main/upgrade") {
+      return new Promise((resolve) => {
+        resolveUpgrade = () => {
+          upgraded = true;
+          resolve({ ok: true, json: async () => ({
+            plugin_id: "hello_plugin",
+            target: {
+              id: "main",
+              directory: "hello_plugin/migrations",
+              database_url: null,
+              current_revision: "002_hello",
+              head_revision: "002_hello",
+              status: "current",
+              pending: false,
+              last_error: null,
+            },
+          }) });
+        };
+      });
+    }
+    return Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing" });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const user = userEvent.setup();
+
+  render(<PluginsPage />);
+
+  await screen.findByRole("button", { name: "Upgrade" });
+  const upgradeClick = user.click(screen.getByRole("button", { name: "Upgrade" }));
+  expect(await screen.findByRole("button", { name: "Upgrading" })).toBeDisabled();
+  resolveUpgrade?.();
+  await upgradeClick;
+
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/hello_plugin/migrations/main/upgrade", expect.objectContaining({ method: "POST" }));
+  expect(await screen.findByText("Upgrade complete")).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Upgrade" })).not.toBeInTheDocument();
+  expect(screen.getAllByText("current").length).toBeGreaterThan(0);
+});
+
+it("shows last_error when a migration upgrade fails", async () => {
+  const fetch = vi.fn((url: string) => {
+    if (url === "/lm-api/v1/plugins/enabled") {
+      return Promise.resolve({ ok: true, json: async () => ([{
+        id: "hello_plugin",
+        name: "Hello Plugin",
+        version: "1.0",
+        status: "enabled",
+        frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+        navigation: [],
+        ui_routes: [],
+      }]) });
+    }
+    if (url === "/lm-api/v1/plugins/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugins: [{
+          id: "hello_plugin",
+          status: "enabled",
+          version: "1.0",
+          health: [{ level: "error", message: "Plugin migration target main upgrade failed: migration boom" }],
+          warnings: [],
+          errors: ["Plugin migration target main upgrade failed: migration boom"],
+          config: {},
+        }],
+      }) });
+    }
+    if (url === "/lm-api/v1/plugins/hello_plugin/migrations/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugin_id: "hello_plugin",
+        targets: [{
+          id: "main",
+          directory: "hello_plugin/migrations",
+          database_url: null,
+          current_revision: "001_hello",
+          head_revision: "002_hello",
+          status: "pending",
+          pending: true,
+          last_error: "migration boom",
+        }],
+      }) });
+    }
+    if (url === "/lm-api/v1/plugins/hello_plugin/migrations/main/upgrade") {
+      return Promise.resolve({ ok: false, status: 500, statusText: "Internal Server Error", text: async () => "migration boom" });
+    }
+    return Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing" });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const user = userEvent.setup();
+
+  render(<PluginsPage />);
+
+  await user.click(await screen.findByRole("button", { name: "Upgrade" }));
+
+  expect(await screen.findByText(/500 Internal Server Error: migration boom/)).toBeInTheDocument();
+  expect(screen.getByText("migration boom")).toBeInTheDocument();
+});

@@ -41,15 +41,25 @@ export type PluginActionResult = {
 
 export type PluginMigrationStatus = {
   plugin_id: string;
-  targets: Array<{
+  targets: PluginMigrationTarget[];
+};
+
+export type PluginMigrationTarget = {
     id: string;
     directory: string;
+    database_name?: string | null;
+    database_path?: string | null;
     database_url?: string | null;
     current_revision?: string | null;
     head_revision?: string | null;
     status: string;
     pending: boolean;
-  }>;
+    last_error?: string | null;
+};
+
+export type PluginMigrationUpgradeResult = {
+  plugin_id: string;
+  target: PluginMigrationTarget;
 };
 
 export function getEnabledPlugins() {
@@ -62,6 +72,12 @@ export function getPluginStatus() {
 
 export function getPluginMigrationStatus(pluginId: string) {
   return apiGet<PluginMigrationStatus>(`/plugins/${encodeURIComponent(pluginId)}/migrations/status`);
+}
+
+export function upgradePluginMigrationTarget(pluginId: string, targetId: string) {
+  return apiPost<PluginMigrationUpgradeResult>(
+    `/plugins/${encodeURIComponent(pluginId)}/migrations/${encodeURIComponent(targetId)}/upgrade`,
+  );
 }
 
 export function activatePlugin(pluginId: string) {

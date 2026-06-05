@@ -719,6 +719,53 @@ def downgrade():
     assert target["last_error"] is None
 
 
+def test_hello_style_plugin_migration_upgrade_endpoint_returns_target_payload(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "hello_upgrade_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                context.add_migration_target("main", directory="hello_upgrade_plugin/migrations", database=database)
+
+        plugin = Plugin()
+        """,
+    )
+    migrations_dir = plugin_dir / "hello_upgrade_plugin" / "migrations"
+    migrations_dir.mkdir(parents=True)
+    (migrations_dir / "001_hello.py").write_text(
+        '''
+revision = "001_hello"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+from alembic import op
+import sqlalchemy as sa
+
+def upgrade():
+    op.create_table("hello_rows", sa.Column("id", sa.Integer(), primary_key=True))
+
+def downgrade():
+    op.drop_table("hello_rows")
+''',
+        encoding="utf-8",
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.post("/lm-api/v1/plugins/hello_upgrade_plugin/migrations/main/upgrade")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["plugin_id"] == "hello_upgrade_plugin"
+    assert payload["target"]["id"] == "main"
+    assert payload["target"]["status"] == "current"
+    assert payload["target"]["pending"] is False
+    assert payload["target"]["last_error"] is None
+
+
 def test_plugin_migration_upgrade_endpoint_returns_500_and_records_last_error(tmp_path: Path):
     plugin_dir = write_plugin(
         tmp_path,
