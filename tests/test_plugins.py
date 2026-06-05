@@ -137,6 +137,7 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert target["database_name"] == "main"
     assert target["database_path"].endswith("/logs/plugins/hello_plugin/state/hello_plugin.db")
     assert target["status"] == "current"
+    assert target["last_error"] is None
 
 
 def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
@@ -644,6 +645,33 @@ def downgrade():
     assert target["status"] == "missing"
 
 
+def test_plugin_migration_refresh_error_appears_in_health_status(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "broken_migration_status_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                context.add_migration_target("main", directory="missing/migrations", database=database)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    migration_status = client.get("/lm-api/v1/plugins/broken_migration_status_plugin/migrations/status").json()
+    plugin_status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+
+    assert migration_status["targets"][0]["last_error"]
+    assert any(
+        item["level"] == "error" and "Plugin migration target main refresh failed" in item["message"]
+        for item in plugin_status["health"]
+    )
+    assert any("Plugin migration target main refresh failed" in message for message in plugin_status["errors"])
+
+
 def test_plugin_migration_upgrade_endpoint_runs_selected_target(tmp_path: Path):
     plugin_dir = write_plugin(
         tmp_path,
@@ -689,6 +717,52 @@ def downgrade():
     assert target["status"] == "current"
     assert target["pending"] is False
     assert target["last_error"] is None
+
+
+def test_plugin_migration_upgrade_endpoint_returns_500_and_records_last_error(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "failed_upgrade_migration_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                database = context.get_database("main")
+                context.add_migration_target("main", directory="migrations/main", database=database)
+
+        plugin = Plugin()
+        """,
+    )
+    migrations_dir = plugin_dir / "migrations" / "main"
+    migrations_dir.mkdir(parents=True)
+    (migrations_dir / "001_initial.py").write_text(
+        '''
+revision = "001"
+down_revision = None
+branch_labels = None
+depends_on = None
+
+def upgrade():
+    raise RuntimeError("migration boom")
+
+def downgrade():
+    pass
+''',
+        encoding="utf-8",
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.post("/lm-api/v1/plugins/failed_upgrade_migration_plugin/migrations/main/upgrade")
+
+    assert response.status_code == 500
+    assert "migration boom" in response.json()["detail"]
+    target = client.get("/lm-api/v1/plugins/failed_upgrade_migration_plugin/migrations/status").json()["targets"][0]
+    plugin_status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert "migration boom" in target["last_error"]
+    assert any(
+        item["level"] == "error" and "Plugin migration target main upgrade failed" in item["message"]
+        for item in plugin_status["health"]
+    )
 
 
 def test_plugin_migration_upgrade_endpoint_returns_404_for_unknown_target(tmp_path: Path):

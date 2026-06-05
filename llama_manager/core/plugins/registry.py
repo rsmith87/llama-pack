@@ -190,6 +190,14 @@ class PluginRegistry:
         health: list[dict[str, str]] = []
         for target in record.migration_targets:
             target.refresh_status(plugin_root=record.root)
+            if target.last_error:
+                operation = target.last_error_source or "refresh"
+                health.append(
+                    {
+                        "level": "error",
+                        "message": f"Plugin migration target {target.id} {operation} failed: {target.last_error}",
+                    }
+                )
             warning = target.health_warning()
             if warning:
                 health.append({"level": "warning", "message": warning})

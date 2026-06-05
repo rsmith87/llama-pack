@@ -23,6 +23,7 @@ class PluginMigrationTarget:
     head_revision: str | None = None
     runner: Callable[[], Any] | None = None
     last_error: str | None = None
+    last_error_source: str | None = None
 
     def refresh_status(self, *, plugin_root: Path | None = None) -> None:
         if self.database_url is None or self.directory is None:
@@ -35,6 +36,9 @@ class PluginMigrationTarget:
             heads = script.get_heads()
             if len(heads) == 1:
                 self.head_revision = heads[0]
+            if self.database_path is not None and not self.database_path.exists():
+                self._clear_refresh_error()
+                return
             engine = create_engine(self.database_url, future=True, pool_pre_ping=True)
             try:
                 with engine.connect() as connection:
@@ -42,9 +46,10 @@ class PluginMigrationTarget:
                     self.current_revision = context.get_current_revision()
             finally:
                 engine.dispose()
-            self.last_error = None
+            self._clear_refresh_error()
         except Exception as exc:
             self.last_error = str(exc)
+            self.last_error_source = "refresh"
 
     def upgrade(self, *, plugin_root: Path | None = None) -> None:
         if self.database_url is None:
@@ -68,8 +73,10 @@ class PluginMigrationTarget:
             finally:
                 engine.dispose()
             self.last_error = None
+            self.last_error_source = None
         except Exception as exc:
             self.last_error = str(exc)
+            self.last_error_source = "upgrade"
             raise
         finally:
             self.refresh_status(plugin_root=plugin_root)
@@ -117,6 +124,11 @@ class PluginMigrationTarget:
             "pending": self.pending,
             "last_error": self.last_error,
         }
+
+    def _clear_refresh_error(self) -> None:
+        if self.last_error_source in {None, "refresh"}:
+            self.last_error = None
+            self.last_error_source = None
 
 
 def normalize_migration_directory(directory: str | Path) -> str:
