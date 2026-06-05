@@ -248,6 +248,57 @@ def test_external_app_key_can_list_client_safe_models(tmp_path):
     }
 
 
+def test_external_app_key_can_list_live_controller_node_models_without_static_routes(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_node_request(method, url, api_key, verify_tls, json_body=None):
+        assert method == "GET"
+        assert url == "http://mac/lm-api/v1/models"
+        return [
+            {
+                "name": "gemma-4-E4B-it",
+                "running": True,
+                "supports_json_schema": True,
+                "supports_grammar": False,
+                "vision": False,
+            }
+        ]
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"mac-mini": {"url": "http://mac"}},
+            }
+        ),
+        controller_request=fake_node_request,
+    )
+    raw_key = app.state.auth_store.create_external_key("Home App", "https://home.local")["key"]
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": raw_key})
+
+    response = client.get("/v1/models")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == [
+        {
+            "id": "gemma-4-E4B-it",
+            "object": "model",
+            "owned_by": "neuraxis",
+            "metadata": {
+                "display_label": "gemma-4-E4B-it",
+                "request_types": [],
+                "default_request_type": None,
+                "context_identity": "gemma-4-E4B-it",
+                "model_family": "gemma-4-E4B-it",
+                "context_profile": None,
+                "capabilities": {"streaming": True, "json_schema": True, "grammar": False, "vision": False},
+            },
+        }
+    ]
+
+
 def test_external_app_key_can_read_client_session_capabilities(tmp_path):
     app, _, _ = _controller_app(tmp_path)
     created = app.state.auth_store.create_external_key("Home App", "https://home.local")

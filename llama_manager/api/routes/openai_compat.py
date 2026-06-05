@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from llama_manager.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_process_manager, get_profile_activation_service, get_thread_service
+from llama_manager.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_thread_service
 from llama_manager.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_manager.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_manager.core.agent_tools.registry import ToolRegistry
@@ -25,6 +25,7 @@ from llama_manager.core.chat.proxy import ChatProxy
 from llama_manager.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 from llama_manager.core.agent_tools.runtime import AgentToolLoop
 from llama_manager.core.config import AppConfig
+from llama_manager.core.nodes.registry import NodeRegistry
 from llama_manager.core.runtime.process_manager import ProcessManager
 from llama_manager.core.threads.service import ThreadService
 
@@ -69,12 +70,12 @@ class ClientChatDiagnosticsRequest(BaseModel):
 
 
 @router.get("/models")
-async def openai_models(request: Request):
-    return {"object": "list", "data": _client_safe_models(request)}
+async def openai_models(request: Request, registry: NodeRegistry = Depends(get_node_registry)):
+    return {"object": "list", "data": await _client_safe_models(request, registry)}
 
 
 @router.get("/client/session")
-async def openai_client_session(request: Request):
+async def openai_client_session(request: Request, registry: NodeRegistry = Depends(get_node_registry)):
     return {
         "auth": _client_auth_payload(request),
         "capabilities": {
@@ -82,7 +83,7 @@ async def openai_client_session(request: Request):
             "streaming": True,
             "serverHistory": False,
         },
-        "models": _client_safe_models(request),
+        "models": await _client_safe_models(request, registry),
     }
 
 
@@ -309,7 +310,7 @@ def _client_auth_payload(request: Request) -> dict[str, str]:
     return {"method": "none", "role": "", "username": ""}
 
 
-def _client_safe_models(request: Request) -> list[dict[str, Any]]:
+async def _client_safe_models(request: Request, registry: NodeRegistry | None = None) -> list[dict[str, Any]]:
     config = request.app.state.config
     models: dict[str, dict[str, Any]] = {}
     if config.mode == "controller":
@@ -319,17 +320,13 @@ def _client_safe_models(request: Request) -> list[dict[str, Any]]:
             for request_type, route in node.request_types.items():
                 if route.model:
                     _ensure_client_model(models, route.model)["request_types"].add(request_type)
+        await _merge_live_controller_models(models, registry or request.app.state.node_registry)
     else:
         for status in request.app.state.process_manager.list_statuses():
             name = str(status.get("name") or "")
             if name:
                 entry = _ensure_client_model(models, name)
-                entry["capabilities"] = {
-                    "streaming": True,
-                    "json_schema": bool(status.get("supports_json_schema")),
-                    "grammar": bool(status.get("supports_grammar")),
-                    "vision": bool(status.get("vision")),
-                }
+                entry["capabilities"] = _status_capabilities(status)
 
     return [
         {
@@ -340,6 +337,38 @@ def _client_safe_models(request: Request) -> list[dict[str, Any]]:
         }
         for model_id, values in sorted(models.items())
     ]
+
+
+async def _merge_live_controller_models(models: dict[str, dict[str, Any]], registry: NodeRegistry) -> None:
+    for node in registry.list_nodes():
+        if not node.get("heartbeat_fresh"):
+            continue
+        node_name = str(node.get("name") or "")
+        if not node_name:
+            continue
+        try:
+            statuses = await registry.request_node(node_name, "GET", "/lm-api/v1/models")
+        except Exception:
+            continue
+        if not isinstance(statuses, list):
+            continue
+        for status in statuses:
+            if not isinstance(status, dict):
+                continue
+            name = str(status.get("name") or "")
+            if not name:
+                continue
+            entry = _ensure_client_model(models, name)
+            entry["capabilities"].update(_status_capabilities(status))
+
+
+def _status_capabilities(status: dict[str, Any]) -> dict[str, bool]:
+    return {
+        "streaming": True,
+        "json_schema": bool(status.get("supports_json_schema")),
+        "grammar": bool(status.get("supports_grammar")),
+        "vision": bool(status.get("vision")),
+    }
 
 
 def _ensure_client_model(models: dict[str, dict[str, Any]], model_id: str) -> dict[str, Any]:
