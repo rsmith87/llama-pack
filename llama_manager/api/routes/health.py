@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends
 
 from llama_manager.api.dependencies import get_config
 from llama_manager.core.config import AppConfig
+from llama_manager.core.network.tls_diagnostics import network_error_text
 from llama_manager.core.runtime.health_check import health_payload
 
 
@@ -22,9 +23,8 @@ async def controller_health(config: AppConfig = Depends(get_config)) -> dict[str
         return {"reachable": False}
     url = f"{config.controller_url.rstrip('/')}/health"
     try:
-        async with httpx.AsyncClient(timeout=5, verify=False) as client:
+        async with httpx.AsyncClient(timeout=5, verify=True) as client:
             resp = await client.get(url)
-            return {"reachable": resp.status_code < 500}
-    except Exception:
-        return {"reachable": False}
-
+            return {"reachable": resp.status_code < 500, "status_code": resp.status_code}
+    except Exception as exc:
+        return {"reachable": False, "error": network_error_text(exc)}

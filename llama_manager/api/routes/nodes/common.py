@@ -5,6 +5,8 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from llama_manager.core.network.tls_diagnostics import network_error_text
+
 
 class NodeRegistrationRequest(BaseModel):
     name: str
@@ -32,11 +34,7 @@ def platform_from_path(path: str | None) -> str:
 
 
 def upstream_error_text(exc: Exception) -> str:
-    if isinstance(exc, httpx.HTTPStatusError):
-        return f"upstream http {exc.response.status_code}: {exc.response.text}"
-    if isinstance(exc, httpx.HTTPError):
-        return f"upstream transport error: {exc}"
-    return f"unexpected upstream error: {exc}"
+    return network_error_text(exc)
 
 
 def stale_node_payload(node: dict, include_models: bool) -> dict:

@@ -4,6 +4,7 @@ from fastapi.testclient import TestClient as RawTestClient
 import json
 import httpx
 import pytest
+import ssl
 from sqlalchemy import update
 
 import time
@@ -3163,6 +3164,43 @@ def test_setup_status_reports_auth_bootstrap_required_without_keys():
     assert "secret-registration" not in response.text
     assert "config" not in payload
     assert "key" not in payload
+
+
+def test_controller_health_reports_expired_tls_certificate(monkeypatch):
+    app = create_app(
+        config=load_config({"mode": "agent", "controller_url": "https://pi-controller.local"}),
+    )
+
+    class FakeClient:
+        def __init__(self, timeout=None, verify=True):
+            assert timeout == 5
+            assert verify is True
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def get(self, url):
+            assert url == "https://pi-controller.local/health"
+            try:
+                raise ssl.SSLCertVerificationError("certificate has expired")
+            except ssl.SSLCertVerificationError as exc:
+                raise httpx.ConnectError(
+                    "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired"
+                ) from exc
+
+    monkeypatch.setattr("llama_manager.api.routes.health.httpx.AsyncClient", FakeClient)
+    client = RawTestClient(app)
+
+    response = client.get("/lm-api/v1/health/controller")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["reachable"] is False
+    assert "expired" in payload["error"]
+    assert "docs/caddy-local-tls.md#recovering-from-expired-certificates" in payload["error"]
 
 
 def test_setup_bootstrap_admin_creates_key_and_ui_session_once():

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { getHealth } from "../../../api/health";
+import { getControllerStatus, getHealth } from "../../../api/health";
 import { listNodes } from "../../../api/nodes";
 import { getSetupStatus } from "../../../api/setup";
 import { Button } from "../../../components/ui";
@@ -83,11 +83,11 @@ export function Verification({ nav }: { nav: WizardNav }) {
       const controllerUrl = nav.state.agentConnection.controller_url;
       if (controllerUrl) {
         try {
-          const res = await fetch(`${controllerUrl}/lm-api/v1/health`);
+          const status = await getControllerStatus();
           results.push({
             label: "Controller reachable",
-            state: res.ok ? "pass" : "fail",
-            reason: !res.ok ? `HTTP ${res.status}` : undefined,
+            state: status.reachable ? "pass" : "fail",
+            reason: status.reachable ? undefined : status.error || "Could not connect",
           });
         } catch {
           results.push({ label: "Controller reachable", state: "fail", reason: "Could not connect" });

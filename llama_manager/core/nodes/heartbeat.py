@@ -8,6 +8,7 @@ from typing import Any
 import httpx
 
 from llama_manager.core.config import AppConfig
+from llama_manager.core.network.tls_diagnostics import ssl_diagnostic_message
 
 
 RequestFn = Callable[[str, str, dict[str, Any] | None], Awaitable[dict[str, Any]]]
@@ -34,10 +35,12 @@ class AgentHeartbeatClient:
         self._stopped.clear()
         try:
             await self._register()
-        except Exception:
+        except Exception as exc:
+            diagnostic = ssl_diagnostic_message(exc)
             logger.warning(
-                "Agent registration failed for %s",
+                "Agent registration failed for %s%s",
                 self.config.node_name,
+                f": {diagnostic}" if diagnostic else "",
                 exc_info=True,
             )
         self._task = asyncio.create_task(self._run_loop())
@@ -58,10 +61,12 @@ class AgentHeartbeatClient:
         while not self._stopped.is_set():
             try:
                 await self._heartbeat()
-            except Exception:
+            except Exception as exc:
+                diagnostic = ssl_diagnostic_message(exc)
                 logger.warning(
-                    "Agent heartbeat failed for %s",
+                    "Agent heartbeat failed for %s%s",
                     self.config.node_name,
+                    f": {diagnostic}" if diagnostic else "",
                     exc_info=True,
                 )
             try:

@@ -18,7 +18,7 @@ export function getHealth() {
 }
 
 export function getControllerStatus() {
-  return apiGet<{ reachable: boolean }>("/health/controller");
+  return apiGet<{ reachable: boolean; error?: string; status_code?: number }>("/health/controller");
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {

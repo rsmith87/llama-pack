@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import httpx
 from fastapi import APIRouter, Depends
 
 from llama_manager.api.dependencies import get_node_registry
@@ -8,6 +7,7 @@ from llama_manager.api.routes.nodes.common import (
     annotate_model_sources,
     failed_node_payload,
     stale_node_payload,
+    upstream_error_text,
 )
 from llama_manager.core.nodes.registry import NodeRegistry
 from llama_manager.core.runtime.profile_catalog import build_profile_catalog
@@ -57,12 +57,8 @@ async def _fetch_node_gguf_snapshot(registry: NodeRegistry, node: dict) -> dict:
         payload = await registry.request_node(node["name"], "GET", "/lm-api/v1/library/ggufs")
         files = payload if isinstance(payload, list) else payload.get("files") or payload.get("ggufs") or []
         return {**node, "reachable": True, "files": files}
-    except httpx.HTTPStatusError as exc:
-        return {**node, "reachable": False, "files": [], "error": f"upstream http {exc.response.status_code}: {exc.response.text}"}
-    except httpx.HTTPError as exc:
-        return {**node, "reachable": False, "files": [], "error": f"upstream transport error: {exc}"}
     except Exception as exc:
-        return {**node, "reachable": False, "files": [], "error": f"unexpected upstream error: {exc}"}
+        return {**node, "reachable": False, "files": [], "error": upstream_error_text(exc)}
 
 
 @router.get("/nodes/ggufs")
