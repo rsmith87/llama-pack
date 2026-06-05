@@ -20,6 +20,7 @@ describe("page route model", () => {
       "plugins",
       "setup",
       "settings",
+      "docs",
     ]);
     expect(pageForKey("dashboard")).toEqual({ key: "dashboard", label: "Dashboard", path: "/", icon: "dashboard", section: "operations" });
     expect(pageForKey("setup")).toEqual({ key: "setup", label: "Setup", path: "/ui/setup", icon: "setup", section: "system" });
@@ -59,7 +60,7 @@ describe("page route model", () => {
       { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization", "benchmarks"] },
       { label: "Runtime", pages: ["runtime-overview", "embeddings"] },
       { label: "Plugins", pages: ["plugins"] },
-      { label: "System", pages: ["setup", "settings"] },
+      { label: "System", pages: ["setup", "settings", "docs"] },
     ]);
     expect(pagesBySectionForMode("agent").map((section) => ({
       label: section.label,
@@ -69,7 +70,7 @@ describe("page route model", () => {
       { label: "Operations", pages: ["dashboard"] },
       { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization"] },
       { label: "Runtime", pages: ["runtime-overview", "embeddings"] },
-      { label: "System", pages: ["setup", "settings"] },
+      { label: "System", pages: ["setup", "settings", "docs"] },
     ]);
   });
 });

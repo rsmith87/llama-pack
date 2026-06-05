@@ -19,11 +19,15 @@ import { PluginsPage } from "./pages/PluginsPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { SetupPage } from "./pages/SetupPage";
 import { TestChatPage } from "./pages/TestChatPage";
+import { DocsPage } from "./pages/DocsPage";
 
 function RoutedApp() {
   const { authToken } = useAuthSession();
   if (window.location.pathname === "/ui/test-chat") {
     return <TestChatPage />;
+  }
+  if (window.location.pathname === "/ui/docs") {
+    return <DocsPage />;
   }
   return (
     <AppShell

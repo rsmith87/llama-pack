@@ -1,4 +1,4 @@
-export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings";
+export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
 export type PageKey = BuiltInPageKey | string;
 export type PageIcon =
   | "dashboard"
@@ -16,7 +16,8 @@ export type PageIcon =
   | "benchmark"
   | "api-keys"
   | "plugins"
-  | "settings";
+  | "settings"
+  | "docs";
 export type AppMode = "agent" | "controller";
 export type NavSectionKey = "gateway" | "operations" | "models" | "runtime" | "plugins" | "system";
 export type NavSection = { key: NavSectionKey; label: string };
@@ -61,6 +62,7 @@ export const pages: PageDefinition[] = [
   { key: "plugins", label: "Plugins", path: "/ui/plugins", icon: "plugins", section: "plugins", hideInModes: ["agent"] },
   { key: "setup", label: "Setup", path: "/ui/setup", icon: "setup", section: "system" },
   { key: "settings", label: "Settings", path: "/ui/settings", icon: "settings", section: "system" },
+  { key: "docs", label: "Docs", path: "/ui/docs", icon: "docs", section: "system" },
 ];
 
 export function pagesForMode(mode: string): PageDefinition[] {

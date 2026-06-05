@@ -26,6 +26,7 @@ REACT_PAGE_ROUTES = [
     "/ui/setup",
     "/ui/settings",
     "/ui/test-chat",
+    "/ui/docs",
 ]
 
 

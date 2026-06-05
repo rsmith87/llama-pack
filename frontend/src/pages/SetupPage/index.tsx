@@ -134,9 +134,12 @@ export function SetupPage() {
           <span className="eyebrow">First Run</span>
           <h2>Setup Wizard</h2>
         </div>
-        {nav.currentStep !== "mode" ? (
-          <span className="muted">{nav.state.mode} mode</span>
-        ) : null}
+        <div style={{ display: "flex", alignItems: "center", gap: "1rem" }}>
+          {nav.currentStep !== "mode" ? (
+            <span className="muted">{nav.state.mode} mode</span>
+          ) : null}
+          <a href="/ui/docs" className="btn btn-ghost" style={{ fontSize: "0.8rem" }}>Docs</a>
+        </div>
       </div>
 
       <StepIndicator nav={nav} />

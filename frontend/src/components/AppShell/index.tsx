@@ -49,6 +49,7 @@ function MenuIcon({ icon }: { icon: PageIcon | "logs" | "menu" | "close" }) {
       {icon === "api-keys" ? <path d="M7 11a4 4 0 1 1 8 0 4 4 0 0 1-8 0Zm4-6V3m0 16v-2m6-5h2M3 11h2m8.5-3.5 1.5-1.5M5 19l3-3m9 0 2 2M5 5l2 2" /> : null}
       {icon === "plugins" ? <path d="M8 4h8v5H8V4Zm-3 11h6v5H5v-5Zm8 0h6v5h-6v-5Zm-1-6v3m-4 0h8M8 12v3m8-3v3" /> : null}
       {icon === "settings" ? <path d="M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0-8Zm0-4v3m0 10v3M4 12h3m10 0h3" /> : null}
+      {icon === "docs" ? <path d="M7 4h10v16H7V4Zm3 4h4M10 10h4M10 14h2" /> : null}
       {icon === "logs" ? <path d="M5 5h14v14H5V5Zm4 5h6M9 14h4" /> : null}
       {icon === "menu" ? <path d="M5 7h14M5 12h14M5 17h14" /> : null}
       {icon === "close" ? <path d="M7 7l10 10M17 7 7 17" /> : null}
@@ -237,7 +238,13 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
                   key={item.key}
                   className={`nav-button ${activePage.key === item.key ? "active" : ""}`}
                   type="button"
-                  onClick={() => navigate(item.key)}
+                  onClick={() => {
+                    if (item.path.startsWith("/ui/docs")) {
+                      window.location.href = item.path;
+                    } else {
+                      navigate(item.key);
+                    }
+                  }}
                 >
                   <MenuIcon icon={item.icon} />
                   <span>{item.navLabel || item.label}</span>

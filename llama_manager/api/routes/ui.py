@@ -49,6 +49,7 @@ REACT_ROUTE_PATHS = [
     "/ui/plugins",
     "/ui/setup",
     "/ui/settings",
+    "/ui/docs",
     "/ui/test-chat",
 ]
 
