@@ -29,6 +29,16 @@ function streamResponse(chunks: string[], headers = new Headers()) {
   return { ok: true, headers, body: { getReader: () => streamReader(chunks) } };
 }
 
+function stubChatPageFetch(handler: (url: string, init?: RequestInit) => unknown) {
+  const fetchMock = vi.fn((url: string, init?: RequestInit) => {
+    if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+    if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+    return handler(url, init);
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 it("loads models and preserves chat localStorage keys", async () => {
   localStorage.setItem("lm_chat_preset", "creative");
   localStorage.setItem("lm_active_chat_session_id", "session-1");
@@ -414,15 +424,13 @@ it("validates structured JSON schema before sending", async () => {
 });
 
 it("shows capabilities, copies capability JSON, inspects prompts, and clears KV slots", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(okJson({ supports: { structured_output: { json_schema: true, grammar: false }, kv_cache: true } }))
-      .mockResolvedValueOnce(okJson({ rendered_prompt_preview: "rendered prompt" }))
-      .mockResolvedValueOnce(okJson({ slots: [{ id: 0, state: "used" }] }))
-      .mockResolvedValueOnce(okJson({ ok: true })),
-  );
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/capabilities/mistral") return okJson({ supports: { structured_output: { json_schema: true, grammar: false }, kv_cache: true } });
+    if (url === "/lm-api/v1/chat/mistral/inspect") return okJson({ rendered_prompt_preview: "rendered prompt" });
+    if (url === "/lm-api/v1/chat/mistral/kv/slots?target=auto") return okJson({ slots: [{ id: 0, state: "used" }] });
+    if (url === "/lm-api/v1/chat/mistral/kv/slots/0") return okJson({ ok: true });
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -449,13 +457,11 @@ it("shows capabilities, copies capability JSON, inspects prompts, and clears KV 
 });
 
 it("saves the current chat session and remembers the saved session id", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(streamResponse(['data: {"choices":[{"delta":{"content":"saved reply"}}]}\n\n']))
-      .mockResolvedValueOnce(okJson({ id: "session-1", name: "Work session", messages: [] })),
-  );
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"saved reply"}}]}\n\n']);
+    if (url === "/lm-api/v1/chat/sessions") return okJson({ id: "session-1", name: "Work session", messages: [] });
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -488,13 +494,11 @@ it("saves the current chat session and remembers the saved session id", async ()
 
 it("saves a selected session as new without reusing the old session id", async () => {
   localStorage.setItem("lm_active_chat_session_id", "session-old");
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(streamResponse(['data: {"choices":[{"delta":{"content":"new reply"}}]}\n\n']))
-      .mockResolvedValueOnce(okJson({ id: "session-new", name: "Forked session", messages: [] })),
-  );
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"new reply"}}]}\n\n']);
+    if (url === "/lm-api/v1/chat/sessions") return okJson({ id: "session-new", name: "Forked session", messages: [] });
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);

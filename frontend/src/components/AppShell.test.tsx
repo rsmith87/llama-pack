@@ -217,7 +217,7 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
   render(<App />);
 
   expect(await screen.findByRole("button", { name: "Business" })).toHaveClass("active");
-  expect(screen.getByRole("heading", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Business" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/ui/plugins/neuraxis_business");
 });
 
