@@ -1,4 +1,4 @@
-import { apiGet } from "./client";
+import { apiGet, apiPost } from "./client";
 
 export type PluginNavigationItem = {
   label?: string;
@@ -31,6 +31,14 @@ export type PluginStatus = {
   }>;
 };
 
+export type PluginActionResult = {
+  id: string;
+  status: string;
+  version: string;
+  warnings: string[];
+  errors: string[];
+};
+
 export type PluginMigrationStatus = {
   plugin_id: string;
   targets: Array<{
@@ -54,4 +62,12 @@ export function getPluginStatus() {
 
 export function getPluginMigrationStatus(pluginId: string) {
   return apiGet<PluginMigrationStatus>(`/plugins/${encodeURIComponent(pluginId)}/migrations/status`);
+}
+
+export function activatePlugin(pluginId: string) {
+  return apiPost<PluginActionResult>(`/plugins/${encodeURIComponent(pluginId)}/activate`);
+}
+
+export function deactivatePlugin(pluginId: string) {
+  return apiPost<PluginActionResult>(`/plugins/${encodeURIComponent(pluginId)}/deactivate`);
 }

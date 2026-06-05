@@ -127,7 +127,10 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert metadata["id"] == "hello_plugin"
     assert metadata["navigation"][0]["label"] == "Hello"
     assert metadata["frontend"]["entry"] == "/plugin-assets/hello_plugin/hello-entry.js"
-    assert client.get("/plugin-assets/hello_plugin/hello-entry.js").status_code == 200
+    asset_response = client.get("/plugin-assets/hello_plugin/hello-entry.js")
+    assert asset_response.status_code == 200
+    assert "export function mount" in asset_response.text
+    assert "host.pluginId" in asset_response.text
     migration_status = client.get("/lm-api/v1/plugins/hello_plugin/migrations/status").json()
     assert migration_status["targets"][0]["status"] == "current"
 
@@ -190,6 +193,73 @@ def test_disabled_plugin_is_ignored_and_not_registered(tmp_path: Path):
     assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 404
     assert client.get("/lm-api/v1/plugins/enabled").json() == []
     assert client.get("/lm-api/v1/plugins/status").json()["plugins"][0]["status"] == "disabled"
+
+
+def test_plugin_can_be_activated_at_runtime_from_configured_path(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir, enabled=[]))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 404
+    assert client.get("/plugin-assets/sample_plugin/hello-entry.js").status_code == 404
+
+    response = client.post("/lm-api/v1/plugins/sample_plugin/activate")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "enabled"
+    assert client.get("/lm-api/v1/plugins/sample_plugin/hello").json() == {"message": "hello"}
+    assert client.get("/plugin-assets/sample_plugin/hello-entry.js").status_code == 200
+    assert client.get("/lm-api/v1/plugins/enabled").json()[0]["id"] == "sample_plugin"
+
+
+def test_plugin_can_be_deactivated_at_runtime(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 200
+
+    response = client.post("/lm-api/v1/plugins/sample_plugin/deactivate")
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "disabled"
+    assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 404
+    assert client.get("/plugin-assets/sample_plugin/hello-entry.js").status_code == 404
+    assert client.get("/lm-api/v1/plugins/enabled").json() == []
+    assert client.get("/lm-api/v1/plugins/status").json()["plugins"][0]["status"] == "disabled"
+
+
+@pytest.mark.asyncio
+async def test_runtime_deactivation_removes_plugin_hooks_and_events(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "runtime_plugin",
+        body="""
+        events = []
+        class Plugin:
+            id = "runtime_plugin"
+            name = "Runtime Plugin"
+            version = "1.0"
+            def register(self, context):
+                async def record(event):
+                    events.append(event.type)
+                async def reject(payload):
+                    return {"allowed": False, "message": "blocked"}
+                context.subscribe("test.runtime", record)
+                context.add_policy_hook("neuraxis.chat_admission", reject)
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    assert client.post("/lm-api/v1/plugins/runtime_plugin/deactivate").status_code == 200
+    await app.state.plugin_registry.events.emit("test.runtime")
+    await app.state.plugin_registry.hooks.run_policy_hooks("neuraxis.chat_admission", {})
+
+    import runtime_plugin.plugin as module
+
+    assert module.events == []
 
 
 def test_invalid_plugin_id_is_rejected_by_config():

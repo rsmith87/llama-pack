@@ -97,3 +97,54 @@ it("shows an empty state when no plugins are configured", async () => {
 
   expect(await screen.findByText("No plugins configured.")).toBeInTheDocument();
 });
+
+it("activates and deactivates the selected plugin", async () => {
+  let enabled = false;
+  const fetch = vi.fn((url: string, options?: RequestInit) => {
+    if (url === "/lm-api/v1/plugins/enabled") {
+      return Promise.resolve({ ok: true, json: async () => enabled ? [{
+        id: "business_plugin",
+        name: "Business Plugin",
+        version: "1.0",
+        status: "enabled",
+        frontend: { entry: "/plugin-assets/business_plugin/business-entry.js", style: null },
+        navigation: [],
+        ui_routes: [],
+      }] : [] });
+    }
+    if (url === "/lm-api/v1/plugins/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugins: [{
+          id: "business_plugin",
+          status: enabled ? "enabled" : "disabled",
+          version: "1.0",
+          health: [],
+          warnings: [],
+          errors: [],
+          config: {},
+        }],
+      }) });
+    }
+    if (url === "/lm-api/v1/plugins/business_plugin/activate") {
+      enabled = true;
+      return Promise.resolve({ ok: true, json: async () => ({ id: "business_plugin", status: "enabled", version: "1.0", warnings: [], errors: [] }) });
+    }
+    if (url === "/lm-api/v1/plugins/business_plugin/deactivate") {
+      enabled = false;
+      return Promise.resolve({ ok: true, json: async () => ({ id: "business_plugin", status: "disabled", version: "1.0", warnings: [], errors: [] }) });
+    }
+    return Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing" });
+  });
+  vi.stubGlobal("fetch", fetch);
+  const user = userEvent.setup();
+
+  render(<PluginsPage />);
+
+  await screen.findByRole("heading", { name: "business_plugin" });
+  await user.click(screen.getAllByRole("button", { name: "Activate" })[0]);
+
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/business_plugin/activate", expect.objectContaining({ method: "POST" }));
+  await screen.findByText("/plugin-assets/business_plugin/business-entry.js");
+  await user.click(screen.getAllByRole("button", { name: "Deactivate" })[0]);
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/business_plugin/deactivate", expect.objectContaining({ method: "POST" }));
+});

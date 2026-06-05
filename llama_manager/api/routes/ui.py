@@ -7,6 +7,7 @@ from pathlib import Path
 from fastapi import APIRouter, Request
 from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, Response
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException
 
 
 UI_DIR = Path(__file__).resolve().parents[2] / "ui"
@@ -15,7 +16,22 @@ TEST_CHAT_SESSION_SECONDS = 12 * 60 * 60
 
 router = APIRouter()
 api_router = APIRouter()
-static_app = StaticFiles(directory=UI_DIR, check_dir=False)
+
+
+class ReactStaticFiles(StaticFiles):
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except HTTPException as exc:
+            if exc.status_code != 404 or path.startswith("assets/"):
+                raise
+            response = index()
+            if response.status_code != 200:
+                raise
+            return response
+
+
+static_app = ReactStaticFiles(directory=UI_DIR, check_dir=False)
 REACT_ROUTE_PATHS = [
     "/ui/",
     "/ui/chat",
@@ -27,6 +43,11 @@ REACT_ROUTE_PATHS = [
     "/ui/controller-ops",
     "/ui/embeddings",
     "/ui/audit",
+    "/ui/api-keys",
+    "/ui/benchmarks",
+    "/ui/runtime",
+    "/ui/plugins",
+    "/ui/setup",
     "/ui/settings",
     "/ui/test-chat",
 ]

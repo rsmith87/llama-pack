@@ -57,7 +57,18 @@ class PluginRegistry:
             self.records[plugin_id] = record
         record.status = "disabled"
         record.warnings.append(message)
+        self._remove_runtime_bindings(plugin_id, record)
         record.routers.clear()
+
+    def deactivate(self, plugin_id: str, message: str = "Deactivated at runtime") -> PluginRecord | None:
+        record = self.records.get(plugin_id)
+        if record is None:
+            return None
+        record.status = "disabled"
+        if message not in record.warnings:
+            record.warnings.append(message)
+        self._remove_runtime_bindings(plugin_id, record)
+        return record
 
     def mark_failed(self, plugin_id: str, message: str) -> None:
         record = self.records.get(plugin_id)
@@ -66,6 +77,7 @@ class PluginRegistry:
             self.records[plugin_id] = record
         record.status = "failed"
         record.errors.append(message)
+        self._remove_runtime_bindings(plugin_id, record)
         record.routers.clear()
 
     def record_health(self, plugin_id: str, level: str, message: str) -> None:
@@ -85,6 +97,20 @@ class PluginRegistry:
         if prefix in self.route_prefixes:
             raise ValueError(f"Plugin route prefix collision: {prefix}")
         self.route_prefixes.add(prefix)
+
+    def remove_record(self, plugin_id: str) -> PluginRecord | None:
+        record = self.records.pop(plugin_id, None)
+        self._remove_runtime_bindings(plugin_id, record)
+        return record
+
+    def _remove_runtime_bindings(self, plugin_id: str, record: PluginRecord | None) -> None:
+        self.events.remove_plugin(plugin_id)
+        self.hooks.remove_plugin(plugin_id)
+        if record is None:
+            self.route_prefixes.discard(f"/{plugin_id}")
+            return
+        for route_prefix, _router in record.routers:
+            self.route_prefixes.discard(route_prefix)
 
     def enabled_metadata(self) -> list[dict[str, Any]]:
         return [self._frontend_payload(record) for record in self.records.values() if record.status == "enabled"]

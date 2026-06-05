@@ -23,6 +23,14 @@ class HookRegistry:
     def add_policy_hook(self, plugin_id: str, hook_name: str, handler: Callable[[dict[str, Any]], Any]) -> None:
         self._hooks[hook_name].append((plugin_id, handler))
 
+    def remove_plugin(self, plugin_id: str) -> None:
+        for hook_name, hooks in list(self._hooks.items()):
+            remaining = [(owner, handler) for owner, handler in hooks if owner != plugin_id]
+            if remaining:
+                self._hooks[hook_name] = remaining
+            else:
+                self._hooks.pop(hook_name, None)
+
     async def run_policy_hooks(self, hook_name: str, payload: dict[str, Any]) -> None:
         for plugin_id, handler in list(self._hooks.get(hook_name, [])):
             try:

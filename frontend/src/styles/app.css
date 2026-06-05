@@ -88,6 +88,48 @@
   gap: 12px;
 }
 
+.plugin-list-item {
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+}
+
+.plugin-list-name {
+  justify-self: start;
+}
+
+.plugin-row-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 2px;
+}
+
+.plugin-action {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.plugin-action:hover:not(:disabled) {
+  text-decoration: underline;
+}
+
+.plugin-action-danger {
+  color: var(--danger);
+}
+
+.plugin-action:disabled {
+  color: var(--muted);
+  cursor: wait;
+}
+
 .quick-actions {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }

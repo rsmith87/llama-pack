@@ -47,6 +47,14 @@ class EventBus:
     def subscribe(self, plugin_id: str, event_type: str, handler: Callable[[EventEnvelope], Any]) -> None:
         self._subscribers[event_type].append((plugin_id, handler))
 
+    def remove_plugin(self, plugin_id: str) -> None:
+        for event_type, subscribers in list(self._subscribers.items()):
+            remaining = [(owner, handler) for owner, handler in subscribers if owner != plugin_id]
+            if remaining:
+                self._subscribers[event_type] = remaining
+            else:
+                self._subscribers.pop(event_type, None)
+
     async def emit(
         self,
         event_type: str,

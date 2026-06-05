@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
@@ -61,6 +63,22 @@ it("loads a plugin frontend module and mounts it into the host container", async
   expect(cleanup).toHaveBeenCalled();
 });
 
+it("loads the checked-in hello_plugin frontend bundle through plugin metadata", async () => {
+  stubEnabledPlugin();
+  const helloEntrySource = readFileSync(
+    resolve(__dirname, "../../../plugins/hello_plugin/hello_plugin/static/hello-entry.js"),
+    "utf-8",
+  );
+  const helloEntryUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(helloEntrySource)}`;
+  const loadModule = vi.fn((entry: string) => import(/* @vite-ignore */ helloEntryUrl));
+
+  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+
+  expect(await screen.findByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
+  expect(await screen.findByText("hello_plugin")).toBeInTheDocument();
+  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
+});
+
 it("shows a clear error when the module does not export mount", async () => {
   stubEnabledPlugin();
   render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={vi.fn().mockResolvedValue({ registerPlugin: vi.fn() })} />);
@@ -103,4 +121,30 @@ it("reloads the plugin module with a new cache-bust token", async () => {
   await user.click(screen.getByRole("button", { name: "Reload" }));
   await waitFor(() => expect(loadModule).toHaveBeenCalledTimes(2));
   expect(loadModule).toHaveBeenNthCalledWith(2, "/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=1");
+});
+
+it("isolates plugin cleanup failures during reload", async () => {
+  stubEnabledPlugin();
+  const user = userEvent.setup();
+  const loadModule = vi.fn()
+    .mockResolvedValueOnce({
+      mount(container: HTMLElement) {
+        container.textContent = "first mount";
+        return () => {
+          throw new Error("cleanup failed");
+        };
+      },
+    })
+    .mockResolvedValueOnce({
+      mount(container: HTMLElement) {
+        container.textContent = "second mount";
+      },
+    });
+
+  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+
+  expect(await screen.findByText("first mount")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Reload" }));
+  expect(await screen.findByText("second mount")).toBeInTheDocument();
+  expect(screen.getByRole("alert")).toHaveTextContent("cleanup failed");
 });

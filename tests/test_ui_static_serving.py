@@ -1,7 +1,6 @@
 from pathlib import Path
 
 from fastapi.testclient import TestClient
-from fastapi.staticfiles import StaticFiles
 
 from llama_manager.main import create_app
 from llama_manager.api.routes import ui
@@ -18,6 +17,13 @@ REACT_PAGE_ROUTES = [
     "/ui/controller-ops",
     "/ui/embeddings",
     "/ui/audit",
+    "/ui/api-keys",
+    "/ui/benchmarks",
+    "/ui/runtime",
+    "/ui/plugins",
+    "/ui/plugins/hello_plugin",
+    "/ui/plugins/hello_plugin/settings",
+    "/ui/setup",
     "/ui/settings",
     "/ui/test-chat",
 ]
@@ -67,7 +73,7 @@ def test_react_page_routes_fall_back_to_index(monkeypatch, tmp_path):
     ui_dir.mkdir(parents=True)
     (ui_dir / "index.html").write_text("<html><body>react build</body></html>", encoding="utf-8")
     monkeypatch.setattr(ui, "UI_DIR", ui_dir)
-    monkeypatch.setattr(ui, "static_app", StaticFiles(directory=ui_dir))
+    monkeypatch.setattr(ui, "static_app", ui.ReactStaticFiles(directory=ui_dir))
     app = create_app()
     client = TestClient(app)
 
@@ -85,7 +91,7 @@ def test_react_asset_routes_still_use_static_files(monkeypatch, tmp_path):
     (ui_dir / "index.html").write_text("<html><body>react build</body></html>", encoding="utf-8")
     (assets_dir / "app.js").write_text("console.log('asset');", encoding="utf-8")
     monkeypatch.setattr(ui, "UI_DIR", ui_dir)
-    monkeypatch.setattr(ui, "static_app", StaticFiles(directory=ui_dir))
+    monkeypatch.setattr(ui, "static_app", ui.ReactStaticFiles(directory=ui_dir))
     app = create_app()
     client = TestClient(app)
 

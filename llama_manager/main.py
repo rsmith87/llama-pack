@@ -304,11 +304,13 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.include_router(external_keys.router, prefix=LM_API_PREFIX)
     app.include_router(ui.api_router, prefix=LM_API_PREFIX)
     app.include_router(plugins.router, prefix=LM_API_PREFIX)
+    app.state.plugin_routers_included = set()
     for record in app.state.plugin_registry.records.values():
         if record.status != "enabled":
             continue
         for route_prefix, router in record.routers:
             app.include_router(router, prefix=f"{LM_API_PREFIX}/plugins{route_prefix}")
+            app.state.plugin_routers_included.add((record.id, route_prefix))
     if app_config.mode == "controller":
         app.include_router(benchmarks.router, prefix=LM_API_PREFIX)
         app.include_router(threads.router, prefix=LM_API_PREFIX)
@@ -318,6 +320,20 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
 
 
 def _register_middleware(app: FastAPI) -> None:
+    @app.middleware("http")
+    async def enforce_plugin_activation(request: Request, call_next):
+        path = request.url.path
+        prefix = f"{LM_API_PREFIX}/plugins/"
+        if path.startswith(prefix):
+            remainder = path[len(prefix) :]
+            plugin_id, _, plugin_path = remainder.partition("/")
+            management_paths = {"activate", "deactivate", "migrations/status"}
+            if plugin_id not in {"enabled", "status"} and plugin_path not in management_paths:
+                record = app.state.plugin_registry.records.get(plugin_id)
+                if record is None or record.status != "enabled":
+                    return JSONResponse({"detail": "Not Found"}, status_code=404)
+        return await call_next(request)
+
     @app.middleware("http")
     async def enforce_agent_api_key(request: Request, call_next):
         path = request.url.path

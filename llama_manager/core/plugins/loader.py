@@ -27,6 +27,17 @@ def load_plugins(config: AppConfig) -> PluginRegistry:
     return registry
 
 
+def load_configured_plugin(registry: PluginRegistry, config: AppConfig, plugin_id: str) -> PluginRecord:
+    plugin_config = config.plugins.get(plugin_id)
+    if plugin_config is None:
+        raise KeyError(plugin_id)
+    if plugin_config.path is None:
+        raise ValueError("Plugin path is not configured")
+    registry.remove_record(plugin_id)
+    _load_one(registry, plugin_id, plugin_config.path, plugin_config.config, config.mode, config.log_dir)
+    return registry.records[plugin_id]
+
+
 def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_config: dict[str, Any], mode: str, log_dir: Path) -> None:
     try:
         manifest = load_manifest(path)

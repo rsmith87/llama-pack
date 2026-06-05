@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { getEnabledPlugins, getPluginMigrationStatus, getPluginStatus, type EnabledPlugin, type PluginMigrationStatus, type PluginStatus } from "../../api/plugins";
+import { activatePlugin, deactivatePlugin, getEnabledPlugins, getPluginMigrationStatus, getPluginStatus, type EnabledPlugin, type PluginMigrationStatus, type PluginStatus } from "../../api/plugins";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
 
 type PluginRow = {
@@ -60,6 +60,10 @@ function listText(values: string[], empty = "None") {
   return values.length ? values.join(", ") : empty;
 }
 
+function actionLabelFor(plugin: PluginRow) {
+  return plugin.status === "enabled" ? "Deactivate" : "Activate";
+}
+
 export function PluginsPage() {
   const [enabled, setEnabled] = useState<EnabledPlugin[]>([]);
   const [status, setStatus] = useState<PluginStatus | null>(null);
@@ -67,6 +71,7 @@ export function PluginsPage() {
   const [selectedId, setSelectedId] = useState<string>("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [actingPluginId, setActingPluginId] = useState("");
 
   async function load() {
     setLoading(true);
@@ -102,6 +107,24 @@ export function PluginsPage() {
   const rows = useMemo(() => mergePluginRows(enabled, status, migrations), [enabled, status, migrations]);
   const selected = rows.find((row) => row.id === selectedId) || rows[0];
 
+  async function runPluginAction(plugin: PluginRow) {
+    const actionLabel = actionLabelFor(plugin);
+    setActingPluginId(plugin.id);
+    setError("");
+    try {
+      if (plugin.status === "enabled") {
+        await deactivatePlugin(plugin.id);
+      } else {
+        await activatePlugin(plugin.id);
+      }
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${actionLabel.toLowerCase()} plugin`);
+    } finally {
+      setActingPluginId("");
+    }
+  }
+
   return (
     <div className="plugins-page">
       <div className="page-heading">
@@ -119,7 +142,27 @@ export function PluginsPage() {
           emptyMessage={loading ? "Loading plugins..." : "No plugins configured."}
           getRowKey={(row) => row.id}
           columns={[
-            { key: "id", header: "Plugin", render: (row) => <button className="table-link-button" type="button" onClick={() => setSelectedId(row.id)}>{row.name}</button> },
+            {
+              key: "id",
+              header: "Plugin",
+              render: (row) => (
+                <div className="plugin-list-item">
+                  <button className="table-link-button plugin-list-name" type="button" onClick={() => setSelectedId(row.id)}>{row.name}</button>
+                  <span className="muted">{row.id}</span>
+                  <div className="plugin-row-actions">
+                    <button
+                      className={row.status === "enabled" ? "plugin-action plugin-action-danger" : "plugin-action"}
+                      type="button"
+                      onClick={() => void runPluginAction(row)}
+                      disabled={loading || actingPluginId === row.id}
+                    >
+                      {actingPluginId === row.id ? "Working" : actionLabelFor(row)}
+                    </button>
+                    <button className="plugin-action" type="button" onClick={() => setSelectedId(row.id)}>Details</button>
+                  </div>
+                </div>
+              ),
+            },
             { key: "status", header: "Status", render: (row) => <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge> },
             { key: "version", header: "Version", render: (row) => row.version || "-" },
             { key: "routes", header: "Routes", render: (row) => row.routes.length },
@@ -129,7 +172,19 @@ export function PluginsPage() {
         />
       </Panel>
       {selected ? (
-        <Panel title={selected.name} eyebrow="Detail">
+        <Panel
+          title={selected.name}
+          eyebrow="Detail"
+          actions={
+            <Button
+              type="button"
+              onClick={() => void runPluginAction(selected)}
+              disabled={loading || actingPluginId === selected.id}
+            >
+              {actingPluginId === selected.id ? "Working" : actionLabelFor(selected)}
+            </Button>
+          }
+        >
           <div className="detail-grid">
             <div><span className="muted">ID</span><strong>{selected.id}</strong></div>
             <div><span className="muted">Version</span><strong>{selected.version || "-"}</strong></div>
