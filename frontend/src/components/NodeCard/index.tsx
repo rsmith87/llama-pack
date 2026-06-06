@@ -1,18 +1,30 @@
 import "./styles.css";
 import type { ReactNode } from "react";
-import { Button, EmptyState, StatusBadge } from "../ui";
+import { Button, EmptyState, StatusBadge, type Tone } from "../ui";
 
 type NodeCardProps = {
   name: string;
   statusLabel?: string;
-  badgeTone?: "success" | "warning" | "danger" | "muted";
+  badgeTone?: Tone;
+  certLabel?: string;
+  certTone?: Tone;
   modelCount: number;
   onOpenNode?: () => void;
   emptyMessage?: string;
   children?: ReactNode;
 };
 
-export function NodeCard({ name, statusLabel, badgeTone = "muted", modelCount, onOpenNode, emptyMessage, children }: NodeCardProps) {
+export function NodeCard({
+  name,
+  statusLabel,
+  badgeTone = "muted",
+  certLabel,
+  certTone = "muted",
+  modelCount,
+  onOpenNode,
+  emptyMessage,
+  children,
+}: NodeCardProps) {
   return (
     <article className="controller-node-card">
       <div className="controller-node-card-header">
@@ -20,9 +32,10 @@ export function NodeCard({ name, statusLabel, badgeTone = "muted", modelCount, o
           <span className="label">Node</span>
           <strong>{name}</strong>
         </div>
-        {statusLabel ? (
-          <StatusBadge tone={badgeTone}>{statusLabel}</StatusBadge>
-        ) : null}
+        <div className="controller-node-card-badges">
+          {statusLabel ? <StatusBadge tone={badgeTone}>{statusLabel}</StatusBadge> : null}
+          {certLabel ? <StatusBadge tone={certTone}>{certLabel}</StatusBadge> : null}
+        </div>
       </div>
       <div className="node-model-summary">
         <span>{modelCount} models</span>

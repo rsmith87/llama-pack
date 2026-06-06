@@ -247,3 +247,32 @@ it("shows a useful error when loading fails", async () => {
 
   await waitFor(() => expect(screen.getByText(/503 Service Unavailable: offline/)).toBeInTheDocument());
 });
+
+it("renders certificate alerts and per-node cert badges", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller", configured_models: 2 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          nodes: [
+            { name: "expired-node", reachable: true, models: [], cert_expires_in_seconds: -10 },
+            { name: "expiring-node", reachable: true, models: [], cert_expires_in_seconds: 86400 },
+            { name: "healthy-node", reachable: true, models: [], cert_expires_in_seconds: 60 * 60 * 24 * 90 },
+          ],
+        }),
+      }),
+  );
+
+  render(<DashboardPage onNavigate={() => undefined} />);
+
+  expect(await screen.findByText(/Expired:/)).toBeInTheDocument();
+  expect(screen.getAllByText(/expired-node/).length).toBeGreaterThan(0);
+  expect(screen.getByText(/Expiring soon:/)).toBeInTheDocument();
+  expect(screen.getByText(/expiring-node \(1d\)/)).toBeInTheDocument();
+  expect(screen.getByText("cert expired")).toBeInTheDocument();
+  expect(screen.getByText("cert 1d left")).toBeInTheDocument();
+  expect(screen.getByText("cert valid")).toBeInTheDocument();
+});

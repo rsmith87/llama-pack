@@ -15,6 +15,13 @@
   gap: 12px;
 }
 
+.controller-node-card-badges {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .controller-node-card-header strong {
   display: block;
   margin-top: 3px;

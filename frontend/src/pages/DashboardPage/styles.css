@@ -1,7 +1,35 @@
 .dashboard-health,
+.dashboard-cert-alerts,
 .quick-actions-panel,
 .dashboard-controller-nodes {
   grid-column: 1 / -1;
+}
+
+.dashboard-cert-alerts {
+  display: grid;
+  gap: 8px;
+}
+
+.dashboard-cert-alert {
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  color: var(--ink);
+}
+
+.dashboard-cert-alert strong {
+  margin-right: 6px;
+}
+
+.dashboard-cert-alert-danger {
+  border-color: color-mix(in srgb, var(--danger) 55%, var(--line));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+}
+
+.dashboard-cert-alert-warning {
+  border-color: color-mix(in srgb, var(--warning) 55%, var(--line));
+  background: color-mix(in srgb, var(--warning) 10%, var(--panel));
 }
 
 .controller-node-grid {

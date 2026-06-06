@@ -806,6 +806,32 @@ def test_nodes_status_reports_upstream_http_error_classification():
     assert payload[0]["error"] == "upstream http 503: agent unavailable"
 
 
+def test_nodes_status_includes_cert_expiry_seconds(monkeypatch):
+    config = load_config(
+        {
+            "mode": "controller",
+            "node_heartbeat_timeout_seconds": -1,
+            "nodes": {"win": {"url": "https://win-agent:9000"}},
+        }
+    )
+    app = create_app(config=config)
+    client = TestClient(app)
+
+    async def fake_probe(url: str, timeout: float = 5.0):
+        assert url == "https://win-agent:9000"
+        return -42
+
+    monkeypatch.setattr(
+        "llama_manager.api.routes.nodes.aggregate.probe_cert_expiry_seconds",
+        fake_probe,
+    )
+
+    response = client.get("/lm-api/v1/nodes/status")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["cert_expires_in_seconds"] == -42
+
+
 def test_nodes_models_reports_upstream_transport_error_classification():
     config = load_config(
         {
@@ -828,6 +854,32 @@ def test_nodes_models_reports_upstream_transport_error_classification():
     assert payload[0]["models"] == []
     assert payload[0]["agent_config_source"] is None
     assert payload[0]["models_source"] == "unknown"
+
+
+def test_nodes_models_includes_cert_expiry_seconds(monkeypatch):
+    config = load_config(
+        {
+            "mode": "controller",
+            "node_heartbeat_timeout_seconds": -1,
+            "nodes": {"win": {"url": "https://win-agent:9000"}},
+        }
+    )
+    app = create_app(config=config)
+    client = TestClient(app)
+
+    async def fake_probe(url: str, timeout: float = 5.0):
+        assert url == "https://win-agent:9000"
+        return 3600
+
+    monkeypatch.setattr(
+        "llama_manager.api.routes.nodes.aggregate.probe_cert_expiry_seconds",
+        fake_probe,
+    )
+
+    response = client.get("/lm-api/v1/nodes/models")
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0]["cert_expires_in_seconds"] == 3600
 
 
 def test_ui_index_is_served(monkeypatch, tmp_path):

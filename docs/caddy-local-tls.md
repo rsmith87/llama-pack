@@ -146,7 +146,7 @@ Copy both CA certs to every machine and keep a local staging copy:
 
 ```bash
 mkdir -p ~/neuraxis-certs
-cp ~/.step/certs/root_ca.crt ~/neuraxis-certs/ca-root.crt
+cp ~/.step/certs/root_ca.crt ~/neuraxis-certs/root_ca.crt
 cp ~/.step/certs/intermediate_ca.crt ~/neuraxis-certs/intermediate_ca.crt
 cat ~/neuraxis-certs/ca-root.crt ~/neuraxis-certs/intermediate_ca.crt \
   > ~/neuraxis-certs/neuraxis-ca-chain.crt
@@ -158,7 +158,7 @@ On other nodes, copy it with `scp` or another trusted transfer method:
 mkdir -p ~/neuraxis-certs
 # copy root_ca.crt into ~/neuraxis-certs/ca-root.crt
 # copy intermediate_ca.crt into ~/neuraxis-certs/intermediate_ca.crt
-cat ~/neuraxis-certs/ca-root.crt ~/neuraxis-certs/intermediate_ca.crt \
+cat ~/neuraxis-certs/root_ca.crt ~/neuraxis-certs/intermediate_ca.crt \
   > ~/neuraxis-certs/neuraxis-ca-chain.crt
 ```
 
@@ -212,6 +212,7 @@ Controller:
 step ca certificate pi-controller.local pi-controller.crt pi-controller.key \
   --ca-url https://pi-controller.local:8443 \
   --root ~/.step/certs/root_ca.crt \
+  --expires-in 24h
   --not-after 720h
 ```
 
@@ -252,12 +253,13 @@ scripts/renew_caddy_step_cert.sh \
   --name pi-controller \
   --leaf ~/neuraxis-certs/pi-controller.crt \
   --key ~/neuraxis-certs/pi-controller.key \
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \
+  --intermediate ~/.step/certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/ca-root.crt \
+  --root ~/.step/certs/root_ca.crt \
   --cert-dir /etc/caddy/certs \
   --expires-in 24h \
-  --reload systemd
+  --reload systemd \
+  --force
 ```
 
 For Linux agents, replace `pi-controller` with the agent basename, such as
@@ -752,9 +754,9 @@ scripts/renew_caddy_step_cert.sh \
   --name pi-controller \
   --leaf ~/neuraxis-certs/pi-controller.crt \
   --key ~/neuraxis-certs/pi-controller.key \
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \
+  --intermediate ~/.step/certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/root_ca.crt \
+  --root ~/.step/certs/root_ca.crt \
   --cert-dir /etc/caddy/certs \
   --expires-in 24h \
   --reload systemd \

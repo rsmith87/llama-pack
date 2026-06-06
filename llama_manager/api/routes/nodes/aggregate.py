@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import httpx
 from fastapi import APIRouter, Depends
 
 from llama_manager.api.dependencies import get_node_registry
@@ -9,6 +10,7 @@ from llama_manager.api.routes.nodes.common import (
     stale_node_payload,
     upstream_error_text,
 )
+from llama_manager.core.network.cert_probe import probe_cert_expiry_seconds
 from llama_manager.core.nodes.registry import NodeRegistry
 from llama_manager.core.runtime.profile_catalog import build_profile_catalog
 
@@ -17,12 +19,14 @@ router = APIRouter()
 
 
 async def _fetch_node_snapshot(registry: NodeRegistry, node: dict, include_models: bool) -> dict:
+    cert_expires_in_seconds = await probe_cert_expiry_seconds(node.get("url", ""))
     if not node["heartbeat_fresh"]:
-        return stale_node_payload(node, include_models=include_models)
+        payload = stale_node_payload(node, include_models=include_models)
+        return {**payload, "cert_expires_in_seconds": cert_expires_in_seconds}
     try:
         health = await registry.request_node(node["name"], "GET", "/health")
         if not include_models:
-            return {**node, "reachable": True, "health": health}
+            return {**node, "reachable": True, "health": health, "cert_expires_in_seconds": cert_expires_in_seconds}
         models = await registry.request_node(node["name"], "GET", "/lm-api/v1/models")
         models_source = annotate_model_sources(models)
         return {
@@ -31,13 +35,17 @@ async def _fetch_node_snapshot(registry: NodeRegistry, node: dict, include_model
             "models": models,
             "agent_config_source": health.get("config_source"),
             "models_source": models_source,
+            "cert_expires_in_seconds": cert_expires_in_seconds,
         }
     except httpx.HTTPStatusError as exc:
-        return failed_node_payload(node, exc, include_models=include_models)
+        payload = failed_node_payload(node, exc, include_models=include_models)
+        return {**payload, "cert_expires_in_seconds": cert_expires_in_seconds}
     except httpx.HTTPError as exc:
-        return failed_node_payload(node, exc, include_models=include_models)
+        payload = failed_node_payload(node, exc, include_models=include_models)
+        return {**payload, "cert_expires_in_seconds": cert_expires_in_seconds}
     except Exception as exc:
-        return failed_node_payload(node, exc, include_models=include_models)
+        payload = failed_node_payload(node, exc, include_models=include_models)
+        return {**payload, "cert_expires_in_seconds": cert_expires_in_seconds}
 
 
 @router.get("/nodes/status")

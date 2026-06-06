@@ -10,6 +10,7 @@ export type NodeInventoryItem = {
   status?: string;
   reachable?: boolean;
   models?: NodeModel[];
+  cert_expires_in_seconds?: number | null;
 };
 
 export type NodesResponse = {
@@ -32,6 +33,7 @@ export type NodeRecord = {
   heartbeat_age_seconds?: number | null;
   last_heartbeat?: string;
   error?: string;
+  cert_expires_in_seconds?: number | null;
 };
 
 /** Config entry for a node (used inside CurrentConfig). */

@@ -28,6 +28,10 @@ const emptyData: DashboardData = {
   nodes: [],
 };
 
+const DAY_SECONDS = 24 * 60 * 60;
+const CERT_EXPIRING_SOON_SECONDS = 30 * DAY_SECONDS;
+type CertTone = "success" | "warning" | "danger" | "muted";
+
 function chatSearch(model: string, target: string, mode: "direct" | "thread", source: string): string {
   const params = new URLSearchParams();
   params.set("model", model);
@@ -83,6 +87,13 @@ function modelForNode(node: DashboardData["nodes"][number], nodeModel: LocalMode
 
 function nodeName(node: { name?: string; node_id?: string }): string {
   return String(node.name || node.node_id || "");
+}
+
+function certBadge(seconds: number | null | undefined): { tone: CertTone; label: string } {
+  if (typeof seconds !== "number") return { tone: "muted", label: "cert unknown" };
+  if (seconds <= 0) return { tone: "danger", label: "cert expired" };
+  if (seconds <= CERT_EXPIRING_SOON_SECONDS) return { tone: "warning", label: `cert ${Math.max(1, Math.ceil(seconds / DAY_SECONDS))}d left` };
+  return { tone: "success", label: "cert valid" };
 }
 
 function asNodeRecords(nodes: DashboardData["nodes"]): NodeRecord[] {
@@ -186,6 +197,18 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
     }
     return [...byName.values()];
   })();
+  const expiredCertNodes = controllerNodes
+    .filter((node) => typeof node.cert_expires_in_seconds === "number" && node.cert_expires_in_seconds <= 0)
+    .map((node) => nodeName(node) || "unnamed node");
+  const expiringCertNodes = controllerNodes
+    .filter((node) => {
+      const expiry = node.cert_expires_in_seconds;
+      return typeof expiry === "number" && expiry > 0 && expiry <= CERT_EXPIRING_SOON_SECONDS;
+    })
+    .map((node) => {
+      const expiry = Number(node.cert_expires_in_seconds);
+      return `${nodeName(node) || "unnamed node"} (${Math.max(1, Math.ceil(expiry / DAY_SECONDS))}d)`;
+    });
 
   function renderModelCard(model: LocalModel, key: string) {
     const name = modelName(model);
@@ -244,6 +267,21 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
         </div>
       </Panel>
 
+      {isController && (expiredCertNodes.length > 0 || expiringCertNodes.length > 0) ? (
+        <Panel className="dashboard-cert-alerts" eyebrow="TLS Alerts" title="Node Certificates">
+          {expiredCertNodes.length > 0 ? (
+            <p className="dashboard-cert-alert dashboard-cert-alert-danger" role="alert">
+              <strong>Expired:</strong> {expiredCertNodes.join(", ")}
+            </p>
+          ) : null}
+          {expiringCertNodes.length > 0 ? (
+            <p className="dashboard-cert-alert dashboard-cert-alert-warning">
+              <strong>Expiring soon:</strong> {expiringCertNodes.join(", ")}
+            </p>
+          ) : null}
+        </Panel>
+      ) : null}
+
       {mode !== "agent" ? (
         <Panel
           className="dashboard-controller-nodes"
@@ -258,12 +296,15 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
               const models = node.models || [];
               const nodeStatus = node.reachable === false ? "offline" : node.status || "reachable";
               const nodeTone = node.reachable === false ? "danger" : statusTone(node.status || "reachable");
+              const cert = certBadge(node.cert_expires_in_seconds);
               return (
                 <NodeCard
                   key={`${name}-${index}`}
                   name={name}
                   statusLabel={nodeStatus}
                   badgeTone={nodeTone}
+                  certLabel={cert.label}
+                  certTone={cert.tone}
                   modelCount={models.length}
                   onOpenNode={() => onNavigate("nodes")}
                   emptyMessage="No models reported for this node."
