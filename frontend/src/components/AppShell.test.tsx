@@ -389,6 +389,53 @@ it("hydrates plugin navigation from the last known metadata cache", async () => 
   expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
 });
 
+it("loads plugin navigation on document refresh with the persisted UI session", async () => {
+  localStorage.setItem("lm_ui_token", "persisted-session");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string, init?: RequestInit) => {
+      const token = (init?.headers as Record<string, string> | undefined)?.["X-UI-Session"];
+      if (url === "/lm-api/v1/auth/me" && token === "persisted-session") {
+        return Promise.resolve({ ok: true, json: async () => ({ username: "admin", role: "admin" }) });
+      }
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled" && token === "persisted-session") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "neuraxis_business",
+              name: "Business",
+              version: "1.0",
+              status: "enabled",
+              frontend: { entry: null, style: null },
+              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              secondary_navigation: [],
+              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+            },
+          ]),
+        });
+      }
+      if (url === "/lm-api/v1/plugins/status" && token === "persisted-session") {
+        return Promise.resolve({ ok: true, json: async () => ({ plugins: [{ id: "neuraxis_business", status: "enabled", version: "1.0", health: [], warnings: [], errors: [] }] }) });
+      }
+      if (url === "/lm-api/v1/plugins/enabled" || url === "/lm-api/v1/plugins/status" || url === "/lm-api/v1/auth/me") {
+        return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+
+  render(<App />);
+
+  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/enabled", expect.objectContaining({
+    headers: expect.objectContaining({ "X-UI-Session": "persisted-session" }),
+  }));
+});
+
 it("shows plugin status failures and warnings in the shell", async () => {
   vi.stubGlobal(
     "fetch",

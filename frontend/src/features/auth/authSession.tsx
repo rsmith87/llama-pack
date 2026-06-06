@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { currentUser, login, logout } from "../../api/auth";
 import { setAuthTokenProvider } from "../../api/client";
 import { Button } from "../../components/ui";
@@ -22,7 +22,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState("");
   const [authRole, setAuthRole] = useState("");
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     setAuthTokenProvider(() => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "");
   }, []);
 
