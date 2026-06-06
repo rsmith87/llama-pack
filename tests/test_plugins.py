@@ -4,6 +4,7 @@ import textwrap
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient as RawTestClient
 
 from llama_manager.core.config import AppConfig, load_config
 from llama_manager.core.chat.scheduler import ChatAdmissionError, ChatScheduler
@@ -115,6 +116,23 @@ def test_enabled_plugin_loads_registers_route_and_frontend_metadata(tmp_path: Pa
     assert status["status"] == "enabled"
     assert status["warnings"] == []
     assert status["errors"] == []
+
+
+def test_plugin_shell_metadata_is_public_but_plugin_api_stays_protected(tmp_path: Path):
+    plugin_dir = write_plugin(tmp_path, "sample_plugin")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    app.state.auth_store.create_key("admin", "admin")
+    client = RawTestClient(app)
+
+    metadata_response = client.get("/lm-api/v1/plugins/enabled")
+    status_response = client.get("/lm-api/v1/plugins/status")
+    plugin_api_response = client.get("/lm-api/v1/plugins/sample_plugin/hello")
+
+    assert metadata_response.status_code == 200
+    assert metadata_response.json()[0]["id"] == "sample_plugin"
+    assert status_response.status_code == 200
+    assert status_response.json()["plugins"][0]["id"] == "sample_plugin"
+    assert plugin_api_response.status_code == 401
 
 
 def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):

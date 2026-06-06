@@ -436,6 +436,38 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
   }));
 });
 
+it("keeps cached plugin navigation when the persisted UI session is stale", async () => {
+  localStorage.setItem("lm_ui_token", "stale-session");
+  localStorage.setItem("neuraxis.pluginNavigation", JSON.stringify([
+    {
+      id: "neuraxis_business",
+      name: "Business",
+      version: "1.0",
+      status: "enabled",
+      frontend: { entry: null, style: null },
+      navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+      secondary_navigation: [],
+      ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+    },
+  ]));
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/auth/me" || url === "/lm-api/v1/plugins/enabled" || url === "/lm-api/v1/plugins/status") {
+        return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+
+  render(<App />);
+
+  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+});
+
 it("shows plugin status failures and warnings in the shell", async () => {
   vi.stubGlobal(
     "fetch",

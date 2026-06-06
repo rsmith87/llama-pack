@@ -16,6 +16,8 @@ def should_bypass_middleware(path: str, method: str) -> bool:
         return True
     if path == f"{LM_API_PREFIX}/client-discovery" and method == "GET":
         return True
+    if method == "GET" and path in {f"{LM_API_PREFIX}/plugins/enabled", f"{LM_API_PREFIX}/plugins/status"}:
+        return True
     if path == f"{LM_API_PREFIX}/test-chat/bootstrap":
         return True
     if path.startswith("/health") or path.startswith(f"{LM_API_PREFIX}/health"):
