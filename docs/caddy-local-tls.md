@@ -328,22 +328,31 @@ renewal windows when it is running.
 
 ### macOS scheduled renewal
 
-For Homebrew Caddy on macOS, use the same renewal helper with
-`--reload brew`. A simple cron entry is enough:
+For Homebrew Caddy on macOS, use the dedicated wrapper:
 
 ```bash
-crontab -e
+/Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh
 ```
 
-Example entry for the Mac mini:
+For scheduled runs, prefer `launchd` over `cron`. Install the wrapper into a
+stable user path and point your LaunchAgent to it:
 
-```cron
-0 3,15 * * * cd /Users/robertsmith/Apps/neuraxis && /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_step_cert.sh --name mac-mini --leaf /Users/robertsmith/neuraxis-certs/mac-mini.crt --key /Users/robertsmith/neuraxis-certs/mac-mini.key --intermediate /Users/robertsmith/neuraxis-certs/intermediate_ca.crt --ca-url https://pi-controller.local:8443 --root /Users/robertsmith/neuraxis-certs/ca-root.crt --cert-dir /opt/homebrew/etc/caddy/certs --owner robertsmith --group staff --expires-in 24h --reload brew >> /Users/robertsmith/Library/Logs/neuraxis-renew-caddy-cert.log 2>&1
+```bash
+install -m 755 /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh \
+  /Users/robertsmith/bin/renew_caddy_mac_mini.sh
 ```
 
-Run the command manually once before adding it to cron. On macOS, cron has a
-smaller environment than your shell, so use absolute paths in the scheduled
-entry.
+LaunchAgent location:
+
+```text
+~/Library/LaunchAgents/com.neuraxis.cert-renew.plist
+```
+
+`ProgramArguments` should execute:
+
+```text
+/Users/robertsmith/bin/renew_caddy_mac_mini.sh
+```
 
 ## Install Certs For Caddy
 
@@ -796,12 +805,11 @@ If `depth=0`, Caddy is serving the leaf cert only without the intermediate.
 Re-run the renewal script — the fullchain install step rebuilds
 `<node>-fullchain.crt` from the leaf + intermediate.
 
-### macOS cron gotchas
+### macOS scheduler gotchas
 
-- cron uses a minimal environment. Always use absolute paths in the cron entry.
-- macOS may block cron from accessing files without Full Disk Access permission.
-  Go to `System Settings → Privacy & Security → Full Disk Access` and add
-  `/usr/sbin/cron`. Without this, renewal silently fails after a reboot.
+- Use `launchd` (`~/Library/LaunchAgents`) for better behavior across network
+  transitions and wake/sleep.
+- Keep absolute paths in wrapper scripts and LaunchAgent `ProgramArguments`.
 
 ## Troubleshooting
 

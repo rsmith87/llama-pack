@@ -88,13 +88,20 @@ step ca certificate mac-mini.local ~/neuraxis-certs/mac-mini.crt ~/neuraxis-cert
 
 ```bash
 cd /Users/robertsmith/Apps/neuraxis
+scripts/renew_caddy_mac_mini.sh
+```
+
+Wrapper script content (`scripts/renew_caddy_mac_mini.sh`):
+
+```bash
+cd /Users/robertsmith/Apps/neuraxis
 scripts/renew_caddy_step_cert.sh \
   --name mac-mini \
   --leaf ~/neuraxis-certs/mac-mini.crt \
   --key ~/neuraxis-certs/mac-mini.key \
   --intermediate ~/neuraxis-certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/ca-root.crt \
+  --root ~/neuraxis-certs/root_ca.crt \
   --cert-dir /opt/homebrew/etc/caddy/certs \
   --owner robertsmith \
   --group staff \
@@ -157,6 +164,13 @@ and the cron job on macOS must run at least twice a day. The
 machine is off during both windows, the cert will expire before the next
 attempt.
 
-Make sure the macOS cron job has Full Disk Access: `System Settings → Privacy &
-Security → Full Disk Access → add /usr/sbin/cron`. Without this it silently
-fails after a reboot.
+If you move scheduling to `launchd` (recommended), copy the wrapper script to a
+stable user path first:
+
+```bash
+install -m 755 /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh \
+  /Users/robertsmith/bin/renew_caddy_mac_mini.sh
+```
+
+Then point your LaunchAgent `ProgramArguments` to:
+`/Users/robertsmith/bin/renew_caddy_mac_mini.sh`.
