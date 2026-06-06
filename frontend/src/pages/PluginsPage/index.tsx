@@ -81,19 +81,19 @@ export function PluginsPage() {
     try {
       const [enabledPayload, statusPayload] = await Promise.all([getEnabledPlugins(), getPluginStatus()]);
       const enabledPlugins = Array.isArray(enabledPayload) ? enabledPayload : [];
+      const ids = new Set([...enabledPlugins.map((plugin) => plugin.id), ...(statusPayload.plugins || []).map((plugin) => plugin.id)]);
       const migrationEntries = await Promise.all(
-        enabledPlugins.map(async (plugin) => {
+        Array.from(ids).sort().map(async (pluginId) => {
           try {
-            return [plugin.id, await getPluginMigrationStatus(plugin.id)] as const;
+            return [pluginId, await getPluginMigrationStatus(pluginId)] as const;
           } catch {
-            return [plugin.id, null] as const;
+            return [pluginId, null] as const;
           }
         })
       );
       setEnabled(enabledPlugins);
       setStatus(statusPayload);
       setMigrations(Object.fromEntries(migrationEntries));
-      const ids = new Set([...enabledPlugins.map((plugin) => plugin.id), ...(statusPayload.plugins || []).map((plugin) => plugin.id)]);
       setSelectedId((existing) => existing && ids.has(existing) ? existing : Array.from(ids).sort()[0] || "");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Plugins unavailable");

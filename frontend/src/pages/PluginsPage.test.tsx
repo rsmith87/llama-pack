@@ -149,6 +149,51 @@ it("activates and deactivates the selected plugin", async () => {
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/business_plugin/deactivate", expect.objectContaining({ method: "POST" }));
 });
 
+it("loads migration controls for a configured plugin that is not enabled", async () => {
+  const fetch = vi.fn((url: string) => {
+    if (url === "/lm-api/v1/plugins/enabled") {
+      return Promise.resolve({ ok: true, json: async () => [] });
+    }
+    if (url === "/lm-api/v1/plugins/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugins: [{
+          id: "neuraxis_business",
+          status: "disabled",
+          version: "1.0",
+          health: [],
+          warnings: ["Plugin migration target main is pending"],
+          errors: [],
+          config: {},
+        }],
+      }) });
+    }
+    if (url === "/lm-api/v1/plugins/neuraxis_business/migrations/status") {
+      return Promise.resolve({ ok: true, json: async () => ({
+        plugin_id: "neuraxis_business",
+        targets: [{
+          id: "main",
+          directory: "neuraxis_business/migrations",
+          database_url: null,
+          current_revision: "20260604_0003",
+          head_revision: "20260604_0004",
+          status: "pending",
+          pending: true,
+          last_error: null,
+        }],
+      }) });
+    }
+    return Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing" });
+  });
+  vi.stubGlobal("fetch", fetch);
+
+  render(<PluginsPage />);
+
+  await screen.findByRole("heading", { name: "neuraxis_business" });
+  expect(screen.getByText("neuraxis_business/migrations")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Upgrade" })).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/neuraxis_business/migrations/status", expect.anything());
+});
+
 it("upgrades a pending migration target and refreshes migration status", async () => {
   let upgraded = false;
   let resolveUpgrade: (() => void) | undefined;
