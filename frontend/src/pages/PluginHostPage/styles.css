@@ -1,6 +1,5 @@
 .plugin-host-page {
-  display: grid;
-  gap: 18px;
+  display: block;
 }
 
 .plugin-host-panel {

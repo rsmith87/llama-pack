@@ -108,7 +108,6 @@ export function PluginHostPage({
         <div>
           <span className="eyebrow">{plugin?.name || page.pluginName || "Plugin"}</span>
           <h2>{page.label}</h2>
-          <p className="muted">Plugin frontend loaded from {plugin?.frontend?.entry || "plugin metadata"}.</p>
         </div>
         <Button type="button" onClick={() => {
           setReloadCount((value) => value + 1);
