@@ -9,6 +9,7 @@ type AuthSessionContextValue = {
   authToken: string;
   authUser: string;
   authRole: string;
+  authChecked: boolean;
   isAuthenticated: boolean;
   loginWithKey: (username: string, apiKey: string) => Promise<void>;
   acceptSession: (session: { token: string; username: string; role: string }) => void;
@@ -21,23 +22,34 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [authToken, setAuthToken] = useState(() => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "");
   const [authUser, setAuthUser] = useState("");
   const [authRole, setAuthRole] = useState("");
+  const [authChecked, setAuthChecked] = useState(() => !localStorage.getItem(AUTH_TOKEN_STORAGE_KEY));
 
   useLayoutEffect(() => {
     setAuthTokenProvider(() => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "");
   }, []);
 
   useEffect(() => {
-    if (!authToken || authUser) return;
+    if (!authToken) {
+      setAuthChecked(true);
+      return;
+    }
+    if (authUser) {
+      setAuthChecked(true);
+      return;
+    }
+    setAuthChecked(false);
     void currentUser()
       .then((response) => {
         setAuthUser(response.username);
         setAuthRole(response.role || "operator");
+        setAuthChecked(true);
       })
       .catch(() => {
         localStorage.removeItem(AUTH_TOKEN_STORAGE_KEY);
         setAuthToken("");
         setAuthUser("");
         setAuthRole("");
+        setAuthChecked(true);
       });
   }, [authToken, authUser]);
 
@@ -51,6 +63,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     setAuthToken(session.token);
     setAuthUser(session.username);
     setAuthRole(session.role);
+    setAuthChecked(true);
   }
 
   async function logoutSession() {
@@ -61,6 +74,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
       setAuthToken("");
       setAuthUser("");
       setAuthRole("");
+      setAuthChecked(true);
     }
   }
 
@@ -68,11 +82,12 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     authToken,
     authUser,
     authRole,
+    authChecked,
     isAuthenticated: Boolean(authToken),
     loginWithKey,
     acceptSession,
     logoutSession,
-  }), [authToken, authUser, authRole]);
+  }), [authToken, authUser, authRole, authChecked]);
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }

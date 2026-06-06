@@ -151,7 +151,7 @@ it("renders enabled plugin navigation and a generic hosted route", async () => {
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled") {
         return Promise.resolve({
           ok: true,
@@ -192,7 +192,7 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled") {
         return Promise.resolve({
           ok: true,
@@ -227,7 +227,7 @@ it("resolves browser history navigation to plugin pages after shell mount", asyn
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled") {
         return Promise.resolve({
           ok: true,
@@ -268,7 +268,7 @@ it("preserves plugin navigation when a metadata refresh fails", async () => {
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled") {
         enabledCalls += 1;
         if (enabledCalls > 1) {
@@ -317,7 +317,7 @@ it("preserves plugin navigation when a later metadata refresh is unexpectedly em
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled") {
         enabledCalls += 1;
         return Promise.resolve({
@@ -387,6 +387,7 @@ it("hydrates plugin navigation from the last known metadata cache", async () => 
   render(<App />);
 
   expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Login Required" })).toBeInTheDocument();
 });
 
 it("loads plugin navigation on document refresh with the persisted UI session", async () => {
@@ -466,6 +467,7 @@ it("keeps cached plugin navigation when the persisted UI session is stale", asyn
   render(<App />);
 
   expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Login Required" })).toBeInTheDocument();
 });
 
 it("shows plugin status failures and warnings in the shell", async () => {
@@ -474,7 +476,7 @@ it("shows plugin status failures and warnings in the shell", async () => {
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
       if (url === "/lm-api/v1/plugins/status") {
         return Promise.resolve({
@@ -577,7 +579,7 @@ it("shows global health status and refreshes the active page", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", system: { cpu_percent: 20 } }) });
       if (url === "/lm-api/v1/models") {
         modelCalls += 1;

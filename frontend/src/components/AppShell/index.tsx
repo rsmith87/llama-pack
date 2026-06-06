@@ -4,12 +4,12 @@ import { getControllerStatus, getHealth } from "../../api/health";
 import { listNodes } from "../../api/nodes";
 import { getEnabledPlugins, getPluginStatus, type EnabledPlugin, type PluginStatus } from "../../api/plugins";
 import { getSetupStatus } from "../../api/setup";
-import { AuthLoginForm } from "../../features/auth/authSession";
+import { AuthLoginForm, useAuthSession } from "../../features/auth/authSession";
 import { AppModeProvider, type AppMode } from "../../features/appMode/appModeContext";
 import { ThemeToggle } from "../../features/theme/themeSession";
 import { pageForKey, pageForPath, pagesBySectionForMode, pathForPage, type PageDefinition, type PageIcon, type PageKey, type PageNavigationOptions } from "../../routes/pages";
 import { LogModal, type LogSelection } from "../LogModal";
-import { Button } from "../ui";
+import { Button, Panel } from "../ui";
 import { IoRefreshSharp } from "react-icons/io5";
 
 const PLUGIN_NAV_CACHE_KEY = "neuraxis.pluginNavigation";
@@ -60,9 +60,11 @@ function MenuIcon({ icon }: { icon: PageIcon | "logs" | "menu" | "close" }) {
 }
 
 export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
+  const { authChecked, isAuthenticated } = useAuthSession();
   const initialPage = pageForPathOrPluginPlaceholder(window.location.pathname);
   const [activePage, setActivePage] = useState<PageDefinition>(() => initialPage);
   const [setupStatusPending, setSetupStatusPending] = useState(initialPage.key === "dashboard");
+  const [authRequired, setAuthRequired] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
   const [logSelection, setLogSelection] = useState<LogSelection | null>(null);
   const [navOpen, setNavOpen] = useState(false);
@@ -183,12 +185,14 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
     let alive = true;
     void getSetupStatus()
       .then((status) => {
+        if (alive) setAuthRequired(Boolean(status.auth_enabled));
         if (alive && status.auth_bootstrap_required && activePage.key !== "setup") {
           navigate("setup");
         }
         if (alive) setSetupStatusPending(false);
       })
       .catch(() => {
+        if (alive) setAuthRequired(false);
         if (alive) setSetupStatusPending(false);
       })
     return () => {
@@ -365,7 +369,13 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
               ))}
             </nav>
           ) : null}
-          {setupStatusPending ? <div className="muted">Checking setup status...</div> : renderPage(activePage, navigate, refreshKey, openLogs)}
+          {setupStatusPending || (authRequired && !authChecked) ? (
+            <div className="muted">Checking session...</div>
+          ) : authRequired && !isAuthenticated && activePage.key !== "setup" ? (
+            <Panel title="Login Required" eyebrow="Session">
+              <p className="muted">Log in to Neuraxis to continue.</p>
+            </Panel>
+          ) : renderPage(activePage, navigate, refreshKey, openLogs)}
         </main>
       </div>
       {navOpen ? <button className="mobile-nav-scrim" type="button" aria-label="Close navigation overlay" onClick={() => setNavOpen(false)} /> : null}
