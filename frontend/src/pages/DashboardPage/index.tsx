@@ -342,7 +342,7 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
         <div className="quick-actions">
           <button type="button" className="quick-action" onClick={() => onNavigate("chat")}><strong>Open Chat</strong><small>Smoke test a route</small></button>
           <button type="button" className="quick-action" onClick={() => onNavigate("quantization")}><strong>Quantize</strong><small>Fit a model to VRAM</small></button>
-          <button type="button" className="quick-action" onClick={() => onNavigate("controller-ops")}><strong>Controller</strong><small>Jobs and nodes</small></button>
+          {isController && (<button type="button" className="quick-action" onClick={() => onNavigate("controller-ops")}><strong>Controller</strong><small>Jobs and nodes</small></button>)}
         </div>
       </Panel>
     </div>

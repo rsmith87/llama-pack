@@ -29,4 +29,5 @@
 .nodes-page-react .node-header {
   align-items: flex-start;
   flex-direction: row;
+  margin-bottom: 10px;
 }

@@ -962,3 +962,7 @@ button.primary {
   color: var(--muted);
   font-size: 12px;
 }
+
+.nodes-page-list .node.node-full .model-cards {
+  grid-template-columns: repeat(4, 250px);
+}

@@ -141,7 +141,7 @@ export function RuntimeOverviewPage({ onNavigate }: RuntimeOverviewPageProps = {
           <p className="muted runtime-note">Preview model selection without sending a chat request.</p>
           <div className="route-preview-form">
             <FormField label="Task">
-              <input value={routeTask} onChange={(event) => setRouteTask(event.target.value)} />
+              <input type="text" value={routeTask} onChange={(event) => setRouteTask(event.target.value)} />
             </FormField>
             <FormField label="Request type">
               <select value={requestType} onChange={(event) => setRequestType(event.target.value)}>

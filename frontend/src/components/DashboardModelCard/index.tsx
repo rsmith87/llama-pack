@@ -80,7 +80,6 @@ export function DashboardModelCard({ model, resolvedNode, canSend, actingModel, 
         <StatusBadge tone={statusTone(status)}><IoCheckmarkCircle /> {status}</StatusBadge>
         <StatusBadge tone="muted"><IoHome /> {resolvedNode || "local"}</StatusBadge>
         {model.favorite ? <StatusBadge tone="warning"><IoStar /> favorite</StatusBadge> : null}
-        {fileId ? <StatusBadge tone="muted">file {fileId}</StatusBadge> : null}
       </>}
       actions={<>
         <Button variant="success" onClick={onStart} disabled={actingModel === `start:${name}`} aria-label={`Start ${name}`}><IoPlaySharp /></Button>

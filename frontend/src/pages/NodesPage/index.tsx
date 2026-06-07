@@ -181,15 +181,11 @@ export function NodesPage({ onOpenLogs }: NodesPageProps = {}) {
                 </div>
                 <div className="node-header-actions">
                   <StatusBadge tone={node.reachable ? "success" : "danger"}>{node.reachable ? "reachable" : "offline"}</StatusBadge>
+                  <StatusBadge tone={!node.heartbeat_fresh ? "danger": "success"}>{!node.heartbeat_fresh ? "stale" : "fresh"}</StatusBadge>
                   <Button type="button" onClick={() => openEdit(node)} aria-label={`Edit ${node.name}`}>Edit Node</Button>
                 </div>
               </div>
-              <div className="node-meta-grid">
-                <div><span className="label">Registration</span><strong>{node.registration || "-"}</strong></div>
-                <div><span className="label">Heartbeat</span><strong>{node.heartbeat_fresh === false ? "stale" : "fresh"}</strong><small>{node.heartbeat_age_seconds == null ? "-" : `${node.heartbeat_age_seconds}s`}</small></div>
-                <div><span className="label">Agent config</span><strong>{String(node.agent_config_source || "-")}</strong></div>
-                <div><span className="label">Model source</span><strong>{node.models_source || "unknown"}</strong></div>
-              </div>
+
               <div className="model-cards">
                 {node.models?.length ? sortModelsForDisplay(node.models).map((model) => {
                   const name = modelName(model);
