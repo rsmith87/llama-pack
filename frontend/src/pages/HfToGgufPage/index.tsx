@@ -1,6 +1,7 @@
 import "./styles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo } from "react";
 import { listConversions, startConversion } from "../../api/conversions";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, EmptyState, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
 import type { ConversionRecord } from "../../types/api";
 
@@ -25,25 +26,10 @@ function ggufLabel(model: ConversionRecord) {
 }
 
 export function HfToGgufPage() {
-  const [models, setModels] = useState<ConversionRecord[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      setModels(asConversions(await listConversions()));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load convertible HF models");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const { data: models, loading, error, refresh } = useAsyncResource<ConversionRecord[]>(
+    () => listConversions().then(asConversions),
+    [],
+  );
 
   const convertibleModels = useMemo(() => models.filter((model) => Boolean(model.convertible)), [models]);
 

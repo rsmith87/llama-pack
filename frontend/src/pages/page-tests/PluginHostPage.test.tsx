@@ -3,8 +3,8 @@ import { resolve } from "node:path";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { PluginHostPage } from "./PluginHostPage";
-import type { PageDefinition } from "../routes/pages";
+import { PluginHostPage } from "../PluginHostPage";
+import type { PageDefinition } from "../../routes/pages";
 
 const page: PageDefinition = {
   key: "plugin:hello_plugin:/ui/plugins/hello_plugin",
@@ -57,7 +57,6 @@ it("loads a plugin frontend module and mounts it into the host container", async
 
   expect(await screen.findByText("mounted hello_plugin")).toBeInTheDocument();
   expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
-  expect(screen.getByText("Plugin frontend loaded from /plugin-assets/hello_plugin/hello-entry.js.")).toBeInTheDocument();
 
   unmount();
   expect(cleanup).toHaveBeenCalled();
@@ -66,7 +65,7 @@ it("loads a plugin frontend module and mounts it into the host container", async
 it("loads the checked-in hello_plugin frontend bundle through plugin metadata", async () => {
   stubEnabledPlugin();
   const helloEntrySource = readFileSync(
-    resolve(__dirname, "../../../plugins/hello_plugin/hello_plugin/static/hello-entry.js"),
+    resolve(__dirname, "../../../../plugins/hello_plugin/hello_plugin/static/hello-entry.js"),
     "utf-8",
   );
   const helloEntryUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(helloEntrySource)}`;

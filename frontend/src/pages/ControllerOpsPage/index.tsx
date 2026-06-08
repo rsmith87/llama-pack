@@ -1,6 +1,7 @@
 import "./styles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { cancelJob, exportArchive, getControllerStats, getJob, getJobArtifacts, getJobEvents, getRetentionPolicy, listJobs } from "../../api/controller";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, listNodes } from "../../api/nodes";
 import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
 import { mergeNodeInventory } from "../../features/nodes/nodesView";
@@ -40,44 +41,43 @@ function pretty(value: unknown) {
   return JSON.stringify(value || {}, null, 2);
 }
 
+type ControllerOpsData = {
+  jobs: RecordItem[];
+  nodes: RecordItem[];
+  stats: RecordItem | null;
+  policy: RecordItem | null;
+};
+
+async function loadControllerOpsData(): Promise<ControllerOpsData> {
+  const [nodeConfig, nodeModels, jobPayload, statsPayload, policyPayload] = await Promise.all([
+    listNodes(),
+    getNodeModels(),
+    listJobs(50),
+    getControllerStats(),
+    getRetentionPolicy(),
+  ]);
+  return {
+    nodes: mergeNodeInventory(asArray(nodeConfig, "nodes"), asArray(nodeModels, "nodes")) as RecordItem[],
+    jobs: asArray(jobPayload, "jobs"),
+    stats: statsPayload,
+    policy: policyPayload,
+  };
+}
+
 export function ControllerOpsPage() {
-  const [jobs, setJobs] = useState<RecordItem[]>([]);
-  const [nodes, setNodes] = useState<RecordItem[]>([]);
-  const [stats, setStats] = useState<RecordItem | null>(null);
-  const [policy, setPolicy] = useState<RecordItem | null>(null);
+  const { data, loading, error, refresh, setError } = useAsyncResource<ControllerOpsData>(loadControllerOpsData, {
+    jobs: [],
+    nodes: [],
+    stats: null,
+    policy: null,
+  });
+  const { jobs, nodes, stats, policy } = data;
+
   const [detail, setDetail] = useState<JobDetail | null>(null);
   const [archiveResult, setArchiveResult] = useState("No archive export run yet.");
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      const [nodeConfig, nodeModels, jobPayload, statsPayload, policyPayload] = await Promise.all([
-        listNodes(),
-        getNodeModels(),
-        listJobs(50),
-        getControllerStats(),
-        getRetentionPolicy(),
-      ]);
-      setNodes(mergeNodeInventory(asArray(nodeConfig, "nodes"), asArray(nodeModels, "nodes")) as RecordItem[]);
-      setJobs(asArray(jobPayload, "jobs"));
-      setStats(statsPayload);
-      setPolicy(policyPayload);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load controller data");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   const filteredJobs = useMemo(() => jobs.filter((job) => {
     const status = field(job, "status", "").toLowerCase();

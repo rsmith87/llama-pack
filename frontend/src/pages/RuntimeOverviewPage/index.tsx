@@ -1,7 +1,8 @@
 import "./styles.css";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { startNodeModel } from "../../api/nodes";
 import { getRuntimeOverview, previewRoute } from "../../api/runtime";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { PageKey } from "../../components/AppShell";
@@ -47,8 +48,10 @@ type RuntimeOverviewPageProps = {
 };
 
 export function RuntimeOverviewPage({ onNavigate }: RuntimeOverviewPageProps = {}) {
-  const [overview, setOverview] = useState<RuntimeOverview | null>(null);
-  const [error, setError] = useState("");
+  const { data: overview, error, setError, refresh } = useAsyncResource<RuntimeOverview | null>(
+    () => getRuntimeOverview(),
+    null,
+  );
   const [routeTask, setRouteTask] = useState("Summarize a long document");
   const [requestType, setRequestType] = useState("general");
   const [minContext, setMinContext] = useState("");
@@ -57,19 +60,6 @@ export function RuntimeOverviewPage({ onNavigate }: RuntimeOverviewPageProps = {
   const [previewError, setPreviewError] = useState("");
   const [previewLoading, setPreviewLoading] = useState(false);
   const [startingRoute, setStartingRoute] = useState("");
-
-  async function refresh() {
-    setError("");
-    try {
-      setOverview(await getRuntimeOverview());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load runtime overview");
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   async function submitRoutePreview() {
     setPreviewError("");

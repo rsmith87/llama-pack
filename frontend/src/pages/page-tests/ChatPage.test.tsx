@@ -1,7 +1,7 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { ChatPage } from "./ChatPage";
+import { ChatPage } from "../ChatPage";
 
 afterEach(() => {
   window.history.pushState({}, "", "/ui/chat");

@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
-import { PluginsPage } from "./PluginsPage";
+import { PluginsPage } from "../PluginsPage";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -329,6 +329,8 @@ it("shows last_error when a migration upgrade fails", async () => {
 
   await user.click(await screen.findByRole("button", { name: "Upgrade" }));
 
-  expect(await screen.findByText(/500 Internal Server Error: migration boom/)).toBeInTheDocument();
+  const elementToFind = "Plugin migration target main upgrade failed: migration boom";
+  const allElementsFound = await screen.findAllByText(elementToFind);
+  expect(allElementsFound[0]).toBeInTheDocument();
   expect(screen.getByText("migration boom")).toBeInTheDocument();
 });

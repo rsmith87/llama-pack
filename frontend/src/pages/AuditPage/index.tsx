@@ -1,6 +1,7 @@
 import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import { listAuditEvents } from "../../api/audit";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import { useAuthSession } from "../../features/auth/authSession";
 import type { AuditEvent } from "../../types/operations";
@@ -20,7 +21,6 @@ function dateToIso(value: string) {
 
 export function AuditPage() {
   const { authUser } = useAuthSession();
-  const [events, setEvents] = useState<AuditEvent[]>([]);
   const [visibleEvents, setVisibleEvents] = useState<AuditEvent[]>([]);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [eventType, setEventType] = useState("");
@@ -29,12 +29,8 @@ export function AuditPage() {
   const [createdFrom, setCreatedFrom] = useState("");
   const [createdTo, setCreatedTo] = useState("");
   const [limit, setLimit] = useState(200);
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
 
-  async function refresh() {
-    setLoading(true);
-    setError("");
+  function buildParams() {
     const params = new URLSearchParams();
     params.set("limit", String(limit));
     if (eventType.trim()) params.set("event_type", eventType.trim());
@@ -42,31 +38,23 @@ export function AuditPage() {
     if (dryRun) params.set("dry_run", dryRun);
     if (createdFrom) params.set("created_from", dateToIso(createdFrom));
     if (createdTo) params.set("created_to", dateToIso(createdTo));
-    try {
-      const nextEvents = asEvents(await listAuditEvents(`?${params.toString()}`));
-      setEvents(nextEvents);
-      setVisibleEvents(nextEvents);
-    } catch (err) {
-      setEvents([]);
-      setVisibleEvents([]);
-      setError(err instanceof Error ? err.message : "Failed to load audit events");
-    } finally {
-      setLoading(false);
-    }
+    return params;
   }
 
+  const { data: events, loading, error, refresh } = useAsyncResource<AuditEvent[]>(
+    () => listAuditEvents(`?${buildParams().toString()}`).then(asEvents),
+    [],
+    [limit, eventType, target, dryRun, createdFrom, createdTo],
+  );
+
   useEffect(() => {
-    void refresh();
-  }, []);
+    setVisibleEvents(events);
+  }, [events]);
 
   const detail = useMemo(() => JSON.stringify(selected || {}, null, 2), [selected]);
 
   function applyMyActions() {
-    if (!authUser) {
-      setError("Login first.");
-      return;
-    }
-    setError("");
+    if (!authUser) return;
     setVisibleEvents(events.filter((event) => String(event.actor || "") === authUser));
   }
 

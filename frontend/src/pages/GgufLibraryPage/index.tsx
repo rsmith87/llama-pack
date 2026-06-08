@@ -1,5 +1,6 @@
 import "./styles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer, addGgufModel, deleteConfiguredModel, deleteGguf, listGgufs, updateGgufModel } from "../../api/library";
 import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
 import { useAppMode } from "../../features/appMode/appModeContext";
@@ -92,8 +93,31 @@ function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: st
   );
 }
 
+type GgufLibraryData = {
+  files: GgufFile[];
+  nodeSnapshots: NodeRecord[];
+  nodeGgufSnapshots: NodeRecord[];
+};
+
+async function loadGgufLibraryData(appMode: string): Promise<GgufLibraryData> {
+  const nodeGgufsPromise = appMode === "controller" ? getNodeGgufs() : Promise.resolve({ nodes: [] });
+  const [ggufsResult, nodesResult, nodeGgufsResult] = await Promise.allSettled([listGgufs(), getNodeModels(), nodeGgufsPromise]);
+  return {
+    files: ggufsResult.status === "fulfilled" ? asFiles(ggufsResult.value) : [],
+    nodeSnapshots: nodesResult.status === "fulfilled" ? asNodes(nodesResult.value) : [],
+    nodeGgufSnapshots: nodeGgufsResult.status === "fulfilled" ? asNodes(nodeGgufsResult.value) : [],
+  };
+}
+
 export function GgufLibraryPage({ onNavigate }: GgufLibraryPageProps = {}) {
-  const [files, setFiles] = useState<GgufFile[]>([]);
+  const appMode = useAppMode();
+  const { data, loading, error, refresh, setError } = useAsyncResource<GgufLibraryData>(
+    () => loadGgufLibraryData(appMode),
+    { files: [], nodeSnapshots: [], nodeGgufSnapshots: [] },
+    [appMode],
+  );
+  const { files, nodeSnapshots, nodeGgufSnapshots } = data;
+
   const [selected, setSelected] = useState<GgufFile | null>(null);
   const [modelName, setModelName] = useState("");
   const [port, setPort] = useState(8080);
@@ -105,43 +129,12 @@ export function GgufLibraryPage({ onNavigate }: GgufLibraryPageProps = {}) {
   const [vision, setVision] = useState(false);
   const [mmproj, setMmproj] = useState("");
   const [editOpen, setEditOpen] = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [transferOpen, setTransferOpen] = useState(false);
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [sourceNode, setSourceNode] = useState("");
   const [destinationNode, setDestinationNode] = useState("");
   const [includeMode, setIncludeMode] = useState("selected_with_sidecars");
   const [transferStatus, setTransferStatus] = useState("");
-  const [nodeSnapshots, setNodeSnapshots] = useState<NodeRecord[]>([]);
-  const [nodeGgufSnapshots, setNodeGgufSnapshots] = useState<NodeRecord[]>([]);
-  const appMode = useAppMode();
-
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      const nodeGgufsPromise = appMode === "controller" ? getNodeGgufs() : Promise.resolve({ nodes: [] });
-      const [ggufsResult, nodesResult, nodeGgufsResult] = await Promise.allSettled([listGgufs(), getNodeModels(), nodeGgufsPromise]);
-      if (ggufsResult.status === "fulfilled") {
-        setFiles(asFiles(ggufsResult.value));
-      } else {
-        setError(ggufsResult.reason instanceof Error ? ggufsResult.reason.message : "Failed to load GGUF files");
-      }
-      if (nodesResult.status === "fulfilled") {
-        setNodeSnapshots(asNodes(nodesResult.value));
-      }
-      if (nodeGgufsResult.status === "fulfilled") {
-        setNodeGgufSnapshots(asNodes(nodeGgufsResult.value));
-      }
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   const added = useMemo(() => files.filter((file) => Boolean(file.registered) && !isMmproj(file)), [files]);
   const available = useMemo(() => files.filter((file) => !file.registered && !isMmproj(file)), [files]);

@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { activatePlugin, deactivatePlugin, getEnabledPlugins, getPluginMigrationStatus, getPluginStatus, upgradePluginMigrationTarget, type EnabledPlugin, type PluginMigrationStatus, type PluginStatus } from "../../api/plugins";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
 
 type PluginRow = {
@@ -64,49 +65,29 @@ function actionLabelFor(plugin: PluginRow) {
   return plugin.status === "enabled" ? "Deactivate" : "Activate";
 }
 
+async function loadPluginRows(): Promise<PluginRow[]> {
+  const [enabledPayload, statusPayload] = await Promise.all([getEnabledPlugins(), getPluginStatus()]);
+  const enabledPlugins = Array.isArray(enabledPayload) ? enabledPayload : [];
+  const ids = new Set([...enabledPlugins.map((plugin) => plugin.id), ...(statusPayload.plugins || []).map((plugin) => plugin.id)]);
+  const migrationEntries = await Promise.all(
+    Array.from(ids).sort().map(async (pluginId) => {
+      try {
+        return [pluginId, await getPluginMigrationStatus(pluginId)] as const;
+      } catch {
+        return [pluginId, null] as const;
+      }
+    })
+  );
+  return mergePluginRows(enabledPlugins, statusPayload, Object.fromEntries(migrationEntries));
+}
+
 export function PluginsPage() {
-  const [enabled, setEnabled] = useState<EnabledPlugin[]>([]);
-  const [status, setStatus] = useState<PluginStatus | null>(null);
-  const [migrations, setMigrations] = useState<Record<string, PluginMigrationStatus | null>>({});
+  const { data: rows, loading, error, refresh, setError } = useAsyncResource<PluginRow[]>(loadPluginRows, []);
   const [selectedId, setSelectedId] = useState<string>("");
-  const [error, setError] = useState("");
-  const [loading, setLoading] = useState(true);
   const [actingPluginId, setActingPluginId] = useState("");
   const [upgradingTargetKey, setUpgradingTargetKey] = useState("");
   const [migrationActionMessage, setMigrationActionMessage] = useState("");
 
-  async function load() {
-    setLoading(true);
-    setError("");
-    try {
-      const [enabledPayload, statusPayload] = await Promise.all([getEnabledPlugins(), getPluginStatus()]);
-      const enabledPlugins = Array.isArray(enabledPayload) ? enabledPayload : [];
-      const ids = new Set([...enabledPlugins.map((plugin) => plugin.id), ...(statusPayload.plugins || []).map((plugin) => plugin.id)]);
-      const migrationEntries = await Promise.all(
-        Array.from(ids).sort().map(async (pluginId) => {
-          try {
-            return [pluginId, await getPluginMigrationStatus(pluginId)] as const;
-          } catch {
-            return [pluginId, null] as const;
-          }
-        })
-      );
-      setEnabled(enabledPlugins);
-      setStatus(statusPayload);
-      setMigrations(Object.fromEntries(migrationEntries));
-      setSelectedId((existing) => existing && ids.has(existing) ? existing : Array.from(ids).sort()[0] || "");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Plugins unavailable");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  const rows = useMemo(() => mergePluginRows(enabled, status, migrations), [enabled, status, migrations]);
   const selected = rows.find((row) => row.id === selectedId) || rows[0];
 
   async function runPluginAction(plugin: PluginRow) {
@@ -120,22 +101,11 @@ export function PluginsPage() {
       } else {
         await activatePlugin(plugin.id);
       }
-      await load();
+      await refresh();
     } catch (err) {
       setError(err instanceof Error ? err.message : `Failed to ${actionLabel.toLowerCase()} plugin`);
     } finally {
       setActingPluginId("");
-    }
-  }
-
-  async function refreshPluginMigrations(pluginId: string) {
-    try {
-      const migrationStatus = await getPluginMigrationStatus(pluginId);
-      setMigrations((existing) => ({ ...existing, [pluginId]: migrationStatus }));
-      return migrationStatus;
-    } catch {
-      setMigrations((existing) => ({ ...existing, [pluginId]: null }));
-      return null;
     }
   }
 
@@ -146,11 +116,11 @@ export function PluginsPage() {
     setMigrationActionMessage("");
     try {
       await upgradePluginMigrationTarget(pluginId, targetId);
-      await refreshPluginMigrations(pluginId);
+      await refresh();
       setMigrationActionMessage("Upgrade complete");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to upgrade migration target");
-      await refreshPluginMigrations(pluginId);
+      await refresh();
     } finally {
       setUpgradingTargetKey("");
     }
@@ -164,7 +134,7 @@ export function PluginsPage() {
           <h2>Plugins</h2>
           <p className="muted">Runtime metadata, health, assets, and migration status for configured plugins.</p>
         </div>
-        <Button type="button" onClick={() => void load()} disabled={loading}>{loading ? "Refreshing" : "Refresh"}</Button>
+        <Button type="button" onClick={() => void refresh()} disabled={loading}>{loading ? "Refreshing" : "Refresh"}</Button>
       </div>
       {error ? <ErrorBanner message={error} /> : null}
       <Panel title="Configured Plugins" eyebrow="Status">

@@ -16,6 +16,7 @@ import type { NodeRecord } from "../../types/nodes";
 import type { LocalModel, ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
 import type { ChatMessage, ChatDefaults, AdvancedDefaults, ChatContentBlock } from "../../types/chat";
 import { CHAT_CONSTANTS } from "../../constants"
+import { modelName } from "../../helpers/models-helpers";
 
 const PRESETS: Record<string, ChatDefaults> = {
   balanced: { temperature: 0.7, max_tokens: 1024, top_p: 1 },
@@ -57,10 +58,6 @@ function nodeModelsToChatModels(nodes: NodeRecord[]): LocalModel[] {
       node: nodeName,
     }));
   }).filter((model) => modelName(model));
-}
-
-function modelName(model: LocalModel) {
-  return String(model.name || model.id || model.model || "");
 }
 
 function modelTarget(model: LocalModel) {

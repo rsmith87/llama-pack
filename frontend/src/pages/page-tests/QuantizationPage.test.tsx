@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { QuantizationPage } from "./QuantizationPage";
+import { QuantizationPage } from "../QuantizationPage";
 
 afterEach(() => {
   vi.restoreAllMocks();

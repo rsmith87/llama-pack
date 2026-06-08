@@ -1,6 +1,7 @@
 import "./styles.css";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { loadDashboardData } from "../../api/health";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer } from "../../api/library";
 import { startModel, stopModel } from "../../api/models";
 import { startNodeModel, stopNodeModel } from "../../api/nodes";
@@ -8,13 +9,13 @@ import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
 import type { LogSelection } from "../../components/LogModal";
 import type { DashboardData, LocalModel } from "../../types/api";
-import { useNavigate } from "react-router-dom";
-import { pageForKey, pathForPage, type PageKey, type PageNavigationOptions } from "../../routes/pages";
+import { useNavigateToPage } from "../../hooks/useNavigateToPage";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
-import { EnabledModelCard, modelName, statusTone } from "../../components/EnabledModelCard";
+import { EnabledModelCard } from "../../components/EnabledModelCard";
+import { modelName, statusTone } from "../../helpers/models-helpers";
 import { TIMERS } from "../../constants";
 import { 
   percent,
@@ -38,6 +39,10 @@ const emptyData: DashboardData = {
   nodes: [],
 };
 
+function loadDashboard() {
+  return loadDashboardData();
+}
+
 function chatSearch(model: string, target: string, mode: "direct" | "thread", source: string): string {
   const params = new URLSearchParams();
   params.set("model", model);
@@ -48,29 +53,10 @@ function chatSearch(model: string, target: string, mode: "direct" | "thread", so
 }
 
 export function DashboardPage({ onOpenLogs }: DashboardPageProps) {
-  const navigate = useNavigate();
-  const [data, setData] = useState<DashboardData>(emptyData);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+  const navigateToPage = useNavigateToPage();
+  const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, emptyData);
   const [actingModel, setActingModel] = useState("");
   const [transfer, setTransfer] = useState<TransferState | null>(null);
-
-  function navigateToPage(page: PageKey, options: PageNavigationOptions = {}) {
-    const target = pageForKey(page);
-    navigate(pathForPage(target, options));
-  }
-
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      setData(await loadDashboardData());
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load dashboard data");
-    } finally {
-      setLoading(false);
-    }
-  }
 
   async function runModelAction(model: LocalModel, action: "start" | "stop") {
     const name = modelName(model);
@@ -124,10 +110,6 @@ export function DashboardPage({ onOpenLogs }: DashboardPageProps) {
       setTransfer((existing) => existing ? { ...existing, submitting: false } : existing);
     }
   }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   const mode = data.health?.mode || "unknown";
   const isController = mode === "controller";

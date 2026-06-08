@@ -1,6 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPluginHostApi, type PluginHostApi } from "../../api/pluginHost";
 import { getEnabledPlugins, type EnabledPlugin } from "../../api/plugins";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, ErrorBanner, Panel } from "../../components/ui";
 import type { PageDefinition } from "../../routes/pages";
 import "./styles.css";
@@ -36,10 +37,15 @@ export function PluginHostPage({
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const pendingCleanupErrorRef = useRef("");
-  const [plugin, setPlugin] = useState<EnabledPlugin | null>(null);
   const [reloadCount, setReloadCount] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
+
+  const fetcher = useCallback(async () => {
+    if (!page.pluginId) return null;
+    const plugins = await getEnabledPlugins();
+    return plugins.find((item) => item.id === page.pluginId) || null;
+  }, [page.pluginId]);
+
+  const { data: plugin, loading, error, setError } = useAsyncResource<EnabledPlugin | null>(fetcher, null, [fetcher]);
 
   const hostApi = useMemo(() => createPluginHostApi({
     pluginId: page.pluginId || "",
@@ -59,48 +65,39 @@ export function PluginHostPage({
     }
   }
 
-  async function load() {
-    if (!page.pluginId) return;
+  useEffect(() => {
+    if (!page.pluginId || !plugin) return;
     const cleanupError = pendingCleanupErrorRef.current || cleanupPlugin();
     pendingCleanupErrorRef.current = "";
     if (containerRef.current) containerRef.current.innerHTML = "";
-    setLoading(true);
-    setError(cleanupError);
-    try {
-      const plugins = await getEnabledPlugins();
-      const current = plugins.find((item) => item.id === page.pluginId) || null;
-      setPlugin(current);
-      const entry = current?.frontend?.entry;
-      if (!current) {
-        throw new Error(`Plugin ${page.pluginId} is not enabled`);
-      }
-      if (!entry) {
-        throw new Error(`Plugin ${page.pluginId} does not declare a frontend entry`);
-      }
-      const module = await loadModule(cacheBustedEntry(entry, current.version, reloadCount));
-      if (typeof module.mount !== "function") {
-        throw new Error(`Plugin ${page.pluginId} frontend does not export mount()`);
-      }
-      if (!containerRef.current) return;
-      const cleanup = module.mount(containerRef.current, hostApi);
-      cleanupRef.current = typeof cleanup === "function" ? cleanup : null;
-    } catch (err) {
-      const loadError = errorMessage(err, "Plugin frontend unavailable");
-      setError(cleanupError ? `${cleanupError}; ${loadError}` : loadError);
-    } finally {
-      setLoading(false);
+    const entry = plugin?.frontend?.entry;
+    if (!entry) {
+      setError(`Plugin ${page.pluginId} does not declare a frontend entry`);
+      return;
     }
-  }
-
-  useEffect(() => {
-    void load();
-    return () => {
-      const cleanupError = cleanupPlugin();
-      if (cleanupError) {
-        pendingCleanupErrorRef.current = cleanupError;
+    setError(cleanupError);
+    let cancelled = false;
+    loadModule(cacheBustedEntry(entry, plugin.version, reloadCount)).then((module) => {
+      if (cancelled || !containerRef.current || typeof module.mount !== "function") {
+        if (!cancelled && typeof module.mount !== "function") {
+          setError(`Plugin ${page.pluginId} frontend does not export mount()`);
+        }
+        return;
       }
+      const mountedCleanup = module.mount(containerRef.current, hostApi);
+      cleanupRef.current = typeof mountedCleanup === "function" ? mountedCleanup : null;
+    }).catch((err) => {
+      if (!cancelled) {
+        const loadError = errorMessage(err, "Plugin frontend unavailable");
+        setError(cleanupError ? `${cleanupError}; ${loadError}` : loadError);
+      }
+    });
+    return () => {
+      cancelled = true;
+      const cleanErr = cleanupPlugin();
+      if (cleanErr) pendingCleanupErrorRef.current = cleanErr;
     };
-  }, [page.pluginId, refreshKey, reloadCount]);
+  }, [page.pluginId, refreshKey, reloadCount, plugin, hostApi, loadModule, setError]);
 
   return (
     <div className="plugin-host-page">
@@ -109,9 +106,7 @@ export function PluginHostPage({
           <span className="eyebrow">{plugin?.name || page.pluginName || "Plugin"}</span>
           <h2>{page.label}</h2>
         </div>
-        <Button type="button" onClick={() => {
-          setReloadCount((value) => value + 1);
-        }} disabled={loading}>{loading ? "Loading" : "Reload"}</Button>
+        <Button type="button" onClick={() => setReloadCount((c) => c + 1)} disabled={loading}>{loading ? "Loading" : "Reload"}</Button>
       </div>
       {error ? <ErrorBanner message={error} /> : null}
       <Panel className="plugin-host-panel">

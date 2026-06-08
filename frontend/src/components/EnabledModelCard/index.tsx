@@ -2,19 +2,8 @@ import type { LocalModel } from "../../types/api";
 import { ModelCard } from "../ModelCard";
 import { Button, StatusBadge } from "../ui";
 import { isActiveModel } from "../../features/models/modelStatus";
+import { modelName, statusTone } from "../../helpers/models-helpers";
 import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
-
-export function modelName(model: { name?: string; id?: string; model?: string; path?: string }): string {
-  return model.name || model.id || model.model || model.path || "unnamed model";
-}
-
-export function statusTone(status: string): "success" | "warning" | "danger" | "muted" {
-  const normalized = status.toLowerCase();
-  if (["running", "ready", "available", "loaded", "reachable"].includes(normalized)) return "success";
-  if (["starting", "stopping", "loading"].includes(normalized)) return "warning";
-  if (["failed", "error", "offline"].includes(normalized)) return "danger";
-  return "muted";
-}
 
 function modelDetail(model: LocalModel): string {
   return model.model_path || model.path || model.model_dir || model.model || "configured model";

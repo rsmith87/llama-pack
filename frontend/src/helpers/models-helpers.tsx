@@ -1,14 +1,25 @@
 import { LocalModel, DashboardData, NodeRecord } from "../types";
-import { modelName } from "../components/EnabledModelCard";
 import { TIMERS } from "../constants";
 
 type CertTone = "success" | "warning" | "danger" | "muted";
+
+export function modelName(model: { name?: string; id?: string; model?: string; path?: string }): string {
+  return model.name || model.id || model.model || model.path || "unnamed model";
+}
+
+export function statusTone(status: string): CertTone {
+  const normalized = status.toLowerCase();
+  if (["running", "ready", "available", "loaded", "reachable"].includes(normalized)) return "success";
+  if (["starting", "stopping", "loading"].includes(normalized)) return "warning";
+  if (["failed", "error", "offline"].includes(normalized)) return "danger";
+  return "muted";
+}
 
 export function percent(value: number | null | undefined): string {
   return typeof value === "number" ? `${Math.round(value)}%` : "-";
 }
 
-export function modelFileId(model: LocalModel): string {
+export function modelFileId(model: { file_id?: string; id?: string }): string {
   return String(model.file_id || model.id || "");
 }
 

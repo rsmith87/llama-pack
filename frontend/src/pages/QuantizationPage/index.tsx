@@ -1,6 +1,7 @@
 import "./styles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { listQuantizationFiles, startQuantization } from "../../api/quantizations";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
 import type { QuantizationFile } from "../../types/api";
 
@@ -97,30 +98,15 @@ function recommend(files: QuantizationFile[], vramGb: number, latencyGoal: strin
 }
 
 export function QuantizationPage() {
-  const [files, setFiles] = useState<QuantizationFile[]>([]);
+  const { data: files, loading, error, refresh } = useAsyncResource<QuantizationFile[]>(
+    () => listQuantizationFiles().then(asFiles),
+    [],
+  );
   const [selectedTypes, setSelectedTypes] = useState<Record<string, string>>({});
   const [vramGb, setVramGb] = useState(16);
   const [latencyGoal, setLatencyGoal] = useState("balanced");
   const [qualityGoal, setQualityGoal] = useState("balanced");
   const [advisorOutput, setAdvisorOutput] = useState("Run the advisor after files load.");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      setFiles(asFiles(await listQuantizationFiles()));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load quantization files");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   const rowTypes = useMemo(() => {
     const next: Record<string, string> = {};

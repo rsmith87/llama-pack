@@ -1,6 +1,7 @@
 import "./styles.css";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { createExternalKey, getExternalKeyAnalytics, listExternalKeys, revokeExternalKey } from "../../api/externalKeys";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Modal, Panel } from "../../components/ui";
 import type { ExternalApiKey, ExternalApiKeyAnalytics, ExternalApiKeyCreated } from "../../types/api";
 
@@ -143,34 +144,19 @@ function KeyAnalyticsModal({
 }
 
 export function ApiKeysPage() {
-  const [keys, setKeys] = useState<ExternalApiKey[]>([]);
+  const { data: keys, loading, error, refresh, setError } = useAsyncResource<ExternalApiKey[]>(
+    () => listExternalKeys().then((data) => data.keys || []),
+    [],
+  );
   const [siteName, setSiteName] = useState("");
   const [siteUrl, setSiteUrl] = useState("");
-  const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
-  const [error, setError] = useState("");
   const [newKey, setNewKey] = useState<ExternalApiKeyCreated | null>(null);
   const [analyticsKey, setAnalyticsKey] = useState<ExternalApiKey | null>(null);
   const [analytics, setAnalytics] = useState<ExternalApiKeyAnalytics | null>(null);
   const [analyticsLoading, setAnalyticsLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState("");
 
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      const data = await listExternalKeys();
-      setKeys(data.keys || []);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load API keys");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();

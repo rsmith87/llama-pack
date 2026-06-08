@@ -2,17 +2,15 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import { createEmbeddings } from "../../api/embeddings";
 import { listModels } from "../../api/models";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import type { LocalModel } from "../../types/models";
 import type { EmbeddingRow, EmbeddingsResult, DisplayEmbeddingRow, SimilarityRow } from "../../types/embeddings";
+import { modelName } from "../../helpers/models-helpers";
 
 function asModels(payload: unknown): LocalModel[] {
   if (Array.isArray(payload)) return payload as LocalModel[];
   return (payload as { models?: LocalModel[] } | null)?.models || [];
-}
-
-function modelName(model: LocalModel) {
-  return String(model.name || model.id || model.model || "");
 }
 
 function parseInputLines(value: string) {
@@ -101,8 +99,17 @@ function quickClusters(vectors: number[][]) {
 }
 
 export function EmbeddingsPage() {
-  const [models, setModels] = useState<LocalModel[]>([]);
+  const { data: models, error, setError } = useAsyncResource<LocalModel[]>(
+    () => listModels().then(asModels),
+    [],
+  );
   const [selectedModel, setSelectedModel] = useState("");
+
+  useEffect(() => {
+    if (!selectedModel && models.length > 0) {
+      setSelectedModel(modelName(models[0]));
+    }
+  }, [models, selectedModel]);
   const [target, setTarget] = useState("auto");
   const [input, setInput] = useState("");
   const [result, setResult] = useState<EmbeddingsResult | null>(null);
@@ -111,22 +118,6 @@ export function EmbeddingsPage() {
   const [similarities, setSimilarities] = useState<SimilarityRow[]>([]);
   const [clusterOutput, setClusterOutput] = useState("No clustering run yet.");
   const [status, setStatus] = useState("Ready");
-  const [error, setError] = useState("");
-
-  async function refreshModels() {
-    setError("");
-    try {
-      const items = asModels(await listModels());
-      setModels(items);
-      setSelectedModel((current) => current || modelName(items[0] || {}));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load embedding models");
-    }
-  }
-
-  useEffect(() => {
-    void refreshModels();
-  }, []);
 
   const rows = useMemo(() => result?.data || [], [result]);
   const displayRows = useMemo(() => rows.map((row, index) => ({ row, input: submittedLines[index] || "-", index })), [rows, submittedLines]);

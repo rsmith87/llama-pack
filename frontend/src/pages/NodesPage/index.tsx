@@ -1,6 +1,7 @@
 import "./styles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { createGgufTransfer } from "../../api/library";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel, stopNodeModel, updateNode } from "../../api/nodes";
 import { EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import type { LogSelection } from "../../components/LogModal";
@@ -8,6 +9,7 @@ import { isActiveModel } from "../../features/models/modelStatus";
 import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
+import { modelName, modelFileId } from "../../helpers/models-helpers";
 
 type NodeEditState = {
   name: string;
@@ -26,14 +28,6 @@ function asNodeArray(payload: unknown): NodeRecord[] {
   return Array.isArray(nodes) ? nodes : [];
 }
 
-function modelName(model: Record<string, unknown>) {
-  return String(model.name || model.id || model.model || "unnamed model");
-}
-
-function modelFileId(model: Record<string, unknown>) {
-  return String(model.file_id || model.id || "");
-}
-
 function isSendableGgufModel(node: NodeRecord, model: Record<string, unknown>) {
   const path = String(model.model_path || model.path || model.filename || "").toLowerCase();
   return Boolean(node.reachable && modelFileId(model) && path.endsWith(".gguf"));
@@ -49,32 +43,16 @@ function transferProgressText(transfer: Record<string, unknown> | null) {
 }
 
 export function NodesPage({ onOpenLogs }: NodesPageProps = {}) {
-  const [nodes, setNodes] = useState<NodeRecord[]>([]);
+  const { data: nodes, loading, error, refresh, setError } = useAsyncResource<NodeRecord[]>(
+    () => Promise.all([listNodes(), getNodeModels()])
+      .then(([configuredPayload, modelsPayload]) => mergeNodeInventory(asNodeArray(configuredPayload), asNodeArray(modelsPayload))),
+    [],
+  );
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");
   const [registration, setRegistration] = useState("");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
   const [editNode, setEditNode] = useState<NodeEditState | null>(null);
   const [transfer, setTransfer] = useState<TransferState | null>(null);
-
-  async function refresh() {
-    setLoading(true);
-    setError("");
-    try {
-      const [configuredPayload, modelsPayload] = await Promise.all([listNodes(), getNodeModels()]);
-      setNodes(mergeNodeInventory(asNodeArray(configuredPayload), asNodeArray(modelsPayload)));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load nodes");
-      setNodes([]);
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
 
   const filteredNodes = useMemo(() => filterNodes(nodes, { query, status, registration }), [nodes, query, status, registration]);
   const summary = nodeSummary(nodes);

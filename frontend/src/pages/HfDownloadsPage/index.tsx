@@ -1,5 +1,6 @@
 import "./styles.css";
 import { useEffect, useState, type FormEvent } from "react";
+import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createJob } from "../../api/controller";
 import { cancelDownload, deleteDownload, discoverQuants, listDownloadHistory, listDownloadRecommendations, startDownload } from "../../api/downloads";
 import { createGgufTransfer, listGgufs } from "../../api/library";
@@ -10,6 +11,7 @@ import { transferDestinationOptions, type NodeRecord } from "../../features/node
 import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/api";
 import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferState, RecommendedDownload } from "../../types/downloads";
 import { RecommendationModelCard } from "../../components/RecommendationModelCard";
+import { modelName, modelFileId } from "../../helpers/models-helpers";
 
 function asDownloads(payload: unknown): DownloadRecord[] {
   if (Array.isArray(payload)) return payload as DownloadRecord[];
@@ -72,14 +74,6 @@ function fileText(record: Record<string, unknown>) {
 function matchesRecommendedFile(record: Record<string, unknown>, item: RecommendedDownload) {
   const expected = item.includeFile.toLowerCase();
   return fileText(record).includes(expected);
-}
-
-function modelName(model: Record<string, unknown>) {
-  return String(model.name || model.id || model.model || model.model_path || "model");
-}
-
-function remoteFileId(model: Record<string, unknown>) {
-  return String(model.file_id || model.id || "");
 }
 
 function bytesToGb(value: unknown) {
@@ -203,13 +197,13 @@ function inventoryForRecommended(item: RecommendedDownload, localGgufs: GgufFile
   }
   for (const node of nodes) {
     if (!node?.reachable || !node.name || !Array.isArray(node.models)) continue;
-    const model = node.models.find((candidate) => matchesRecommendedFile(candidate, item) && remoteFileId(candidate));
+    const model = node.models.find((candidate) => matchesRecommendedFile(candidate, item) && modelFileId(candidate));
     if (model) {
       return {
         status: "remote",
         label: "Elsewhere in fleet",
         detail: `${node.name} has ${modelName(model)}`,
-        remoteSource: { node: node.name, modelName: modelName(model), fileId: remoteFileId(model) },
+        remoteSource: { node: node.name, modelName: modelName(model), fileId: modelFileId(model) },
       };
     }
   }
@@ -221,13 +215,34 @@ function inventoryForRecommended(item: RecommendedDownload, localGgufs: GgufFile
   };
 }
 
+type HfDownloadsData = {
+  downloads: DownloadRecord[];
+  recommendationPayload: DownloadRecommendationsResponse | null;
+  recommendationError: string;
+  localGgufs: GgufFile[];
+  nodes: NodeRecord[];
+};
+
+async function loadHfDownloadsData(): Promise<HfDownloadsData> {
+  const [downloadPayload, recommendationResult, ggufsPayload, nodePayload] = await Promise.all([
+    listDownloadHistory(),
+    listDownloadRecommendations()
+      .then((payload) => ({ payload, error: "" }))
+      .catch((err) => ({ payload: null, error: err instanceof Error ? err.message : "Recommendations unavailable" })),
+    listGgufs().catch(() => []),
+    getNodeModels().catch(() => []),
+  ]);
+  return {
+    downloads: asDownloads(downloadPayload),
+    recommendationPayload: recommendationResult.payload,
+    recommendationError: recommendationResult.error,
+    localGgufs: asGgufs(ggufsPayload),
+    nodes: asNodes(nodePayload),
+  };
+}
+
 export function HfDownloadsPage() {
   const appMode = useAppMode();
-  const [downloads, setDownloads] = useState<DownloadRecord[]>([]);
-  const [recommendationPayload, setRecommendationPayload] = useState<DownloadRecommendationsResponse | null>(null);
-  const [recommendationError, setRecommendationError] = useState("");
-  const [localGgufs, setLocalGgufs] = useState<GgufFile[]>([]);
-  const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [transfer, setTransfer] = useState<HfTransferState | null>(null);
   const [repoId, setRepoId] = useState("");
   const [revision, setRevision] = useState("");
@@ -236,44 +251,23 @@ export function HfDownloadsPage() {
   const [installPort, setInstallPort] = useState("8080");
   const [quants, setQuants] = useState<QuantRecord[]>([]);
   const [quantStatus, setQuantStatus] = useState("Select a repo to query remote GGUF quants.");
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
-  async function refresh(showLoading = true) {
-    if (showLoading) setLoading(true);
-    setError("");
-    try {
-      const [downloadPayload, recommendationResult, ggufsPayload, nodePayload] = await Promise.all([
-        listDownloadHistory(),
-        listDownloadRecommendations()
-          .then((payload) => ({ payload, error: "" }))
-          .catch((err) => ({ payload: null, error: err instanceof Error ? err.message : "Recommendations unavailable" })),
-        listGgufs().catch(() => []),
-        getNodeModels().catch(() => []),
-      ]);
-      setDownloads(asDownloads(downloadPayload));
-      setRecommendationPayload(recommendationResult.payload);
-      setRecommendationError(recommendationResult.error);
-      setLocalGgufs(asGgufs(ggufsPayload));
-      setNodes(asNodes(nodePayload));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load download history");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const { data, loading, error, refresh } = useAsyncResource<HfDownloadsData>(loadHfDownloadsData, {
+    downloads: [],
+    recommendationPayload: null,
+    recommendationError: "",
+    localGgufs: [],
+    nodes: [],
+  });
+  const { downloads, recommendationPayload, recommendationError, localGgufs, nodes } = data;
 
   useEffect(() => {
     if (!downloads.some((download) => download.status === "running")) return undefined;
     const intervalId = window.setInterval(() => {
-      void refresh(false);
+      void refresh();
     }, 1500);
     return () => window.clearInterval(intervalId);
-  }, [downloads]);
+  }, [downloads, refresh]);
 
   async function onDiscover() {
     if (!repoId.trim()) {
