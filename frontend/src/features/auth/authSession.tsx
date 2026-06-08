@@ -121,7 +121,7 @@ export function AuthLoginForm() {
       <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="api key" />
       <Button type="submit">Login</Button>
       <Button type="button" onClick={() => void logoutSession()} disabled={!isAuthenticated}>Logout</Button>
-      <span className="muted">{authUser ? `${authUser} (${authRole || "operator"})` : "Not logged in"}</span>
+      <span className="muted text-xs font-bold">{authUser ? `${authUser} (${authRole || "operator"})` : "Not logged in"}</span>
       {error ? <span className="error-text" role="alert">{error}</span> : null}
     </form>
   );

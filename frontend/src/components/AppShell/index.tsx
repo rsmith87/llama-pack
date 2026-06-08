@@ -34,7 +34,7 @@ function LlamaManagerLogo() {
 
 function MenuIcon({ icon }: { icon: PageIcon | "logs" | "menu" | "close" }) {
   return (
-    <svg className={`nav-icon icon-${icon}`} viewBox="0 0 24 24" aria-hidden="true">
+    <svg className={`nav-icon icon-${icon} ml-1`} viewBox="0 0 24 24" aria-hidden="true">
       {icon === "dashboard" ? <path d="M4 12.5 12 5l8 7.5V20h-5v-5H9v5H4v-7.5Z" /> : null}
       {icon === "setup" ? <path d="M5 5h14v5H5V5Zm0 9h6v5H5v-5Zm9 0h5v5h-5v-5Z" /> : null}
       {icon === "chat" ? <path d="M5 6h14v9H9l-4 4V6Z" /> : null}
@@ -241,7 +241,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
               {section.pages.map((item) => (
                 <button
                   key={item.key}
-                  className={`nav-button ${activePage.key === item.key ? "active" : ""}`}
+                  className={`nav-button cursor-pointer ${activePage.key === item.key ? "active" : ""}`}
                   type="button"
                   onClick={() => {
                     if (item.path.startsWith("/ui/docs")) {
@@ -271,7 +271,7 @@ export function AppShell({ authRefreshKey = "", renderPage }: AppShellProps) {
             </div>
           ))}
         </nav>
-        <div className="sidebar-footer">
+        <div className="sidebar-footer absolute bottom-0">
           {globalMode === "agent" && globalControllerUrl ? (
             <div className="sidebar-peers">
               <div className="sidebar-peers-label">Controller</div>

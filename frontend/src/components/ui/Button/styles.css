@@ -1,15 +1,11 @@
+@reference "../../../styles/app.css";
+
 .btn {
-  display: inline-flex;
-  align-items: center;
+  @apply flex items-center border cursor-pointer pt-1.5 pb-1.5 pl-3 pr-3 font-medium; 
   gap: 6px;
-  border: 1px solid transparent;
-  border-radius: 8px;
-  padding: 6px 12px;
   font-family: "Open Sans", ui-sans-serif, system-ui, sans-serif;
   font-size: 12px;
-  font-weight: 500;
   line-height: 1.4;
-  cursor: pointer;
   white-space: nowrap;
   transition: border-color 0.15s, box-shadow 0.15s, opacity 0.15s, background 0.15s, color 0.15s;
 }

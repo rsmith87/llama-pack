@@ -975,7 +975,7 @@ button.primary {
 }
 
 .nodes-page-list {
-  grid-template-columns: repeat(2, 1fr);
+  /*grid-template-columns: repeat(2, 1fr);*/
 }
 
 .nodes-filter-bar {

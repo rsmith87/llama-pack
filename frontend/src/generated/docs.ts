@@ -3033,6 +3033,92 @@ real domain such as \`controller.example.com\`.
     searchBody: "Caddy Local TLS Setup This is the operator checklist for running Neuraxis controller and agent nodes over local HTTPS with Caddy. You can run Neuraxis without this TLS setup by exposing uvicorn directly on the LAN: In that direct HTTP mode, controller and agent URLs use . That is simpler, but API keys, prompts, responses, and heartbeats travel in plaintext. For local TLS, change to , use URLs, and expose Caddy on . The target shape is: Neuraxis still uses API keys for authorization. Caddy adds transport encryption and keeps uvicorn off the LAN. Hostnames Use stable hostnames everywhere, not IP addresses: Role Hostname --- --- Controller Mac agent Linux agent The same hostname must be used in: - , mDNS, or LAN DNS - the certificate DNS SAN - the Caddy site block - , , and controller After changing , restart the affected Neuraxis process so long-lived HTTP clients do not keep stale resolution behavior. Public Controller, Private Agents For external user or mobile access, the best default topology is a public controller domain with private agents reachable only over a VPN/private network. In this topology: - The controller has a public DNS name and public HTTPS certificate, preferably from ACME/Let's Encrypt through Caddy. - Agents stay off the public internet. Their Caddy listeners are reachable only from the controller over Tailscale, WireGuard, a private subnet, or a private DNS/VPN name. - Public clients use only the controller URL. - The controller URLs use the private/VPN agent names. - Agents set to the public controller URL, because their heartbeat and work-claim traffic goes outbound to the controller. - Agents set to their private/VPN URL, because that is the URL the controller uses to call them. Example controller : Example Mac agent : Example Linux agent : Controller Caddy with a public ACME cert can be as simple as: Agent Caddy can still use private CA certs, Tailscale HTTPS certs, or any certificate trusted by the controller's Python runtime. If agent certs are private CA certs, the controller must still set and to the private CA chain bundle. Do not expose agent Caddy listeners publicly unless the controller cannot reach them privately. Public agents increase the attack surface and require tighter firewall, monitoring, and key-rotation discipline. Certificate Files The CA root and intermediate cert are created by on the CA machine. They are often under: If they are not there, ask Step where it keeps its files: Or search: Copy both CA certs to every machine and keep a local staging copy: On other nodes, copy it with or another trusted transfer method: Install the root into system trust. macOS: Debian, Ubuntu, and Raspberry Pi OS: System trust is not always enough for Python/httpx on every platform. Also point Neuraxis at the CA chain bundle in each node's : Use the local account path on each machine. On the Mac mini, for example: Issue Node Certificates only needs to be running when issuing or renewing certificates. Start it on the CA machine when needed: Issue each node certificate with the exact hostname clients will use. Controller: Mac agent: Linux agent: The example gives 30-day certs if the CA policy allows it. Shorter default certs work, but they need renewal sooner. Automatic Certificate Renewal Smallstep certificates are often short-lived. For this Caddy setup, renewal has three steps: 1. Renew the node leaf certificate with . 2. Rebuild the Caddy fullchain by appending the intermediate CA certificate. 3. Reload Caddy so it serves the renewed certificate. Use the repo helper for all three: For Linux agents, replace with the agent basename, such as . For macOS Homebrew Caddy, use the Homebrew cert directory and reload mode: Preview without changing anything: Linux/Pi systemd timer Copy the examples from : Edit for the local node's paths, hostname, and cert basename. Then enable the timer: Run once immediately: The timer assumes is reachable when renewal runs. If the CA server is not always running, either keep it available on the controller or schedule renewal windows when it is running. macOS scheduled renewal For Homebrew Caddy on macOS, use the dedicated wrapper: For scheduled runs, prefer over . Install the wrapper into a stable user path and point your LaunchAgent to it: LaunchAgent location: should execute: Install Certs For Caddy Caddy should serve a fullchain certificate: the node leaf certificate followed by the intermediate CA certificate. Without the intermediate, may still work in some environments while Python/httpx fails with . Linux and Raspberry Pi: The script builds from the user-writable leaf and intermediate files, then uses to write: - with mode - with mode - with mode - with owner and mode Use to preview the commands after building the local fullchain. For , replace with . macOS with Homebrew on Apple Silicon: Use to confirm . Intel Homebrew commonly uses . Caddyfiles Linux and Raspberry Pi use . Controller: Linux agent: macOS with Homebrew uses on Apple Silicon: Repo templates are also available under . Run Caddy As A Service Linux and Raspberry Pi: After Caddyfile changes: macOS Homebrew: If reports an error, run this to expose the real failure: If the error says is already in use, another Caddy process is already running. Stop the manual process, then restart the service: Lock Down Neuraxis Set uvicorn to loopback on every node: If using , add or update: Restart Neuraxis after changing : Switch Neuraxis URLs To HTTPS Controller : Mac agent : Linux agent : Controller node config should use HTTPS and keep TLS verification enabled: Verification Run from each machine: The TLS output should include: Local uvicorn should still work on the node itself: Direct remote uvicorn access should fail: Controller node visibility: Python/httpx trust from each node: Heartbeats flow from each agent to the controller. If shows stale heartbeats, test the controller URL from the agent process environment first: The controller also calls agents for model/status data, so the controller's Python environment must trust the same CA chain. Recovering From Expired Certificates only works while the cert is still valid. If a cert has already expired, renew is blocked and you must re-issue from scratch. Step 1 — Make sure is running on the Pi: Step 2 — Re-issue the cert on each node (run on the machine that owns the cert): Pi controller: Mac mini: Linux agent: The duration must be within the CA policy limit. If the CA rejects longer durations (e.g. 720h), use . With a 24h cert lifetime, cron must run at least twice a day to stay ahead of expiry — the schedule works. Step 3 — Install and reload Caddy using the renewal script with : Running step-ca As A Systemd Service does not create a systemd service automatically. Without it, the CA goes down on reboot and all renewal cron jobs fail. Create the service file on the Pi: Replace with the actual username. Find the binary path with if it is not at . The flag is required. Without it, tries to prompt for the key password interactively and fails with when run as a service. Create the password file: Enable and start: Verify the CA is reachable: Verifying Renewal Is Working Mac — check the cron log: Pi and Linux — check the systemd timer and service: Force a test run on any machine to confirm the full pipeline end-to-end: Mac: Pi: Linux agent: Expected output: . Verify the cert expiry after renewal: Verify the full chain is being served (want ): If , Caddy is serving the leaf cert only without the intermediate. Re-run the renewal script — the fullchain install step rebuilds from the leaf + intermediate. macOS scheduler gotchas - Use ( ) for better behavior across network transitions and wake/sleep. - Keep absolute paths in wrapper scripts and LaunchAgent . Troubleshooting Symptom Meaning Fix --- --- --- from Caddy TLS works, upstream Neuraxis is not reachable Check on that node and verify . Root CA is not trusted by the client Install into the client system trust store. in Python/httpx Missing intermediate chain or Python is not using system trust Serve from Caddy and set to . Hostname does not match the cert SAN Reissue the node cert with the exact hostname. Wrong binary or old CLI Install Smallstep , then check . on is not running Start or enable the systemd service. See Running step-ca As A Systemd Service. in step-ca service step-ca is prompting for a key password with no terminal Add to the line. in step-ca service systemd does not match the actual account Check on the Pi and update and in the service file. Cert already past expiry; is blocked Re-issue with , then re-run the renewal script. See Recovering From Expired Certificates. Another Caddy process is running Stop the manual process or restart the service cleanly. Caddy reload says cert/key permission denied Caddy service user cannot read Use , then , on the cert dir, on keys, and on certs. Pi can ping an agent but HTTPS hangs Firewall blocks TCP 443 Allow on the agent, for example . Admin API returns with Neuraxis does not use Bearer auth for admin APIs Send . Mobile App Note Private CA HTTPS is fine for LAN/VPN mobile testing only after the phone trusts the private root CA. For broader mobile access, prefer a public ACME cert on a real domain such as .",
   },
   {
+    id: "componentize-frontend",
+    title: "Frontend Componentization Opportunities",
+    sourcePath: "docs/componentize-frontend.md",
+    content: `# Frontend Componentization Opportunities
+
+After reviewing the React frontend pages and current \`components/ui\` primitives, these are the highest-value components to add for better reuse.
+
+## Existing Reusable Base
+
+Already in place and widely used:
+
+- \`Button\`, \`Panel\`, \`DataTable\`, \`FormField\`, \`Modal\`, \`StatusBadge\`, \`EmptyState\`, \`ErrorBanner\`
+- Domain cards/modals: \`NodeCard\`, \`EnabledModelCard\`, \`RecommendationModelCard\`, \`SendModelModal\`
+
+The biggest remaining duplication is mostly **page scaffolding**, **filter/action toolbars**, **status rendering**, and **detail blocks**.
+
+## Priority List (build first)
+
+| Priority | Proposed component | Why it helps | Repeated in |
+| --- | --- | --- | --- |
+| 1 | \`PageScaffold\` | Standardize page header (\`eyebrow/title/detail\`) + refresh action + error banner + content wrapper | \`ControllerOpsPage\`, \`HfDownloadsPage\`, \`HfToGgufPage\`, \`QuantizationPage\`, \`PluginsPage\`, \`NodesPage\`, \`AuditPage\`, \`ApiKeysPage\`, \`DashboardPage\`, \`SetupPage\` |
+| 2 | \`FilterToolbar\` | Reusable grid/row for \`FormField\` filters and toolbar actions (refresh, secondary actions) | \`ControllerOpsPage\`, \`AuditPage\`, \`NodesPage\`, \`HfDownloadsPage\`, \`SettingsPage\`, \`BenchmarksPage\` |
+| 3 | \`RowActionGroup\` | Consistent table/card action button rows (View/Cancel, Download/Stop/Delete, Start/Stop/Restart, etc.) | \`ControllerOpsPage\`, \`HfDownloadsPage\`, \`HfToGgufPage\`, \`QuantizationPage\`, \`PluginsPage\`, \`NodesPage\`, \`AuditPage\` |
+| 4 | \`StatusValue\` (component + tone mapper helpers) | Centralize status-to-tone mapping and avoid repeated inline mapping logic | \`ControllerOpsPage\`, \`HfDownloadsPage\`, \`HfToGgufPage\`, \`QuantizationPage\`, \`PluginsPage\`, \`NodesPage\`, \`DashboardPage\`, \`TestChatPage\` |
+| 5 | \`DetailGrid\` | Reusable key/value metadata grid (\`label + value\`) for record details | plugin detail (\`PluginsPage\`), model details (\`EnabledModelCard\`), transfer/detail sections (\`HfDownloadsPage\`, \`SendModelModal\`) |
+
+## Secondary Components
+
+| Proposed component | Why it helps | Repeated in |
+| --- | --- | --- |
+| \`JsonPreview\` | Shared \`<pre>\` styling + optional copy button + max-height variants for event/artifact/debug payloads | \`ControllerOpsPage\`, \`AuditPage\`, \`QuantizationPage\`, \`RuntimeOverviewPage\`, \`BenchmarksPage\` |
+| \`AsyncTablePanel\` | Wrap common pattern: \`Panel\` + loading/empty/error handling + \`DataTable\` | \`HfToGgufPage\`, \`HfDownloadsPage\`, \`ControllerOpsPage\`, \`ApiKeysPage\`, \`PluginsPage\`, \`EmbeddingsPage\`, \`RuntimeOverviewPage\` |
+| \`ProgressInline\` | General progress bar + label/value (current \`DownloadProgress\` is a page-local one-off) | \`HfDownloadsPage\` now; likely reusable for transfers/jobs/benchmarks |
+| \`TransferModal\` | Generalize transfer UX currently split between \`SendModelModal\` and custom transfer modal in \`HfDownloadsPage\` | \`DashboardPage\`, \`NodesPage\`, \`HfDownloadsPage\`, \`GgufLibraryPage\` |
+| \`WizardStepFrame\` | Standardized setup step wrapper (\`title/description/body/actions\`) to reduce repeated setup-step markup | \`SetupPage/steps/*\` |
+
+## Candidate Consolidations (non-UI-primitive but worthwhile)
+
+1. Extract shared record helpers into \`frontend/src/features/records/\`:
+   - \`field(...)\`, array coercion helpers (\`asArray\` variants), status formatting helpers.
+2. Consolidate duplicated byte/date/size formatting into \`frontend/src/features/format/\`.
+3. Converge model action cards:
+   - Align model card usage between \`NodesPage\` inline cards and \`EnabledModelCard\` to reduce drift in action behavior and styling.
+
+## Suggested Build Order
+
+1. \`PageScaffold\` + \`FilterToolbar\` (largest immediate reduction in repeated layout code).
+2. \`StatusValue\` + \`RowActionGroup\` (removes repeated ad-hoc render logic in many tables).
+3. \`DetailGrid\` + \`JsonPreview\`.
+4. \`TransferModal\` unification and \`AsyncTablePanel\`.
+`,
+    headings: [
+      {
+        "level": 1,
+        "text": "Frontend Componentization Opportunities",
+        "anchor": "frontend-componentization-opportunities"
+      },
+      {
+        "level": 2,
+        "text": "Existing Reusable Base",
+        "anchor": "existing-reusable-base"
+      },
+      {
+        "level": 2,
+        "text": "Priority List (build first)",
+        "anchor": "priority-list-build-first"
+      },
+      {
+        "level": 2,
+        "text": "Secondary Components",
+        "anchor": "secondary-components"
+      },
+      {
+        "level": 2,
+        "text": "Candidate Consolidations (non-UI-primitive but worthwhile)",
+        "anchor": "candidate-consolidations-non-ui-primitive-but-worthwhile"
+      },
+      {
+        "level": 2,
+        "text": "Suggested Build Order",
+        "anchor": "suggested-build-order"
+      }
+    ],
+    searchBody: "Frontend Componentization Opportunities After reviewing the React frontend pages and current primitives, these are the highest-value components to add for better reuse. Existing Reusable Base Already in place and widely used: - , , , , , , , - Domain cards/modals: , , , The biggest remaining duplication is mostly page scaffolding, filter/action toolbars, status rendering, and detail blocks. Priority List (build first) Priority Proposed component Why it helps Repeated in --- --- --- --- 1 Standardize page header ( ) + refresh action + error banner + content wrapper , , , , , , , , , 2 Reusable grid/row for filters and toolbar actions (refresh, secondary actions) , , , , , 3 Consistent table/card action button rows (View/Cancel, Download/Stop/Delete, Start/Stop/Restart, etc.) , , , , , , 4 (component + tone mapper helpers) Centralize status-to-tone mapping and avoid repeated inline mapping logic , , , , , , , 5 Reusable key/value metadata grid ( ) for record details plugin detail ( ), model details ( ), transfer/detail sections ( , ) Secondary Components Proposed component Why it helps Repeated in --- --- --- Shared styling + optional copy button + max-height variants for event/artifact/debug payloads , , , , Wrap common pattern: + loading/empty/error handling + , , , , , , General progress bar + label/value (current is a page-local one-off) now; likely reusable for transfers/jobs/benchmarks Generalize transfer UX currently split between and custom transfer modal in , , , Standardized setup step wrapper ( ) to reduce repeated setup-step markup Candidate Consolidations (non-UI-primitive but worthwhile) 1. Extract shared record helpers into : - , array coercion helpers ( variants), status formatting helpers. 2. Consolidate duplicated byte/date/size formatting into . 3. Converge model action cards: - Align model card usage between inline cards and to reduce drift in action behavior and styling. Suggested Build Order 1. + (largest immediate reduction in repeated layout code). 2. + (removes repeated ad-hoc render logic in many tables). 3. + . 4. unification and .",
+  },
+  {
     id: "configuration",
     title: "Configuration",
     sourcePath: "docs/configuration.md",

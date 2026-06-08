@@ -134,15 +134,9 @@
 }
 
 .nav-button {
-  border: 0;
-  border-radius: 8px;
   padding: 5px;
   background: transparent;
-  color: inherit;
-  text-align: left;
-  font: inherit;
   font-size: 12px;
-  cursor: pointer;
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -159,7 +153,6 @@
 
 .nav-button.active {
   color: #f5fdff;
-  border: 1px solid rgba(24, 199, 214, 0.5);
   box-shadow: inset 3px 0 0 var(--accent), 0 0 18px rgba(24, 199, 214, 0.08);
 }
 
