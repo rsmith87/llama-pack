@@ -15,10 +15,7 @@ import type { ThreadEvent } from "../../types/threads";
 import type { NodeRecord } from "../../types/nodes";
 import type { LocalModel, ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
 import type { ChatMessage, ChatDefaults, AdvancedDefaults, ChatContentBlock } from "../../types/chat";
-
-const CHAT_PRESET_STORAGE_KEY = "lm_chat_preset";
-const ACTIVE_CHAT_SESSION_STORAGE_KEY = "lm_active_chat_session_id";
-const AUTH_TOKEN_STORAGE_KEY = "lm_ui_token";
+import { CHAT_CONSTANTS } from "../../constants"
 
 const PRESETS: Record<string, ChatDefaults> = {
   balanced: { temperature: 0.7, max_tokens: 1024, top_p: 1 },
@@ -257,8 +254,8 @@ export function ChatPage() {
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [lastPrompt, setLastPrompt] = useState("");
-  const [preset, setPreset] = useState(() => localStorage.getItem(CHAT_PRESET_STORAGE_KEY) || "balanced");
-  const [defaults, setDefaults] = useState<ChatDefaults>(() => PRESETS[localStorage.getItem(CHAT_PRESET_STORAGE_KEY) || "balanced"] || PRESETS.balanced);
+  const [preset, setPreset] = useState(() => localStorage.getItem(CHAT_CONSTANTS.CHAT_PRESET_STORAGE_KEY) || "balanced");
+  const [defaults, setDefaults] = useState<ChatDefaults>(() => PRESETS[localStorage.getItem(CHAT_CONSTANTS.CHAT_PRESET_STORAGE_KEY) || "balanced"] || PRESETS.balanced);
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advanced, setAdvanced] = useState<AdvancedDefaults>(ADVANCED_DEFAULTS);
   const [capabilities, setCapabilities] = useState<Record<string, unknown> | null>(null);
@@ -267,7 +264,7 @@ export function ChatPage() {
   const [kvDetail, setKvDetail] = useState("No KV slot data loaded.");
   const [kvSlotActionId, setKvSlotActionId] = useState("");
   const [sessions, setSessions] = useState<ChatSession[]>([]);
-  const [selectedSessionId, setSelectedSessionId] = useState(() => localStorage.getItem(ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
+  const [selectedSessionId, setSelectedSessionId] = useState(() => localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
   const [sessionName, setSessionName] = useState("");
   const abortRef = useRef<AbortController | null>(null);
 
@@ -343,7 +340,7 @@ export function ChatPage() {
 
   function applyPreset(nextPreset: string) {
     setPreset(nextPreset);
-    localStorage.setItem(CHAT_PRESET_STORAGE_KEY, nextPreset);
+    localStorage.setItem(CHAT_CONSTANTS.CHAT_PRESET_STORAGE_KEY, nextPreset);
     setDefaults(PRESETS[nextPreset] || PRESETS.balanced);
   }
 
@@ -425,7 +422,7 @@ export function ChatPage() {
     try {
       const items = asChatSessions(await listChatSessions());
       setSessions(items);
-      setSelectedSessionId((current) => current || localStorage.getItem(ACTIVE_CHAT_SESSION_STORAGE_KEY) || items[0]?.id || "");
+      setSelectedSessionId((current) => current || localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || items[0]?.id || "");
       setStatus("Sessions refreshed");
       return items;
     } catch (err) {
@@ -477,7 +474,7 @@ export function ChatPage() {
     setLastPrompt("");
     if (sessionId) {
       setSelectedSessionId(sessionId);
-      localStorage.setItem(ACTIVE_CHAT_SESSION_STORAGE_KEY, sessionId);
+      localStorage.setItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY, sessionId);
     }
     setStatus("Session loaded");
   }
@@ -509,7 +506,7 @@ export function ChatPage() {
       const nextId = nextSelectedChatSessionId({ savedSessionId: String(saved.id || ""), saveAsNew });
       if (nextId) {
         setSelectedSessionId(nextId);
-        localStorage.setItem(ACTIVE_CHAT_SESSION_STORAGE_KEY, nextId);
+        localStorage.setItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY, nextId);
       }
       setSessionName(String(saved.name || payload.name || ""));
       setSessions((current) => {
@@ -532,7 +529,7 @@ export function ChatPage() {
       await deleteChatSession(normalizedSessionId);
       setSessions((current) => current.filter((session) => session.id !== normalizedSessionId));
       setSelectedSessionId("");
-      localStorage.setItem(ACTIVE_CHAT_SESSION_STORAGE_KEY, "");
+      localStorage.setItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY, "");
       setStatus("Session deleted");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to delete chat session");
@@ -543,7 +540,7 @@ export function ChatPage() {
     const items = await refreshSessions();
     const reusableSessionId = chooseChatSessionToResume({
       sessions: items,
-      preferredSessionId: localStorage.getItem(ACTIVE_CHAT_SESSION_STORAGE_KEY) || selectedSessionId,
+      preferredSessionId: localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || selectedSessionId,
     });
     if (!reusableSessionId) {
       setStatus("No reusable session");
@@ -725,7 +722,7 @@ export function ChatPage() {
       updateAssistant(assistantIndex, patch);
       return;
     }
-    const authToken = localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "";
+    const authToken = localStorage.getItem(CHAT_CONSTANTS.AUTH_TOKEN_STORAGE_KEY) || "";
     const response = await fetch(`/lm-api/v1/chat/${encodeURIComponent(model)}/stream`, {
       method: "POST",
       headers: {
@@ -826,7 +823,7 @@ export function ChatPage() {
     setPrompt("");
     setSelectedImage(null);
     setLastPrompt("");
-    localStorage.setItem(ACTIVE_CHAT_SESSION_STORAGE_KEY, localStorage.getItem(ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
+    localStorage.setItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY, localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
   }
 
   const runningModels = models.filter((model) => modelName(model) && modelIsLoaded(model));

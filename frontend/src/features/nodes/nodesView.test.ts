@@ -1,11 +1,11 @@
 import { describe, expect, it } from "vitest";
+import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
 import {
   filterNodes,
   mergeNodeInventory,
   nodeSummary,
   nodeEditFormDefaults,
   nodeEditMarkup,
-  PROMPT_TEMPLATE_OPTIONS,
   receivedBadgeText,
   sortModelsForDisplay,
   suggestedGgufModelName,

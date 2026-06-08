@@ -8,17 +8,27 @@ import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
 import type { LogSelection } from "../../components/LogModal";
 import type { DashboardData, LocalModel } from "../../types/api";
-import type { PageKey } from "../../components/AppShell";
-import type { PageNavigationOptions } from "../../routes/pages";
-import { isActiveModel } from "../../features/models/modelStatus";
+import { useNavigate } from "react-router-dom";
+import { pageForKey, pathForPage, type PageKey, type PageNavigationOptions } from "../../routes/pages";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
 import { EnabledModelCard, modelName, statusTone } from "../../components/EnabledModelCard";
+import { TIMERS } from "../../constants";
+import { 
+  percent,
+  modelFileId,
+  isGgufBacked,
+  modelNode,
+  modelForNode,
+  nodeName,
+  certBadge,
+  asNodeRecords,
+  metricPercent
+} from "../../helpers/models-helpers";
 
 type DashboardPageProps = {
-  onNavigate: (page: PageKey, options?: PageNavigationOptions) => void;
   onOpenLogs?: (selection?: Omit<LogSelection, "requestId">) => void;
 };
 
@@ -27,10 +37,6 @@ const emptyData: DashboardData = {
   localModels: [],
   nodes: [],
 };
-
-const DAY_SECONDS = 24 * 60 * 60;
-const CERT_EXPIRING_SOON_SECONDS = 30 * DAY_SECONDS;
-type CertTone = "success" | "warning" | "danger" | "muted";
 
 function chatSearch(model: string, target: string, mode: "direct" | "thread", source: string): string {
   const params = new URLSearchParams();
@@ -41,74 +47,18 @@ function chatSearch(model: string, target: string, mode: "direct" | "thread", so
   return params.toString();
 }
 
-function metricPercent(
-  health: DashboardData["health"],
-  flatKey: "cpu_percent" | "memory_percent" | "vram_percent",
-  nestedKey: "cpu" | "ram" | "vram",
-): number | null {
-  const system = health?.system as Record<string, unknown> | undefined;
-  const flat = system?.[flatKey];
-  if (typeof flat === "number") return flat;
-  const nested = system?.[nestedKey] as Record<string, unknown> | null | undefined;
-  const nestedPercent = nested?.percent;
-  if (typeof nestedPercent === "number") return nestedPercent;
-  return null;
-}
-
-function percent(value: number | null | undefined): string {
-  return typeof value === "number" ? `${Math.round(value)}%` : "-";
-}
-
-function modelFileId(model: LocalModel): string {
-  return String(model.file_id || model.id || "");
-}
-
-function isGgufBacked(model: LocalModel): boolean {
-  const path = String(model.model_path || model.path || model.model || "").toLowerCase();
-  return Boolean(modelFileId(model) && path.endsWith(".gguf"));
-}
-
-function modelNode(model: LocalModel, data: DashboardData): string | null {
-  const directNode = model.node || model.node_name;
-  if (directNode) return directNode;
-  const matchingNode = data.nodes.find((node) => node.models?.some((nodeModel) => modelName(nodeModel) === modelName(model)));
-  return (matchingNode?.name || matchingNode?.node_id || null);
-}
-
-function modelForNode(node: DashboardData["nodes"][number], nodeModel: LocalModel, data: DashboardData): LocalModel {
-  const expectedNode = nodeName(node);
-  const expectedModel = modelName(nodeModel);
-  return data.localModels.find((model) => {
-    const localNode = model.node || model.node_name || modelNode(model, data);
-    if (!localNode && expectedNode === "controller-local") return modelName(model) === expectedModel;
-    return localNode === expectedNode && modelName(model) === expectedModel;
-  }) || { ...nodeModel, node: expectedNode };
-}
-
-function nodeName(node: { name?: string; node_id?: string }): string {
-  return String(node.name || node.node_id || "");
-}
-
-function certBadge(seconds: number | null | undefined): { tone: CertTone; label: string } {
-  if (typeof seconds !== "number") return { tone: "muted", label: "cert unknown" };
-  if (seconds <= 0) return { tone: "danger", label: "cert expired" };
-  if (seconds <= CERT_EXPIRING_SOON_SECONDS) return { tone: "warning", label: `cert ${Math.max(1, Math.ceil(seconds / DAY_SECONDS))}d left` };
-  return { tone: "success", label: "cert valid" };
-}
-
-function asNodeRecords(nodes: DashboardData["nodes"]): NodeRecord[] {
-  return nodes.map((node) => ({
-    ...node,
-    name: nodeName(node),
-  }));
-}
-
-export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
+export function DashboardPage({ onOpenLogs }: DashboardPageProps) {
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData>(emptyData);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [actingModel, setActingModel] = useState("");
   const [transfer, setTransfer] = useState<TransferState | null>(null);
+
+  function navigateToPage(page: PageKey, options: PageNavigationOptions = {}) {
+    const target = pageForKey(page);
+    navigate(pathForPage(target, options));
+  }
 
   async function refresh() {
     setLoading(true);
@@ -203,11 +153,11 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
   const expiringCertNodes = controllerNodes
     .filter((node) => {
       const expiry = node.cert_expires_in_seconds;
-      return typeof expiry === "number" && expiry > 0 && expiry <= CERT_EXPIRING_SOON_SECONDS;
+      return typeof expiry === "number" && expiry > 0 && expiry <= TIMERS.CERT_EXPIRING_SOON_SECONDS;
     })
     .map((node) => {
       const expiry = Number(node.cert_expires_in_seconds);
-      return `${nodeName(node) || "unnamed node"} (${Math.max(1, Math.ceil(expiry / DAY_SECONDS))}d)`;
+      return `${nodeName(node) || "unnamed node"} (${Math.max(1, Math.ceil(expiry / TIMERS.DAY_SECONDS))}d)`;
     });
 
   function renderModelCard(model: LocalModel, key: string) {
@@ -222,13 +172,13 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
         resolvedNode={resolvedNode}
         canSend={canSend}
         actingModel={actingModel}
-        onOpen={() => onNavigate("gguf-library")}
+        onOpen={() => navigateToPage("gguf-library")}
         onStart={() => void runModelAction(model, "start")}
         onStop={() => void runModelAction(model, "stop")}
-        onChat={() => onNavigate("chat", {
+        onChat={() => navigateToPage("chat", {
           search: chatSearch(name, resolvedNode ? `node:${resolvedNode}` : "auto", resolvedNode ? "thread" : "direct", "dashboard"),
         })}
-        onBenchmark={() => onNavigate("benchmarks", {
+        onBenchmark={() => navigateToPage("benchmarks", {
           search: benchmarkSearch(name, resolvedNode ? `node:${resolvedNode}` : "auto", resolvedNode || "", "dashboard"),
         })}
         onTransfer={() => openTransfer(model)}
@@ -287,7 +237,7 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
           className="dashboard-controller-nodes"
           eyebrow="Controller view"
           title="All Nodes"
-          actions={<Button type="button" onClick={() => onNavigate("nodes")}>Manage Nodes</Button>}
+          actions={<Button type="button" onClick={() => navigateToPage("nodes")}>Manage Nodes</Button>}
         >
           <div className="controller-node-grid">
             {controllerNodes.length === 0 ? <EmptyState message="No controller nodes reported." /> : null}
@@ -306,9 +256,9 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
                   certLabel={cert.label}
                   certTone={cert.tone}
                   modelCount={models.length}
-                  onOpenNode={() => onNavigate("nodes")}
+                  onOpenNode={() => navigateToPage("nodes")}
                   emptyMessage="No models reported for this node."
-                >
+                 >
                   {models.map((nodeModel, modelIndex) => renderModelCard(modelForNode(node, nodeModel, data), `${name}-${modelName(nodeModel)}-${modelIndex}`))}
                 </NodeCard>
               );
@@ -320,7 +270,7 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
           className="dashboard-models"
           eyebrow="This agent"
           title="Local Models"
-          actions={<Button type="button" onClick={() => onNavigate("gguf-library")}>Add Model</Button>}
+          actions={<Button type="button" onClick={() => navigateToPage("gguf-library")}>Add Model</Button>}
         >
           <div className="library-cards">
             {data.localModels.length === 0 ? <EmptyState message="No local models reported." /> : null}
@@ -340,9 +290,9 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
 
       <Panel className="quick-actions-panel" eyebrow="Shortcuts" title="Quick Actions">
         <div className="quick-actions">
-          <button type="button" className="quick-action" onClick={() => onNavigate("chat")}><strong>Open Chat</strong><small>Smoke test a route</small></button>
-          <button type="button" className="quick-action" onClick={() => onNavigate("quantization")}><strong>Quantize</strong><small>Fit a model to VRAM</small></button>
-          {isController && (<button type="button" className="quick-action" onClick={() => onNavigate("controller-ops")}><strong>Controller</strong><small>Jobs and nodes</small></button>)}
+          <button type="button" className="quick-action" onClick={() => navigateToPage("chat")}><strong>Open Chat</strong><small>Smoke test a route</small></button>
+          <button type="button" className="quick-action" onClick={() => navigateToPage("quantization")}><strong>Quantize</strong><small>Fit a model to VRAM</small></button>
+          {isController && (<button type="button" className="quick-action" onClick={() => navigateToPage("controller-ops")}><strong>Controller</strong><small>Jobs and nodes</small></button>)}
         </div>
       </Panel>
     </div>

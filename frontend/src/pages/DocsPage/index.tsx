@@ -1,11 +1,11 @@
 import "./styles.css";
-import { useState, useEffect, useMemo } from "react";
+import { useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import { Link, useSearchParams } from "react-router-dom";
 import { generatedDocs, type DocRecord } from "../../generated/docs";
 
-function docIdFromPath(): string {
-  const params = new URLSearchParams(window.location.search);
+function docIdFromParams(params: URLSearchParams): string {
   return params.get("doc") || "";
 }
 
@@ -39,33 +39,27 @@ function snippet(doc: DocRecord, query: string): string {
 }
 
 export function DocsPage() {
-  const [activeId, setActiveId] = useState(() => docIdFromPath());
+  const [searchParams, setSearchParams] = useSearchParams();
   const [query, setQuery] = useState("");
+  const activeId = docIdFromParams(searchParams);
 
   const activeDoc = useMemo(() => resolveDoc(activeId), [activeId]);
   const results = useMemo(() => searchDocs(query), [query]);
 
   function openDoc(id: string) {
-    setActiveId(id);
     setQuery("");
-    const url = new URL(window.location.href);
-    url.searchParams.set("doc", id);
-    window.history.pushState({}, "", url.toString());
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("doc", id);
+      return next;
+    });
   }
-
-  useEffect(() => {
-    function onPop() {
-      setActiveId(docIdFromPath());
-    }
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
 
   return (
     <div className="docs-shell">
       <aside className="docs-sidebar" aria-label="Documentation navigation">
         <div className="docs-brand">
-          <a href="/ui/setup" className="docs-back-link">← Back to app</a>
+          <Link to="/ui/setup" className="docs-back-link">← Back to app</Link>
           <h1 className="docs-brand-title">Neuraxis Docs</h1>
         </div>
 

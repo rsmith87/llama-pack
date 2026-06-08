@@ -11,8 +11,7 @@ import { pageForKey, pageForPath, pagesBySectionForMode, pathForPage, type PageD
 import { LogModal, type LogSelection } from "../LogModal";
 import { Button, Panel } from "../ui";
 import { IoRefreshSharp } from "react-icons/io5";
-
-const PLUGIN_NAV_CACHE_KEY = "neuraxis.pluginNavigation";
+import { PLUGIN_NAV_CACHE_KEY } from "../../constants";
 
 type AppShellProps = {
   authRefreshKey?: string;

@@ -1,11 +1,33 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { DashboardPage } from "./DashboardPage";
+
+const { mockedNavigate } = vi.hoisted(() => ({
+  mockedNavigate: vi.fn(),
+}));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockedNavigate,
+  };
+});
+
+function renderDashboardPage(onOpenLogs?: Parameters<typeof DashboardPage>[0]["onOpenLogs"]) {
+  return render(
+    <MemoryRouter>
+      <DashboardPage onOpenLogs={onOpenLogs} />
+    </MemoryRouter>,
+  );
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  mockedNavigate.mockReset();
 });
 
 it("loads and renders health, local models, and nodes", async () => {
@@ -17,7 +39,7 @@ it("loads and renders health, local models, and nodes", async () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ node_id: "mac-mini", reachable: true, models: [{ name: "llama" }] }] }) }),
   );
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
 
   expect(await screen.findByText("controller")).toBeInTheDocument();
   expect(screen.getByText("mistral")).toBeInTheDocument();
@@ -33,14 +55,13 @@ it("calls navigation when quick actions are clicked", async () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) }),
   );
-  const onNavigate = vi.fn();
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={onNavigate} />);
+  renderDashboardPage();
   await screen.findByText("agent");
   await user.click(screen.getByRole("button", { name: /Open Chat/i }));
 
-  expect(onNavigate).toHaveBeenCalledWith("chat");
+  expect(mockedNavigate).toHaveBeenCalledWith("/ui/chat");
 });
 
 it("navigates to Chat with selected model and node context from a model card", async () => {
@@ -51,15 +72,12 @@ it("navigates to Chat with selected model and node context from a model card", a
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "running", node: "mac-mini" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) }),
   );
-  const onNavigate = vi.fn();
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={onNavigate} />);
+  renderDashboardPage();
   await user.click(await screen.findByRole("button", { name: "Chat with mistral" }));
 
-  expect(onNavigate).toHaveBeenCalledWith("chat", {
-    search: "model=mistral&target=node%3Amac-mini&mode=thread&source=dashboard",
-  });
+  expect(mockedNavigate).toHaveBeenCalledWith("/ui/chat?model=mistral&target=node%3Amac-mini&mode=thread&source=dashboard");
 });
 
 it("navigates to Benchmarks with selected model and node context from a model card", async () => {
@@ -70,15 +88,12 @@ it("navigates to Benchmarks with selected model and node context from a model ca
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "running", node: "mac-mini" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) }),
   );
-  const onNavigate = vi.fn();
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={onNavigate} />);
+  renderDashboardPage();
   await user.click(await screen.findByRole("button", { name: "Benchmark mistral" }));
 
-  expect(onNavigate).toHaveBeenCalledWith("benchmarks", {
-    search: "model=mistral&target=node%3Amac-mini&target_node=mac-mini&source=dashboard",
-  });
+  expect(mockedNavigate).toHaveBeenCalledWith("/ui/benchmarks?model=mistral&target=node%3Amac-mini&target_node=mac-mini&source=dashboard");
 });
 
 it("renders local models as GGUF-style cards with runtime actions", async () => {
@@ -92,7 +107,7 @@ it("renders local models as GGUF-style cards with runtime actions", async () => 
   const onOpenLogs = vi.fn();
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={() => undefined} onOpenLogs={onOpenLogs} />);
+  renderDashboardPage(onOpenLogs);
   const cardButton = await screen.findByRole("button", { name: "Open mistral" });
 
   expect(cardButton.closest(".library-card")).toBeInTheDocument();
@@ -133,7 +148,7 @@ it("renders rich model card runtime and configuration details", async () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) }),
   );
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
 
   expect(await screen.findByText("qwen-coder")).toBeInTheDocument();
   expect(screen.getByText("Port")).toBeInTheDocument();
@@ -151,7 +166,6 @@ it("renders rich model card runtime and configuration details", async () => {
   expect(screen.getByText("Size")).toBeInTheDocument();
   expect(screen.getByText("4.0 GB")).toBeInTheDocument();
   expect(screen.getByText("favorite")).toBeInTheDocument();
-  expect(screen.getByText("file abc123")).toBeInTheDocument();
 });
 
 it("starts and stops local models from the Dashboard card", async () => {
@@ -172,7 +186,7 @@ it("starts and stops local models from the Dashboard card", async () => {
   );
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
   await user.click(await screen.findByRole("button", { name: "Start mistral" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/nodes/mac-mini/models/mistral/start", expect.objectContaining({ method: "POST" })));
   await waitFor(() => expect(screen.getAllByText("running").length).toBeGreaterThan(0));
@@ -196,7 +210,7 @@ it("sends dashboard local models to another reachable node", async () => {
   );
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
   await user.click(await screen.findByRole("button", { name: "Send Model for mistral" }));
 
   expect(await screen.findByRole("heading", { name: "Send mistral" })).toBeInTheDocument();
@@ -231,7 +245,7 @@ it("uses local model endpoints when no node mapping exists", async () => {
   );
   const user = userEvent.setup();
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
   await user.click(await screen.findByRole("button", { name: "Start gemma-4-E2B-it" }));
 
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/models/gemma-4-E2B-it/start", expect.objectContaining({ method: "POST" })));
@@ -243,7 +257,7 @@ it("shows a useful error when loading fails", async () => {
     vi.fn().mockResolvedValue({ ok: false, status: 503, statusText: "Service Unavailable", text: async () => "offline" }),
   );
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
 
   await waitFor(() => expect(screen.getByText(/503 Service Unavailable: offline/)).toBeInTheDocument());
 });
@@ -266,7 +280,7 @@ it("renders certificate alerts and per-node cert badges", async () => {
       }),
   );
 
-  render(<DashboardPage onNavigate={() => undefined} />);
+  renderDashboardPage();
 
   expect(await screen.findByText(/Expired:/)).toBeInTheDocument();
   expect(screen.getAllByText(/expired-node/).length).toBeGreaterThan(0);

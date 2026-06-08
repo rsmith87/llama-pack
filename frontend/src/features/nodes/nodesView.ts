@@ -40,17 +40,6 @@ export function suggestedGgufModelName(file: Record<string, unknown>) {
   return String(file?.name || file?.model_dir || "").trim();
 }
 
-export const PROMPT_TEMPLATE_OPTIONS = [
-  { value: "", label: "Auto / server default" },
-  { value: "llama3", label: "Llama 3" },
-  { value: "llama-3", label: "Llama 3 (alias)" },
-  { value: "chatml", label: "ChatML" },
-  { value: "qwen", label: "Qwen (ChatML)" },
-  { value: "gemma", label: "Gemma" },
-  { value: "gpt-oss", label: "GPT-OSS (ChatML)" },
-  { value: "gptoss", label: "GPTOSS (ChatML alias)" },
-];
-
 export function suggestedPromptTemplate(file: Record<string, unknown>) {
   const text = [file?.name, file?.model_dir, file?.filename, file?.path]
     .filter(Boolean)

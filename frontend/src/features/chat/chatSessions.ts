@@ -1,5 +1,8 @@
 export type { ChatSession, ChatSessionSaveOptions, ChatSessionSavePayload } from "../../types/chat";
 import type { ChatSession, ChatSessionSaveOptions, ChatSessionSavePayload } from "../../types/chat";
+import { TIMERS } from "../../constants";
+
+export const CHAT_SESSION_MAX_AGE_MS = TIMERS.DAY_MS;
 
 export function buildChatSessionSavePayload({
   name,
@@ -35,7 +38,6 @@ export function nextSelectedChatSessionId({ savedSessionId }: { savedSessionId?:
   return normalizedSessionId;
 }
 
-export const CHAT_SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 
 export function parseChatSessionTimestamp(value: unknown) {
   if (typeof value !== "string" || !value.trim()) {

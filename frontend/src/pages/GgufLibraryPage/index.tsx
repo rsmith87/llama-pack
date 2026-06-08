@@ -7,7 +7,8 @@ import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge }
 import { IoAdd, IoChatbubbles, IoCamera, IoCheckmarkCircle, IoDocumentText, IoPencil, IoSend, IoTrash } from "react-icons/io5";
 import { ModelCard } from "../../components/ModelCard";
 import { isActiveModel } from "../../features/models/modelStatus";
-import { PROMPT_TEMPLATE_OPTIONS, receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
+import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
+import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
 import type { PageKey } from "../../components/AppShell";
 import type { PageNavigationOptions } from "../../routes/pages";
 import type { GgufFile } from "../../types/api";

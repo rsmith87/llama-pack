@@ -27,7 +27,8 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.tsbuildinfo",
     "paths": {
       "react-icons/*": ["./node_modules/react-icons/*/index"]
-    }
+    },
+    "jsxImportSource": "react"
   },
   "include": [
     "src"

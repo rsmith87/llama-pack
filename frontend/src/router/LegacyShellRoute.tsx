@@ -27,7 +27,7 @@ export function LegacyShellRoute({ authRefreshKey }: LegacyShellRouteProps) {
       authRefreshKey={authRefreshKey}
       renderPage={(page, setPage, refreshKey, openLogs) => {
         if (page.key === "dashboard") {
-          return <DashboardPage onNavigate={setPage} onOpenLogs={openLogs} />;
+          return <DashboardPage onOpenLogs={openLogs} />;
         }
         if (page.key === "chat") {
           return <ChatPage />;
@@ -77,7 +77,7 @@ export function LegacyShellRoute({ authRefreshKey }: LegacyShellRouteProps) {
         if (page.pluginId) {
           return <PluginHostPage page={page} onNavigate={setPage} refreshKey={refreshKey} />;
         }
-        return <DashboardPage onNavigate={setPage} onOpenLogs={openLogs} />;
+        return <DashboardPage onOpenLogs={openLogs} />;
       }}
     />
   );
