@@ -248,8 +248,8 @@ export function EmbeddingsPage() {
           </div>
           <div className="stacked-actions">
             <button className="primary" type="button" onClick={() => void runEmbeddings()}>Run</button>
-            <button type="button" onClick={exportJson}>Export JSON</button>
-            <button type="button" onClick={exportCsv}>Export CSV</button>
+            <button className="primary" type="button" onClick={exportJson}>Export JSON</button>
+            <button className="primary" type="button" onClick={exportCsv}>Export CSV</button>
           </div>
           <p className="muted">{status}</p>
         </Panel>
@@ -277,9 +277,9 @@ export function EmbeddingsPage() {
             <FormField label="Anchor index">
               <input type="number" min={0} step={1} value={anchorIndex} onChange={(event) => setAnchorIndex(Number(event.target.value))} />
             </FormField>
-            <button type="button" onClick={computeSimilarity}>Compute Similarity</button>
-            <button type="button" onClick={computeNearestNeighbors}>Nearest Neighbors</button>
-            <button type="button" onClick={runQuickClusters}>Quick Clusters</button>
+            <button type="button" className="primary" onClick={computeSimilarity}>Compute Similarity</button>
+            <button type="button" className="primary" onClick={computeNearestNeighbors}>Nearest Neighbors</button>
+            <button type="button" className="primary" onClick={runQuickClusters}>Quick Clusters</button>
           </div>
           <DataTable
             rows={similarities}

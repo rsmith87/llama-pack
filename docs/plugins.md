@@ -9,6 +9,10 @@ Use the checked-in `plugins/hello_plugin/` as the reference sample. Paid or
 private plugins, including the private `neuraxis_business` add-on, live outside
 this repository and are loaded from configured local paths.
 
+For a draft of the next plugin-page developer experience (template-first pages,
+external styles, and action-focused controllers), see
+[Plugin Page Authoring v1 (Draft)](plugin-page-authoring-v1.md).
+
 ## Enable A Plugin
 
 Add the plugin id to `enabled_plugins` and provide a matching `plugins` entry:

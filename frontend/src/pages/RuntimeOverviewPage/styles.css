@@ -56,6 +56,7 @@
 
 .runtime-note {
   margin-top: 0;
+  margin-bottom: 16px;
 }
 
 .route-preview-form {
@@ -68,6 +69,11 @@
 .route-preview-form input,
 .route-preview-form select {
   min-width: 0;
+  border: 1px solid var(--line);
+  background: var(--input);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
 }
 
 .route-preview-check {

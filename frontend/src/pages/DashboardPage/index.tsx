@@ -6,7 +6,6 @@ import { startModel, stopModel } from "../../api/models";
 import { startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
-import { DashboardModelCard, modelName, statusTone } from "../../components/DashboardModelCard";
 import type { LogSelection } from "../../components/LogModal";
 import type { DashboardData, LocalModel } from "../../types/api";
 import type { PageKey } from "../../components/AppShell";
@@ -16,6 +15,7 @@ import { transferDestinationOptions, type NodeRecord } from "../../features/node
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
+import { EnabledModelCard, modelName, statusTone } from "../../components/EnabledModelCard";
 
 type DashboardPageProps = {
   onNavigate: (page: PageKey, options?: PageNavigationOptions) => void;
@@ -216,7 +216,7 @@ export function DashboardPage({ onNavigate, onOpenLogs }: DashboardPageProps) {
     const destinationOptions = resolvedNode ? transferDestinationOptions(nodeRecords, resolvedNode) : [];
     const canSend = Boolean(resolvedNode && isGgufBacked(model) && destinationOptions.length);
     return (
-      <DashboardModelCard
+      <EnabledModelCard
         key={key}
         model={model}
         resolvedNode={resolvedNode}

@@ -9,6 +9,7 @@ import { useAppMode } from "../../features/appMode/appModeContext";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/api";
 import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferState, RecommendedDownload } from "../../types/downloads";
+import { RecommendationModelCard } from "../../components/RecommendationModelCard";
 
 function asDownloads(payload: unknown): DownloadRecord[] {
   if (Array.isArray(payload)) return payload as DownloadRecord[];
@@ -386,29 +387,16 @@ export function HfDownloadsPage() {
             {allRecommendedModelsLocal ? <p className="muted">All recommended models are already available locally.</p> : null}
             {recommendations.map((item) => {
               const inventory = inventoryForRecommended(item, localGgufs, nodes);
-              const destinations = inventory.remoteSource ? transferDestinationOptions(nodes, inventory.remoteSource.node) : [];
+              const canSend = inventory.remoteSource ? transferDestinationOptions(nodes, inventory.remoteSource.node).length > 0 : false;
               return (
-                <article className="model-card recommended-download-card" key={`${item.repoId}:${item.includeFile}`}>
-                  <strong>{item.title}</strong>
-                  <span>{item.fitLabel}</span>
-                  <small>{item.repoId}</small>
-                  <div className="recommended-download-meta">
-                    <span>{item.quant}</span>
-                    <span>{item.includeFile}</span>
-                    {item.mmprojFile ? <span>{item.mmprojFile}</span> : null}
-                    <span>{inventory.label}</span>
-                  </div>
-                  <p>{item.useCase}</p>
-                  <small>{item.fitReason}</small>
-                  <small>Path: {inventory.detail}</small>
-                  {inventory.status === "local" ? (
-                    <Button disabled>Available locally</Button>
-                  ) : inventory.remoteSource && destinations.length ? (
-                    <Button type="button" onClick={() => openTransfer(item, inventory.remoteSource as RemoteGgufSource)} aria-label={`Send ${item.title}`}>Send</Button>
-                  ) : (
-                    <Button type="button" onClick={() => void start(item.repoId, item.includeFile, item.mmprojFile)} aria-label={`Download ${item.title}`}>Download</Button>
-                  )}
-                </article>
+                <RecommendationModelCard
+                  key={`${item.repoId}:${item.includeFile}`}
+                  item={item}
+                  inventory={inventory}
+                  canSend={canSend}
+                  onSend={openTransfer}
+                  onDownload={(recommendedItem) => void start(recommendedItem.repoId, recommendedItem.includeFile, recommendedItem.mmprojFile)}
+                />
               );
             })}
           </div>

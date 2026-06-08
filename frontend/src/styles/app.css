@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -243,12 +245,16 @@
 }
 
 .status-badge {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   border-radius: 999px;
   padding: 3px 7px;
   font-size: 11px;
   font-weight: 700;
+}
+
+.status-badge svg {
+  margin-right: 3px;
 }
 
 .status-badge-success {
@@ -349,6 +355,7 @@
   align-items: end;
   gap: 8px;
   flex-wrap: nowrap;
+  align-items: center;
 }
 
 .auth-form .form-field {
@@ -965,4 +972,37 @@ button.primary {
 
 .nodes-page-list .node.node-full .model-cards {
   grid-template-columns: repeat(4, 250px);
+}
+
+.nodes-page-list {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.nodes-filter-bar {
+  margin-bottom: 20px;
+}
+
+input[type="text"],
+input[type="number"],
+select,
+textarea {
+  border: 1px solid var(--line);
+  background: var(--input);
+  color: var(--ink);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+
+.form-field {
+  margin-bottom: 10px;
+}
+
+.embeddings-page-react .split-page-layout button {
+  margin-right: 5px;
+  margin-bottom: 5px;
+}
+
+.embeddings-page-react .side-panel {
+  position: relative;
+  top: 0;
 }

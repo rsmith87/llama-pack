@@ -1,3 +1,5 @@
+@import "tailwindcss";
+
 .app-shell {
   min-height: 100vh;
   display: grid;
@@ -11,13 +13,16 @@
 }
 
 .app-sidebar {
-  padding: 22px 14px;
   border-right: 1px solid var(--line);
   background: var(--sidebar);
   color: var(--sidebar-ink);
-  display: flex;
   flex-direction: column;
-  gap: 22px;
+  gap: 10px;
+  padding: 10px;
+  display: flex;
+  position: sticky;
+  height: 100vh;
+  top: 0;
 }
 
 .mobile-menu-button,
@@ -131,7 +136,7 @@
 .nav-button {
   border: 0;
   border-radius: 8px;
-  padding: 9px 10px;
+  padding: 5px;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -141,8 +146,7 @@
   text-decoration: none;
   display: flex;
   align-items: center;
-  gap: 11px;
-  min-height: 40px;
+  gap: 8px;
   opacity: 0.82;
   transition: background 140ms ease, color 140ms ease, opacity 140ms ease, transform 140ms ease;
 }
@@ -183,7 +187,6 @@
 }
 
 .sidebar-footer {
-  margin-top: auto;
   display: flex;
   gap: 8px;
   align-items: center;
