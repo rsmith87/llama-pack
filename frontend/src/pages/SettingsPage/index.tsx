@@ -32,12 +32,12 @@ export function SettingsPage() {
   const { authUser, authRole } = useAuthSession();
   const [mode, setMode] = useState("single");
   const [logDir, setLogDir] = useState("./logs");
-  const [controllerUrl, setControllerUrl] = useState("http://127.0.0.1:9137");
+  const [controllerUrl, setControllerUrl] = useState("http://<controller-ip>:9137");
   const [controllerApiKey, setControllerApiKey] = useState("");
   const [registrationKey, setRegistrationKey] = useState("");
   const [agentApiKey, setAgentApiKey] = useState("");
   const [agentName, setAgentName] = useState("local-agent");
-  const [agentUrl, setAgentUrl] = useState("http://127.0.0.1:9000");
+  const [agentUrl, setAgentUrl] = useState("http://127.0.0.1:9137");
   const [activePane, setActivePane] = useState("config");
   const [prefix, setPrefix] = useState("llm");
   const [tokenBytes, setTokenBytes] = useState(32);

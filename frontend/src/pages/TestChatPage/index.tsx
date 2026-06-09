@@ -4,7 +4,7 @@ import { readChatStream } from "../../features/chat/chatStreaming";
 import { Button, ErrorBanner, FormField, StatusBadge } from "../../components/ui";
 import type { ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
 import type { TestChatBootstrap, TestChatSession, TestChatMessage, RouteMeta, ChatModel } from "../../types/chat";
-import { modelName } from "../../helpers/models-helpers";
+import { modelName } from "../../features/models";
 
 function modelTarget(model: ChatModel) {
   const node = model.node || model.node_name;

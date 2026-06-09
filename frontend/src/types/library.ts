@@ -1,3 +1,5 @@
+import { NodeRecord } from "../types";
+
 export type GgufFile = Record<string, unknown> & {
   id?: string;
   name?: string;
@@ -30,3 +32,9 @@ export type ConversionsResponse = {
 
 export type QuantizationFile = Record<string, unknown>;
 export type QuantizationFilesResponse = { files?: QuantizationFile[] };
+
+export type GgufLibraryData = {
+  files: GgufFile[];
+  nodeSnapshots: NodeRecord[];
+  nodeGgufSnapshots: NodeRecord[];
+};

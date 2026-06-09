@@ -2,7 +2,7 @@ import type { LocalModel } from "../../types/api";
 import { ModelCard } from "../ModelCard";
 import { Button, StatusBadge } from "../ui";
 import { isActiveModel } from "../../features/models/modelStatus";
-import { modelName, statusTone } from "../../helpers/models-helpers";
+import { modelName, statusTone } from "../../features/models";
 import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
 
 function modelDetail(model: LocalModel): string {
@@ -40,7 +40,7 @@ function modelDetails(model: LocalModel): Array<[string, string]> {
   return details.flatMap(([label, value]) => (value || value === 0 ? [[label, String(value)]] : []));
 }
 
-type EnabledModelCardProps = {
+export type GgufCardProps = {
   model: LocalModel;
   resolvedNode: string | null;
   canSend: boolean;
@@ -54,11 +54,10 @@ type EnabledModelCardProps = {
   onLogs?: () => void;
 };
 
-export function EnabledModelCard({ model, resolvedNode, canSend, actingModel, onOpen, onStart, onStop, onChat, onBenchmark, onTransfer, onLogs }: EnabledModelCardProps) {
+export function GgufCard({ model, resolvedNode, canSend, actingModel, onOpen, onStart, onStop, onChat, onBenchmark, onTransfer, onLogs }: GgufCardProps) {
   const name = modelName(model);
   const status = model.status || "available";
   const details = modelDetails(model);
-  const fileId = String(model.file_id || "");
   return (
     <ModelCard
       title={name}

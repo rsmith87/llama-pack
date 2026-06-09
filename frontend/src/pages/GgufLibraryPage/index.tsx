@@ -13,60 +13,22 @@ import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
 import type { PageKey } from "../../components/AppShell";
 import type { PageNavigationOptions } from "../../routes/pages";
 import type { GgufFile } from "../../types/api";
+import { GgufLibraryData } from "../../types";
+import { 
+  chatSearch,
+  compactPath,
+  fileName, 
+  asFiles,
+  fileId,
+  isMmproj,
+  sizeLabel,
+  asNodes,
+  isTransferReachableNode
+} from "../../features/ggufLibrary";
 
 type GgufLibraryPageProps = {
   onNavigate?: (page: PageKey, options?: PageNavigationOptions) => void;
 };
-
-function asFiles(payload: unknown): GgufFile[] {
-  if (Array.isArray(payload)) return payload as GgufFile[];
-  const value = payload as { files?: GgufFile[]; ggufs?: GgufFile[] } | null;
-  return value?.files || value?.ggufs || [];
-}
-
-function fileName(file: GgufFile) {
-  return String(file.filename || file.name || file.path || "model.gguf");
-}
-
-function isMmproj(file: GgufFile) {
-  return fileName(file).toLowerCase().includes("mmproj");
-}
-
-function fileId(file: GgufFile) {
-  return String(file.id || file.file_id || fileName(file));
-}
-
-function sizeLabel(value: unknown) {
-  const bytes = typeof value === "number" ? value : Number(value || 0);
-  if (!Number.isFinite(bytes) || bytes <= 0) return "unknown size";
-  if (bytes > 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
-  if (bytes > 1024 ** 2) return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
-  return `${bytes} B`;
-}
-
-function compactPath(value: unknown) {
-  const path = String(value || "-");
-  if (path.length <= 78) return path;
-  return `...${path.slice(-75)}`;
-}
-
-function asNodes(payload: unknown): NodeRecord[] {
-  if (Array.isArray(payload)) return payload as NodeRecord[];
-  return (payload as { nodes?: NodeRecord[] } | null)?.nodes || [];
-}
-
-function isTransferReachableNode(node: NodeRecord) {
-  return Boolean(node.reachable || node.heartbeat_fresh);
-}
-
-function chatSearch(model: string): string {
-  const params = new URLSearchParams();
-  params.set("model", model);
-  params.set("target", "auto");
-  params.set("mode", "direct");
-  params.set("source", "gguf-library");
-  return params.toString();
-}
 
 function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: string; onChange: (v: string) => void }) {
   const candidates = files.filter((f) => fileName(f).toLowerCase().includes("mmproj"));
@@ -93,11 +55,7 @@ function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: st
   );
 }
 
-type GgufLibraryData = {
-  files: GgufFile[];
-  nodeSnapshots: NodeRecord[];
-  nodeGgufSnapshots: NodeRecord[];
-};
+
 
 async function loadGgufLibraryData(appMode: string): Promise<GgufLibraryData> {
   const nodeGgufsPromise = appMode === "controller" ? getNodeGgufs() : Promise.resolve({ nodes: [] });

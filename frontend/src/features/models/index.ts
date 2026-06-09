@@ -1,5 +1,5 @@
-import { LocalModel, DashboardData, NodeRecord } from "../types";
-import { TIMERS } from "../constants";
+import { LocalModel, DashboardData, NodeRecord } from "../../types";
+import { TIMERS } from "../../constants";
 
 type CertTone = "success" | "warning" | "danger" | "muted";
 

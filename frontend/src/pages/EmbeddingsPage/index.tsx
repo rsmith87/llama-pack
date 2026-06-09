@@ -6,7 +6,7 @@ import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import type { LocalModel } from "../../types/models";
 import type { EmbeddingRow, EmbeddingsResult, DisplayEmbeddingRow, SimilarityRow } from "../../types/embeddings";
-import { modelName } from "../../helpers/models-helpers";
+import { modelName } from "../../features/models";
 
 function asModels(payload: unknown): LocalModel[] {
   if (Array.isArray(payload)) return payload as LocalModel[];

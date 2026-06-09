@@ -1,85 +1,9 @@
-import { useMemo, useState } from "react";
-import { activatePlugin, deactivatePlugin, getEnabledPlugins, getPluginMigrationStatus, getPluginStatus, upgradePluginMigrationTarget, type EnabledPlugin, type PluginMigrationStatus, type PluginStatus } from "../../api/plugins";
+import { useState } from "react";
+import { activatePlugin, deactivatePlugin, upgradePluginMigrationTarget } from "../../api/plugins";
+import { loadPluginRows, actionLabelFor, listText, statusTone, migrationSummary } from "../../features/plugins"
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
-
-type PluginRow = {
-  id: string;
-  name: string;
-  version: string;
-  status: string;
-  frontendEntry?: string | null;
-  routes: string[];
-  warnings: string[];
-  errors: string[];
-  health: Array<Record<string, string>>;
-  config?: Record<string, unknown>;
-  migrationStatus?: PluginMigrationStatus | null;
-};
-
-function statusTone(status: string) {
-  if (status === "enabled") return "success";
-  if (status === "disabled") return "muted";
-  if (status === "incompatible") return "warning";
-  return "danger";
-}
-
-function migrationSummary(status?: PluginMigrationStatus | null) {
-  if (!status) return "Unavailable";
-  if (!status.targets.length) return "No targets";
-  const pending = status.targets.filter((target) => target.pending).length;
-  if (pending) return `${pending} pending`;
-  return "Current";
-}
-
-function mergePluginRows(enabled: EnabledPlugin[], status: PluginStatus | null, migrations: Record<string, PluginMigrationStatus | null>): PluginRow[] {
-  const enabledById = new Map(enabled.map((plugin) => [plugin.id, plugin]));
-  const statusPlugins = status?.plugins || [];
-  const ids = new Set([...enabledById.keys(), ...statusPlugins.map((plugin) => plugin.id)]);
-  return Array.from(ids).sort().map((id) => {
-    const metadata = enabledById.get(id);
-    const statusItem = statusPlugins.find((plugin) => plugin.id === id);
-    return {
-      id,
-      name: metadata?.name || id,
-      version: statusItem?.version || metadata?.version || "",
-      status: statusItem?.status || metadata?.status || "unknown",
-      frontendEntry: metadata?.frontend?.entry || null,
-      routes: [...(metadata?.navigation || []), ...(metadata?.ui_routes || [])]
-        .map((item) => item.path)
-        .filter((path): path is string => typeof path === "string" && path.length > 0),
-      warnings: statusItem?.warnings || [],
-      errors: statusItem?.errors || [],
-      health: statusItem?.health || [],
-      config: statusItem?.config,
-      migrationStatus: migrations[id],
-    };
-  });
-}
-
-function listText(values: string[], empty = "None") {
-  return values.length ? values.join(", ") : empty;
-}
-
-function actionLabelFor(plugin: PluginRow) {
-  return plugin.status === "enabled" ? "Deactivate" : "Activate";
-}
-
-async function loadPluginRows(): Promise<PluginRow[]> {
-  const [enabledPayload, statusPayload] = await Promise.all([getEnabledPlugins(), getPluginStatus()]);
-  const enabledPlugins = Array.isArray(enabledPayload) ? enabledPayload : [];
-  const ids = new Set([...enabledPlugins.map((plugin) => plugin.id), ...(statusPayload.plugins || []).map((plugin) => plugin.id)]);
-  const migrationEntries = await Promise.all(
-    Array.from(ids).sort().map(async (pluginId) => {
-      try {
-        return [pluginId, await getPluginMigrationStatus(pluginId)] as const;
-      } catch {
-        return [pluginId, null] as const;
-      }
-    })
-  );
-  return mergePluginRows(enabledPlugins, statusPayload, Object.fromEntries(migrationEntries));
-}
+import { PluginRow } from "../../types/plugins";
 
 export function PluginsPage() {
   const { data: rows, loading, error, refresh, setError } = useAsyncResource<PluginRow[]>(loadPluginRows, []);

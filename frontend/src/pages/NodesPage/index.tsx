@@ -9,7 +9,7 @@ import { isActiveModel } from "../../features/models/modelStatus";
 import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
-import { modelName, modelFileId } from "../../helpers/models-helpers";
+import { modelName, modelFileId } from "../../features/models";
 
 type NodeEditState = {
   name: string;

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPluginHostApi, type PluginHostApi } from "../../api/pluginHost";
-import { getEnabledPlugins, type EnabledPlugin } from "../../api/plugins";
+import { getEnabledPlugins } from "../../api/plugins";
+import { EnabledPlugin } from "../../types/plugins";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, ErrorBanner, Panel } from "../../components/ui";
 import type { PageDefinition } from "../../routes/pages";

@@ -14,8 +14,8 @@ import { transferDestinationOptions, type NodeRecord } from "../../features/node
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
-import { EnabledModelCard } from "../../components/EnabledModelCard";
-import { modelName, statusTone } from "../../helpers/models-helpers";
+import { GgufCard } from "../../components/GgufCard";
+import { modelName, statusTone } from "../../features/models";
 import { TIMERS } from "../../constants";
 import { 
   percent,
@@ -27,7 +27,7 @@ import {
   certBadge,
   asNodeRecords,
   metricPercent
-} from "../../helpers/models-helpers";
+} from "../../features/models";
 
 type DashboardPageProps = {
   onOpenLogs?: (selection?: Omit<LogSelection, "requestId">) => void;
@@ -148,7 +148,7 @@ export function DashboardPage({ onOpenLogs }: DashboardPageProps) {
     const destinationOptions = resolvedNode ? transferDestinationOptions(nodeRecords, resolvedNode) : [];
     const canSend = Boolean(resolvedNode && isGgufBacked(model) && destinationOptions.length);
     return (
-      <EnabledModelCard
+      <GgufCard
         key={key}
         model={model}
         resolvedNode={resolvedNode}

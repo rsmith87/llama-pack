@@ -11,7 +11,7 @@ import { transferDestinationOptions, type NodeRecord } from "../../features/node
 import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/api";
 import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferState, RecommendedDownload } from "../../types/downloads";
 import { RecommendationModelCard } from "../../components/RecommendationModelCard";
-import { modelName, modelFileId } from "../../helpers/models-helpers";
+import { modelName, modelFileId } from "../../features/models";
 
 function asDownloads(payload: unknown): DownloadRecord[] {
   if (Array.isArray(payload)) return payload as DownloadRecord[];
