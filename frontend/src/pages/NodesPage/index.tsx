@@ -4,7 +4,7 @@ import { createGgufTransfer } from "../../api/library";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel, stopNodeModel, updateNode } from "../../api/nodes";
 import { EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
-import type { LogSelection } from "../../components/LogModal";
+import { useLogModal } from "../../features/logs/logModalContext";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { TransferState } from "../../types/nodes";
@@ -16,10 +16,6 @@ type NodeEditState = {
   url: string;
   api_key: string;
   verify_tls: boolean;
-};
-
-type NodesPageProps = {
-  onOpenLogs?: (selection?: Omit<LogSelection, "requestId">) => void;
 };
 
 function asNodeArray(payload: unknown): NodeRecord[] {
@@ -42,7 +38,8 @@ function transferProgressText(transfer: Record<string, unknown> | null) {
   return `${Number(copied || 0)}/${Number(total || 0)} files copied, ${Number(skipped || 0)} skipped`;
 }
 
-export function NodesPage({ onOpenLogs }: NodesPageProps = {}) {
+export function NodesPage() {
+  const { openLogs } = useLogModal();
   const { data: nodes, loading, error, refresh, setError } = useAsyncResource<NodeRecord[]>(
     () => Promise.all([listNodes(), getNodeModels()])
       .then(([configuredPayload, modelsPayload]) => mergeNodeInventory(asNodeArray(configuredPayload), asNodeArray(modelsPayload))),
@@ -177,7 +174,7 @@ export function NodesPage({ onOpenLogs }: NodesPageProps = {}) {
                         <button type="button" onClick={() => void runModelAction(node.name || "", name, "restart")} aria-label={`Restart ${name} on ${node.name}`}>Restart</button>
                         <button
                           type="button"
-                          onClick={() => onOpenLogs?.({
+                          onClick={() => openLogs({
                             source: "node-model",
                             identifier: name,
                             node: node.name || "",

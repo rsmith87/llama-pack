@@ -10,8 +10,7 @@ import { ModelCard } from "../../components/ModelCard";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
 import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
-import type { PageKey } from "../../components/AppShell";
-import type { PageNavigationOptions } from "../../routes/pages";
+import { useNavigate } from "react-router-dom";
 import type { GgufFile } from "../../types/api";
 import { GgufLibraryData } from "../../types";
 import { 
@@ -25,10 +24,6 @@ import {
   asNodes,
   isTransferReachableNode
 } from "../../features/ggufLibrary";
-
-type GgufLibraryPageProps = {
-  onNavigate?: (page: PageKey, options?: PageNavigationOptions) => void;
-};
 
 function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: string; onChange: (v: string) => void }) {
   const candidates = files.filter((f) => fileName(f).toLowerCase().includes("mmproj"));
@@ -67,7 +62,8 @@ async function loadGgufLibraryData(appMode: string): Promise<GgufLibraryData> {
   };
 }
 
-export function GgufLibraryPage({ onNavigate }: GgufLibraryPageProps = {}) {
+export function GgufLibraryPage() {
+  const navigate = useNavigate();
   const appMode = useAppMode();
   const { data, loading, error, refresh, setError } = useAsyncResource<GgufLibraryData>(
     () => loadGgufLibraryData(appMode),
@@ -253,8 +249,8 @@ export function GgufLibraryPage({ onNavigate }: GgufLibraryPageProps = {}) {
                 <IoPencil />
               </Button>
             ) : null}
-            {file.registered && onNavigate ? (
-              <Button variant="warning" onClick={() => onNavigate("chat", { search: chatSearch(registeredName) })} aria-label={`Chat with ${registeredName}`}>
+            {file.registered ? (
+              <Button variant="warning" onClick={() => navigate(`/ui/chat?${chatSearch(registeredName)}`)} aria-label={`Chat with ${registeredName}`}>
                 <IoChatbubbles />
               </Button>
             ) : null}
@@ -390,15 +386,13 @@ export function GgufLibraryPage({ onNavigate }: GgufLibraryPageProps = {}) {
                             <StatusBadge tone={isActiveModel(model) ? "success" : "muted"}>
                               {String(model.status || (isActiveModel(model) ? "running" : "available"))}
                             </StatusBadge>
-                            {onNavigate ? (
                               <button
                                 type="button"
-                                onClick={() => onNavigate("chat", { search: chatSearch(name) })}
+                                onClick={() => navigate(`/ui/chat?${chatSearch(name)}`)}
                                 aria-label={`Chat with ${name} on ${nodeName}`}
                               >
                                 Chat
                               </button>
-                            ) : null}
                           </div>
                         );
                       }) : (

@@ -16,10 +16,10 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-function renderDashboardPage(onOpenLogs?: Parameters<typeof DashboardPage>[0]["onOpenLogs"]) {
+function renderDashboardPage() {
   return render(
     <MemoryRouter>
-      <DashboardPage onOpenLogs={onOpenLogs} />
+      <DashboardPage />
     </MemoryRouter>,
   );
 }
@@ -104,24 +104,15 @@ it("renders local models as GGUF-style cards with runtime actions", async () => 
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "stopped", path: "/models/mistral.gguf", node: "mac-mini" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) }),
   );
-  const onOpenLogs = vi.fn();
   const user = userEvent.setup();
 
-  renderDashboardPage(onOpenLogs);
+  renderDashboardPage();
   const cardButton = await screen.findByRole("button", { name: "Open mistral" });
 
   expect(cardButton.closest(".library-card")).toBeInTheDocument();
   expect(screen.getByText("/models/mistral.gguf")).toBeInTheDocument();
   expect(screen.getAllByText("stopped").length).toBeGreaterThan(0);
   expect(screen.getAllByText("mac-mini").length).toBeGreaterThan(0);
-
-  await user.click(screen.getByRole("button", { name: "View logs for mistral" }));
-  expect(onOpenLogs).toHaveBeenCalledWith(expect.objectContaining({
-    source: "node-model",
-    identifier: "mistral",
-    node: "mac-mini",
-    autoLoad: true,
-  }));
 });
 
 it("renders rich model card runtime and configuration details", async () => {

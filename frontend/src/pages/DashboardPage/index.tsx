@@ -7,7 +7,7 @@ import { startModel, stopModel } from "../../api/models";
 import { startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
-import type { LogSelection } from "../../components/LogModal";
+import { useLogModal } from "../../features/logs/logModalContext";
 import type { DashboardData, LocalModel } from "../../types/api";
 import { useNavigateToPage } from "../../hooks/useNavigateToPage";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
@@ -29,10 +29,6 @@ import {
   metricPercent
 } from "../../features/models";
 
-type DashboardPageProps = {
-  onOpenLogs?: (selection?: Omit<LogSelection, "requestId">) => void;
-};
-
 const emptyData: DashboardData = {
   health: null,
   localModels: [],
@@ -52,7 +48,8 @@ function chatSearch(model: string, target: string, mode: "direct" | "thread", so
   return params.toString();
 }
 
-export function DashboardPage({ onOpenLogs }: DashboardPageProps) {
+export function DashboardPage() {
+  const { openLogs } = useLogModal();
   const navigateToPage = useNavigateToPage();
   const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, emptyData);
   const [actingModel, setActingModel] = useState("");
@@ -164,7 +161,7 @@ export function DashboardPage({ onOpenLogs }: DashboardPageProps) {
           search: benchmarkSearch(name, resolvedNode ? `node:${resolvedNode}` : "auto", resolvedNode || "", "dashboard"),
         })}
         onTransfer={() => openTransfer(model)}
-        onLogs={() => onOpenLogs?.({
+        onLogs={() => openLogs({
           source: resolvedNode ? "node-model" : "model",
           identifier: name,
           node: resolvedNode || undefined,

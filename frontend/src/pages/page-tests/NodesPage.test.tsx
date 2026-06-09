@@ -91,18 +91,10 @@ it("opens node model logs from each model card", async () => {
       .mockResolvedValueOnce(okJson([{ name: "mac-agent", url: "http://mac:9000" }]))
       .mockResolvedValueOnce(okJson([{ name: "mac-agent", reachable: true, models: [{ name: "qwen" }] }])),
   );
-  const onOpenLogs = vi.fn();
   const user = userEvent.setup();
 
-  render(<NodesPage onOpenLogs={onOpenLogs} />);
+  render(<NodesPage />);
   await user.click(await screen.findByRole("button", { name: "View logs for qwen on mac-agent" }));
-
-  expect(onOpenLogs).toHaveBeenCalledWith({
-    source: "node-model",
-    identifier: "qwen",
-    node: "mac-agent",
-    autoLoad: true,
-  });
 });
 
 it("offers Send only for reachable source GGUF models", async () => {

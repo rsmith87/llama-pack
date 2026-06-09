@@ -16,6 +16,7 @@ afterEach(() => {
 
 function stubReactSmokeFetches() {
   vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }));
     if (url === "/lm-api/v1/health") return Promise.resolve(okJson({ mode: "controller", configured_models: 1, system: { cpu_percent: 10 } }));
     if (url === "/lm-api/v1/models") return Promise.resolve(okJson({ models: [{ name: "qwen" }] }));
     if (url === "/lm-api/v1/nodes") return Promise.resolve(okJson([{ name: "mac", url: "http://mac" }]));
@@ -55,24 +56,24 @@ it("smoke tests migrated React pages and logs modal", async () => {
   render(<App />);
 
   expect(await screen.findByText("Backend online")).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Nodes" }));
+  await user.click(screen.getByRole("link", { name: "Nodes" }));
   expect(await screen.findByRole("heading", { name: "Nodes" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Chat" }));
+  await user.click(screen.getByRole("link", { name: "Chat" }));
   expect(await screen.findByRole("heading", { name: "Chat" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "GGUF Library" }));
+  await user.click(screen.getByRole("link", { name: "GGUF Library" }));
   expect(await screen.findByRole("heading", { name: "GGUF Library" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "HF Downloads" }));
+  await user.click(screen.getByRole("link", { name: "HF Downloads" }));
   expect(await screen.findByRole("heading", { name: "HF Downloads" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Quantization" }));
+  await user.click(screen.getByRole("link", { name: "Quantization" }));
   expect(await screen.findByRole("heading", { name: "Quantization" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Audit" }));
+  await user.click(screen.getByRole("link", { name: "Audit" }));
   expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Overview" }));
+  await user.click(screen.getByRole("link", { name: "Overview" }));
   expect(await screen.findByRole("heading", { name: "Runtime Overview" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Preview Route" }));
   expect((await screen.findAllByText("mac / qwen")).length).toBeGreaterThan(0);
   expect((await screen.findAllByText("coding")).length).toBeGreaterThan(1);
-  await user.click(screen.getByRole("button", { name: "Settings" }));
+  await user.click(screen.getByRole("link", { name: "Settings" }));
   expect(await screen.findByRole("heading", { name: "System Settings" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Logs" }));
   expect(screen.getByRole("dialog", { name: "Recent Logs" })).toBeInTheDocument();

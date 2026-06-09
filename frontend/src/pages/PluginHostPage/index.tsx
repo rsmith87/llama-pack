@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { createPluginHostApi, type PluginHostApi } from "../../api/pluginHost";
 import { getEnabledPlugins } from "../../api/plugins";
 import { EnabledPlugin } from "../../types/plugins";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, ErrorBanner, Panel } from "../../components/ui";
-import type { PageDefinition } from "../../routes/pages";
+import { useGlobalStatus } from "../../features/globalStatus/globalStatusContext";
+import { usePluginNav } from "../../features/plugins/pluginNavContext";
 import "./styles.css";
 
 export type PluginFrontendModule = {
@@ -25,16 +27,28 @@ function errorMessage(err: unknown, fallback: string): string {
 }
 
 export function PluginHostPage({
-  page,
-  onNavigate,
-  refreshKey = "",
   loadModule = defaultLoader,
 }: {
-  page: PageDefinition;
-  onNavigate: (pageKeyOrPath: string) => void;
-  refreshKey?: string | number;
   loadModule?: PluginModuleLoader;
-}) {
+} = {}) {
+  const { pluginId: routePluginId } = useParams();
+  const navigate = useNavigate();
+  const { refreshKey } = useGlobalStatus();
+  const { pluginPages } = usePluginNav();
+
+  const page = useMemo(() => {
+    const match = pluginPages.find((p) => p.pluginId === routePluginId && p.path === window.location.pathname);
+    if (match) return match;
+    return {
+      key: `plugin:${routePluginId}:${window.location.pathname}`,
+      label: "Plugin",
+      path: window.location.pathname,
+      icon: "settings" as const,
+      section: "plugins" as const,
+      pluginId: routePluginId || "",
+      pluginName: "Plugin",
+    };
+  }, [routePluginId, pluginPages]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const pendingCleanupErrorRef = useRef("");
@@ -50,9 +64,9 @@ export function PluginHostPage({
 
   const hostApi = useMemo(() => createPluginHostApi({
     pluginId: page.pluginId || "",
-    navigate: onNavigate,
+    navigate,
     refreshPluginStatus: () => undefined,
-  }), [onNavigate, page.pluginId]);
+  }), [navigate, page.pluginId]);
 
   function cleanupPlugin(): string {
     const cleanup = cleanupRef.current;

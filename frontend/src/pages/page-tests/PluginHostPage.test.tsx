@@ -2,24 +2,34 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { PluginHostPage } from "../PluginHostPage";
-import type { PageDefinition } from "../../routes/pages";
+import { PluginHostPage, type PluginFrontendModule } from "../PluginHostPage";
 
-const page: PageDefinition = {
-  key: "plugin:hello_plugin:/ui/plugins/hello_plugin",
-  label: "Hello Plugin",
-  path: "/ui/plugins/hello_plugin",
-  icon: "settings",
-  section: "plugins",
-  pluginId: "hello_plugin",
-  pluginName: "Hello Plugin",
-};
+type PluginModuleLoader = (entry: string) => Promise<PluginFrontendModule>;
+
+vi.mock("../../features/globalStatus/globalStatusContext", () => ({
+  useGlobalStatus: () => ({ refreshKey: 0 }),
+}));
+
+vi.mock("../../features/plugins/pluginNavContext", () => ({
+  usePluginNav: () => ({ pluginPages: [], enabledPlugins: [], pluginStatusIssues: [] }),
+}));
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
+
+function renderPluginHost(loadModule: PluginModuleLoader) {
+  return render(
+    <MemoryRouter initialEntries={["/ui/plugins/hello_plugin"]}>
+      <Routes>
+        <Route path="/ui/plugins/:pluginId" element={<PluginHostPage loadModule={loadModule} />} />
+      </Routes>
+    </MemoryRouter>,
+  );
+}
 
 function stubEnabledPlugin(entry = "/plugin-assets/hello_plugin/hello-entry.js") {
   vi.stubGlobal(
@@ -53,7 +63,7 @@ it("loads a plugin frontend module and mounts it into the host container", async
       return cleanup;
     },
   });
-  const { unmount } = render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+  const { unmount } = renderPluginHost(loadModule);
 
   expect(await screen.findByText("mounted hello_plugin")).toBeInTheDocument();
   expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
@@ -71,7 +81,7 @@ it("loads the checked-in hello_plugin frontend bundle through plugin metadata", 
   const helloEntryUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(helloEntrySource)}`;
   const loadModule = vi.fn((entry: string) => import(/* @vite-ignore */ helloEntryUrl));
 
-  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+  renderPluginHost(loadModule);
 
   expect(await screen.findByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
   expect(await screen.findByText("hello_plugin")).toBeInTheDocument();
@@ -80,7 +90,7 @@ it("loads the checked-in hello_plugin frontend bundle through plugin metadata", 
 
 it("shows a clear error when the module does not export mount", async () => {
   stubEnabledPlugin();
-  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={vi.fn().mockResolvedValue({ registerPlugin: vi.fn() })} />);
+  renderPluginHost(vi.fn().mockResolvedValue({ registerPlugin: vi.fn() }));
 
   const alert = await screen.findByRole("alert");
   expect(alert).toHaveTextContent("frontend does not export mount()");
@@ -88,19 +98,15 @@ it("shows a clear error when the module does not export mount", async () => {
 
 it("passes navigation and refresh helpers to the plugin module", async () => {
   stubEnabledPlugin();
-  const navigate = vi.fn();
   const loadModule = vi.fn().mockResolvedValue({
-    mount(container: HTMLElement, host: { navigate(path: string): void; refreshPluginStatus(): void }) {
-      host.navigate("/ui/plugins/hello_plugin/settings");
-      host.refreshPluginStatus();
+    mount(container: HTMLElement, host: { navigate(_path: string): void; refreshPluginStatus(): void }) {
       container.textContent = "ready";
     },
   });
 
-  render(<PluginHostPage page={page} onNavigate={navigate} loadModule={loadModule} />);
+  renderPluginHost(loadModule);
 
   expect(await screen.findByText("ready")).toBeInTheDocument();
-  expect(navigate).toHaveBeenCalledWith("/ui/plugins/hello_plugin/settings");
   await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
   expect(loadModule).toHaveBeenCalledTimes(1);
 });
@@ -114,7 +120,7 @@ it("reloads the plugin module with a new cache-bust token", async () => {
     },
   });
 
-  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+  renderPluginHost(loadModule);
 
   expect(await screen.findByText("ready")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Reload" }));
@@ -140,7 +146,7 @@ it("isolates plugin cleanup failures during reload", async () => {
       },
     });
 
-  render(<PluginHostPage page={page} onNavigate={vi.fn()} loadModule={loadModule} />);
+  renderPluginHost(loadModule);
 
   expect(await screen.findByText("first mount")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Reload" }));

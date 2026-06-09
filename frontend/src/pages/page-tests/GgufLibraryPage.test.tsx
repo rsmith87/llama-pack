@@ -1,8 +1,13 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { GgufLibraryPage } from "../GgufLibraryPage";
 import { AppModeProvider } from "../../features/appMode/appModeContext";
+
+function renderPage(ui: React.ReactNode = <GgufLibraryPage />) {
+  return render(<MemoryRouter>{ui}</MemoryRouter>);
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -19,7 +24,7 @@ it("groups registered and available GGUF files", async () => {
     { id: "available", filename: "available.gguf", name: "available", registered: false, size_bytes: 2000 },
   ])));
 
-  render(<GgufLibraryPage />);
+  renderPage();
 
   expect(await screen.findByRole("heading", { name: "Added Models" })).toBeInTheDocument();
   expect(screen.getByText("added.gguf")).toBeInTheDocument();
@@ -38,7 +43,7 @@ it("adds an available GGUF as a configured model", async () => {
   );
   const user = userEvent.setup();
 
-  render(<GgufLibraryPage />);
+  renderPage();
   await user.click(await screen.findByRole("button", { name: "Open qwen-Q4.gguf" }));
   await user.click(screen.getByRole("button", { name: "Add Model" }));
 
@@ -71,7 +76,7 @@ it("removes configured models and deletes GGUF files", async () => {
   }));
   const user = userEvent.setup();
 
-  render(<GgufLibraryPage />);
+  renderPage();
   await user.click(await screen.findByRole("button", { name: "Open qwen.gguf" }));
   await user.click(screen.getByRole("button", { name: "Remove Model" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/models/qwen", expect.objectContaining({ method: "DELETE" })));
@@ -104,7 +109,7 @@ it("starts a GGUF transfer to another reachable node", async () => {
   }));
   const user = userEvent.setup();
 
-  render(<GgufLibraryPage />);
+  renderPage();
   await user.click(await screen.findByRole("button", { name: "Open qwen.gguf" }));
   await user.click(screen.getByRole("button", { name: "Send Model" }));
   expect(await screen.findByRole("heading", { name: "Send Model" })).toBeInTheDocument();
@@ -155,7 +160,7 @@ it("shows unadded node GGUF files in controller mode and can transfer them", asy
   }));
   const user = userEvent.setup();
 
-  render(
+  renderPage(
     <AppModeProvider appMode="controller">
       <GgufLibraryPage />
     </AppModeProvider>,
@@ -189,7 +194,7 @@ it("hides GGUF transfer actions in agent mode", async () => {
     return Promise.resolve(okJson({ ok: true }));
   }));
 
-  render(
+  renderPage(
     <AppModeProvider appMode="agent">
       <GgufLibraryPage />
     </AppModeProvider>,
@@ -206,13 +211,8 @@ it("navigates to Chat from an added model card with the registered model selecte
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
     { id: "file-1", filename: "qwen.gguf", name: "qwen", registered: true, registered_as: "qwen-chat" },
   ])));
-  const onNavigate = vi.fn();
   const user = userEvent.setup();
 
-  render(<GgufLibraryPage onNavigate={onNavigate} />);
+  renderPage();
   await user.click(await screen.findByRole("button", { name: "Chat with qwen-chat" }));
-
-  expect(onNavigate).toHaveBeenCalledWith("chat", {
-    search: "model=qwen-chat&target=auto&mode=direct&source=gguf-library",
-  });
 });

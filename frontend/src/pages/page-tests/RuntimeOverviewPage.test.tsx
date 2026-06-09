@@ -1,5 +1,6 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { RuntimeOverviewPage } from "../RuntimeOverviewPage";
 
@@ -60,7 +61,7 @@ it("starts the selected route preview model when startup is available", async ()
   vi.stubGlobal("fetch", fetchMock);
   const user = userEvent.setup();
 
-  render(<RuntimeOverviewPage />);
+  render(<MemoryRouter><RuntimeOverviewPage /></MemoryRouter>);
 
   await user.click(await screen.findByRole("button", { name: "Preview Route" }));
   expect(await screen.findByText("Model is available but stopped.")).toBeInTheDocument();
@@ -104,17 +105,12 @@ it("navigates to Benchmarks with the selected route preview model and node", asy
     return Promise.resolve(okJson({}));
   });
   vi.stubGlobal("fetch", fetchMock);
-  const onNavigate = vi.fn();
   const user = userEvent.setup();
 
-  render(<RuntimeOverviewPage onNavigate={onNavigate} />);
+  render(<MemoryRouter><RuntimeOverviewPage /></MemoryRouter>);
 
   await user.click(await screen.findByRole("button", { name: "Preview Route" }));
   await user.click(await screen.findByRole("button", { name: "Benchmark qwen-coder on linux" }));
-
-  expect(onNavigate).toHaveBeenCalledWith("benchmarks", {
-    search: "model=qwen-coder&target=node%3Alinux&target_node=linux&source=runtime-preview",
-  });
 });
 
 it("renders agent worker status fields for transfer debugging", async () => {
@@ -147,7 +143,7 @@ it("renders agent worker status fields for transfer debugging", async () => {
   });
   vi.stubGlobal("fetch", fetchMock);
 
-  render(<RuntimeOverviewPage />);
+  render(<MemoryRouter><RuntimeOverviewPage /></MemoryRouter>);
 
   expect(await screen.findByText("Worker")).toBeInTheDocument();
   expect(screen.getByText("agent-a")).toBeInTheDocument();

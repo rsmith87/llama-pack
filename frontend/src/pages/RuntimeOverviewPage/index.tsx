@@ -5,8 +5,7 @@ import { getRuntimeOverview, previewRoute } from "../../api/runtime";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
-import type { PageKey } from "../../components/AppShell";
-import type { PageNavigationOptions } from "../../routes/pages";
+import { useNavigate } from "react-router-dom";
 import type { RoutePreviewResponse, RuntimeOverview } from "../../types/api";
 
 function yesNo(value?: boolean) {
@@ -43,11 +42,9 @@ function workerStatus(worker?: WorkerOverview) {
   return "Disabled";
 }
 
-type RuntimeOverviewPageProps = {
-  onNavigate?: (page: PageKey, options?: PageNavigationOptions) => void;
-};
 
-export function RuntimeOverviewPage({ onNavigate }: RuntimeOverviewPageProps = {}) {
+export function RuntimeOverviewPage() {
+  const navigate = useNavigate();
   const { data: overview, error, setError, refresh } = useAsyncResource<RuntimeOverview | null>(
     () => getRuntimeOverview(),
     null,
@@ -170,14 +167,12 @@ export function RuntimeOverviewPage({ onNavigate }: RuntimeOverviewPageProps = {
               {preview.selected?.model ? (
                 <Button
                   type="button"
-                  onClick={() => onNavigate?.("benchmarks", {
-                    search: benchmarkSearch(
-                      preview.selected?.model || "",
-                      preview.selected?.node ? `node:${preview.selected.node}` : "auto",
-                      preview.selected?.node || "",
-                      "runtime-preview",
-                    ),
-                  })}
+                  onClick={() => navigate(`/ui/benchmarks?${benchmarkSearch(
+                    preview.selected?.model || "",
+                    preview.selected?.node ? `node:${preview.selected.node}` : "auto",
+                    preview.selected?.node || "",
+                    "runtime-preview",
+                  )}`)}
                   aria-label={`Benchmark ${preview.selected.model}${preview.selected.node ? ` on ${preview.selected.node}` : ""}`}
                 >
                   Benchmark
