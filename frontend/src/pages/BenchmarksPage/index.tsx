@@ -17,7 +17,7 @@ import type {
   BenchmarkRunRecord,
   BenchmarkRunStatus,
   LocalModel,
-} from "../../types/api";
+} from "../../types/index";
 
 const TERMINAL_STATUSES: BenchmarkRunStatus[] = ["completed", "failed", "partial"];
 

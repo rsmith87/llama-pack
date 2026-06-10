@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { HfToGgufPage } from "../HfToGgufPage";
+import { HfToGgufPage } from "../../pages/HfToGgufPage";
 
 afterEach(() => {
   vi.restoreAllMocks();

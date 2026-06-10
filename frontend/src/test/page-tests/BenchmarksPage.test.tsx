@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { BenchmarksPage } from "../BenchmarksPage";
+import { BenchmarksPage } from "../../pages/BenchmarksPage";
 
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };

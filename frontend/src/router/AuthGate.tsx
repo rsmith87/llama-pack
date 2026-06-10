@@ -1,58 +1,25 @@
-import { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { getSetupStatus } from "../api/setup";
 import { useAuthSession } from "../features/auth/authSession";
-import { Panel } from "../components/ui";
 
 const SETUP_PATH = "/ui/setup";
 
+/**
+ * AuthGate only handles the bootstrap redirect: if the backend has not been
+ * bootstrapped yet (no admin key configured), force the user to /ui/setup.
+ *
+ * Auth-required-but-not-authenticated is intentionally NOT handled here. The
+ * layout (`AppLayout`) owns the chrome (sidebar, header, login form) and must
+ * always render so the user can log in. A "Login Required" banner is shown
+ * inside the main content area by `AppLayout` when auth is enabled but the
+ * user has no session.
+ */
 export function AuthGate() {
-  const { authChecked, isAuthenticated } = useAuthSession();
   const location = useLocation();
-  const [authRequired, setAuthRequired] = useState(false);
-  const [setupStatusPending, setSetupStatusPending] = useState(true);
-  const [bootstrapRequired, setBootstrapRequired] = useState(false);
-
+  const { bootstrapRequired } = useAuthSession();
   const onSetupPage = location.pathname === SETUP_PATH;
 
-  useEffect(() => {
-    let alive = true;
-    void getSetupStatus()
-      .then((status) => {
-        if (!alive) return;
-        setAuthRequired(Boolean(status.auth_enabled));
-        setBootstrapRequired(Boolean(status.auth_bootstrap_required));
-      })
-      .catch(() => {
-        if (!alive) return;
-        setAuthRequired(false);
-        setBootstrapRequired(false);
-      })
-      .finally(() => {
-        if (alive) setSetupStatusPending(false);
-      });
-    return () => {
-      alive = false;
-    };
-  }, []);
-
-  // Redirect to setup when bootstrap is required
-  if (!setupStatusPending && bootstrapRequired && !onSetupPage) {
+  if (bootstrapRequired === true && !onSetupPage) {
     return <Navigate to={SETUP_PATH} replace />;
-  }
-
-  // Loading state
-  if (setupStatusPending || (authRequired && !authChecked)) {
-    return <div className="muted">Checking session...</div>;
-  }
-
-  // Auth required but not authenticated
-  if (authRequired && !isAuthenticated && !onSetupPage) {
-    return (
-      <Panel title="Login Required" eyebrow="Session">
-        <p className="muted">Log in to Neuraxis to continue.</p>
-      </Panel>
-    );
   }
 
   return <Outlet />;

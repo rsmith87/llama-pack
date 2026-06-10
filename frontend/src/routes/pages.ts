@@ -88,6 +88,33 @@ export function pageForPath(pathname: string, extraPages: PageDefinition[] = [])
   return [...pages, ...extraPages].find((page) => page.path === pathname) || pageForKey("dashboard");
 }
 
+export function pageForCurrentPath(
+  pathname: string,
+  extraPages: PageDefinition[] = [],
+): PageDefinition {
+  const match = [...pages, ...extraPages].find((p) => p.path === pathname);
+  if (match) return match;
+  // Handle plugin pages that don't appear in the static list
+  if (pathname.startsWith("/ui/plugins/")) {
+    const pluginId = pathname.slice("/ui/plugins/".length).split("/")[0];
+    if (pluginId) {
+      const pluginMatch = extraPages.find((p) => p.pluginId === pluginId && p.path === pathname);
+      if (pluginMatch) return pluginMatch;
+      return {
+        key: `plugin:${pluginId}:${pathname}`,
+        label: "Plugin",
+        path: pathname,
+        icon: "settings",
+        section: "plugins",
+        pluginId,
+        pluginName: "Plugin",
+        hideFromPrimary: true,
+      };
+    }
+  }
+  return pageForKey("dashboard");
+}
+
 export function pathForPage(page: PageDefinition, options: PageNavigationOptions = {}): string {
   const search = options.search?.trim();
   if (!search) return page.path;

@@ -8,9 +8,10 @@ import { getNodeModels } from "../../api/nodes";
 import { DataTable, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
-import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/api";
+import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/index";
 import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferState, RecommendedDownload } from "../../types/downloads";
 import { RecommendationModelCard } from "../../components/RecommendationModelCard";
+import { field } from "../../features/shared/helpers";
 import { modelName, modelFileId } from "../../features/models";
 
 function asDownloads(payload: unknown): DownloadRecord[] {
@@ -34,10 +35,6 @@ function asGgufs(payload: unknown): GgufFile[] {
 function asNodes(payload: unknown): NodeRecord[] {
   const nodes = Array.isArray(payload) ? payload : (payload as { nodes?: NodeRecord[] } | null)?.nodes;
   return Array.isArray(nodes) ? nodes : [];
-}
-
-function field(record: Record<string, unknown>, key: string, fallback = "-") {
-  return String(record[key] || fallback);
 }
 
 function quantPath(quant: QuantRecord) {

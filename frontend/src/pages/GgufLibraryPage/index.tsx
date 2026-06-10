@@ -11,7 +11,7 @@ import { isActiveModel } from "../../features/models/modelStatus";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
 import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
 import { useNavigate } from "react-router-dom";
-import type { GgufFile } from "../../types/api";
+import type { GgufFile } from "../../types/index";
 import { GgufLibraryData } from "../../types";
 import { 
   chatSearch,

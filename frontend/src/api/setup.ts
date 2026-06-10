@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./client";
-import type { BootstrapAdminResponse, CurrentConfig, SetupStatus } from "../types/api";
+import type { BootstrapAdminResponse, CurrentConfig, SetupStatus } from "../types/index";
 
 export function getSetupStatus() {
   return apiGet<SetupStatus>("/setup/status");

@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { AuthSessionProvider } from "../../features/auth/authSession";
-import { SetupPage } from "../SetupPage";
+import { SetupPage } from "../../pages/SetupPage";
 
 afterEach(() => {
   localStorage.clear();

@@ -33,6 +33,7 @@ it("logs in and logs out through the form", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ token: "token-1", username: "admin", role: "admin", expires_at: "later" }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) }),
   );

@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./client";
-import type { ThreadEventsResponse, ThreadRecord } from "../types/api";
+import type { ThreadEventsResponse, ThreadRecord } from "../types/index";
 
 export function createThread(payload: Record<string, unknown>) { return apiPost<ThreadRecord>("/threads", payload); }
 export function getThreadEvents(threadId: string, query = "") { return apiGet<ThreadEventsResponse>(`/threads/${encodeURIComponent(threadId)}/events${query}`); }

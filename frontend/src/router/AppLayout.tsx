@@ -1,48 +1,30 @@
-import "../components/AppShell/styles.css";
+import "./layout.css";
 import { useEffect, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppModeProvider } from "../features/appMode/appModeContext";
-import { AuthLoginForm } from "../features/auth/authSession";
+import { AuthLoginForm, useAuthSession } from "../features/auth/authSession";
 import { ThemeToggle } from "../features/theme/themeSession";
 import { useGlobalStatus } from "../features/globalStatus/globalStatusContext";
 import { usePluginNav } from "../features/plugins/pluginNavContext";
 import { useLogModal } from "../features/logs/logModalContext";
-import { pageForPath, pagesBySectionForMode, type PageDefinition } from "../routes/pages";
+import { pageForCurrentPath, pagesBySectionForMode } from "../routes/pages";
 import { LogModal } from "../components/LogModal";
-import { Button } from "../components/ui";
+import { Button, Panel } from "../components/ui";
 import { MenuIcon } from "../components/MenuIcon";
 import { BrandLogo } from "../components/BrandLogo";
 import { IoRefreshSharp } from "react-icons/io5";
 import { NavSidebar } from "./NavSidebar";
 
-function pageForPathWithPlugins(pathname: string, pluginPages: PageDefinition[]): PageDefinition {
-  const page = pageForPath(pathname, pluginPages);
-  if (page.key !== "dashboard" || !pathname.startsWith("/ui/plugins/")) {
-    return page;
-  }
-  const pluginId = pathname.slice("/ui/plugins/".length).split("/")[0];
-  if (!pluginId) return page;
-  return {
-    key: `plugin:${pluginId}:${pathname}`,
-    label: "Plugin",
-    path: pathname,
-    icon: "settings",
-    section: "plugins",
-    pluginId,
-    pluginName: "Plugin",
-    hideFromPrimary: true,
-  };
-}
-
 export function AppLayout() {
   const { appMode, status, refreshKey, globalRefreshing, refreshGlobal } = useGlobalStatus();
   const { pluginPages, pluginStatusIssues } = usePluginNav();
   const { isOpen: logsOpen, selection: logSelection, closeLogs } = useLogModal();
+  const { authEnabled, setupStatusPending, isAuthenticated } = useAuthSession();
   const location = useLocation();
   const navigate = useNavigate();
 
   const [navOpen, setNavOpen] = useState(false);
-  const activePage = pageForPathWithPlugins(location.pathname, pluginPages);
+  const activePage = pageForCurrentPath(location.pathname, pluginPages);
 
   // Visible pages for mode-based redirect
   const visiblePages = pagesBySectionForMode(appMode, pluginPages)
@@ -66,6 +48,9 @@ export function AppLayout() {
       if (activePage.key !== "dashboard") navigate("/", { replace: true });
     }
   }, [activePage.key, appMode, visiblePages, navigate]);
+
+  const authRequired = authEnabled === true;
+  const showLoginRequired = !setupStatusPending && authRequired && !isAuthenticated;
 
   return (
     <AppModeProvider appMode={appMode}>
@@ -107,6 +92,11 @@ export function AppLayout() {
                 </ul>
               </section>
             ) : null}
+            {showLoginRequired ? (
+              <Panel title="Login Required" eyebrow="Session">
+                <p className="muted">Log in to Neuraxis to continue.</p>
+              </Panel>
+            ) : null}
             {activePage.pluginId && activePage.secondaryNavigation?.length ? (
               <nav className="plugin-secondary-nav" aria-label={`${activePage.pluginName || activePage.label} navigation`}>
                 {activePage.secondaryNavigation.map((item) => (
@@ -121,7 +111,11 @@ export function AppLayout() {
                 ))}
               </nav>
             ) : null}
-            <Outlet />
+            {setupStatusPending ? (
+              <div className="muted" data-testid="auth-gate-pending">Checking session...</div>
+            ) : (
+              <Outlet />
+            )}
           </main>
         </div>
         {navOpen ? <button className="mobile-nav-scrim" type="button" aria-label="Close navigation overlay" onClick={() => setNavOpen(false)} /> : null}

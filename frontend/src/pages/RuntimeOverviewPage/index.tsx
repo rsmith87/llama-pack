@@ -6,7 +6,7 @@ import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import { useNavigate } from "react-router-dom";
-import type { RoutePreviewResponse, RuntimeOverview } from "../../types/api";
+import type { RoutePreviewResponse, RuntimeOverview } from "../../types/index";
 
 function yesNo(value?: boolean) {
   return value ? "Yes" : "No";

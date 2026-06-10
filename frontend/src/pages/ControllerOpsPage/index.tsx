@@ -5,6 +5,7 @@ import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, listNodes } from "../../api/nodes";
 import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
 import { mergeNodeInventory } from "../../features/nodes/nodesView";
+import { field } from "../../features/shared/helpers";
 import type { RecordItem, JobDetail } from "../../types/operations";
 
 function asArray(payload: unknown, key?: string): RecordItem[] {
@@ -14,10 +15,6 @@ function asArray(payload: unknown, key?: string): RecordItem[] {
     if (Array.isArray(value)) return value as RecordItem[];
   }
   return [];
-}
-
-function field(record: RecordItem, key: string, fallback = "-") {
-  return String(record[key] || fallback);
 }
 
 function jobId(job: RecordItem) {

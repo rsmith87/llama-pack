@@ -1,4 +1,4 @@
-import type { LocalModel } from "../../types/api";
+import type { LocalModel } from "../../types/index";
 import { ModelCard } from "../ModelCard";
 import { Button, StatusBadge } from "../ui";
 import { isActiveModel } from "../../features/models/modelStatus";

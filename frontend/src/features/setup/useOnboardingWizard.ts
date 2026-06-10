@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react";
-import type { CurrentConfig } from "../../types/api";
+import type { CurrentConfig } from "../../types/index";
 import {
   type AgentConnectionState,
   type AgentFirstModelState,

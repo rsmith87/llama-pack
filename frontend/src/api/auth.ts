@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./client";
-import type { AuthKey, CurrentUserResponse, LoginRequest, LoginResponse } from "../types/api";
+import type { AuthKey, CurrentUserResponse, LoginRequest, LoginResponse } from "../types/index";
 
 export function login(payload: LoginRequest) { return apiPost<LoginResponse>("/auth/login", payload); }
 export function logout() { return apiPost<{ ok: boolean }>("/auth/logout"); }

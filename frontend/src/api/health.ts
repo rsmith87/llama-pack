@@ -1,5 +1,5 @@
 import { apiGet } from "./client";
-import type { DashboardData, HealthResponse, LocalModel, NodeInventoryItem } from "../types/api";
+import type { DashboardData, HealthResponse, LocalModel, NodeInventoryItem } from "../types/index";
 
 function modelList(payload: unknown): LocalModel[] {
   if (Array.isArray(payload)) return payload as LocalModel[];

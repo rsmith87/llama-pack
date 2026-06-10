@@ -2,7 +2,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { DocsPage } from "../DocsPage";
+import { DocsPage } from "../../pages/DocsPage";
 
 function renderDocsPage(initialPath = "/ui/docs") {
   return render(

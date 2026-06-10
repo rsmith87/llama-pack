@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./client";
-import type { ExternalApiKey, ExternalApiKeyAnalytics, ExternalApiKeyCreated } from "../types/api";
+import type { ExternalApiKey, ExternalApiKeyAnalytics, ExternalApiKeyCreated } from "../types/index";
 
 export function listExternalKeys() {
   return apiGet<{ keys?: ExternalApiKey[] }>("/external-keys");

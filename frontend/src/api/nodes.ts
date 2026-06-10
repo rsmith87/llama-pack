@@ -1,8 +1,7 @@
 import { apiGet, apiPost, apiPut, apiStream } from "./client";
-import type { NodesResponse } from "../types/api";
+import type { NodesResponse } from "../types/index";
 
 export function listNodes() { return apiGet<NodesResponse>("/nodes"); }
-export function getNodeStatus() { return apiGet<Record<string, unknown>>("/nodes/status"); }
 export function getNodeModels() { return apiGet<Record<string, unknown>>("/nodes/models"); }
 export function getNodeGgufs() { return apiGet<Record<string, unknown>>("/nodes/ggufs"); }
 export function startNodeModel(node: string, name: string) { return apiPost<Record<string, unknown>>(`/nodes/${encodeURIComponent(node)}/models/${encodeURIComponent(name)}/start`); }

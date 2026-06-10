@@ -3,7 +3,7 @@ import { useMemo } from "react";
 import { listConversions, startConversion } from "../../api/conversions";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, EmptyState, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
-import type { ConversionRecord } from "../../types/api";
+import type { ConversionRecord } from "../../types/index";
 
 function asConversions(payload: unknown): ConversionRecord[] {
   if (Array.isArray(payload)) return payload as ConversionRecord[];

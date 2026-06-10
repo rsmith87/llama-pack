@@ -1,11 +1,33 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { SettingsPage } from "../SettingsPage";
+import { SettingsPage } from "../../pages/SettingsPage";
 import { AuthSessionProvider, AUTH_TOKEN_STORAGE_KEY } from "../../features/auth/authSession";
 
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
+}
+
+const SETUP_STATUS_RESPONSE = {
+  mode: "controller",
+  auth_bootstrap_required: false,
+  auth_enabled: false,
+  setup_recommended: false,
+};
+
+function mockFetch(responses: Array<() => ReturnType<typeof okJson>>) {
+  const calls: Array<{ url: string; options?: RequestInit }> = [];
+  const fetchMock = vi.fn((url: string, options?: RequestInit) => {
+    calls.push({ url, options });
+    if (url === "/lm-api/v1/setup/status") {
+      return Promise.resolve(okJson(SETUP_STATUS_RESPONSE));
+    }
+    const next = responses.shift();
+    if (next) return Promise.resolve(next());
+    return Promise.resolve(okJson({}));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return { fetchMock, calls };
 }
 
 function renderWithAuth(token = "admin-token") {
@@ -20,7 +42,7 @@ afterEach(() => {
 });
 
 it("generates config and env exports from settings fields", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(okJson({ username: "admin", role: "admin", created_at: "now" })));
+  mockFetch([() => okJson({ username: "admin", role: "admin", created_at: "now" })]);
   const user = userEvent.setup();
 
   renderWithAuth();
@@ -49,7 +71,7 @@ it("copies and downloads generated config utilities", async () => {
   vi.spyOn(document, "createElement").mockImplementation((tagName: string, options?: ElementCreationOptions) => (
     tagName === "a" ? anchor : createElement(tagName, options)
   ));
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValueOnce(okJson({ username: "admin", role: "admin", created_at: "now" })));
+  mockFetch([() => okJson({ username: "admin", role: "admin", created_at: "now" })]);
   const user = userEvent.setup();
 
   renderWithAuth();
@@ -70,9 +92,10 @@ it("copies and downloads generated config utilities", async () => {
 });
 
 it("generates helper keys and applies the first generated key", async () => {
-  vi.stubGlobal("fetch", vi.fn()
-    .mockResolvedValueOnce(okJson({ username: "admin", role: "admin", created_at: "now" }))
-    .mockResolvedValueOnce(okJson({ keys: ["llm_generated"], count: 1 })));
+  mockFetch([
+    () => okJson({ username: "admin", role: "admin", created_at: "now" }),
+    () => okJson({ keys: ["llm_generated"], count: 1 }),
+  ]);
   const user = userEvent.setup();
 
   renderWithAuth();
@@ -88,13 +111,14 @@ it("generates helper keys and applies the first generated key", async () => {
 });
 
 it("creates and revokes admin auth keys", async () => {
-  vi.stubGlobal("fetch", vi.fn()
-    .mockResolvedValueOnce(okJson({ username: "admin", role: "admin", created_at: "now" }))
-    .mockResolvedValueOnce(okJson([]))
-    .mockResolvedValueOnce(okJson({ id: "key-1", username: "service", role: "operator", key: "llm_secret" }))
-    .mockResolvedValueOnce(okJson([{ id: "key-1", username: "service", role: "operator", key_hint: "llm_...", revoked: false, created_at: "now" }]))
-    .mockResolvedValueOnce(okJson({ ok: true }))
-    .mockResolvedValueOnce(okJson([{ id: "key-1", username: "service", role: "operator", key_hint: "llm_...", revoked: true, created_at: "now" }])));
+  mockFetch([
+    () => okJson({ username: "admin", role: "admin", created_at: "now" }),
+    () => okJson([]),
+    () => okJson({ id: "key-1", username: "service", role: "operator", key: "llm_secret" }),
+    () => okJson([{ id: "key-1", username: "service", role: "operator", key_hint: "llm_...", revoked: false, created_at: "now" }]),
+    () => okJson({ ok: true }),
+    () => okJson([{ id: "key-1", username: "service", role: "operator", key_hint: "llm_...", revoked: true, created_at: "now" }]),
+  ]);
   const user = userEvent.setup();
 
   renderWithAuth();

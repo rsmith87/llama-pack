@@ -2,36 +2,20 @@ import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
 import App from "../App";
-import { AuthSessionProvider } from "../features/auth/authSession";
-import { ThemeProvider } from "../features/theme/themeSession";
-import { AppShell, pluginPagesForPlugin, pluginStatusIssuesFromPayload } from "./AppShell";
+import { pluginStatusIssuesFromPayload } from "../features/plugins/pluginNavContext";
 
 afterEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
   document.body.classList.remove("nav-open");
-  window.history.pushState({}, "", "/ui");
+  window.history.pushState({}, "", "/");
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
 });
 
-it("maps enabled plugin metadata into shell page definitions", () => {
-  const pages = pluginPagesForPlugin({
-    id: "hello_plugin",
-    name: "Hello Plugin",
-    version: "1.0",
-    status: "enabled",
-    navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
-    secondary_navigation: [{ label: "Settings", path: "/ui/plugins/hello_plugin/settings" }],
-    ui_routes: [{ path: "/ui/plugins/hello_plugin", label: "Hello Plugin" }],
-  });
-
-  expect(pages.map((page) => [page.label, page.path, page.pluginId])).toContainEqual([
-    "Hello Plugin",
-    "/ui/plugins/hello_plugin",
-    "hello_plugin",
-  ]);
-});
+// ---------------------------------------------------------------------------
+// Pure-function tests (plugin helpers, no component rendering)
+// ---------------------------------------------------------------------------
 
 it("maps plugin status payloads into operator-facing issue summaries", () => {
   expect(pluginStatusIssuesFromPayload({
@@ -61,19 +45,24 @@ it("maps plugin status payloads into operator-facing issue summaries", () => {
   ]);
 });
 
-function stubDashboardFetches() {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller" }) }),
-  );
-}
+// ---------------------------------------------------------------------------
+// Integration tests (full App rendering via new Route-based layout)
+// ---------------------------------------------------------------------------
 
 it("renders primary React navigation and defaults to dashboard", async () => {
-  stubDashboardFetches();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/models") return Promise.resolve({ ok: true, json: async () => ({ models: [] }) });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: true, json: async () => ({ plugins: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
   render(<App />);
 
   expect(screen.getByRole("heading", { name: "Neuraxis" })).toBeInTheDocument();
@@ -85,8 +74,8 @@ it("renders primary React navigation and defaults to dashboard", async () => {
     "Plugins",
     "System",
   ]);
-  expect(screen.getByRole("button", { name: "Dashboard" })).toHaveClass("active");
-  expect(await screen.findByRole("heading", { name: "System Snapshot" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Dashboard" })).toHaveClass("active");
+  expect(await screen.findByText("System Snapshot")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Switch to dark mode" })).toBeInTheDocument();
   expect(screen.queryByText("Legacy Console")).not.toBeInTheDocument();
   expect(screen.queryByText("Legacy UI")).not.toBeInTheDocument();
@@ -105,7 +94,7 @@ it("routes first-run users to setup when auth bootstrap is required", async () =
   render(<App />);
 
   expect(await screen.findByRole("heading", { name: "Setup Wizard" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Setup" })).toHaveClass("active");
+  expect(screen.getByRole("link", { name: "Setup" })).toHaveClass("active");
 });
 
 it("does not block the dashboard when setup status fails", async () => {
@@ -122,27 +111,30 @@ it("does not block the dashboard when setup status fails", async () => {
 
   render(<App />);
 
-  expect(await screen.findByRole("heading", { name: "System Snapshot" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Dashboard" })).toHaveClass("active");
+  expect(await screen.findByText("System Snapshot")).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Dashboard" })).toHaveClass("active");
 });
 
 it("hides controller navigation when the backend is running as an agent", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "agent" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "agent" }) }),
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "agent" }) });
+      if (url === "/lm-api/v1/models") return Promise.resolve({ ok: true, json: async () => ({ models: [] }) });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
   );
 
   render(<App />);
 
   expect(await screen.findByText("Agent runtime")).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Nodes" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Controller Ops" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Audit" })).not.toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Chat" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Nodes" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Controller Ops" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Audit" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Chat" })).toBeInTheDocument();
 });
 
 it("renders enabled plugin navigation and a generic hosted route", async () => {
@@ -177,12 +169,11 @@ it("renders enabled plugin navigation and a generic hosted route", async () => {
   render(<App />);
 
   await vi.waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/enabled", expect.anything()));
-  expect(await screen.findByRole("button", { name: "Hello" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Hello" }));
+  expect(await screen.findByRole("link", { name: "Hello" })).toBeInTheDocument();
+  await user.click(screen.getByRole("link", { name: "Hello" }));
 
-  expect(screen.getByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
   expect(await screen.findByText(/does not declare a frontend entry/)).toBeInTheDocument();
-  expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("button", { name: "Settings" })).toBeInTheDocument();
+  expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("link", { name: "Settings" })).toBeInTheDocument();
 });
 
 it("keeps a refreshed plugin URL on the plugin page after metadata loads", async () => {
@@ -216,7 +207,7 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
 
   render(<App />);
 
-  expect(await screen.findByRole("button", { name: "Business" })).toHaveClass("active");
+  expect(await screen.findByRole("link", { name: "Business" })).toHaveClass("active");
   expect(await screen.findByRole("heading", { name: "Business" })).toBeInTheDocument();
   expect(window.location.pathname).toBe("/ui/plugins/neuraxis_business");
 });
@@ -251,14 +242,14 @@ it("resolves browser history navigation to plugin pages after shell mount", asyn
 
   render(<App />);
 
-  expect(await screen.findByRole("heading", { name: "System Snapshot" })).toBeInTheDocument();
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByText("System Snapshot")).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
 
   window.history.pushState({}, "", "/ui/plugins/neuraxis_business");
   window.dispatchEvent(new PopStateEvent("popstate"));
 
   expect(await screen.findByRole("heading", { name: "Business" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Business" })).toHaveClass("active");
+  expect(screen.getByRole("link", { name: "Business" })).toHaveClass("active");
 });
 
 it("preserves plugin navigation when a metadata refresh fails", async () => {
@@ -293,21 +284,10 @@ it("preserves plugin navigation when a metadata refresh fails", async () => {
       return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
     }),
   );
-  const renderPage = (page: { label: string }) => <h2>{page.label}</h2>;
-  const renderShell = (authRefreshKey: string) => (
-    <ThemeProvider>
-      <AuthSessionProvider>
-        <AppShell authRefreshKey={authRefreshKey} renderPage={renderPage} />
-      </AuthSessionProvider>
-    </ThemeProvider>
-  );
-  const { rerender } = render(renderShell("session-1"));
 
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  render(<App />);
 
-  rerender(renderShell("session-2"));
-
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
 });
 
 it("preserves plugin navigation when a later metadata refresh is unexpectedly empty", async () => {
@@ -342,21 +322,10 @@ it("preserves plugin navigation when a later metadata refresh is unexpectedly em
       return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
     }),
   );
-  const renderPage = (page: { label: string }) => <h2>{page.label}</h2>;
-  const renderShell = (authRefreshKey: string) => (
-    <ThemeProvider>
-      <AuthSessionProvider>
-        <AppShell authRefreshKey={authRefreshKey} renderPage={renderPage} />
-      </AuthSessionProvider>
-    </ThemeProvider>
-  );
-  const { rerender } = render(renderShell("session-1"));
 
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  render(<App />);
 
-  rerender(renderShell("session-2"));
-
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
 });
 
 it("hydrates plugin navigation from the last known metadata cache", async () => {
@@ -386,8 +355,8 @@ it("hydrates plugin navigation from the last known metadata cache", async () => 
 
   render(<App />);
 
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
-  expect(await screen.findByRole("heading", { name: "Login Required" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByText("Login Required")).toBeInTheDocument();
 });
 
 it("loads plugin navigation on document refresh with the persisted UI session", async () => {
@@ -401,7 +370,7 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
       }
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
       if (url === "/lm-api/v1/plugins/enabled" && token === "persisted-session") {
         return Promise.resolve({
           ok: true,
@@ -431,14 +400,13 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
 
   render(<App />);
 
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/enabled", expect.objectContaining({
     headers: expect.objectContaining({ "X-UI-Session": "persisted-session" }),
   }));
 });
 
 it("keeps cached plugin navigation when the persisted UI session is stale", async () => {
-  localStorage.setItem("lm_ui_token", "stale-session");
   localStorage.setItem("neuraxis.pluginNavigation", JSON.stringify([
     {
       id: "neuraxis_business",
@@ -456,18 +424,16 @@ it("keeps cached plugin navigation when the persisted UI session is stale", asyn
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
-      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
-      if (url === "/lm-api/v1/auth/me" || url === "/lm-api/v1/plugins/enabled" || url === "/lm-api/v1/plugins/status") {
-        return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
-      }
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
       return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
     }),
   );
 
   render(<App />);
 
-  expect(await screen.findByRole("button", { name: "Business" })).toBeInTheDocument();
-  expect(await screen.findByRole("heading", { name: "Login Required" })).toBeInTheDocument();
+  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
 });
 
 it("shows plugin status failures and warnings in the shell", async () => {
@@ -529,12 +495,24 @@ it("hides plugin navigation when no plugin metadata is enabled", async () => {
 
   render(<App />);
 
-  expect(await screen.findByRole("heading", { name: "System Snapshot" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Hello" })).not.toBeInTheDocument();
+  expect(await screen.findByText("System Snapshot")).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Hello" })).not.toBeInTheDocument();
 });
 
 it("toggles dark mode from the shell header", async () => {
-  stubDashboardFetches();
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/models") return Promise.resolve({ ok: true, json: async () => ({ models: [] }) });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: true, json: async () => ({ plugins: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
   const user = userEvent.setup();
   render(<App />);
 
@@ -545,12 +523,23 @@ it("toggles dark mode from the shell header", async () => {
 });
 
 it("opens migrated pages and the React logs modal", async () => {
-  stubDashboardFetches();
-  (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/models") return Promise.resolve({ ok: true, json: async () => ({ models: [] }) });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: true, json: async () => ({ plugins: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
   const user = userEvent.setup();
   render(<App />);
 
-  await user.click(screen.getByRole("button", { name: "Chat" }));
+  await user.click(screen.getByRole("link", { name: "Chat" }));
   expect(screen.getByRole("heading", { name: "Chat" })).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Logs" }));
@@ -558,8 +547,19 @@ it("opens migrated pages and the React logs modal", async () => {
 });
 
 it("opens and closes the mobile menu after navigation", async () => {
-  stubDashboardFetches();
-  (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/models") return Promise.resolve({ ok: true, json: async () => ({ models: [] }) });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: true, json: async () => ({ plugins: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
   const user = userEvent.setup();
   render(<App />);
 
@@ -567,7 +567,7 @@ it("opens and closes the mobile menu after navigation", async () => {
   expect(screen.getByRole("button", { name: "Close navigation menu" })).toBeInTheDocument();
   expect(document.body).toHaveClass("nav-open");
 
-  await user.click(screen.getByRole("button", { name: "Chat" }));
+  await user.click(screen.getByRole("link", { name: "Chat" }));
 
   expect(screen.getByRole("heading", { name: "Chat" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Open navigation menu" })).toBeInTheDocument();

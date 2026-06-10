@@ -1,16 +1,25 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { currentUser, login, logout } from "../../api/auth";
 import { setAuthTokenProvider } from "../../api/client";
+import { getSetupStatus } from "../../api/setup";
 import { Button } from "../../components/ui";
 
 export const AUTH_TOKEN_STORAGE_KEY = "lm_ui_token";
 
-type AuthSessionContextValue = {
+export type AuthSessionContextValue = {
   authToken: string;
   authUser: string;
   authRole: string;
   authChecked: boolean;
   isAuthenticated: boolean;
+  /** Whether the backend has authentication enabled at all. `null` while the
+   * setup status is still loading. */
+  authEnabled: boolean | null;
+  /** Whether the backend still needs the admin bootstrap. `null` while the
+   * setup status is still loading. */
+  bootstrapRequired: boolean | null;
+  /** Whether the setup status request is still in flight. */
+  setupStatusPending: boolean;
   loginWithKey: (username: string, apiKey: string) => Promise<void>;
   acceptSession: (session: { token: string; username: string; role: string }) => void;
   logoutSession: () => Promise<void>;
@@ -23,9 +32,33 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   const [authUser, setAuthUser] = useState("");
   const [authRole, setAuthRole] = useState("");
   const [authChecked, setAuthChecked] = useState(() => !localStorage.getItem(AUTH_TOKEN_STORAGE_KEY));
+  const [authEnabled, setAuthEnabled] = useState<boolean | null>(null);
+  const [bootstrapRequired, setBootstrapRequired] = useState<boolean | null>(null);
+  const [setupStatusPending, setSetupStatusPending] = useState(true);
 
   useLayoutEffect(() => {
     setAuthTokenProvider(() => localStorage.getItem(AUTH_TOKEN_STORAGE_KEY) || "");
+  }, []);
+
+  useEffect(() => {
+    let alive = true;
+    void getSetupStatus()
+      .then((status) => {
+        if (!alive) return;
+        setAuthEnabled(Boolean(status.auth_enabled));
+        setBootstrapRequired(Boolean(status.auth_bootstrap_required));
+      })
+      .catch(() => {
+        if (!alive) return;
+        setAuthEnabled(false);
+        setBootstrapRequired(false);
+      })
+      .finally(() => {
+        if (alive) setSetupStatusPending(false);
+      });
+    return () => {
+      alive = false;
+    };
   }, []);
 
   useEffect(() => {
@@ -84,10 +117,13 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
     authRole,
     authChecked,
     isAuthenticated: Boolean(authToken),
+    authEnabled,
+    bootstrapRequired,
+    setupStatusPending,
     loginWithKey,
     acceptSession,
     logoutSession,
-  }), [authToken, authUser, authRole, authChecked]);
+  }), [authToken, authUser, authRole, authChecked, authEnabled, bootstrapRequired, setupStatusPending]);
 
   return <AuthSessionContext.Provider value={value}>{children}</AuthSessionContext.Provider>;
 }

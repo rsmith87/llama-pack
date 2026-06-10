@@ -1,7 +1,7 @@
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
-import { AuditPage } from "../AuditPage";
+import { AuditPage } from "../../pages/AuditPage";
 import { AuthSessionProvider, AUTH_TOKEN_STORAGE_KEY } from "../../features/auth/authSession";
 
 function okJson(payload: unknown) {

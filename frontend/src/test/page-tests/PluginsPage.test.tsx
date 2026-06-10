@@ -1,7 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, vi } from "vitest";
-import { PluginsPage } from "../PluginsPage";
+import { PluginsPage } from "../../pages/PluginsPage";
 
 afterEach(() => {
   vi.restoreAllMocks();

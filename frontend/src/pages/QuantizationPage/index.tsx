@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { listQuantizationFiles, startQuantization } from "../../api/quantizations";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
-import type { QuantizationFile } from "../../types/api";
+import type { QuantizationFile } from "../../types/index";
 
 const DEFAULT_TYPES = ["Q4_K_M"];
 const QUANTIZED_GGUF_SUFFIX = /(?:^|[-._])(?:Q[2-8](?:_[0-9A-Z]+)*|IQ[1-4](?:_[0-9A-Z]+)*|TQ[1-2](?:_[0-9A-Z]+)*)\.gguf$/i;

@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { createExternalKey, getExternalKeyAnalytics, listExternalKeys, revokeExternalKey } from "../../api/externalKeys";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Modal, Panel } from "../../components/ui";
-import type { ExternalApiKey, ExternalApiKeyAnalytics, ExternalApiKeyCreated } from "../../types/api";
+import type { ExternalApiKey, ExternalApiKeyAnalytics, ExternalApiKeyCreated } from "../../types/index";
 
 function formatDateTime(value?: string) {
   return value ? new Date(value).toLocaleString() : "-";

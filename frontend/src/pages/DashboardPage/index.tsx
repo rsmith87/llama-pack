@@ -8,7 +8,7 @@ import { startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
 import { useLogModal } from "../../features/logs/logModalContext";
-import type { DashboardData, LocalModel } from "../../types/api";
+import type { DashboardData, LocalModel } from "../../types/index";
 import { useNavigateToPage } from "../../hooks/useNavigateToPage";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";

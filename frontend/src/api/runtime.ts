@@ -1,5 +1,5 @@
 import { apiGet, apiPost } from "./client";
-import type { RoutePreviewRequest, RoutePreviewResponse, RuntimeOverview } from "../types/api";
+import type { RoutePreviewRequest, RoutePreviewResponse, RuntimeOverview } from "../types/index";
 
 export function getRuntimeOverview() {
   return apiGet<RuntimeOverview>("/runtime/overview");

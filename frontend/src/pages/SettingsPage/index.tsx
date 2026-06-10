@@ -4,7 +4,8 @@ import { createKey, listKeys, revokeKey } from "../../api/auth";
 import { generateApiKeys } from "../../api/settings";
 import { DataTable, ErrorBanner, FormField, Panel, Button } from "../../components/ui";
 import { useAuthSession } from "../../features/auth/authSession";
-import type { AuthKey } from "../../types/api";
+import { downloadText } from "../../features/shared/helpers";
+import type { AuthKey } from "../../types/index";
 
 function shellQuote(value: string) {
   return `'${String(value || "").replaceAll("'", "'\"'\"'")}'`;
@@ -16,16 +17,6 @@ function keyId(key: AuthKey) {
 
 function keyHint(key: AuthKey) {
   return String((key as Record<string, unknown>).key_hint || key.hint || "-");
-}
-
-function downloadText(filename: string, text: string, mime: string) {
-  const blob = new Blob([text], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 export function SettingsPage() {

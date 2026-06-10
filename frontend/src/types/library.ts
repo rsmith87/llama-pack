@@ -1,4 +1,4 @@
-import { NodeRecord } from "../types";
+import { NodeRecord } from "../types/nodes";
 
 export type GgufFile = Record<string, unknown> & {
   id?: string;

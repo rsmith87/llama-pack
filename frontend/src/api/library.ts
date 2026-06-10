@@ -1,5 +1,5 @@
 import { apiDelete, apiGet, apiPatch, apiPost } from "./client";
-import type { GgufLibraryResponse } from "../types/api";
+import type { GgufLibraryResponse } from "../types/index";
 
 export type AddModelPayload = {
   name: string;

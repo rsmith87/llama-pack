@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
-import { DashboardPage } from "../DashboardPage";
+import { DashboardPage } from "../../pages/DashboardPage";
 
 const { mockedNavigate } = vi.hoisted(() => ({
   mockedNavigate: vi.fn(),

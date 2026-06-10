@@ -2,7 +2,7 @@ import "./styles.css";
 import { useEffect, useState } from "react";
 import { getSetupStatus, getCurrentConfig } from "../../api/setup";
 import { Button } from "../../components/ui";
-import type { SetupStatus } from "../../types/api";
+import type { SetupStatus } from "../../types/index";
 import type { ModeChoice } from "../../features/setup/types";
 import { STEP_LABELS } from "../../features/setup/types";
 import { type WizardNav, useOnboardingWizard } from "../../features/setup/useOnboardingWizard";

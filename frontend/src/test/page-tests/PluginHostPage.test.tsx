@@ -4,7 +4,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { PluginHostPage, type PluginFrontendModule } from "../PluginHostPage";
+import { PluginHostPage, type PluginFrontendModule } from "../../pages/PluginHostPage";
 
 type PluginModuleLoader = (entry: string) => Promise<PluginFrontendModule>;
 

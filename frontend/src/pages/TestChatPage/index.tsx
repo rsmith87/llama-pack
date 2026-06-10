@@ -4,6 +4,7 @@ import { readChatStream } from "../../features/chat/chatStreaming";
 import { Button, ErrorBanner, FormField, StatusBadge } from "../../components/ui";
 import type { ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
 import type { TestChatBootstrap, TestChatSession, TestChatMessage, RouteMeta, ChatModel } from "../../types/chat";
+import { asModels } from "../../features/shared/helpers";
 import { modelName } from "../../features/models";
 
 function modelTarget(model: ChatModel) {
@@ -15,11 +16,6 @@ function modelLabel(model: ChatModel) {
   const name = modelName(model);
   const target = modelTarget(model);
   return target.startsWith("node:") ? `${name} on ${target.slice("node:".length)}` : name;
-}
-
-function asModels(payload: unknown): ChatModel[] {
-  if (Array.isArray(payload)) return payload as ChatModel[];
-  return (payload as { models?: ChatModel[] } | null)?.models || [];
 }
 
 function nodeModelsToModels(payload: unknown): ChatModel[] {
@@ -101,7 +97,7 @@ export function TestChatPage() {
       await assertOk(response as Response);
       return response.json();
     };
-    let items = asModels(await fetchWithSession("/lm-api/v1/models"));
+    let items = asModels<ChatModel>(await fetchWithSession("/lm-api/v1/models"));
     if (!items.length) items = nodeModelsToModels(await fetchWithSession("/lm-api/v1/nodes/models"));
     setModels(items);
     setSelectedModel((current) => current || modelName(items[0] || {}));

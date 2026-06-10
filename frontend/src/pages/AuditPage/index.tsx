@@ -4,15 +4,12 @@ import { listAuditEvents } from "../../api/audit";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import { useAuthSession } from "../../features/auth/authSession";
+import { field } from "../../features/shared/helpers";
 import type { AuditEvent } from "../../types/operations";
 
 function asEvents(payload: unknown): AuditEvent[] {
   if (Array.isArray(payload)) return payload as AuditEvent[];
   return (payload as { events?: AuditEvent[] } | null)?.events || [];
-}
-
-function field(event: AuditEvent, key: string, fallback = "-") {
-  return String(event[key] ?? fallback);
 }
 
 function dateToIso(value: string) {

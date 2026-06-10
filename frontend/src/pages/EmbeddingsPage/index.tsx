@@ -4,14 +4,10 @@ import { createEmbeddings } from "../../api/embeddings";
 import { listModels } from "../../api/models";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
+import { asModels, downloadText } from "../../features/shared/helpers";
 import type { LocalModel } from "../../types/models";
 import type { EmbeddingRow, EmbeddingsResult, DisplayEmbeddingRow, SimilarityRow } from "../../types/embeddings";
 import { modelName } from "../../features/models";
-
-function asModels(payload: unknown): LocalModel[] {
-  if (Array.isArray(payload)) return payload as LocalModel[];
-  return (payload as { models?: LocalModel[] } | null)?.models || [];
-}
 
 function parseInputLines(value: string) {
   return value.split("\n").map((line) => line.trim()).filter(Boolean);
@@ -48,16 +44,6 @@ function cosineSimilarity(a: number[], b: number[]) {
   }
   if (!na || !nb) return 0;
   return dot / (Math.sqrt(na) * Math.sqrt(nb));
-}
-
-function downloadText(filename: string, text: string, mime: string) {
-  const blob = new Blob([text], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
 }
 
 function csvEscape(value: unknown) {
@@ -100,7 +86,7 @@ function quickClusters(vectors: number[][]) {
 
 export function EmbeddingsPage() {
   const { data: models, error, setError } = useAsyncResource<LocalModel[]>(
-    () => listModels().then(asModels),
+    () => listModels().then((payload) => asModels<LocalModel>(payload)),
     [],
   );
   const [selectedModel, setSelectedModel] = useState("");

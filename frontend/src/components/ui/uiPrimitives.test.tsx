@@ -1,7 +1,7 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
-import { DataTable, Drawer, EmptyState, ErrorBanner, Modal, Panel, StatusBadge, StreamingText } from ".";
+import { DataTable, EmptyState, ErrorBanner, Modal, Panel, StatusBadge } from ".";
 
 describe("shared UI primitives", () => {
   it("renders panel title, eyebrow, actions, and children", () => {
@@ -51,15 +51,4 @@ describe("shared UI primitives", () => {
     expect(onClose).toHaveBeenCalledOnce();
   });
 
-  it("sets drawer visibility state", () => {
-    render(<Drawer title="Filters" open={false} onClose={() => undefined}>drawer</Drawer>);
-
-    expect(screen.getByRole("complementary", { hidden: true })).toHaveAttribute("aria-hidden", "true");
-  });
-
-  it("renders streaming text with pre semantics", () => {
-    render(<StreamingText text={"line 1\nline 2"} />);
-
-    expect(screen.getByText(/line 1/).tagName).toBe("PRE");
-  });
 });

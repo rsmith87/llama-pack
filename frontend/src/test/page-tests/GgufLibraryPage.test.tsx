@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { GgufLibraryPage } from "../GgufLibraryPage";
+import { GgufLibraryPage } from "../../pages/GgufLibraryPage";
 import { AppModeProvider } from "../../features/appMode/appModeContext";
 
 function renderPage(ui: React.ReactNode = <GgufLibraryPage />) {

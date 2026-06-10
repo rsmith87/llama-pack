@@ -6,7 +6,7 @@ import type {
   BenchmarkRunRecord,
   BenchmarkRunsResponse,
   BenchmarkStartRunsResponse,
-} from "../types/api";
+} from "../types/index";
 
 export function listBenchmarkDefinitions(includeArchived = false) {
   const q = includeArchived ? "?include_archived=true" : "";

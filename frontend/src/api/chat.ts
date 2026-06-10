@@ -1,5 +1,5 @@
 import { apiAbsolutePost, apiDelete, apiGet, apiPost, apiStream } from "./client";
-import type { ChatRequest, ChatResponse, ChatSessionsResponse } from "../types/api";
+import type { ChatRequest, ChatResponse, ChatSessionsResponse } from "../types/index";
 
 export function getChatCapabilities(modelName: string) { return apiGet<Record<string, unknown>>(`/chat/capabilities/${encodeURIComponent(modelName)}`); }
 export function inspectModel(modelName: string, payload: Record<string, unknown>) { return apiPost<Record<string, unknown>>(`/chat/${encodeURIComponent(modelName)}/inspect`, payload); }
