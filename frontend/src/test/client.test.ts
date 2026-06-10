@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { apiDelete, apiGet, apiPost, apiRequest, apiStream, setAuthTokenProvider } from "./client";
-import { loadDashboardData } from "./health";
+import { apiDelete, apiGet, apiPost, apiRequest, apiStream, setAuthTokenProvider } from "../api/client";
+import { loadDashboardData } from "../api/health";
 
 afterEach(() => {
   setAuthTokenProvider(() => "");

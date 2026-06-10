@@ -5,7 +5,7 @@ import {
   chooseChatSessionToResume,
   isChatSessionReusable,
   nextSelectedChatSessionId,
-} from "./chatSessions";
+} from "../../features/chat/chatSessions";
 
 describe("chat session save payload", () => {
   it("reuses the selected session id for a normal save", () => {

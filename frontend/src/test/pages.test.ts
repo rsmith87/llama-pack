@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { navSections, pageForKey, pageForPath, pages, pagesBySectionForMode, pagesForMode } from "./pages";
+import {
+  navSections,
+  pageForKey,
+  pageForPath,
+  pages,
+  pagesBySectionForMode,
+  pagesForMode
+} from "../routes/pages";
 
 describe("page route model", () => {
   it("defines stable metadata for every React nav page without legacy fallbacks", () => {

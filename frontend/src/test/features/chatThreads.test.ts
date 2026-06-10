@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildThreadMetadata,
   threadEventsToChatMessages,
-} from "./chatThreads";
+} from "../../features/chat/chatThreads";
 
 describe("thread event transcript mapping", () => {
   it("renders public user and assistant events with route metadata", () => {

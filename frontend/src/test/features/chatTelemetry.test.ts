@@ -4,7 +4,7 @@ import {
   finalizeTelemetry,
   parseSseDataLines,
   parseSseEvents,
-} from "./chatTelemetry";
+} from "../../features/chat/chatTelemetry";
 
 describe("chat telemetry", () => {
   it("computes tokens/sec from timings.predicted fields", () => {

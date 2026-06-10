@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { generateCommands, generateConfig } from "./generateConfig";
-import type { WizardState } from "./types";
+import { generateCommands, generateConfig } from "../../features/setup/generateConfig";
+import type { WizardState } from "../../features/setup/types";
 
 function baseState(): WizardState {
   return {

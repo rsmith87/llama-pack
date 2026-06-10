@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
-import { useAsyncResource } from "./useAsyncResource";
+import { useAsyncResource } from "../hooks/useAsyncResource";
 
 describe("useAsyncResource", () => {
   it("starts in loading state with the initial data and no error", () => {

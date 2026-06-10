@@ -1,19 +1,19 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { login, logout } from "./auth";
-import { listAuditEvents } from "./audit";
-import { sendChat } from "./chat";
-import { getClientDiscovery } from "./clientDiscovery";
-import { listJobs } from "./controller";
-import { listDownloadHistory, listDownloadRecommendations } from "./downloads";
-import { createEmbeddings } from "./embeddings";
-import { getHealth } from "./health";
-import { listGgufs } from "./library";
-import { listModels } from "./models";
-import { listNodes } from "./nodes";
-import { listQuantizationFiles } from "./quantizations";
-import { bootstrapAdmin, getSetupStatus } from "./setup";
-import { createThread } from "./threads";
-import { setAuthTokenProvider } from "./client";
+import { login, logout } from "../api/auth";
+import { listAuditEvents } from "../api/audit";
+import { sendChat } from "../api/chat";
+import { getClientDiscovery } from "../api/clientDiscovery";
+import { listJobs } from "../api/controller";
+import { listDownloadHistory, listDownloadRecommendations } from "../api/downloads";
+import { createEmbeddings } from "../api/embeddings";
+import { getHealth } from "../api/health";
+import { listGgufs } from "../api/library";
+import { listModels } from "../api/models";
+import { listNodes } from "../api/nodes";
+import { listQuantizationFiles } from "../api/quantizations";
+import { bootstrapAdmin, getSetupStatus } from "../api/setup";
+import { createThread } from "../api/threads";
+import { setAuthTokenProvider } from "../api/client";
 
 afterEach(() => {
   setAuthTokenProvider(() => "");

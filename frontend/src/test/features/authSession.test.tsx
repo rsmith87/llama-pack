@@ -2,7 +2,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { apiGet } from "../../api/client";
-import { AuthLoginForm, AuthSessionProvider, useAuthSession } from "./authSession";
+import { AuthLoginForm, AuthSessionProvider, useAuthSession } from "../../features/auth/authSession";
 
 afterEach(() => {
   localStorage.clear();

@@ -11,7 +11,7 @@ import {
   suggestedGgufModelName,
   suggestedPromptTemplate,
   transferDestinationOptions,
-} from "./nodesView";
+} from "../../features/nodes/nodesView";
 
 const nodes = [
   {

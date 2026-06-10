@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createPluginHostApi } from "./pluginHost";
+import { createPluginHostApi } from "../api/pluginHost";
 
 afterEach(() => {
   vi.restoreAllMocks();
