@@ -4,6 +4,9 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import os
+import re
+import shlex
 import sys
 from datetime import UTC, datetime
 from pathlib import Path
@@ -37,6 +40,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         default=["all"],
         help="Built-in case id to run. Repeat for multiple cases. Defaults to all.",
     )
+    parser.add_argument(
+        "--env-file",
+        type=Path,
+        default=None,
+        help="Env file to load before config expansion. Defaults to NEURAXIS_ENV_FILE or ./.neuraxis.env.",
+    )
     parser.add_argument("--output-jsonl", type=Path, default=None, help="Append suite records to this JSONL file.")
     parser.add_argument("--latest-json", type=Path, default=None, help="Write the latest app-ready summary JSON here.")
     return parser.parse_args(argv)
@@ -46,6 +55,35 @@ def resolve_output_paths(args: argparse.Namespace, log_dir: Path) -> tuple[Path,
     output_jsonl = args.output_jsonl or log_dir / "tool_loop_eval_results.jsonl"
     latest_json = args.latest_json or log_dir / "tool_loop_eval_latest.json"
     return output_jsonl, latest_json
+
+
+def resolve_env_file(path: Path | None) -> Path:
+    if path is not None:
+        return path
+    env_file = os.getenv("NEURAXIS_ENV_FILE")
+    if env_file:
+        return Path(env_file)
+    return ROOT_DIR / ".neuraxis.env"
+
+
+def load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#"):
+            continue
+        if line.startswith("export "):
+            line = line.removeprefix("export ").strip()
+        if "=" not in line:
+            continue
+        key, raw_value = line.split("=", 1)
+        key = key.strip()
+        if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key):
+            continue
+        tokens = shlex.split(raw_value, comments=True, posix=True)
+        value = tokens[0] if tokens else ""
+        os.environ[key] = os.path.expandvars(value)
 
 
 def select_cases(case_ids: list[str]) -> list[Any]:
@@ -187,6 +225,7 @@ def write_outputs(suites: list[dict[str, Any]], *, output_jsonl: Path, latest_js
 
 async def async_main(argv: list[str]) -> int:
     args = parse_args(argv)
+    load_env_file(resolve_env_file(args.env_file))
     config = load_config(args.config)
     validate_config(config, args.target)
     cases = cases_with_target(select_cases(args.case), args.target)

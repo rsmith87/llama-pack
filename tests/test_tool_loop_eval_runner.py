@@ -50,6 +50,49 @@ def test_resolve_output_paths_uses_config_log_dir(tmp_path):
     assert latest_json == tmp_path / "tool_loop_eval_latest.json"
 
 
+def test_resolve_env_file_defaults_to_repo_env(monkeypatch):
+    runner = _load_runner()
+    monkeypatch.delenv("NEURAXIS_ENV_FILE", raising=False)
+
+    assert runner.resolve_env_file(None) == runner.ROOT_DIR / ".neuraxis.env"
+
+
+def test_resolve_env_file_uses_env_override(monkeypatch, tmp_path):
+    runner = _load_runner()
+    env_file = tmp_path / "custom.env"
+    monkeypatch.setenv("NEURAXIS_ENV_FILE", str(env_file))
+
+    assert runner.resolve_env_file(None) == env_file
+
+
+def test_load_env_file_expands_config_placeholders(monkeypatch, tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    monkeypatch.delenv("MAC_MINI_URL", raising=False)
+    env_file = tmp_path / ".neuraxis.env"
+    env_file.write_text(
+        "MAC_MINI_URL=https://mac-mini.local\n"
+        "export MAC_MINI_KEY='secret key'\n",
+        encoding="utf-8",
+    )
+    config_file = tmp_path / "config.yaml"
+    config_file.write_text(
+        "mode: controller\n"
+        "nodes:\n"
+        "  mac-mini:\n"
+        "    url: ${MAC_MINI_URL}\n"
+        "    api_key: ${MAC_MINI_KEY}\n",
+        encoding="utf-8",
+    )
+
+    runner.load_env_file(env_file)
+    config = load_config(config_file)
+
+    assert config.nodes["mac-mini"].url == "https://mac-mini.local"
+    assert config.nodes["mac-mini"].api_key == "secret key"
+
+
 def test_write_outputs_appends_jsonl_and_writes_latest_summary(tmp_path):
     runner = _load_runner()
     output_jsonl = tmp_path / "results.jsonl"
