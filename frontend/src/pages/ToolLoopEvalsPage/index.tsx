@@ -1,9 +1,16 @@
 import "./styles.css";
-import { useMemo, useState } from "react";
-import { getToolLoopEvalLatest, getToolLoopEvalRun, listToolLoopEvalRuns } from "../../api/toolLoopEvals";
-import { DataTable, ErrorBanner, Panel, StatusBadge, Button } from "../../components/ui";
+import { useEffect, useMemo, useState } from "react";
+import { getNodeModels } from "../../api/nodes";
+import {
+  getToolLoopEvalLatest,
+  getToolLoopEvalRun,
+  listToolLoopEvalRuns,
+  startToolLoopEvalNodeRun,
+} from "../../api/toolLoopEvals";
+import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField } from "../../components/ui";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import type {
+  LocalModel,
   ToolLoopEvalCaseResult,
   ToolLoopEvalLatest,
   ToolLoopEvalRunDetail,
@@ -11,6 +18,20 @@ import type {
   ToolLoopEvalRunsResponse,
   ToolLoopEvalSuite,
 } from "../../types/index";
+
+const CASE_PRESETS = [
+  { id: "all", label: "All presets" },
+  { id: "two-step-tool-synthesis", label: "Two-step synthesis" },
+  { id: "avoid-unneeded-tools", label: "Avoid unneeded tools" },
+  { id: "linear-4-step-synthesis", label: "Linear 4-step synthesis" },
+  { id: "linear-8-step-synthesis", label: "Linear 8-step synthesis" },
+  { id: "tool-error-recovery", label: "Tool-error recovery" },
+  { id: "avoid-loop-trap", label: "Avoid loop trap" },
+  { id: "branching-decision", label: "Branching decision" },
+  { id: "argument-repair", label: "Argument repair" },
+  { id: "parallel-fact-gathering", label: "Parallel fact gathering" },
+  { id: "subagent-delegation-simulation", label: "Subagent delegation simulation" },
+];
 
 function scorePercent(score?: number): string {
   return `${Math.round((score ?? 0) * 100)}%`;
@@ -41,6 +62,23 @@ function firstCase(suite: ToolLoopEvalSuite | null): ToolLoopEvalCaseResult | nu
   return suite?.cases?.[0] || null;
 }
 
+function nodeModelName(model: LocalModel): string {
+  return String(model.name || model.id || model.model || "");
+}
+
+function asNodeArray(payload: unknown): Array<{ name?: string; reachable?: boolean; models?: LocalModel[] }> {
+  if (Array.isArray(payload)) return payload as Array<{ name?: string; reachable?: boolean; models?: LocalModel[] }>;
+  return (payload as { nodes?: Array<{ name?: string; reachable?: boolean; models?: LocalModel[] }> } | null)?.nodes || [];
+}
+
+function flattenNodeModels(payload: unknown): LocalModel[] {
+  return asNodeArray(payload).flatMap((node) => {
+    const nodeName = String(node.name || "");
+    if (!nodeName || node.reachable === false || !Array.isArray(node.models)) return [];
+    return node.models.map((model) => ({ ...(model as LocalModel), node: nodeName }));
+  }).filter((model) => nodeModelName(model));
+}
+
 export function ToolLoopEvalsPage() {
   const { data, loading, error, refresh } = useAsyncResource<ToolLoopEvalLatest | null>(
     () => getToolLoopEvalLatest(),
@@ -55,6 +93,14 @@ export function ToolLoopEvalsPage() {
     () => listToolLoopEvalRuns(50),
     { runs: [] },
   );
+  const {
+    data: nodeModels,
+    loading: nodesLoading,
+    error: nodesError,
+  } = useAsyncResource<LocalModel[]>(
+    async () => flattenNodeModels(await getNodeModels()),
+    [],
+  );
   const suites = data?.suites || [];
   const historyRuns = historyData.runs || [];
   const [selectedModel, setSelectedModel] = useState("");
@@ -62,6 +108,27 @@ export function ToolLoopEvalsPage() {
   const [selectedRun, setSelectedRun] = useState<ToolLoopEvalRunDetail | null>(null);
   const [runLoading, setRunLoading] = useState(false);
   const [runError, setRunError] = useState("");
+  const [runNode, setRunNode] = useState("");
+  const [runModel, setRunModel] = useState("");
+  const [runPreset, setRunPreset] = useState("all");
+  const [submitMessage, setSubmitMessage] = useState("");
+
+  const nodeOptions = useMemo(
+    () => Array.from(new Set(nodeModels.map((model) => String(model.node || model.node_name || "")).filter(Boolean))),
+    [nodeModels],
+  );
+  const modelOptions = useMemo(
+    () => nodeModels.filter((model) => !runNode || model.node === runNode || model.node_name === runNode),
+    [nodeModels, runNode],
+  );
+
+  useEffect(() => {
+    if (!runNode && nodeOptions.length) setRunNode(nodeOptions[0]);
+  }, [nodeOptions, runNode]);
+
+  useEffect(() => {
+    if (!runModel && modelOptions.length) setRunModel(nodeModelName(modelOptions[0]));
+  }, [modelOptions, runModel]);
 
   const activeSuite = useMemo(() => {
     if (selectedRun) return selectedRun;
@@ -95,6 +162,48 @@ export function ToolLoopEvalsPage() {
     }
   }
 
+  async function submitRun(event: React.FormEvent) {
+    event.preventDefault();
+    const node = runNode.trim();
+    const model = runModel.trim();
+    if (!node || !model) {
+      setRunError("Node and model are required to run tool-loop evals.");
+      return;
+    }
+    setRunLoading(true);
+    setRunError("");
+    setSubmitMessage("");
+    try {
+      const payload = {
+        node,
+        model,
+        ...(runPreset === "all" ? {} : { case_ids: [runPreset] }),
+      };
+      const suite = await startToolLoopEvalNodeRun(payload);
+      setSelectedRun({
+        id: suite.persisted_run_id,
+        generated_at: new Date().toISOString(),
+        model: suite.model,
+        target_selector: `node:${node}`,
+        target_node: node,
+        status: suite.status,
+        average_score: suite.average_score,
+        case_count: suite.case_count,
+        passed_count: suite.passed_count,
+        failed_count: suite.failed_count,
+        cases: suite.cases,
+      });
+      setSelectedModel(String(suite.model || model));
+      setSelectedCaseId("");
+      setSubmitMessage("Tool-loop eval run completed.");
+      await Promise.all([refreshHistory(), refresh()]);
+    } catch (err) {
+      setRunError(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setRunLoading(false);
+    }
+  }
+
   return (
     <div className="tool-loop-evals-page">
       <div className="page-heading">
@@ -106,7 +215,43 @@ export function ToolLoopEvalsPage() {
           {loading || historyLoading || runLoading ? "Refreshing..." : "Refresh"}
         </Button>
       </div>
-      <ErrorBanner message={error || historyError || runError || data?.error || ""} />
+      <ErrorBanner message={error || historyError || nodesError || runError || data?.error || ""} />
+
+      <Panel title="Run Tool-Loop Eval" eyebrow="Controller-triggered node run">
+        <form className="tool-loop-run-form stacked-controls" onSubmit={(event) => void submitRun(event)}>
+          <FormField label="Node">
+            <select value={runNode} onChange={(event) => setRunNode(event.target.value)} disabled={nodesLoading || runLoading}>
+              {nodeOptions.length ? nodeOptions.map((node) => <option key={node} value={node}>{node}</option>) : <option value="">No reachable nodes</option>}
+            </select>
+          </FormField>
+          <FormField label="Model">
+            <input
+              list="tool-loop-model-options"
+              value={runModel}
+              onChange={(event) => setRunModel(event.target.value)}
+              placeholder="gpt-oss-20b"
+              disabled={runLoading}
+            />
+            <datalist id="tool-loop-model-options">
+              {modelOptions.map((model) => {
+                const name = nodeModelName(model);
+                return <option key={`${model.node || model.node_name}-${name}`} value={name} />;
+              })}
+            </datalist>
+          </FormField>
+          <FormField label="Preset">
+            <select value={runPreset} onChange={(event) => setRunPreset(event.target.value)} disabled={runLoading}>
+              {CASE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+            </select>
+          </FormField>
+          <div className="tool-loop-run-actions">
+            <Button type="submit" variant="primary" disabled={runLoading || !runNode || !runModel}>
+              {runLoading ? "Running..." : "Run Eval"}
+            </Button>
+            {submitMessage ? <span className="muted">{submitMessage}</span> : null}
+          </div>
+        </form>
+      </Panel>
 
       <Panel title="Run History" eyebrow="Persisted benchmark DB results">
         <DataTable

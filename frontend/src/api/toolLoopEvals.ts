@@ -1,5 +1,11 @@
-import { apiGet } from "./client";
-import type { ToolLoopEvalLatest, ToolLoopEvalRunDetail, ToolLoopEvalRunsResponse } from "../types/index";
+import { apiGet, apiPost } from "./client";
+import type {
+  ToolLoopEvalLatest,
+  ToolLoopEvalNodeRunRequest,
+  ToolLoopEvalRunDetail,
+  ToolLoopEvalRunsResponse,
+  ToolLoopEvalSuite,
+} from "../types/index";
 
 export function getToolLoopEvalLatest() {
   return apiGet<ToolLoopEvalLatest>("/runtime/tool-loop-evals/latest");
@@ -11,4 +17,8 @@ export function listToolLoopEvalRuns(limit = 50) {
 
 export function getToolLoopEvalRun(runId: string) {
   return apiGet<ToolLoopEvalRunDetail>(`/runtime/tool-loop-evals/runs/${encodeURIComponent(runId)}`);
+}
+
+export function startToolLoopEvalNodeRun(payload: ToolLoopEvalNodeRunRequest) {
+  return apiPost<ToolLoopEvalSuite & { persisted_run_id?: string }>("/runtime/tool-loop-evals/node-run", payload);
 }

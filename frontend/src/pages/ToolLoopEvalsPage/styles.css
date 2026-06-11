@@ -24,6 +24,20 @@
   min-width: 0;
 }
 
+.tool-loop-run-form {
+  align-items: end;
+  display: grid;
+  gap: var(--space-3, 1rem);
+  grid-template-columns: minmax(150px, 0.8fr) minmax(220px, 1.2fr) minmax(180px, 1fr) auto;
+}
+
+.tool-loop-run-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  min-height: 38px;
+}
+
 .tool-loop-summary strong,
 .tool-loop-path,
 .tool-loop-answer,
@@ -88,7 +102,13 @@
 
 @media (max-width: 900px) {
   .tool-loop-grid,
-  .tool-loop-summary {
+  .tool-loop-summary,
+  .tool-loop-run-form {
     grid-template-columns: 1fr;
+  }
+
+  .tool-loop-run-actions {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }

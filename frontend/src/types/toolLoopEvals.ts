@@ -65,3 +65,9 @@ export type ToolLoopEvalRunDetail = ToolLoopEvalRunSummary & {
 export type ToolLoopEvalRunsResponse = {
   runs?: ToolLoopEvalRunSummary[];
 };
+
+export type ToolLoopEvalNodeRunRequest = {
+  node: string;
+  model: string;
+  case_ids?: string[];
+};

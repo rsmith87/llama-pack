@@ -1,6 +1,7 @@
 import { render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ToolLoopEvalsPage } from "../../pages/ToolLoopEvalsPage";
+import userEvent from "@testing-library/user-event";
 
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
@@ -140,7 +141,7 @@ it("renders an empty state when no latest tool-loop eval exists", async () => {
 });
 
 it("loads persisted run detail from the history table", async () => {
-  const user = (await import("@testing-library/user-event")).default.setup();
+  const user = userEvent.setup();
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
       return Promise.resolve(okJson({
@@ -207,4 +208,75 @@ it("loads persisted run detail from the history table", async () => {
   expect((await screen.findAllByText("branching-decision")).length).toBeGreaterThan(0);
   expect(screen.getAllByText("choose_route -> inspect_billing").length).toBeGreaterThan(0);
   expect(screen.getByText("billing route found invoice drift")).toBeInTheDocument();
+});
+
+it("submits a tool-loop eval run from the page", async () => {
+  const user = userEvent.setup();
+  const requests: Array<{ url: string; body?: string }> = [];
+  vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+    requests.push({ url, body: String(options?.body || "") });
+    if (url === "/lm-api/v1/nodes/models") {
+      return Promise.resolve(okJson({
+        nodes: [
+          {
+            name: "mac-mini",
+            reachable: true,
+            models: [{ name: "gpt-oss-20b", status: "running" }],
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({ runs: [] }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/node-run") {
+      return Promise.resolve(okJson({
+        model: "gpt-oss-20b",
+        status: "passed",
+        case_count: 1,
+        passed_count: 1,
+        failed_count: 0,
+        average_score: 1,
+        persisted_run_id: "run-new",
+        cases: [
+          {
+            case_id: "avoid-unneeded-tools",
+            status: "passed",
+            score: 1,
+            iteration_count: 1,
+            tool_call_count: 0,
+            observed_tool_sequence: [],
+            expected_tool_sequence: [],
+            checks: { completed: true },
+            final_answer: "tool loop ready",
+          },
+        ],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  await user.selectOptions(await screen.findByLabelText("Preset"), "avoid-unneeded-tools");
+  await user.click(screen.getByRole("button", { name: "Run Eval" }));
+
+  const runRequest = requests.find((request) => request.url === "/lm-api/v1/runtime/tool-loop-evals/node-run");
+  expect(runRequest).toBeTruthy();
+  expect(JSON.parse(String(runRequest?.body))).toEqual({
+    node: "mac-mini",
+    model: "gpt-oss-20b",
+    case_ids: ["avoid-unneeded-tools"],
+  });
+  expect(await screen.findByText("tool loop ready")).toBeInTheDocument();
 });
