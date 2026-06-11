@@ -105,6 +105,7 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
     assert cases["technical-design-doc-draft"].category == "real_world"
     assert cases["technical-design-doc-draft"].scoring_mode == "set_membership"
     assert cases["technical-design-doc-draft"].max_repeated_tool_calls == 1
+    assert cases["technical-design-doc-draft"].request_defaults["max_tokens"] >= 1000
     assert "lookup_unrelated_context" in cases["technical-design-doc-draft"].eval_tools
     assert "lookup_unrelated_context" not in cases["technical-design-doc-draft"].expected_tool_sequence
 
@@ -353,9 +354,9 @@ async def test_tool_loop_eval_scores_real_world_design_doc_with_unordered_eviden
             "inspect_existing_api_contract",
         ],
         (
-            "Problem: durable eval history. Proposed design: persist comparable run summaries. "
-            "API: controller-triggered node runs. Persistence: benchmark database. "
-            "UI: grouped real-world scenarios. Risks: avoid schema churn."
+            "Overview: durable eval history. Goals: persist comparable run summaries. "
+            "Architecture: controller-triggered node runs. Persistence: benchmark database. "
+            "Frontend: grouped real-world scenarios. Risks: avoid schema churn."
         ),
     )
 
@@ -366,6 +367,40 @@ async def test_tool_loop_eval_scores_real_world_design_doc_with_unordered_eviden
     assert result["checks"]["expected_tool_sequence"] is True
     assert result["checks"]["no_repeated_calls"] is True
     assert result["scoring_mode"] == "set_membership"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_real_world_design_doc_sectioned_answer(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "technical-design-doc-draft")
+    proxy = ScriptedToolProxy(
+        [
+            "read_design_requirements",
+            "inspect_existing_api_contract",
+            "inspect_persistence_constraints",
+            "inspect_frontend_requirements",
+            "read_rollout_risks",
+        ],
+        (
+            "# Technical Design Document - Durable Tool-Loop Eval History\n"
+            "## Overview\n"
+            "Users need durable run history for model comparisons.\n"
+            "## Goals\n"
+            "Persist comparable run summaries and case details.\n"
+            "## Architecture\n"
+            "The controller triggers node runs through the existing API contract.\n"
+            "## Persistence\n"
+            "Store results in the benchmark DB without changing existing run payloads unnecessarily.\n"
+            "## Frontend\n"
+            "Expose grouped real-world scenarios alongside synthetic presets.\n"
+            "## Risks\n"
+            "Schema churn and backward compatibility are the main rollout risks.\n"
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_final_substrings"] is True
 
 
 @pytest.mark.asyncio
@@ -381,9 +416,9 @@ async def test_tool_loop_eval_penalizes_real_world_design_doc_irrelevant_tool_us
             "lookup_unrelated_context",
         ],
         (
-            "Problem: durable eval history. Proposed design: persist comparable run summaries. "
-            "API: controller-triggered node runs. Persistence: benchmark database. "
-            "UI: grouped real-world scenarios. Risks: avoid schema churn."
+            "Overview: durable eval history. Goals: persist comparable run summaries. "
+            "Architecture: controller-triggered node runs. Persistence: benchmark database. "
+            "Frontend: grouped real-world scenarios. Risks: avoid schema churn."
         ),
     )
 
