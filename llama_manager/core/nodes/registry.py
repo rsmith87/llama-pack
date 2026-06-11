@@ -80,7 +80,8 @@ class NodeRegistry:
         json_body: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         node = self._get_node(node_name)
-        url = f"{node.url.rstrip('/')}/{path.lstrip('/')}"
+        base_url = _validated_base_url(node_name, node.url)
+        url = f"{base_url}/{path.lstrip('/')}"
         if json_body is None:
             return await self._request(method, url, node.api_key, node.verify_tls)
         return await self._request(method, url, node.api_key, node.verify_tls, json_body)
@@ -88,11 +89,7 @@ class NodeRegistry:
     def register_node(self, name: str, node: NodeConfig) -> None:
         if name in self.config.nodes:
             configured = self.config.nodes[name]
-            self._node_overrides[name] = NodeConfig(
-                url=_inherit_url_scheme(node.url, configured.url),
-                api_key=node.api_key if node.api_key is not None else configured.api_key,
-                verify_tls=configured.verify_tls if node.verify_tls is True else node.verify_tls,
-            )
+            self._node_overrides[name] = _static_node_override(node, configured)
             self._dynamic_nodes.pop(name, None)
         else:
             self._dynamic_nodes[name] = node
@@ -103,6 +100,9 @@ class NodeRegistry:
         self._get_node(name)
         if name in self._dynamic_nodes:
             self._dynamic_nodes[name] = node
+        elif name in self.config.nodes:
+            node = _static_node_override(node, self.config.nodes[name])
+            self._node_overrides[name] = node
         else:
             self._node_overrides[name] = node
         self._save_state()
@@ -166,7 +166,12 @@ class NodeRegistry:
             overrides: dict[str, NodeConfig] = {}
             for name, value in raw_overrides.items():
                 if isinstance(name, str) and isinstance(value, dict):
-                    overrides[name] = NodeConfig.model_validate(value)
+                    override = NodeConfig.model_validate(value)
+                    if name in self.config.nodes:
+                        configured = self.config.nodes[name]
+                        overrides[name] = _static_node_override(override, configured)
+                    else:
+                        overrides[name] = override
             self._node_overrides = overrides
         raw_heartbeats = data.get("heartbeats", {})
         if isinstance(raw_heartbeats, dict):
@@ -199,3 +204,22 @@ def _inherit_url_scheme(url: str, fallback_url: str) -> str:
     if not fallback.scheme:
         return url
     return f"{fallback.scheme}://{url.lstrip('/')}"
+
+
+def _static_node_override(node: NodeConfig, configured: NodeConfig) -> NodeConfig:
+    return NodeConfig(
+        **node.model_dump(exclude={"url", "api_key", "verify_tls"}),
+        url=_inherit_url_scheme(node.url, configured.url),
+        api_key=node.api_key if node.api_key is not None else configured.api_key,
+        verify_tls=configured.verify_tls if node.verify_tls is True else node.verify_tls,
+    )
+
+
+def _validated_base_url(node_name: str, url: str) -> str:
+    scheme = urlsplit(url).scheme
+    if scheme not in {"http", "https"}:
+        raise ValueError(
+            f"nodes.{node_name}.url must start with http:// or https:// "
+            f"(resolved value: {url!r})"
+        )
+    return url.rstrip("/")

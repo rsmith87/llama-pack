@@ -72,6 +72,54 @@ def test_registering_static_node_inherits_scheme_when_agent_url_is_scheme_less()
     assert registry.list_nodes()[0]["url"] == "https://mac-mini.local"
 
 
+def test_persisted_static_node_override_inherits_configured_scheme():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "mac-mini": {
+                    "url": "https://mac-mini.local",
+                    "api_key": "secret",
+                    "verify_tls": False,
+                }
+            },
+        }
+    )
+    store = InMemoryStore()
+    store.save(
+        {
+            "node_overrides": {
+                "mac-mini": {
+                    "url": "mac-mini.local",
+                    "api_key": None,
+                    "verify_tls": True,
+                }
+            }
+        }
+    )
+
+    registry = NodeRegistry(config=config, store=store)
+
+    node = registry.get_node_config("mac-mini")
+    assert node.url == "https://mac-mini.local"
+    assert node.api_key == "secret"
+    assert node.verify_tls is False
+
+
+@pytest.mark.asyncio
+async def test_request_node_rejects_node_url_without_http_scheme():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {"mac-mini": {"url": "mac-mini.local"}},
+        }
+    )
+    registry = NodeRegistry(config=config)
+
+    with pytest.raises(ValueError, match=r"nodes\.mac-mini\.url must start with http:// or https://"):
+        await registry.request_node("mac-mini", "GET", "/lm-api/v1/models")
+
+
 def test_updates_static_node_runtime_config_without_changing_registration():
     config = load_config(
         {
@@ -92,6 +140,22 @@ def test_updates_static_node_runtime_config_without_changing_registration():
     assert updated["registration"] == "static"
     assert registry.get_node_config("win").api_key == "new"
     assert registry.get_node_config("win").verify_tls is False
+
+
+def test_updates_static_node_inherits_scheme_when_url_is_scheme_less():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {"mac-mini": {"url": "https://mac-mini.local", "api_key": "old"}},
+        }
+    )
+    registry = NodeRegistry(config=config)
+
+    updated = registry.update_node("mac-mini", NodeConfig(url="mac-mini.local"))
+
+    assert updated["url"] == "https://mac-mini.local"
+    assert registry.get_node_config("mac-mini").url == "https://mac-mini.local"
+    assert registry.get_node_config("mac-mini").api_key == "old"
 
 
 @pytest.mark.asyncio

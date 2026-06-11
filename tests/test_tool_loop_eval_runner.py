@@ -231,3 +231,30 @@ def test_run_suites_with_controller_node_target_calls_agent_eval_endpoint(monkey
             {"model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
         )
     ]
+
+
+def test_run_suites_with_controller_node_target_reports_scheme_less_url(tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.agent_tools.evals import ToolLoopEvalCase
+    from llama_manager.core.config import load_config
+
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path),
+            "nodes": {"mac-mini": {"url": "mac-mini.local"}},
+        }
+    )
+
+    suites = asyncio.run(
+        runner.run_suites(
+            config,
+            ["gpt-oss-20b"],
+            [ToolLoopEvalCase(id="avoid-unneeded-tools", prompt="hi")],
+            target="node:mac-mini",
+        )
+    )
+
+    assert suites[0]["status"] == "failed"
+    assert "nodes.mac-mini.url must start with http:// or https://" in suites[0]["error"]
+    assert "mac-mini.local" in suites[0]["error"]
