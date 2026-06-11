@@ -133,6 +133,12 @@ async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict
         raise HTTPException(status_code=400, detail="tool-loop eval run is only available in agent mode")
     if not config.agent_tools.enabled:
         raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
+    process_manager = getattr(request.app.state, "process_manager", None)
+    if process_manager is not None and hasattr(process_manager, "start"):
+        try:
+            process_manager.start(body.model)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
     cases = _select_tool_loop_cases(body.case_ids)
     evaluator = ToolLoopEvaluator(
         config,

@@ -42,14 +42,15 @@ class TargetResolver:
         raise ModelNotRunningError(f"Model is not running locally or on any controller node: {model_name}")
 
     def resolve_local_target(self, model_name: str) -> dict[str, str]:
+        host_label = "controller host" if self.config.mode == "controller" else "agent host"
         try:
             local_status = self.process_manager.status(model_name)
             local_data: Any = local_status.to_dict() if hasattr(local_status, "to_dict") else local_status
             if bool(local_data.get("running")):
                 return {"kind": "local", "url": f"http://127.0.0.1:{local_data['port']}/v1/chat/completions"}
         except KeyError:
-            raise ModelNotRunningError(f"Model is not running locally on controller host: {model_name}") from None
-        raise ModelNotRunningError(f"Model is not running locally on controller host: {model_name}")
+            raise ModelNotRunningError(f"Model is not running locally on {host_label}: {model_name}") from None
+        raise ModelNotRunningError(f"Model is not running locally on {host_label}: {model_name}")
 
     async def resolve_named_node_target(self, model_name: str, node_name: str) -> dict[str, str]:
         node = next((item for item in self.node_registry.list_nodes() if item["name"] == node_name), None)

@@ -242,6 +242,54 @@ def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
     assert body["cases"][0]["case_id"] == "avoid-unneeded-tools"
 
 
+def test_agent_tool_loop_eval_run_starts_or_adopts_model_before_eval(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    calls = []
+
+    class PM:
+        def __init__(self):
+            self.running = False
+
+        def start(self, name):
+            calls.append(("start", name))
+            self.running = True
+            return {"running": True, "port": 8081}
+
+        def status(self, name):
+            calls.append(("status", name))
+            return {"running": self.running, "port": 8081}
+
+    async def fake_chat_request(url, payload):
+        calls.append(("chat", url))
+        return {"choices": [{"message": {"role": "assistant", "content": "tool loop ready"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True, "tools": {}},
+            }
+        ),
+        process_manager=PM(),
+        chat_request=fake_chat_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        json={"model": "qwen", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "passed"
+    assert calls[0] == ("start", "qwen")
+    assert ("chat", "http://127.0.0.1:8081/v1/chat/completions") in calls
+
+
 def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     calls = []
