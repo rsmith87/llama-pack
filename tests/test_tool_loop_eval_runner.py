@@ -93,6 +93,72 @@ def test_load_env_file_expands_config_placeholders(monkeypatch, tmp_path):
     assert config.nodes["mac-mini"].api_key == "secret key"
 
 
+def test_apply_node_api_key_fallback_uses_node_specific_env(monkeypatch, tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", "mac-key")
+    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "generic-key")
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path),
+            "nodes": {"mac-mini": {"url": "https://mac-mini.local"}},
+        }
+    )
+
+    runner.apply_node_api_key_fallback(config, "mac-mini")
+
+    assert config.nodes["mac-mini"].api_key == "mac-key"
+
+
+def test_apply_node_api_key_fallback_replaces_unresolved_placeholder(monkeypatch, tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    monkeypatch.delenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", raising=False)
+    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "generic-key")
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path),
+            "nodes": {
+                "mac-mini": {
+                    "url": "https://mac-mini.local",
+                    "api_key": "${NEURAXIS_MAC_MINI_AGENT_API_KEY}",
+                }
+            },
+        }
+    )
+
+    runner.apply_node_api_key_fallback(config, "mac-mini")
+
+    assert config.nodes["mac-mini"].api_key == "generic-key"
+
+
+def test_apply_node_api_key_fallback_preserves_configured_key(monkeypatch, tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", "env-key")
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path),
+            "nodes": {
+                "mac-mini": {
+                    "url": "https://mac-mini.local",
+                    "api_key": "configured-key",
+                }
+            },
+        }
+    )
+
+    runner.apply_node_api_key_fallback(config, "mac-mini")
+
+    assert config.nodes["mac-mini"].api_key == "configured-key"
+
+
 def test_write_outputs_appends_jsonl_and_writes_latest_summary(tmp_path):
     runner = _load_runner()
     output_jsonl = tmp_path / "results.jsonl"

@@ -86,6 +86,31 @@ def load_env_file(path: Path) -> None:
         os.environ[key] = os.path.expandvars(value)
 
 
+def apply_node_api_key_fallback(config: Any, node_name: str) -> None:
+    node = getattr(config, "nodes", {}).get(node_name)
+    if node is None or _has_resolved_value(getattr(node, "api_key", None)):
+        return
+    env_keys = [
+        f"NEURAXIS_{_env_name_fragment(node_name)}_AGENT_API_KEY",
+        "NEURAXIS_AGENT_API_KEY",
+    ]
+    for env_key in env_keys:
+        value = os.getenv(env_key)
+        if value:
+            config.nodes[node_name] = node.model_copy(update={"api_key": value})
+            return
+
+
+def _has_resolved_value(value: str | None) -> bool:
+    if not value:
+        return False
+    return not re.fullmatch(r"\$\{[A-Za-z_][A-Za-z0-9_]*\}", value.strip())
+
+
+def _env_name_fragment(value: str) -> str:
+    return re.sub(r"[^A-Za-z0-9]+", "_", value).strip("_").upper()
+
+
 def select_cases(case_ids: list[str]) -> list[Any]:
     cases = default_tool_loop_eval_cases()
     requested = set(case_ids)
@@ -153,6 +178,7 @@ async def run_node_suites(config: Any, models: list[str], cases: list[Any], node
     node_name = node_name.strip()
     if not node_name:
         raise SystemExit("--target node:<name> requires a node name")
+    apply_node_api_key_fallback(config, node_name)
     registry = NodeRegistry(config)
     suites = []
     case_ids = [case.id for case in cases]
