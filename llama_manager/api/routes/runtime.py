@@ -116,7 +116,7 @@ async def tool_loop_eval_node_chat(body: ToolLoopNodeChatRequest, request: Reque
         node = node_registry.get_node_config(body.node)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    node_url = f"{node.url.rstrip('/')}/v1/chat/completions"
+    node_url = f"{_node_base_url(body.node, node.url)}/v1/chat/completions"
     payload = {
         **body.payload,
         "model": body.model,
@@ -154,7 +154,7 @@ async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request
         node = node_registry.get_node_config(body.node)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    node_url = f"{node.url.rstrip('/')}/lm-api/v1/runtime/tool-loop-evals/run"
+    node_url = f"{_node_base_url(body.node, node.url)}/lm-api/v1/runtime/tool-loop-evals/run"
     payload: dict[str, object] = {"model": body.model}
     if body.case_ids is not None:
         payload["case_ids"] = body.case_ids
@@ -186,6 +186,12 @@ def _select_tool_loop_cases(case_ids: list[str] | None):
     if missing:
         raise HTTPException(status_code=400, detail=f"Unknown tool-loop eval case(s): {', '.join(missing)}")
     return [by_id[case_id] for case_id in case_ids]
+
+
+def _node_base_url(node_name: str, url: str) -> str:
+    if not (url.startswith("http://") or url.startswith("https://")):
+        raise HTTPException(status_code=400, detail=f"nodes.{node_name}.url must start with http:// or https://")
+    return url.rstrip("/")
 
 
 def _jobs_summary(mode: str, orchestrator) -> dict[str, object]:

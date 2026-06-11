@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable, Protocol
+from urllib.parse import urlsplit
 
 import httpx
 
@@ -88,7 +89,7 @@ class NodeRegistry:
         if name in self.config.nodes:
             configured = self.config.nodes[name]
             self._node_overrides[name] = NodeConfig(
-                url=node.url,
+                url=_inherit_url_scheme(node.url, configured.url),
                 api_key=node.api_key if node.api_key is not None else configured.api_key,
                 verify_tls=configured.verify_tls if node.verify_tls is True else node.verify_tls,
             )
@@ -153,7 +154,7 @@ class NodeRegistry:
                         configured = self.config.nodes[name]
                         registered = NodeConfig.model_validate(value)
                         self._node_overrides[name] = NodeConfig(
-                            url=registered.url,
+                            url=_inherit_url_scheme(registered.url, configured.url),
                             api_key=registered.api_key if registered.api_key is not None else configured.api_key,
                             verify_tls=configured.verify_tls if registered.verify_tls is True else registered.verify_tls,
                         )
@@ -189,3 +190,12 @@ class NodeRegistry:
                 "heartbeats": self._heartbeats,
             }
         )
+
+
+def _inherit_url_scheme(url: str, fallback_url: str) -> str:
+    if urlsplit(url).scheme:
+        return url
+    fallback = urlsplit(fallback_url)
+    if not fallback.scheme:
+        return url
+    return f"{fallback.scheme}://{url.lstrip('/')}"

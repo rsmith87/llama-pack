@@ -282,6 +282,30 @@ def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_p
     ]
 
 
+def test_controller_tool_loop_eval_node_run_rejects_node_url_without_scheme(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"mac-mini": {"url": "mac-mini.local"}},
+            }
+        )
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/node-run",
+        json={"node": "mac-mini", "model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "nodes.mac-mini.url must start with http:// or https://"
+
+
 def test_runtime_overview_reports_controller_runtime_state(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     async def fake_request(method, url, api_key, verify_tls, json_body=None):

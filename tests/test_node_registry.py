@@ -51,6 +51,27 @@ def test_registering_static_node_preserves_static_credentials_and_registration()
     assert registry.get_node_config("linux").verify_tls is False
 
 
+def test_registering_static_node_inherits_scheme_when_agent_url_is_scheme_less():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "mac-mini": {
+                    "url": "https://mac-mini.local",
+                    "api_key": "secret",
+                    "verify_tls": True,
+                }
+            },
+        }
+    )
+    registry = NodeRegistry(config=config)
+
+    registry.register_node("mac-mini", NodeConfig(url="mac-mini.local"))
+
+    assert registry.get_node_config("mac-mini").url == "https://mac-mini.local"
+    assert registry.list_nodes()[0]["url"] == "https://mac-mini.local"
+
+
 def test_updates_static_node_runtime_config_without_changing_registration():
     config = load_config(
         {
