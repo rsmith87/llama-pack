@@ -73,8 +73,27 @@ class LiveToolLoopEvaluator:
                     function = tool_call.get("function") or {}
                     name = str(function.get("name") or "")
                     raw_arguments = function.get("arguments")
-                    arguments = _parse_arguments(raw_arguments)
+                    arguments, argument_error = _parse_arguments_with_error(raw_arguments)
                     observed_tools.append(name)
+                    if argument_error:
+                        error = f"invalid tool arguments for {name}"
+                        tool_results.append(
+                            {
+                                "tool_call_id": tool_call.get("id") or name,
+                                "tool_name": name,
+                                "function": {
+                                    "name": name,
+                                    "arguments": raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments or {}),
+                                },
+                                "raw_arguments": raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments or {}),
+                                "arguments": {},
+                                "ok": False,
+                                "error": argument_error,
+                                "expected_error": False,
+                                "result": {"ok": False, "error": argument_error},
+                            }
+                        )
+                        break
                     result = await executor.execute(name, arguments, request_id=request_id, model=model_name)
                     tool_results.append(
                         {
@@ -100,6 +119,8 @@ class LiveToolLoopEvaluator:
                             "content": json.dumps(result),
                         }
                     )
+                if error:
+                    break
             else:
                 error = "live tool loop reached max_iterations before final assistant response"
 
@@ -342,15 +363,22 @@ def _tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _parse_arguments(raw: Any) -> dict[str, Any]:
+    parsed, _error = _parse_arguments_with_error(raw)
+    return parsed
+
+
+def _parse_arguments_with_error(raw: Any) -> tuple[dict[str, Any], str]:
     if isinstance(raw, dict):
-        return raw
+        return raw, ""
     if not isinstance(raw, str) or not raw.strip():
-        return {}
+        return {}, ""
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError as exc:
+        return {}, f"invalid JSON arguments: {exc.msg}"
+    if not isinstance(parsed, dict):
+        return {}, "tool arguments must be a JSON object"
+    return parsed, ""
 
 
 def _message_content(message: dict[str, Any]) -> str:

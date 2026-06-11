@@ -167,3 +167,47 @@ async def test_live_collaborative_notes_design_returns_failed_case_when_model_ca
     assert result["score"] == 0.0
     assert result["checks"]["completed"] is False
     assert result["error"] == "model chat request failed with HTTP 500: llama-server failed"
+
+
+@pytest.mark.asyncio
+async def test_live_collaborative_notes_design_stops_on_malformed_tool_arguments(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+
+    class MalformedToolCallProxy:
+        def __init__(self):
+            self.payloads = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.payloads.append(payload)
+            if len(self.payloads) > 1:
+                raise AssertionError("malformed tool call should not be sent back into chat history")
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "bad-json",
+                                    "type": "function",
+                                    "function": {
+                                        "name": "write_notes_app_design",
+                                        "arguments": "{\"content\":\"unterminated",
+                                    },
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    proxy = MalformedToolCallProxy()
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert len(proxy.payloads) == 1
+    assert result["status"] == "failed"
+    assert result["error"] == "invalid tool arguments for write_notes_app_design"
+    assert result["tool_results"][0]["ok"] is False
+    assert result["tool_results"][0]["error"].startswith("invalid JSON arguments")
