@@ -6,7 +6,6 @@ from typing import Any
 from uuid import uuid4
 
 from llama_manager.core.agent_tools.executor import ToolExecutor
-from llama_manager.core.agent_tools.registry import ToolRegistry
 from llama_manager.core.config.models import AppConfig
 
 
@@ -24,8 +23,7 @@ class ToolLoopEvaluator:
     def __init__(self, config: AppConfig, proxy: Any, executor: ToolExecutor | None = None) -> None:
         self.config = config
         self.proxy = proxy
-        self.registry = ToolRegistry(config.agent_tools)
-        self.executor = executor or ToolExecutor(config)
+        self.executor = executor or EvalToolExecutor()
 
     async def run_case(self, model_name: str, case: ToolLoopEvalCase, request_id: str | None = None) -> dict[str, Any]:
         request_id = request_id or str(uuid4())
@@ -37,7 +35,7 @@ class ToolLoopEvaluator:
         }
         if self.config.mode == "agent":
             base_payload["target"] = "local"
-        tool_defs = self.registry.openai_tools()
+        tool_defs = eval_tool_definitions()
         observed_tools: list[str] = []
         tool_results: list[dict[str, Any]] = []
         iteration_count = 0
@@ -129,6 +127,7 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
                 "findings into one final answer."
             ),
             expected_tool_sequence=["read_status", "read_details"],
+            expected_final_substrings=["green", "calibration window"],
         ),
         ToolLoopEvalCase(
             id="avoid-unneeded-tools",
@@ -136,6 +135,45 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
             prompt="Reply with exactly: tool loop ready",
             expected_final_substrings=["tool loop ready"],
         ),
+    ]
+
+
+class EvalToolExecutor:
+    async def execute(self, name: str, arguments: dict[str, Any], request_id: str, model: str) -> dict[str, Any]:
+        if name == "read_status":
+            return {
+                "ok": True,
+                "source": "status",
+                "status": "green",
+                "summary": "The eval status source says the deployment status is green.",
+            }
+        if name == "read_details":
+            return {
+                "ok": True,
+                "source": "details",
+                "detail": "The eval details source says the next action is to confirm the calibration window.",
+            }
+        return {"ok": False, "error": f"Unknown eval tool {name!r}"}
+
+
+def eval_tool_definitions() -> list[dict[str, Any]]:
+    return [
+        {
+            "type": "function",
+            "function": {
+                "name": "read_status",
+                "description": "Read the deterministic eval status source. Use this first when the user asks for status.",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "read_details",
+                "description": "Read the deterministic eval details source. Use this after read_status when details are requested.",
+                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+            },
+        },
     ]
 
 

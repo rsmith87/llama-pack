@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from llama_manager.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator
+from llama_manager.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
 from llama_manager.core.config import load_config
 
 
@@ -146,6 +146,91 @@ async def test_tool_loop_eval_forces_agent_runs_to_local_target(tmp_path):
 
     assert result["status"] == "passed"
     assert proxy.payloads[0]["target"] == "local"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_uses_deterministic_eval_tools_instead_of_configured_tools(tmp_path):
+    class Proxy:
+        def __init__(self):
+            self.payloads = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.payloads.append(payload)
+            if len(self.payloads) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-status",
+                                        "type": "function",
+                                        "function": {"name": "read_status", "arguments": "{}"},
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            if len(self.payloads) == 2:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-details",
+                                        "type": "function",
+                                        "function": {"name": "read_details", "arguments": "{}"},
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Status is green and the next action is the calibration window.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "tools": {
+                    "search_project_code": {
+                        "type": "shell",
+                        "description": "Search project code.",
+                        "command": ["printf", "unused"],
+                    }
+                },
+            },
+        }
+    )
+    proxy = Proxy()
+
+    result = await ToolLoopEvaluator(config, proxy).run_case(
+        "gpt-oss-20b",
+        default_tool_loop_eval_cases()[0],
+    )
+
+    tool_names = [tool["function"]["name"] for tool in proxy.payloads[0]["tools"]]
+    assert tool_names == ["read_status", "read_details"]
+    assert "search_project_code" not in tool_names
+    assert result["status"] == "passed"
+    assert result["observed_tool_sequence"] == ["read_status", "read_details"]
 
 
 @pytest.mark.asyncio
