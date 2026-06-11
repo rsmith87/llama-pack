@@ -110,6 +110,31 @@ async def test_live_collaborative_notes_design_penalizes_forbidden_auth_artifact
 
 
 @pytest.mark.asyncio
+async def test_live_collaborative_notes_design_allows_negated_password_language(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("read_workspace_file", {"path": "README.md"}),
+            ("search_workspace", {"query": "user_id"}),
+            (
+                "write_notes_app_design",
+                {
+                    "content": (
+                        "Overview Data model API Frontend Collaboration Risk notes collaborators user_id note_id registration "
+                        "The users table stores minimal profile fields and no password."
+                    )
+                },
+            ),
+        ]
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["no_forbidden_artifact_substrings"] is True
+
+
+@pytest.mark.asyncio
 async def test_live_collaborative_notes_design_allows_distinct_repeated_tool_reads(tmp_path):
     scenario = default_live_tool_loop_scenarios()[0]
     design = (

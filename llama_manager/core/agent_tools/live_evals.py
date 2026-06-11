@@ -398,7 +398,29 @@ def _contains_all(text: str, expected_substrings: list[str]) -> bool:
 
 def _contains_any(text: str, substrings: list[str]) -> bool:
     normalized = _normalize_match_text(text)
-    return any(_normalize_match_text(substring) in normalized for substring in substrings)
+    return any(_has_forbidden_substring(normalized, substring) for substring in substrings)
+
+
+def _has_forbidden_substring(normalized_text: str, substring: str) -> bool:
+    normalized_substring = _normalize_match_text(substring)
+    if normalized_substring == "password":
+        allowed_negations = (
+            "no password",
+            "no passwords",
+            "without password",
+            "without passwords",
+            "not store password",
+            "not store passwords",
+            "does not store password",
+            "does not store passwords",
+            "do not store password",
+            "do not store passwords",
+        )
+        scrubbed = normalized_text
+        for phrase in allowed_negations:
+            scrubbed = scrubbed.replace(phrase, "")
+        return normalized_substring in scrubbed
+    return normalized_substring in normalized_text
 
 
 def _normalize_match_text(text: str) -> str:
