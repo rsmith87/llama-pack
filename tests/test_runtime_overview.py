@@ -1,5 +1,6 @@
 import json
 
+import httpx
 from fastapi.testclient import TestClient
 
 from llama_manager.core.config import NodeConfig, load_config
@@ -333,6 +334,41 @@ def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_p
             {"model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
         )
     ]
+
+
+def test_controller_tool_loop_eval_node_run_returns_agent_error_detail(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_request(method, url, api_key, verify_tls, json_body, timeout=10):
+        request = httpx.Request(method, url)
+        response = httpx.Response(
+            400,
+            request=request,
+            json={"detail": "Unknown tool-loop eval case(s): technical-design-doc-draft"},
+        )
+        raise httpx.HTTPStatusError("Bad Request", request=request, response=response)
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"mac-mini": {"url": "http://mac-mini", "api_key": "node-secret", "verify_tls": False}},
+            }
+        ),
+        controller_request=fake_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/node-run",
+        json={"node": "mac-mini", "model": "gpt-oss-20b", "case_ids": ["technical-design-doc-draft"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Node mac-mini tool-loop eval failed: Unknown tool-loop eval case(s): technical-design-doc-draft"
 
 
 def test_controller_tool_loop_eval_node_run_rejects_node_url_without_scheme(tmp_path):

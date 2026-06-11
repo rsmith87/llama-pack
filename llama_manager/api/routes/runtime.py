@@ -4,6 +4,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
@@ -185,13 +186,19 @@ async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request
     payload: dict[str, object] = {"model": body.model}
     if body.case_ids is not None:
         payload["case_ids"] = body.case_ids
-    suite = await node_registry.request_node(
-        body.node,
-        "POST",
-        "/lm-api/v1/runtime/tool-loop-evals/run",
-        payload,
-        timeout=None,
-    )
+    try:
+        suite = await node_registry.request_node(
+            body.node,
+            "POST",
+            "/lm-api/v1/runtime/tool-loop-evals/run",
+            payload,
+            timeout=None,
+        )
+    except httpx.HTTPStatusError as exc:
+        raise HTTPException(
+            status_code=exc.response.status_code,
+            detail=f"Node {body.node} tool-loop eval failed: {_node_error_detail(exc.response)}",
+        ) from exc
     persisted = _persist_tool_loop_suite(
         request,
         suite,
@@ -221,6 +228,20 @@ def _persist_tool_loop_suite(
         target_node=target_node,
         suite=suite,
     )
+
+
+def _node_error_detail(response: httpx.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return response.text[:500] or response.reason_phrase
+    if isinstance(payload, dict):
+        detail = payload.get("detail")
+        if isinstance(detail, str) and detail:
+            return detail
+        if detail is not None:
+            return json.dumps(detail)
+    return response.text[:500] or response.reason_phrase
 
 
 def _benchmark_store(request: Request) -> Any:
