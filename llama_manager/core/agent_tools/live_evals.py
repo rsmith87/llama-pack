@@ -202,8 +202,9 @@ def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:
             id="live-collaborative-notes-design",
             prompt=(
                 "Use the workspace tools to inspect the notes app brief and starter files. "
-                "Create docs/notes-app-design.md with a concise implementation design. "
+                "Create docs/notes-app-design.md with a compact implementation design under 700 words. "
                 "The design must include sections named Overview, Data model, API, Frontend, Collaboration, and Risk. "
+                "Use 2-3 short bullets per section instead of long tables. "
                 "Do not implement registration or account-management flows."
             ),
             expected_tool_sequence=[
