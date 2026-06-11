@@ -291,6 +291,82 @@ def test_agent_tool_loop_eval_run_starts_or_adopts_model_before_eval(tmp_path):
     assert ("chat", "http://127.0.0.1:8081/v1/chat/completions") in calls
 
 
+def test_agent_tool_loop_eval_run_executes_live_workspace_scenario(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    tool_calls = [
+        ("list_workspace", {}),
+        ("read_workspace_file", {"path": "README.md"}),
+        ("search_workspace", {"query": "user_id"}),
+        (
+            "write_notes_app_design",
+            {
+                "content": (
+                    "Overview: collaborative notes app without registration.\n"
+                    "Data model: notes users collaborators user_id note_id.\n"
+                    "API: CRUD notes and share collaborators.\n"
+                    "Frontend: notes list editor collaborator panel.\n"
+                    "Collaboration: sharing and conflict handling.\n"
+                    "Risk: avoid auth scope creep.\n"
+                )
+            },
+        ),
+    ]
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append(payload)
+        index = len(calls) - 1
+        if index < len(tool_calls):
+            name, arguments = tool_calls[index]
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": f"live-{index}",
+                                    "type": "function",
+                                    "function": {"name": name, "arguments": json.dumps(arguments)},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        return {"choices": [{"message": {"role": "assistant", "content": "Created notes app design."}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True, "tools": {}},
+            }
+        ),
+        process_manager=type("PM", (), {"status": lambda self, name: {"running": True, "port": 8081}})(),
+        chat_request=fake_chat_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        json={"model": "qwen", "case_ids": ["live-collaborative-notes-design"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "passed"
+    assert body["cases"][0]["case_id"] == "live-collaborative-notes-design"
+    assert body["cases"][0]["case_category"] == "live_workspace"
+    assert body["cases"][0]["checks"]["expected_artifacts"] is True
+    assert body["cases"][0]["artifacts"][0]["path"] == "docs/notes-app-design.md"
+
+
 def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     calls = []

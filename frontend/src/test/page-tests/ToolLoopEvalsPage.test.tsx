@@ -409,6 +409,8 @@ it("exposes real-world scenario presets in the run form", async () => {
   expect(within(preset).getByRole("group", { name: "Synthetic presets" })).toBeInTheDocument();
   expect(within(preset).getByRole("group", { name: "Real-world scenarios" })).toBeInTheDocument();
   expect(within(preset).getByRole("option", { name: "Technical design doc draft" })).toHaveValue("technical-design-doc-draft");
+  expect(within(preset).getByRole("option", { name: "Collaborative notes app design" })).toHaveValue("collaborative-notes-app-design");
+  expect(within(preset).getByRole("option", { name: "Live collaborative notes design" })).toHaveValue("live-collaborative-notes-design");
 });
 
 it("updates the model field when the selected node changes", async () => {

@@ -362,6 +362,54 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
             max_iterations=8,
             max_repeated_tool_calls=1,
         ),
+        ToolLoopEvalCase(
+            id="collaborative-notes-app-design",
+            category="real_world",
+            system_prompt=(
+                "You are drafting a practical app design from deterministic project sources. "
+                "Use only relevant sources, call each relevant source at most once, avoid registration/auth scope creep, "
+                "and preserve the requested user_id and note_id relationship constraints."
+            ),
+            prompt=(
+                "Create a concise technical design for a collaborative notes app. "
+                "User account information and registration are not needed, but future relationships from notes to users "
+                "must use user_id and note_id respectively. Inspect the product brief, data model constraints, "
+                "API requirements, frontend requirements, and delivery risks. Do not inspect registration auth requirements."
+            ),
+            expected_tool_sequence=[
+                "read_notes_app_product_brief",
+                "inspect_notes_app_data_model",
+                "inspect_notes_app_api_requirements",
+                "inspect_notes_app_frontend_requirements",
+                "read_notes_app_delivery_risks",
+            ],
+            expected_final_substrings=[
+                "Overview",
+                "Data model",
+                "API",
+                "Frontend",
+                "Collaboration",
+                "Risk",
+                "notes",
+                "collaborators",
+                "user_id",
+                "note_id",
+                "registration",
+                "auth scope creep",
+            ],
+            request_defaults={"max_tokens": 1200},
+            eval_tools=[
+                "read_notes_app_product_brief",
+                "inspect_notes_app_data_model",
+                "inspect_notes_app_api_requirements",
+                "inspect_notes_app_frontend_requirements",
+                "read_notes_app_delivery_risks",
+                "inspect_registration_auth_requirements",
+            ],
+            scoring_mode="set_membership",
+            max_iterations=8,
+            max_repeated_tool_calls=1,
+        ),
     ]
 
 
@@ -480,6 +528,55 @@ class EvalToolExecutor:
                 "source": "unrelated",
                 "fact": "unrelated billing migration context should not be used for this design.",
             }
+        if name == "read_notes_app_product_brief":
+            return {
+                "ok": True,
+                "source": "product_brief",
+                "brief": (
+                    "Create a collaborative notes app. User account information and registration are not needed. "
+                    "Design for future relationships with user_id and note_id."
+                ),
+            }
+        if name == "inspect_notes_app_data_model":
+            return {
+                "ok": True,
+                "source": "data_model",
+                "entities": ["notes", "users", "note_collaborators"],
+                "constraint": "Use user_id and note_id as relationship keys for note ownership and collaborators.",
+            }
+        if name == "inspect_notes_app_api_requirements":
+            return {
+                "ok": True,
+                "source": "api",
+                "requirements": [
+                    "CRUD notes",
+                    "list notes by user_id",
+                    "share a note with collaborators",
+                    "list collaborators by note_id",
+                ],
+            }
+        if name == "inspect_notes_app_frontend_requirements":
+            return {
+                "ok": True,
+                "source": "frontend",
+                "requirements": ["notes list", "note editor", "collaborator panel", "empty and unsaved states"],
+            }
+        if name == "read_notes_app_delivery_risks":
+            return {
+                "ok": True,
+                "source": "risks",
+                "risks": [
+                    "avoid auth scope creep",
+                    "preserve future user relationships",
+                    "handle simple concurrent edit conflicts",
+                ],
+            }
+        if name == "inspect_registration_auth_requirements":
+            return {
+                "ok": True,
+                "source": "registration_auth",
+                "fact": "registration and account-management requirements are intentionally out of scope for this app design.",
+            }
         return {"ok": False, "error": f"Unknown eval tool {name!r}"}
 
 
@@ -554,6 +651,12 @@ _EVAL_TOOL_DESCRIPTIONS = {
     "inspect_frontend_requirements": "Inspect frontend requirements for exposing real-world eval scenarios.",
     "read_rollout_risks": "Read rollout risks that the technical design must address.",
     "lookup_unrelated_context": "Look up unrelated project context. This is intentionally irrelevant to the design-doc scenario.",
+    "read_notes_app_product_brief": "Read the product brief for the collaborative notes app design scenario.",
+    "inspect_notes_app_data_model": "Inspect data model constraints for notes, users, collaborators, user_id, and note_id.",
+    "inspect_notes_app_api_requirements": "Inspect API requirements for note CRUD and collaboration operations.",
+    "inspect_notes_app_frontend_requirements": "Inspect frontend requirements for the notes list, editor, and collaborator UI.",
+    "read_notes_app_delivery_risks": "Read delivery risks for the collaborative notes app design.",
+    "inspect_registration_auth_requirements": "Inspect registration and account auth requirements. This is intentionally out of scope for the notes app scenario.",
 }
 
 

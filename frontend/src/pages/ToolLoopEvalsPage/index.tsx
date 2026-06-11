@@ -40,6 +40,8 @@ const CASE_PRESET_GROUPS = [
     label: "Real-world scenarios",
     presets: [
       { id: "technical-design-doc-draft", label: "Technical design doc draft" },
+      { id: "collaborative-notes-app-design", label: "Collaborative notes app design" },
+      { id: "live-collaborative-notes-design", label: "Live collaborative notes design" },
     ],
   },
 ];

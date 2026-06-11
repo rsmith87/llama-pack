@@ -9,6 +9,7 @@ from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from llama_manager.core.agent_tools.evals import ToolLoopEvaluator, default_tool_loop_eval_cases
+from llama_manager.core.agent_tools.live_evals import LiveToolLoopEvaluator, default_live_tool_loop_scenarios
 from llama_manager.core.runtime.route_preview import RoutePreviewRequest, RoutePreviewService
 
 
@@ -161,13 +162,24 @@ async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict
             process_manager.start(body.model)
         except KeyError as exc:
             raise HTTPException(status_code=404, detail=str(exc)) from exc
-    cases = _select_tool_loop_cases(body.case_ids)
-    evaluator = ToolLoopEvaluator(
-        config,
-        request.app.state.chat_scheduler,
-        executor=None,
-    )
-    return await evaluator.run_suite(body.model, cases)
+    cases, live_scenarios = _select_tool_loop_workloads(body.case_ids)
+    suites = []
+    if cases:
+        suites.append(
+            await ToolLoopEvaluator(
+                config,
+                request.app.state.chat_scheduler,
+                executor=None,
+            ).run_suite(body.model, cases)
+        )
+    if live_scenarios:
+        suites.append(
+            await LiveToolLoopEvaluator(
+                config,
+                request.app.state.chat_scheduler,
+            ).run_suite(body.model, live_scenarios)
+        )
+    return _merge_tool_loop_suites(body.model, suites)
 
 
 @router.post("/tool-loop-evals/node-run")
@@ -276,6 +288,37 @@ def _select_tool_loop_cases(case_ids: list[str] | None):
     if missing:
         raise HTTPException(status_code=400, detail=f"Unknown tool-loop eval case(s): {', '.join(missing)}")
     return [by_id[case_id] for case_id in case_ids]
+
+
+def _select_tool_loop_workloads(case_ids: list[str] | None):
+    cases = default_tool_loop_eval_cases()
+    live_scenarios = default_live_tool_loop_scenarios()
+    if not case_ids:
+        return cases, []
+    by_id = {case.id: case for case in cases}
+    live_by_id = {scenario.id: scenario for scenario in live_scenarios}
+    missing = sorted(set(case_ids) - set(by_id) - set(live_by_id))
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Unknown tool-loop eval case(s): {', '.join(missing)}")
+    return [by_id[case_id] for case_id in case_ids if case_id in by_id], [
+        live_by_id[case_id] for case_id in case_ids if case_id in live_by_id
+    ]
+
+
+def _merge_tool_loop_suites(model: str, suites: list[dict[str, Any]]) -> dict[str, Any]:
+    cases = [case for suite in suites for case in suite.get("cases", []) if isinstance(case, dict)]
+    passed_count = sum(1 for case in cases if case.get("status") == "passed")
+    failed_count = len(cases) - passed_count
+    average_score = round(sum(float(case.get("score") or 0.0) for case in cases) / len(cases), 4) if cases else 0.0
+    return {
+        "model": model,
+        "status": "passed" if failed_count == 0 else "failed",
+        "case_count": len(cases),
+        "passed_count": passed_count,
+        "failed_count": failed_count,
+        "average_score": average_score,
+        "cases": cases,
+    }
 
 
 def _node_base_url(node_name: str, url: str) -> str:

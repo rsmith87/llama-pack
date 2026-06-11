@@ -94,6 +94,7 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
         "parallel-fact-gathering",
         "subagent-delegation-simulation",
         "technical-design-doc-draft",
+        "collaborative-notes-app-design",
     ] == list(cases)
     assert cases["linear-8-step-synthesis"].max_iterations >= 9
     assert cases["tool-error-recovery"].expected_error_tools == ["unstable_primary"]
@@ -108,6 +109,10 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
     assert cases["technical-design-doc-draft"].request_defaults["max_tokens"] >= 1000
     assert "lookup_unrelated_context" in cases["technical-design-doc-draft"].eval_tools
     assert "lookup_unrelated_context" not in cases["technical-design-doc-draft"].expected_tool_sequence
+    assert cases["collaborative-notes-app-design"].category == "real_world"
+    assert cases["collaborative-notes-app-design"].scoring_mode == "set_membership"
+    assert cases["collaborative-notes-app-design"].max_repeated_tool_calls == 1
+    assert cases["collaborative-notes-app-design"].request_defaults["max_tokens"] >= 1000
 
 
 @pytest.mark.asyncio
@@ -450,6 +455,61 @@ async def test_tool_loop_eval_penalizes_real_world_design_doc_irrelevant_tool_us
             "Overview: durable eval history. Goals: persist comparable run summaries. "
             "Architecture: controller-triggered node runs. Persistence: benchmark database. "
             "Frontend: grouped real-world scenarios. Risks: avoid schema churn."
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["expected_tool_sequence"] is False
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_collaborative_notes_app_design(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "collaborative-notes-app-design")
+    proxy = ScriptedToolProxy(
+        [
+            "read_notes_app_product_brief",
+            "inspect_notes_app_data_model",
+            "inspect_notes_app_api_requirements",
+            "inspect_notes_app_frontend_requirements",
+            "read_notes_app_delivery_risks",
+        ],
+        (
+            "Overview: collaborative notes app without registration. "
+            "Data model: notes, users, note_collaborators, user_id, note_id. "
+            "API: CRUD notes, share collaborators, list by user. "
+            "Frontend: notes list, editor, collaborator panel. "
+            "Collaboration: note sharing and simple conflict handling. "
+            "Risks: avoid auth scope creep and preserve future user relationships."
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["case_category"] == "real_world"
+    assert result["checks"]["expected_tool_sequence"] is True
+    assert result["checks"]["expected_final_substrings"] is True
+    assert result["checks"]["no_repeated_calls"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_penalizes_collaborative_notes_app_unrelated_auth_scope(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "collaborative-notes-app-design")
+    proxy = ScriptedToolProxy(
+        [
+            "read_notes_app_product_brief",
+            "inspect_notes_app_data_model",
+            "inspect_notes_app_api_requirements",
+            "inspect_notes_app_frontend_requirements",
+            "read_notes_app_delivery_risks",
+            "inspect_registration_auth_requirements",
+        ],
+        (
+            "Overview: collaborative notes app without registration. "
+            "Data model: notes, users, user_id, note_id. "
+            "API: CRUD notes. Frontend: editor. Collaboration: sharing. Risks: auth scope creep."
         ),
     )
 
