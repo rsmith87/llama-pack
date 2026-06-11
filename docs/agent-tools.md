@@ -606,25 +606,15 @@ Default output paths are:
 - `logs/tool_loop_eval_results.jsonl`
 - `logs/tool_loop_eval_latest.json`
 
-The built-in first-pass cases expect these tools to exist in the active
-agent-mode config:
-
-```yaml
-agent_tools:
-  enabled: true
-  tools:
-    read_status:
-      type: file_read
-      description: Read status.
-      path: ./logs/tool-loop-status.txt
-    read_details:
-      type: file_read
-      description: Read details.
-      path: ./logs/tool-loop-details.txt
-```
+The built-in cases use deterministic eval-only tools instead of the target
+agent's configured tools. This keeps runs comparable across nodes and models:
+the current baseline tools are `read_status` and `read_details`.
 
 Run multiple models by repeating `--model`; route to a specific controller node
 with `--target node:<name>`; run a single built-in case with `--case <case-id>`.
 Node targets require a controller-mode config that defines the node. Running
 the command with an agent-mode config will resolve the model as local to that
 process instead of going through the controller.
+
+See [Tool-Loop Eval Presets](tool-loop-eval-presets.md) for the preset roadmap
+and scoring model.

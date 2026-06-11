@@ -17,6 +17,11 @@ class ToolLoopEvalCase:
     expected_tool_sequence: list[str] = field(default_factory=list)
     expected_final_substrings: list[str] = field(default_factory=list)
     request_defaults: dict[str, Any] = field(default_factory=dict)
+    scoring_mode: str = "strict_sequence"
+    eval_tools: list[str] = field(default_factory=lambda: ["read_status", "read_details"])
+    max_iterations: int | None = None
+    expected_error_tools: list[str] = field(default_factory=list)
+    max_repeated_tool_calls: int | None = None
 
 
 class ToolLoopEvaluator:
@@ -35,7 +40,7 @@ class ToolLoopEvaluator:
         }
         if self.config.mode == "agent":
             base_payload["target"] = "local"
-        tool_defs = eval_tool_definitions()
+        tool_defs = eval_tool_definitions(case.eval_tools)
         observed_tools: list[str] = []
         tool_results: list[dict[str, Any]] = []
         iteration_count = 0
@@ -43,7 +48,8 @@ class ToolLoopEvaluator:
         error = ""
         completed = False
 
-        for _ in range(self.config.agent_tools.max_iterations):
+        max_iterations = case.max_iterations or self.config.agent_tools.max_iterations
+        for _ in range(max_iterations):
             iteration_count += 1
             request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
             response, _meta = await self.proxy.chat_with_meta(model_name, request_payload)
@@ -61,7 +67,15 @@ class ToolLoopEvaluator:
                 observed_tools.append(name)
                 arguments = _parse_arguments(function.get("arguments"))
                 result = await self.executor.execute(name, arguments, request_id=request_id, model=model_name)
-                tool_results.append({"tool_name": name, "ok": bool(result.get("ok")), "error": result.get("error") or ""})
+                expected_error = name in case.expected_error_tools and not bool(result.get("ok"))
+                tool_results.append(
+                    {
+                        "tool_name": name,
+                        "ok": bool(result.get("ok")),
+                        "error": result.get("error") or "",
+                        "expected_error": expected_error,
+                    }
+                )
                 messages.append(
                     {
                         "role": "tool",
@@ -77,8 +91,10 @@ class ToolLoopEvaluator:
             "completed": completed,
             "expected_tool_sequence": _sequence_matches(observed_tools, case.expected_tool_sequence),
             "expected_final_substrings": _contains_all(final_answer, case.expected_final_substrings),
-            "no_tool_errors": all(result["ok"] for result in tool_results),
+            "no_tool_errors": all(result["ok"] or result.get("expected_error") for result in tool_results),
         }
+        if case.max_repeated_tool_calls is not None:
+            checks["no_repeated_calls"] = _max_repeated_calls(observed_tools) <= case.max_repeated_tool_calls
         score = _score(checks)
         return {
             "case_id": case.id,
@@ -91,6 +107,7 @@ class ToolLoopEvaluator:
             "tool_call_count": len(observed_tools),
             "observed_tool_sequence": observed_tools,
             "expected_tool_sequence": list(case.expected_tool_sequence),
+            "scoring_mode": case.scoring_mode,
             "tool_results": tool_results,
             "final_answer": final_answer,
         }
@@ -135,6 +152,87 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
             prompt="Reply with exactly: tool loop ready",
             expected_final_substrings=["tool loop ready"],
         ),
+        ToolLoopEvalCase(
+            id="linear-4-step-synthesis",
+            system_prompt=(
+                "Use the available tools in the requested order. After gathering all facts, "
+                "write one concise final answer containing every fact token."
+            ),
+            prompt=(
+                "Call read_step_1, read_step_2, read_step_3, and read_step_4 in order. "
+                "Then summarize the four returned fact tokens."
+            ),
+            expected_tool_sequence=["read_step_1", "read_step_2", "read_step_3", "read_step_4"],
+            expected_final_substrings=["alpha", "bravo", "charlie", "delta"],
+            eval_tools=["read_step_1", "read_step_2", "read_step_3", "read_step_4"],
+            max_iterations=6,
+        ),
+        ToolLoopEvalCase(
+            id="linear-8-step-synthesis",
+            system_prompt=(
+                "Use the available tools in the requested order. Continue until all eight sources "
+                "have been inspected, then stop and write a concise final answer containing every fact token."
+            ),
+            prompt=(
+                "Call read_step_1 through read_step_8 in numeric order. "
+                "Then summarize all eight returned fact tokens."
+            ),
+            expected_tool_sequence=[
+                "read_step_1",
+                "read_step_2",
+                "read_step_3",
+                "read_step_4",
+                "read_step_5",
+                "read_step_6",
+                "read_step_7",
+                "read_step_8",
+            ],
+            expected_final_substrings=["alpha", "bravo", "charlie", "delta", "echo", "foxtrot", "golf", "hotel"],
+            eval_tools=[
+                "read_step_1",
+                "read_step_2",
+                "read_step_3",
+                "read_step_4",
+                "read_step_5",
+                "read_step_6",
+                "read_step_7",
+                "read_step_8",
+            ],
+            max_iterations=10,
+        ),
+        ToolLoopEvalCase(
+            id="tool-error-recovery",
+            system_prompt=(
+                "If a tool reports an error, use the documented fallback tool once. "
+                "Do not retry a failing tool when a fallback is available."
+            ),
+            prompt=(
+                "Call unstable_primary first. If it fails, call stable_fallback and answer with the recovered fact."
+            ),
+            expected_tool_sequence=["unstable_primary", "stable_fallback"],
+            expected_final_substrings=["fallback", "amber recovery token"],
+            eval_tools=["unstable_primary", "stable_fallback"],
+            scoring_mode="branch_path",
+            expected_error_tools=["unstable_primary"],
+            max_iterations=5,
+            max_repeated_tool_calls=1,
+        ),
+        ToolLoopEvalCase(
+            id="avoid-loop-trap",
+            system_prompt=(
+                "Stop once a tool says no more information is available. "
+                "Do not repeat a lookup that has already answered."
+            ),
+            prompt=(
+                "Call lookup_once. If it says there is no more information, stop and answer with the available fact."
+            ),
+            expected_tool_sequence=["lookup_once"],
+            expected_final_substrings=["no more information", "stop-token"],
+            eval_tools=["lookup_once"],
+            scoring_mode="loop_stop",
+            max_iterations=4,
+            max_repeated_tool_calls=1,
+        ),
     ]
 
 
@@ -153,28 +251,84 @@ class EvalToolExecutor:
                 "source": "details",
                 "detail": "The eval details source says the next action is to confirm the calibration window.",
             }
+        if name.startswith("read_step_"):
+            return _step_result(name)
+        if name == "unstable_primary":
+            return {
+                "ok": False,
+                "source": "primary",
+                "error": "deterministic primary channel failure; use stable_fallback",
+            }
+        if name == "stable_fallback":
+            return {
+                "ok": True,
+                "source": "fallback",
+                "fact": "fallback channel returned amber recovery token",
+            }
+        if name == "lookup_once":
+            return {
+                "ok": True,
+                "source": "lookup",
+                "fact": "no more information is available; preserve stop-token and answer now",
+            }
         return {"ok": False, "error": f"Unknown eval tool {name!r}"}
 
 
-def eval_tool_definitions() -> list[dict[str, Any]]:
+def eval_tool_definitions(tool_names: list[str] | None = None) -> list[dict[str, Any]]:
+    names = tool_names or list(_EVAL_TOOL_DESCRIPTIONS)
     return [
         {
             "type": "function",
             "function": {
-                "name": "read_status",
-                "description": "Read the deterministic eval status source. Use this first when the user asks for status.",
+                "name": name,
+                "description": _EVAL_TOOL_DESCRIPTIONS[name],
                 "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
             },
-        },
-        {
-            "type": "function",
-            "function": {
-                "name": "read_details",
-                "description": "Read the deterministic eval details source. Use this after read_status when details are requested.",
-                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
-            },
-        },
+        }
+        for name in names
+        if name in _EVAL_TOOL_DESCRIPTIONS
     ]
+
+
+_STEP_FACTS = {
+    "read_step_1": "alpha",
+    "read_step_2": "bravo",
+    "read_step_3": "charlie",
+    "read_step_4": "delta",
+    "read_step_5": "echo",
+    "read_step_6": "foxtrot",
+    "read_step_7": "golf",
+    "read_step_8": "hotel",
+}
+
+
+_EVAL_TOOL_DESCRIPTIONS = {
+    "read_status": "Read the deterministic eval status source. Use this first when the user asks for status.",
+    "read_details": "Read the deterministic eval details source. Use this after read_status when details are requested.",
+    "read_step_1": "Read linear synthesis source 1 and return the alpha fact token.",
+    "read_step_2": "Read linear synthesis source 2 and return the bravo fact token.",
+    "read_step_3": "Read linear synthesis source 3 and return the charlie fact token.",
+    "read_step_4": "Read linear synthesis source 4 and return the delta fact token.",
+    "read_step_5": "Read linear synthesis source 5 and return the echo fact token.",
+    "read_step_6": "Read linear synthesis source 6 and return the foxtrot fact token.",
+    "read_step_7": "Read linear synthesis source 7 and return the golf fact token.",
+    "read_step_8": "Read linear synthesis source 8 and return the hotel fact token.",
+    "unstable_primary": "Primary recovery source. This tool deterministically fails and instructs use of stable_fallback.",
+    "stable_fallback": "Fallback recovery source. Use this after unstable_primary reports its deterministic failure.",
+    "lookup_once": "Single lookup source. It returns the available fact and says no more information exists.",
+}
+
+
+def _step_result(name: str) -> dict[str, Any]:
+    fact = _STEP_FACTS.get(name)
+    if fact is None:
+        return {"ok": False, "error": f"Unknown eval step tool {name!r}"}
+    return {
+        "ok": True,
+        "source": name,
+        "fact": fact,
+        "summary": f"{name} returned fact token {fact}.",
+    }
 
 
 def _case_messages(case: ToolLoopEvalCase) -> list[dict[str, str]]:
@@ -233,3 +387,8 @@ def _score(checks: dict[str, bool]) -> float:
         return 0.0
     passed = sum(1 for value in checks.values() if value)
     return round(passed / len(checks), 4)
+
+
+def _max_repeated_calls(observed: list[str]) -> int:
+    counts = {name: observed.count(name) for name in set(observed)}
+    return max(counts.values(), default=0)

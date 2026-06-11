@@ -36,6 +36,62 @@ def _config(tmp_path):
     )
 
 
+class ScriptedToolProxy:
+    def __init__(self, tool_names: list[str], final_answer: str):
+        self.tool_names = tool_names
+        self.final_answer = final_answer
+        self.payloads = []
+
+    async def chat_with_meta(self, model_name, payload):
+        self.payloads.append(payload)
+        index = len(self.payloads) - 1
+        if index < len(self.tool_names):
+            name = self.tool_names[index]
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": f"call-{index}",
+                                    "type": "function",
+                                    "function": {"name": name, "arguments": "{}"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": self.final_answer,
+                    }
+                }
+            ]
+        }, {"route": "local"}
+
+
+def test_default_tool_loop_eval_cases_include_harder_presets():
+    cases = {case.id: case for case in default_tool_loop_eval_cases()}
+
+    assert [
+        "two-step-tool-synthesis",
+        "avoid-unneeded-tools",
+        "linear-4-step-synthesis",
+        "linear-8-step-synthesis",
+        "tool-error-recovery",
+        "avoid-loop-trap",
+    ] == list(cases)
+    assert cases["linear-8-step-synthesis"].max_iterations >= 9
+    assert cases["tool-error-recovery"].expected_error_tools == ["unstable_primary"]
+    assert cases["avoid-loop-trap"].max_repeated_tool_calls == 1
+
+
 @pytest.mark.asyncio
 async def test_tool_loop_eval_scores_expected_tool_order_and_final_answer(tmp_path):
     class Proxy:
@@ -114,6 +170,54 @@ async def test_tool_loop_eval_scores_expected_tool_order_and_final_answer(tmp_pa
         "no_tool_errors": True,
     }
     assert result["final_answer"] == "Combined answer: alpha status and beta details."
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_honors_case_max_iterations_for_long_presets(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "linear-8-step-synthesis")
+    proxy = ScriptedToolProxy(
+        case.expected_tool_sequence,
+        "Final synthesis: alpha bravo charlie delta echo foxtrot golf hotel.",
+    )
+    config = _config(tmp_path)
+    config.agent_tools.max_iterations = 4
+
+    result = await ToolLoopEvaluator(config, proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["tool_call_count"] == 8
+    assert result["iteration_count"] == 9
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_allows_expected_tool_error_recovery(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "tool-error-recovery")
+    proxy = ScriptedToolProxy(
+        ["unstable_primary", "stable_fallback"],
+        "Recovered with the fallback channel: amber recovery token.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["no_tool_errors"] is True
+    assert result["tool_results"][0]["ok"] is False
+    assert result["tool_results"][0]["expected_error"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_penalizes_repeated_calls_in_loop_trap(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "avoid-loop-trap")
+    proxy = ScriptedToolProxy(
+        ["lookup_once", "lookup_once"],
+        "There is no more information, so I will stop with the available stop-token fact.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["no_repeated_calls"] is False
+    assert result["checks"]["completed"] is True
 
 
 @pytest.mark.asyncio
