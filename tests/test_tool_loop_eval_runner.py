@@ -108,6 +108,15 @@ def test_validate_config_allows_controller_mode_with_tools(tmp_path):
     runner.validate_config(config)
 
 
+def test_validate_config_allows_controller_node_target_without_controller_tools(tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    config = load_config({"mode": "controller", "log_dir": str(tmp_path)})
+
+    runner.validate_config(config, target="node:mac-mini")
+
+
 def test_validate_config_rejects_node_target_with_agent_mode(tmp_path):
     runner = _load_runner()
     from llama_manager.core.config import load_config
@@ -178,3 +187,47 @@ def test_run_suites_records_model_routing_failure(monkeypatch, tmp_path):
     assert suites[0]["model"] == "gpt-oss-20b"
     assert "mac-mini" in suites[0]["error"]
     assert suites[0]["cases"][0]["status"] == "failed"
+
+
+def test_run_suites_with_controller_node_target_calls_agent_eval_endpoint(monkeypatch, tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.agent_tools.evals import ToolLoopEvalCase
+    from llama_manager.core.config import load_config
+
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path),
+            "nodes": {"mac-mini": {"url": "http://mac-mini", "api_key": "node-secret"}},
+        }
+    )
+    calls = []
+
+    class FakeNodeRegistry:
+        def __init__(self, config):
+            pass
+
+        async def request_node(self, node, method, path, json_body=None):
+            calls.append((node, method, path, json_body))
+            return {"model": "gpt-oss-20b", "status": "passed", "case_count": 1, "passed_count": 1, "failed_count": 0, "average_score": 1.0, "cases": []}
+
+    monkeypatch.setattr(runner, "NodeRegistry", FakeNodeRegistry)
+
+    suites = asyncio.run(
+        runner.run_suites(
+            config,
+            ["gpt-oss-20b"],
+            [ToolLoopEvalCase(id="avoid-unneeded-tools", prompt="hi")],
+            target="node:mac-mini",
+        )
+    )
+
+    assert suites[0]["status"] == "passed"
+    assert calls == [
+        (
+            "mac-mini",
+            "POST",
+            "/lm-api/v1/runtime/tool-loop-evals/run",
+            {"model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
+        )
+    ]

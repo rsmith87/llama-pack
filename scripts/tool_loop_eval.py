@@ -89,13 +89,17 @@ def validate_config(config: Any, target: str = "auto") -> None:
             "Tool-loop evals with --target node:<name> require a controller-mode config "
             "that defines the target node. Pass --config /path/to/controller-config.yaml."
         )
+    if str(target or "auto").startswith("node:") and config.mode == "controller":
+        return
     if not config.agent_tools.enabled:
         raise SystemExit("agent_tools.enabled must be true for tool-loop evals.")
     if not config.agent_tools.tools:
         raise SystemExit("At least one agent tool must be configured for tool-loop evals.")
 
 
-async def run_suites(config: Any, models: list[str], cases: list[Any]) -> list[dict[str, Any]]:
+async def run_suites(config: Any, models: list[str], cases: list[Any], target: str = "auto") -> list[dict[str, Any]]:
+    if config.mode == "controller" and str(target or "auto").startswith("node:"):
+        return await run_node_suites(config, models, cases, str(target).split(":", 1)[1])
     proxy = build_proxy(config)
     evaluator = ToolLoopEvaluator(config, proxy)
     suites = []
@@ -103,40 +107,64 @@ async def run_suites(config: Any, models: list[str], cases: list[Any]) -> list[d
         try:
             suites.append(await evaluator.run_suite(model, cases))
         except Exception as exc:
-            suites.append(
-                {
-                    "model": model,
-                    "status": "failed",
-                    "case_count": len(cases),
-                    "passed_count": 0,
-                    "failed_count": len(cases),
-                    "average_score": 0.0,
-                    "error": str(exc),
-                    "cases": [
-                        {
-                            "case_id": case.id,
-                            "model": model,
-                            "status": "failed",
-                            "score": 0.0,
-                            "checks": {
-                                "completed": False,
-                                "expected_tool_sequence": False,
-                                "expected_final_substrings": False,
-                                "no_tool_errors": False,
-                            },
-                            "error": str(exc),
-                            "iteration_count": 0,
-                            "tool_call_count": 0,
-                            "observed_tool_sequence": [],
-                            "expected_tool_sequence": list(case.expected_tool_sequence),
-                            "tool_results": [],
-                            "final_answer": "",
-                        }
-                        for case in cases
-                    ],
-                }
-            )
+            suites.append(_failed_suite(model, cases, str(exc)))
     return suites
+
+
+async def run_node_suites(config: Any, models: list[str], cases: list[Any], node_name: str) -> list[dict[str, Any]]:
+    node_name = node_name.strip()
+    if not node_name:
+        raise SystemExit("--target node:<name> requires a node name")
+    registry = NodeRegistry(config)
+    suites = []
+    case_ids = [case.id for case in cases]
+    for model in models:
+        try:
+            suites.append(
+                await registry.request_node(
+                    node_name,
+                    "POST",
+                    "/lm-api/v1/runtime/tool-loop-evals/run",
+                    {"model": model, "case_ids": case_ids},
+                )
+            )
+        except Exception as exc:
+            suites.append(_failed_suite(model, cases, str(exc)))
+    return suites
+
+
+def _failed_suite(model: str, cases: list[Any], error: str) -> dict[str, Any]:
+    return {
+        "model": model,
+        "status": "failed",
+        "case_count": len(cases),
+        "passed_count": 0,
+        "failed_count": len(cases),
+        "average_score": 0.0,
+        "error": error,
+        "cases": [
+            {
+                "case_id": case.id,
+                "model": model,
+                "status": "failed",
+                "score": 0.0,
+                "checks": {
+                    "completed": False,
+                    "expected_tool_sequence": False,
+                    "expected_final_substrings": False,
+                    "no_tool_errors": False,
+                },
+                "error": error,
+                "iteration_count": 0,
+                "tool_call_count": 0,
+                "observed_tool_sequence": [],
+                "expected_tool_sequence": list(case.expected_tool_sequence),
+                "tool_results": [],
+                "final_answer": "",
+            }
+            for case in cases
+        ],
+    }
 
 
 def write_outputs(suites: list[dict[str, Any]], *, output_jsonl: Path, latest_json: Path) -> dict[str, Any]:
@@ -162,7 +190,7 @@ async def async_main(argv: list[str]) -> int:
     config = load_config(args.config)
     validate_config(config, args.target)
     cases = cases_with_target(select_cases(args.case), args.target)
-    suites = await run_suites(config, args.model, cases)
+    suites = await run_suites(config, args.model, cases, target=args.target)
     output_jsonl, latest_json = resolve_output_paths(args, config.log_dir)
     latest = write_outputs(suites, output_jsonl=output_jsonl, latest_json=latest_json)
     print(json.dumps(latest, indent=2, sort_keys=True))

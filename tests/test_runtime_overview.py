@@ -128,6 +128,160 @@ def test_tool_loop_eval_latest_returns_runner_summary(tmp_path):
     assert body["suites"][0]["average_score"] == 1.0
 
 
+def test_controller_tool_loop_eval_node_chat_forwards_to_agent_openai_tool_runtime(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    calls = []
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        calls.append((method, url, api_key, verify_tls, json_body))
+        return {"choices": [{"message": {"role": "assistant", "content": "ok"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"mac-mini": {"url": "http://mac-mini", "api_key": "node-secret", "verify_tls": False}},
+            }
+        ),
+        controller_request=fake_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/node-chat",
+        json={
+            "node": "mac-mini",
+            "model": "gpt-oss-20b",
+            "payload": {
+                "messages": [{"role": "user", "content": "hi"}],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "read_status",
+                            "description": "Read status.",
+                            "parameters": {"type": "object", "properties": {}},
+                        },
+                    }
+                ],
+            },
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "ok"
+    assert calls == [
+        (
+            "POST",
+            "http://mac-mini/v1/chat/completions",
+            "node-secret",
+            False,
+            {
+                "model": "gpt-oss-20b",
+                "messages": [{"role": "user", "content": "hi"}],
+                "tools": [
+                    {
+                        "type": "function",
+                        "function": {
+                            "name": "read_status",
+                            "description": "Read status.",
+                            "parameters": {"type": "object", "properties": {}},
+                        },
+                    }
+                ],
+                "tool_runtime": "agent",
+                "stream": False,
+            },
+        )
+    ]
+
+
+def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_chat_request(url, payload):
+        return {"choices": [{"message": {"role": "assistant", "content": "tool loop ready"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {
+                    "enabled": True,
+                    "tools": {
+                        "read_status": {
+                            "type": "shell",
+                            "description": "Read status.",
+                            "command": ["printf", "ok"],
+                        }
+                    },
+                },
+            }
+        ),
+        process_manager=type("PM", (), {"status": lambda self, name: {"running": True, "port": 8081}})(),
+        chat_request=fake_chat_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        json={"model": "qwen", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["model"] == "qwen"
+    assert body["status"] == "passed"
+    assert body["cases"][0]["case_id"] == "avoid-unneeded-tools"
+
+
+def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    calls = []
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        calls.append((method, url, api_key, verify_tls, json_body))
+        return {"model": "gpt-oss-20b", "status": "passed", "case_count": 1, "passed_count": 1, "failed_count": 0, "average_score": 1.0, "cases": []}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"mac-mini": {"url": "http://mac-mini", "api_key": "node-secret", "verify_tls": False}},
+            }
+        ),
+        controller_request=fake_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/node-run",
+        json={"node": "mac-mini", "model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "passed"
+    assert calls == [
+        (
+            "POST",
+            "http://mac-mini/lm-api/v1/runtime/tool-loop-evals/run",
+            "node-secret",
+            False,
+            {"model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
+        )
+    ]
+
+
 def test_runtime_overview_reports_controller_runtime_state(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     async def fake_request(method, url, api_key, verify_tls, json_body=None):
@@ -206,6 +360,10 @@ def test_runtime_overview_reports_controller_runtime_state(tmp_path):
             "reachable": True,
             "tools_enabled": True,
             "tool_count": 2,
+            "tools": [
+                {"name": "repo_status", "type": "git_status", "description": "status"},
+                {"name": "read_project_file", "type": "file_read_dynamic", "description": "read"},
+            ],
             "memory_configured": False,
             "memory_available": False,
             "worker_enabled": True,

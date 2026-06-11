@@ -1,13 +1,31 @@
 from __future__ import annotations
 
 import json
+from typing import Any
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field
 
+from llama_manager.core.agent_tools.evals import ToolLoopEvaluator, default_tool_loop_eval_cases
 from llama_manager.core.runtime.route_preview import RoutePreviewRequest, RoutePreviewService
 
 
 router = APIRouter(prefix="/runtime")
+
+
+class ToolLoopNodeChatRequest(BaseModel):
+    node: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    payload: dict[str, Any] = Field(default_factory=dict)
+
+
+class ToolLoopRunRequest(BaseModel):
+    model: str = Field(min_length=1)
+    case_ids: list[str] | None = None
+
+
+class ToolLoopNodeRunRequest(ToolLoopRunRequest):
+    node: str = Field(min_length=1)
 
 
 @router.get("/overview")
@@ -86,6 +104,63 @@ async def tool_loop_eval_latest(request: Request) -> dict[str, object]:
     }
 
 
+@router.post("/tool-loop-evals/node-chat")
+async def tool_loop_eval_node_chat(body: ToolLoopNodeChatRequest, request: Request) -> dict[str, object]:
+    config = request.app.state.config
+    if config.mode != "controller":
+        raise HTTPException(status_code=400, detail="tool-loop node chat is only available in controller mode")
+    node_registry = getattr(request.app.state, "node_registry", None)
+    if node_registry is None:
+        raise HTTPException(status_code=503, detail="node registry is not available")
+    try:
+        node = node_registry.get_node_config(body.node)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    node_url = f"{node.url.rstrip('/')}/v1/chat/completions"
+    payload = {
+        **body.payload,
+        "model": body.model,
+        "tool_runtime": "agent",
+        "stream": False,
+    }
+    return await node_registry._request("POST", node_url, node.api_key, node.verify_tls, payload)
+
+
+@router.post("/tool-loop-evals/run")
+async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict[str, object]:
+    config = request.app.state.config
+    if config.mode != "agent":
+        raise HTTPException(status_code=400, detail="tool-loop eval run is only available in agent mode")
+    if not config.agent_tools.enabled:
+        raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
+    cases = _select_tool_loop_cases(body.case_ids)
+    evaluator = ToolLoopEvaluator(
+        config,
+        request.app.state.chat_scheduler,
+        executor=None,
+    )
+    return await evaluator.run_suite(body.model, cases)
+
+
+@router.post("/tool-loop-evals/node-run")
+async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request) -> dict[str, object]:
+    config = request.app.state.config
+    if config.mode != "controller":
+        raise HTTPException(status_code=400, detail="tool-loop node eval run is only available in controller mode")
+    node_registry = getattr(request.app.state, "node_registry", None)
+    if node_registry is None:
+        raise HTTPException(status_code=503, detail="node registry is not available")
+    try:
+        node = node_registry.get_node_config(body.node)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    node_url = f"{node.url.rstrip('/')}/lm-api/v1/runtime/tool-loop-evals/run"
+    payload: dict[str, object] = {"model": body.model}
+    if body.case_ids is not None:
+        payload["case_ids"] = body.case_ids
+    return await node_registry._request("POST", node_url, node.api_key, node.verify_tls, payload)
+
+
 def _agent_tools_summary(config) -> dict[str, object]:
     return {
         "enabled": bool(config.agent_tools.enabled),
@@ -100,6 +175,17 @@ def _agent_tools_summary(config) -> dict[str, object]:
         ],
         "max_iterations": config.agent_tools.max_iterations,
     }
+
+
+def _select_tool_loop_cases(case_ids: list[str] | None):
+    cases = default_tool_loop_eval_cases()
+    if not case_ids:
+        return cases
+    by_id = {case.id: case for case in cases}
+    missing = sorted(set(case_ids) - set(by_id))
+    if missing:
+        raise HTTPException(status_code=400, detail=f"Unknown tool-loop eval case(s): {', '.join(missing)}")
+    return [by_id[case_id] for case_id in case_ids]
 
 
 def _jobs_summary(mode: str, orchestrator) -> dict[str, object]:
@@ -200,6 +286,7 @@ async def _node_runtimes_summary(mode: str, node_registry) -> dict[str, object]:
                     "reachable": True,
                     "tools_enabled": bool(agent_tools.get("enabled")) if isinstance(agent_tools, dict) else False,
                     "tool_count": int(agent_tools.get("tool_count") or 0) if isinstance(agent_tools, dict) else 0,
+                    "tools": agent_tools.get("tools") if isinstance(agent_tools, dict) and isinstance(agent_tools.get("tools"), list) else [],
                     "memory_configured": bool(memory.get("configured")) if isinstance(memory, dict) else False,
                     "memory_available": bool(memory.get("available")) if isinstance(memory, dict) else False,
                     "worker_enabled": bool(worker.get("enabled")) if isinstance(worker, dict) else False,
