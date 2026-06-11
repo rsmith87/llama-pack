@@ -280,3 +280,79 @@ it("submits a tool-loop eval run from the page", async () => {
   });
   expect(await screen.findByText("tool loop ready")).toBeInTheDocument();
 });
+
+it("exposes real-world scenario presets in the run form", async () => {
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/nodes/models") {
+      return Promise.resolve(okJson({
+        nodes: [
+          {
+            name: "mac-mini",
+            reachable: true,
+            models: [{ name: "gpt-oss-20b", status: "running" }],
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") return Promise.resolve(okJson({ runs: [] }));
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  const preset = await screen.findByLabelText("Preset");
+  expect(within(preset).getByRole("group", { name: "Synthetic presets" })).toBeInTheDocument();
+  expect(within(preset).getByRole("group", { name: "Real-world scenarios" })).toBeInTheDocument();
+  expect(within(preset).getByRole("option", { name: "Technical design doc draft" })).toHaveValue("technical-design-doc-draft");
+});
+
+it("updates the model field when the selected node changes", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/nodes/models") {
+      return Promise.resolve(okJson({
+        nodes: [
+          {
+            name: "mac-mini",
+            reachable: true,
+            models: [{ name: "gemma-4-E4B-it-OBLITERATED-Q8_0", status: "running" }],
+          },
+          {
+            name: "linux-2080ti",
+            reachable: true,
+            models: { models: [{ name: "gpt-oss-20b-mxfp4:default", status: "running" }] },
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") return Promise.resolve(okJson({ runs: [] }));
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  expect(await screen.findByDisplayValue("gemma-4-E4B-it-OBLITERATED-Q8_0")).toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText("Node"), "linux-2080ti");
+
+  expect(screen.getByDisplayValue("gpt-oss-20b-mxfp4:default")).toBeInTheDocument();
+});

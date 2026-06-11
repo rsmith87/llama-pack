@@ -19,18 +19,29 @@ import type {
   ToolLoopEvalSuite,
 } from "../../types/index";
 
-const CASE_PRESETS = [
-  { id: "all", label: "All presets" },
-  { id: "two-step-tool-synthesis", label: "Two-step synthesis" },
-  { id: "avoid-unneeded-tools", label: "Avoid unneeded tools" },
-  { id: "linear-4-step-synthesis", label: "Linear 4-step synthesis" },
-  { id: "linear-8-step-synthesis", label: "Linear 8-step synthesis" },
-  { id: "tool-error-recovery", label: "Tool-error recovery" },
-  { id: "avoid-loop-trap", label: "Avoid loop trap" },
-  { id: "branching-decision", label: "Branching decision" },
-  { id: "argument-repair", label: "Argument repair" },
-  { id: "parallel-fact-gathering", label: "Parallel fact gathering" },
-  { id: "subagent-delegation-simulation", label: "Subagent delegation simulation" },
+const CASE_PRESET_GROUPS = [
+  {
+    label: "Synthetic presets",
+    presets: [
+      { id: "all", label: "All presets" },
+      { id: "two-step-tool-synthesis", label: "Two-step synthesis" },
+      { id: "avoid-unneeded-tools", label: "Avoid unneeded tools" },
+      { id: "linear-4-step-synthesis", label: "Linear 4-step synthesis" },
+      { id: "linear-8-step-synthesis", label: "Linear 8-step synthesis" },
+      { id: "tool-error-recovery", label: "Tool-error recovery" },
+      { id: "avoid-loop-trap", label: "Avoid loop trap" },
+      { id: "branching-decision", label: "Branching decision" },
+      { id: "argument-repair", label: "Argument repair" },
+      { id: "parallel-fact-gathering", label: "Parallel fact gathering" },
+      { id: "subagent-delegation-simulation", label: "Subagent delegation simulation" },
+    ],
+  },
+  {
+    label: "Real-world scenarios",
+    presets: [
+      { id: "technical-design-doc-draft", label: "Technical design doc draft" },
+    ],
+  },
 ];
 
 function scorePercent(score?: number): string {
@@ -66,16 +77,23 @@ function nodeModelName(model: LocalModel): string {
   return String(model.name || model.id || model.model || "");
 }
 
-function asNodeArray(payload: unknown): Array<{ name?: string; reachable?: boolean; models?: LocalModel[] }> {
-  if (Array.isArray(payload)) return payload as Array<{ name?: string; reachable?: boolean; models?: LocalModel[] }>;
-  return (payload as { nodes?: Array<{ name?: string; reachable?: boolean; models?: LocalModel[] }> } | null)?.nodes || [];
+function asNodeArray(payload: unknown): Array<{ name?: string; reachable?: boolean; models?: unknown }> {
+  if (Array.isArray(payload)) return payload as Array<{ name?: string; reachable?: boolean; models?: unknown }>;
+  return (payload as { nodes?: Array<{ name?: string; reachable?: boolean; models?: unknown }> } | null)?.nodes || [];
+}
+
+function asModelArray(value: unknown): LocalModel[] {
+  if (Array.isArray(value)) return value as LocalModel[];
+  const nested = (value as { models?: unknown } | null)?.models;
+  return Array.isArray(nested) ? nested as LocalModel[] : [];
 }
 
 function flattenNodeModels(payload: unknown): LocalModel[] {
   return asNodeArray(payload).flatMap((node) => {
     const nodeName = String(node.name || "");
-    if (!nodeName || node.reachable === false || !Array.isArray(node.models)) return [];
-    return node.models.map((model) => ({ ...(model as LocalModel), node: nodeName }));
+    const models = asModelArray(node.models);
+    if (!nodeName || node.reachable === false || !models.length) return [];
+    return models.map((model) => ({ ...(model as LocalModel), node: nodeName }));
   }).filter((model) => nodeModelName(model));
 }
 
@@ -127,8 +145,8 @@ export function ToolLoopEvalsPage() {
   }, [nodeOptions, runNode]);
 
   useEffect(() => {
-    if (!runModel && modelOptions.length) setRunModel(nodeModelName(modelOptions[0]));
-  }, [modelOptions, runModel]);
+    setRunModel(modelOptions.length ? nodeModelName(modelOptions[0]) : "");
+  }, [modelOptions]);
 
   const activeSuite = useMemo(() => {
     if (selectedRun) return selectedRun;
@@ -241,7 +259,11 @@ export function ToolLoopEvalsPage() {
           </FormField>
           <FormField label="Preset">
             <select value={runPreset} onChange={(event) => setRunPreset(event.target.value)} disabled={runLoading}>
-              {CASE_PRESETS.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+              {CASE_PRESET_GROUPS.map((group) => (
+                <optgroup key={group.label} label={group.label}>
+                  {group.presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
+                </optgroup>
+              ))}
             </select>
           </FormField>
           <div className="tool-loop-run-actions">

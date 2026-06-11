@@ -13,6 +13,7 @@ from llama_manager.core.config.models import AppConfig
 class ToolLoopEvalCase:
     id: str
     prompt: str
+    category: str = "synthetic"
     system_prompt: str | None = None
     expected_tool_sequence: list[str] = field(default_factory=list)
     expected_final_substrings: list[str] = field(default_factory=list)
@@ -102,6 +103,7 @@ class ToolLoopEvaluator:
         score = _score(checks)
         return {
             "case_id": case.id,
+            "case_category": case.category,
             "model": model_name,
             "status": "passed" if score == 1.0 else "failed",
             "score": score,
@@ -304,6 +306,51 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
             max_iterations=6,
             max_repeated_tool_calls=1,
         ),
+        ToolLoopEvalCase(
+            id="technical-design-doc-draft",
+            category="real_world",
+            system_prompt=(
+                "You are drafting a concise technical design document from deterministic project sources. "
+                "Use only relevant sources, call each relevant source at most once, avoid unrelated context, "
+                "and include the required design sections in the final answer."
+            ),
+            prompt=(
+                "Create a short technical design doc for adding durable tool-loop eval history. "
+                "Inspect the design requirements, existing API contract, persistence constraints, "
+                "frontend requirements, and rollout risks. Do not inspect unrelated context."
+            ),
+            expected_tool_sequence=[
+                "read_design_requirements",
+                "inspect_existing_api_contract",
+                "inspect_persistence_constraints",
+                "inspect_frontend_requirements",
+                "read_rollout_risks",
+            ],
+            expected_final_substrings=[
+                "Problem",
+                "Proposed design",
+                "API",
+                "Persistence",
+                "UI",
+                "Risks",
+                "durable eval history",
+                "controller-triggered node runs",
+                "benchmark database",
+                "grouped real-world scenarios",
+                "avoid schema churn",
+            ],
+            eval_tools=[
+                "read_design_requirements",
+                "inspect_existing_api_contract",
+                "inspect_persistence_constraints",
+                "inspect_frontend_requirements",
+                "read_rollout_risks",
+                "lookup_unrelated_context",
+            ],
+            scoring_mode="set_membership",
+            max_iterations=8,
+            max_repeated_tool_calls=1,
+        ),
     ]
 
 
@@ -385,6 +432,43 @@ class EvalToolExecutor:
             return {"ok": True, "role": "reviewer", "finding": "risk is low"}
         if name == "ask_verifier":
             return {"ok": True, "role": "verifier", "finding": "checks pass"}
+        if name == "read_design_requirements":
+            return {
+                "ok": True,
+                "source": "requirements",
+                "problem": "durable eval history",
+                "requirement": "Persist comparable run summaries and case details for model comparisons.",
+            }
+        if name == "inspect_existing_api_contract":
+            return {
+                "ok": True,
+                "source": "api",
+                "contract": "Use controller-triggered node runs and preserve existing latest and history endpoints.",
+            }
+        if name == "inspect_persistence_constraints":
+            return {
+                "ok": True,
+                "source": "persistence",
+                "constraint": "Store results in the benchmark database without changing existing run payloads unnecessarily.",
+            }
+        if name == "inspect_frontend_requirements":
+            return {
+                "ok": True,
+                "source": "frontend",
+                "requirement": "Expose grouped real-world scenarios alongside synthetic presets in the run form.",
+            }
+        if name == "read_rollout_risks":
+            return {
+                "ok": True,
+                "source": "risks",
+                "risk": "avoid schema churn and keep old persisted runs readable.",
+            }
+        if name == "lookup_unrelated_context":
+            return {
+                "ok": True,
+                "source": "unrelated",
+                "fact": "unrelated billing migration context should not be used for this design.",
+            }
         return {"ok": False, "error": f"Unknown eval tool {name!r}"}
 
 
@@ -453,6 +537,12 @@ _EVAL_TOOL_DESCRIPTIONS = {
     "ask_executor": "Ask the executor helper for its role-specific output.",
     "ask_reviewer": "Ask the reviewer helper for its role-specific output.",
     "ask_verifier": "Ask the verifier helper for its role-specific output.",
+    "read_design_requirements": "Read the product requirements for the technical design document scenario.",
+    "inspect_existing_api_contract": "Inspect the existing API contract relevant to durable tool-loop eval history.",
+    "inspect_persistence_constraints": "Inspect persistence constraints for storing comparable eval history.",
+    "inspect_frontend_requirements": "Inspect frontend requirements for exposing real-world eval scenarios.",
+    "read_rollout_risks": "Read rollout risks that the technical design must address.",
+    "lookup_unrelated_context": "Look up unrelated project context. This is intentionally irrelevant to the design-doc scenario.",
 }
 
 

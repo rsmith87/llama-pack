@@ -9,6 +9,7 @@ export type ToolLoopEvalCheckMap = {
 
 export type ToolLoopEvalCaseResult = {
   case_id?: string;
+  case_category?: string;
   model?: string;
   status?: string;
   score?: number;

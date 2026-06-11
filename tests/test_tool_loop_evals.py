@@ -93,6 +93,7 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
         "argument-repair",
         "parallel-fact-gathering",
         "subagent-delegation-simulation",
+        "technical-design-doc-draft",
     ] == list(cases)
     assert cases["linear-8-step-synthesis"].max_iterations >= 9
     assert cases["tool-error-recovery"].expected_error_tools == ["unstable_primary"]
@@ -101,6 +102,11 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
     assert cases["argument-repair"].required_tool_arguments == {"fetch_ticket": {"ticket_id": "NX-42"}}
     assert cases["parallel-fact-gathering"].scoring_mode == "set_membership"
     assert cases["subagent-delegation-simulation"].scoring_mode == "set_membership"
+    assert cases["technical-design-doc-draft"].category == "real_world"
+    assert cases["technical-design-doc-draft"].scoring_mode == "set_membership"
+    assert cases["technical-design-doc-draft"].max_repeated_tool_calls == 1
+    assert "lookup_unrelated_context" in cases["technical-design-doc-draft"].eval_tools
+    assert "lookup_unrelated_context" not in cases["technical-design-doc-draft"].expected_tool_sequence
 
 
 @pytest.mark.asyncio
@@ -333,6 +339,58 @@ async def test_tool_loop_eval_scores_subagent_delegation_simulation(tmp_path):
     assert result["status"] == "passed"
     assert result["checks"]["expected_tool_sequence"] is True
     assert result["scoring_mode"] == "set_membership"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_real_world_design_doc_with_unordered_evidence(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "technical-design-doc-draft")
+    proxy = ScriptedToolProxy(
+        [
+            "inspect_frontend_requirements",
+            "read_design_requirements",
+            "inspect_persistence_constraints",
+            "read_rollout_risks",
+            "inspect_existing_api_contract",
+        ],
+        (
+            "Problem: durable eval history. Proposed design: persist comparable run summaries. "
+            "API: controller-triggered node runs. Persistence: benchmark database. "
+            "UI: grouped real-world scenarios. Risks: avoid schema churn."
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["case_category"] == "real_world"
+    assert result["checks"]["expected_tool_sequence"] is True
+    assert result["checks"]["no_repeated_calls"] is True
+    assert result["scoring_mode"] == "set_membership"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_penalizes_real_world_design_doc_irrelevant_tool_use(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "technical-design-doc-draft")
+    proxy = ScriptedToolProxy(
+        [
+            "read_design_requirements",
+            "inspect_existing_api_contract",
+            "inspect_persistence_constraints",
+            "inspect_frontend_requirements",
+            "read_rollout_risks",
+            "lookup_unrelated_context",
+        ],
+        (
+            "Problem: durable eval history. Proposed design: persist comparable run summaries. "
+            "API: controller-triggered node runs. Persistence: benchmark database. "
+            "UI: grouped real-world scenarios. Risks: avoid schema churn."
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["expected_tool_sequence"] is False
 
 
 @pytest.mark.asyncio
