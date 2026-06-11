@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 
+import httpx
 import pytest
 
 from llama_manager.core.agent_tools.live_evals import LiveToolLoopEvaluator, default_live_tool_loop_scenarios
@@ -148,3 +149,21 @@ async def test_live_collaborative_notes_design_penalizes_duplicate_identical_too
     result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
 
     assert result["checks"]["no_repeated_calls"] is False
+
+
+@pytest.mark.asyncio
+async def test_live_collaborative_notes_design_returns_failed_case_when_model_call_errors(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+
+    class FailingProxy:
+        async def chat_with_meta(self, model_name, payload):
+            request = httpx.Request("POST", "http://127.0.0.1:8091/v1/chat/completions")
+            response = httpx.Response(500, request=request, text="llama-server failed")
+            raise httpx.HTTPStatusError("server error", request=request, response=response)
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), FailingProxy()).run_case("gpt-oss-20b", scenario)
+
+    assert result["status"] == "failed"
+    assert result["score"] == 0.0
+    assert result["checks"]["completed"] is False
+    assert result["error"] == "model chat request failed with HTTP 500: llama-server failed"

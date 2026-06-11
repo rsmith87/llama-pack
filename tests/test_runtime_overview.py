@@ -367,6 +367,42 @@ def test_agent_tool_loop_eval_run_executes_live_workspace_scenario(tmp_path):
     assert body["cases"][0]["artifacts"][0]["path"] == "docs/notes-app-design.md"
 
 
+def test_agent_tool_loop_eval_run_returns_failed_live_case_when_model_server_errors(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_chat_request(url, payload):
+        request = httpx.Request("POST", url)
+        response = httpx.Response(500, request=request, text="llama-server failed")
+        raise httpx.HTTPStatusError("server error", request=request, response=response)
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True, "tools": {}},
+            }
+        ),
+        process_manager=type("PM", (), {"status": lambda self, name: {"running": True, "port": 8081}})(),
+        chat_request=fake_chat_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        json={"model": "qwen", "case_ids": ["live-collaborative-notes-design"]},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "failed"
+    assert body["cases"][0]["status"] == "failed"
+    assert body["cases"][0]["error"] == "model chat request failed with HTTP 500: llama-server failed"
+
+
 def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     calls = []

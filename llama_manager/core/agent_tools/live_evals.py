@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+import httpx
+
 from llama_manager.core.agent_tools.executor import ToolExecutor
 from llama_manager.core.agent_tools.registry import ToolRegistry
 from llama_manager.core.config.models import AgentToolDefinitionConfig, AgentToolsConfig, AppConfig
@@ -55,7 +57,11 @@ class LiveToolLoopEvaluator:
                     "messages": messages,
                     "tools": tool_defs,
                 }
-                response, _meta = await self.proxy.chat_with_meta(model_name, payload)
+                try:
+                    response, _meta = await self.proxy.chat_with_meta(model_name, payload)
+                except Exception as exc:
+                    error = _chat_error_message(exc)
+                    break
                 message = _assistant_message(response)
                 tool_calls = _tool_calls(message)
                 if not tool_calls:
@@ -96,6 +102,34 @@ class LiveToolLoopEvaluator:
                     )
             else:
                 error = "live tool loop reached max_iterations before final assistant response"
+
+            if error and not tool_results and not final_answer:
+                return {
+                    "case_id": scenario.id,
+                    "case_category": "live_workspace",
+                    "model": model_name,
+                    "status": "failed",
+                    "score": 0.0,
+                    "checks": {
+                        "completed": False,
+                        "expected_tool_sequence": False,
+                        "expected_final_substrings": False,
+                        "no_tool_errors": False,
+                        "no_repeated_calls": False,
+                        "expected_artifacts": False,
+                        "expected_artifact_substrings": False,
+                        "no_forbidden_artifact_substrings": False,
+                    },
+                    "error": error,
+                    "iteration_count": iteration_count,
+                    "tool_call_count": 0,
+                    "observed_tool_sequence": [],
+                    "expected_tool_sequence": list(scenario.expected_tool_sequence),
+                    "scoring_mode": "set_membership",
+                    "tool_results": [],
+                    "final_answer": "",
+                    "artifacts": _artifact_payloads(workspace, scenario.expected_artifacts),
+                }
 
             artifact_checks = _artifact_checks(workspace, scenario)
             checks = {
@@ -348,6 +382,14 @@ def _normalize_match_text(text: str) -> str:
         .replace("\u2014", "-")
         .replace("\u2212", "-")
     )
+
+
+def _chat_error_message(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        text = exc.response.text[:500] if exc.response is not None else ""
+        suffix = f": {text}" if text else ""
+        return f"model chat request failed with HTTP {exc.response.status_code}{suffix}"
+    return f"model chat request failed: {exc}"
 
 
 def _max_repeated_call_signatures(tool_results: list[dict[str, Any]]) -> int:
