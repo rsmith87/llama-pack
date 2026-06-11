@@ -20,6 +20,8 @@ from llama_manager.core.persistence.models.app_state import (
     BenchmarkDefinitionOrm,
     BenchmarkRunOrm,
     BenchmarkRunSampleOrm,
+    ToolLoopEvalCaseOrm,
+    ToolLoopEvalRunOrm,
 )
 
 _DEFAULT_DEFINITIONS = [
@@ -126,7 +128,14 @@ def _compute_aggregate(samples: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 class BenchmarkStoreOrm:
-    _REQUIRED_TABLES = {"benchmark_definitions", "benchmark_runs", "benchmark_run_samples", "alembic_version"}
+    _REQUIRED_TABLES = {
+        "benchmark_definitions",
+        "benchmark_runs",
+        "benchmark_run_samples",
+        "tool_loop_eval_runs",
+        "tool_loop_eval_cases",
+        "alembic_version",
+    }
 
     def __init__(self, db_path: Path | None = None, db_url: str | None = None):
         if db_url is None:
@@ -372,6 +381,78 @@ class BenchmarkStoreOrm:
             ).scalars().all()
         return [_sample_to_dict(r) for r in rows]
 
+    # ------------------------------------------------------------------
+    # Tool-loop eval runs
+    # ------------------------------------------------------------------
+
+    def create_tool_loop_eval_run(
+        self,
+        *,
+        generated_at: str,
+        target_selector: str,
+        target_node: str | None,
+        suite: dict[str, Any],
+    ) -> dict[str, Any]:
+        now = datetime.now(UTC).isoformat()
+        run_id = str(uuid.uuid4())
+        row = ToolLoopEvalRunOrm(
+            id=run_id,
+            generated_at=generated_at,
+            model=str(suite.get("model") or ""),
+            target_selector=target_selector,
+            target_node=target_node,
+            status=str(suite.get("status") or "failed"),
+            average_score=float(suite.get("average_score") or 0.0),
+            case_count=int(suite.get("case_count") or len(suite.get("cases") or [])),
+            passed_count=int(suite.get("passed_count") or 0),
+            failed_count=int(suite.get("failed_count") or 0),
+            error_detail=str(suite.get("error") or "") or None,
+            created_at=now,
+        )
+        case_rows = [
+            _tool_loop_case_row(run_id, index, case)
+            for index, case in enumerate(suite.get("cases") or [])
+            if isinstance(case, dict)
+        ]
+        with session_scope(self.session_factory) as session:
+            session.add(row)
+            for case_row in case_rows:
+                session.add(case_row)
+        return _tool_loop_run_to_dict(row)
+
+    def list_tool_loop_eval_runs(
+        self,
+        *,
+        model: str | None = None,
+        status: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        with session_scope(self.session_factory) as session:
+            q = select(ToolLoopEvalRunOrm).order_by(ToolLoopEvalRunOrm.generated_at.desc())
+            if model is not None:
+                q = q.where(ToolLoopEvalRunOrm.model == model)
+            if status is not None:
+                q = q.where(ToolLoopEvalRunOrm.status == status)
+            q = q.limit(limit)
+            rows = session.execute(q).scalars().all()
+        return [_tool_loop_run_to_dict(row) for row in rows]
+
+    def get_tool_loop_eval_run(self, run_id: str) -> dict[str, Any] | None:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(ToolLoopEvalRunOrm).where(ToolLoopEvalRunOrm.id == run_id)
+            ).scalar_one_or_none()
+            if row is None:
+                return None
+            result = _tool_loop_run_to_dict(row)
+            cases = session.execute(
+                select(ToolLoopEvalCaseOrm)
+                .where(ToolLoopEvalCaseOrm.run_id == run_id)
+                .order_by(ToolLoopEvalCaseOrm.case_index)
+            ).scalars().all()
+        result["cases"] = [_tool_loop_case_to_dict(case) for case in cases]
+        return result
+
 
 # ------------------------------------------------------------------
 # Serializers
@@ -427,4 +508,61 @@ def _sample_to_dict(row: BenchmarkRunSampleOrm) -> dict[str, Any]:
         "response_excerpt": row.response_excerpt,
         "error_detail": row.error_detail,
         "created_at": row.created_at,
+    }
+
+
+def _tool_loop_case_row(run_id: str, case_index: int, case: dict[str, Any]) -> ToolLoopEvalCaseOrm:
+    return ToolLoopEvalCaseOrm(
+        id=str(uuid.uuid4()),
+        run_id=run_id,
+        case_index=case_index,
+        case_id=str(case.get("case_id") or ""),
+        status=str(case.get("status") or "failed"),
+        score=float(case.get("score") or 0.0),
+        checks_json=json.dumps(case.get("checks") or {}),
+        error_detail=str(case.get("error") or "") or None,
+        iteration_count=int(case.get("iteration_count") or 0),
+        tool_call_count=int(case.get("tool_call_count") or 0),
+        observed_tool_sequence_json=json.dumps(case.get("observed_tool_sequence") or []),
+        expected_tool_sequence_json=json.dumps(case.get("expected_tool_sequence") or []),
+        scoring_mode=case.get("scoring_mode"),
+        tool_results_json=json.dumps(case.get("tool_results") or []),
+        final_answer=str(case.get("final_answer") or ""),
+    )
+
+
+def _tool_loop_run_to_dict(row: ToolLoopEvalRunOrm) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "generated_at": row.generated_at,
+        "model": row.model,
+        "target_selector": row.target_selector,
+        "target_node": row.target_node,
+        "status": row.status,
+        "average_score": row.average_score,
+        "case_count": row.case_count,
+        "passed_count": row.passed_count,
+        "failed_count": row.failed_count,
+        "error": row.error_detail,
+        "created_at": row.created_at,
+    }
+
+
+def _tool_loop_case_to_dict(row: ToolLoopEvalCaseOrm) -> dict[str, Any]:
+    return {
+        "id": row.id,
+        "run_id": row.run_id,
+        "case_index": row.case_index,
+        "case_id": row.case_id,
+        "status": row.status,
+        "score": row.score,
+        "checks": json.loads(row.checks_json),
+        "error": row.error_detail or "",
+        "iteration_count": row.iteration_count,
+        "tool_call_count": row.tool_call_count,
+        "observed_tool_sequence": json.loads(row.observed_tool_sequence_json),
+        "expected_tool_sequence": json.loads(row.expected_tool_sequence_json),
+        "scoring_mode": row.scoring_mode,
+        "tool_results": json.loads(row.tool_results_json),
+        "final_answer": row.final_answer,
     }

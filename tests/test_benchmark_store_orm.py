@@ -178,6 +178,110 @@ class TestRuns:
         assert fetched["samples"][0]["ttft_ms"] == pytest.approx(50.0)
 
 
+class TestToolLoopEvalRuns:
+    def test_persist_and_fetch_tool_loop_eval_run(self, store):
+        summary = {
+            "generated_at": "2026-06-11T04:00:00+00:00",
+            "target_selector": "node:linux-2080ti",
+            "target_node": "linux-2080ti",
+            "suite": {
+                "model": "gpt-oss-20b-mxfp4:default",
+                "status": "passed",
+                "case_count": 2,
+                "passed_count": 2,
+                "failed_count": 0,
+                "average_score": 1.0,
+                "cases": [
+                    {
+                        "case_id": "two-step-tool-synthesis",
+                        "model": "gpt-oss-20b-mxfp4:default",
+                        "status": "passed",
+                        "score": 1.0,
+                        "checks": {"completed": True},
+                        "error": "",
+                        "iteration_count": 3,
+                        "tool_call_count": 2,
+                        "observed_tool_sequence": ["read_status", "read_details"],
+                        "expected_tool_sequence": ["read_status", "read_details"],
+                        "scoring_mode": "strict_sequence",
+                        "tool_results": [{"tool_name": "read_status", "ok": True}],
+                        "final_answer": "green calibration window",
+                    },
+                    {
+                        "case_id": "avoid-unneeded-tools",
+                        "model": "gpt-oss-20b-mxfp4:default",
+                        "status": "passed",
+                        "score": 1.0,
+                        "checks": {"completed": True},
+                        "error": "",
+                        "iteration_count": 1,
+                        "tool_call_count": 0,
+                        "observed_tool_sequence": [],
+                        "expected_tool_sequence": [],
+                        "scoring_mode": "strict_sequence",
+                        "tool_results": [],
+                        "final_answer": "tool loop ready",
+                    },
+                ],
+            },
+        }
+
+        run = store.create_tool_loop_eval_run(**summary)
+
+        assert run["id"]
+        assert run["model"] == "gpt-oss-20b-mxfp4:default"
+        assert run["target_selector"] == "node:linux-2080ti"
+        assert run["target_node"] == "linux-2080ti"
+        assert run["status"] == "passed"
+        assert run["average_score"] == pytest.approx(1.0)
+        assert run["case_count"] == 2
+        assert run["passed_count"] == 2
+        assert run["failed_count"] == 0
+
+        listed = store.list_tool_loop_eval_runs(limit=10)
+        assert [item["id"] for item in listed] == [run["id"]]
+        assert "cases" not in listed[0]
+
+        fetched = store.get_tool_loop_eval_run(run["id"])
+        assert fetched is not None
+        assert fetched["id"] == run["id"]
+        assert [case["case_id"] for case in fetched["cases"]] == [
+            "two-step-tool-synthesis",
+            "avoid-unneeded-tools",
+        ]
+        assert fetched["cases"][0]["observed_tool_sequence"] == ["read_status", "read_details"]
+        assert fetched["cases"][0]["tool_results"] == [{"tool_name": "read_status", "ok": True}]
+
+    def test_list_tool_loop_eval_runs_filters_model_and_status(self, store):
+        def make_suite(model: str, status: str) -> dict:
+            return {
+                "model": model,
+                "status": status,
+                "case_count": 1,
+                "passed_count": 1 if status == "passed" else 0,
+                "failed_count": 0 if status == "passed" else 1,
+                "average_score": 1.0 if status == "passed" else 0.5,
+                "cases": [],
+            }
+
+        passed = store.create_tool_loop_eval_run(
+            generated_at="2026-06-11T04:00:00+00:00",
+            target_selector="node:a",
+            target_node="a",
+            suite=make_suite("model-a", "passed"),
+        )
+        store.create_tool_loop_eval_run(
+            generated_at="2026-06-11T04:01:00+00:00",
+            target_selector="node:b",
+            target_node="b",
+            suite=make_suite("model-b", "failed"),
+        )
+
+        assert [run["id"] for run in store.list_tool_loop_eval_runs(model="model-a")] == [passed["id"]]
+        assert [run["id"] for run in store.list_tool_loop_eval_runs(status="passed")] == [passed["id"]]
+        assert store.get_tool_loop_eval_run("missing") is None
+
+
 class TestAggregateComputation:
     def test_all_success(self):
         from llama_manager.core.persistence.benchmark_store_orm import _compute_aggregate

@@ -22,6 +22,7 @@ class ToolLoopEvalCase:
     max_iterations: int | None = None
     expected_error_tools: list[str] = field(default_factory=list)
     max_repeated_tool_calls: int | None = None
+    required_tool_arguments: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 class ToolLoopEvaluator:
@@ -71,6 +72,7 @@ class ToolLoopEvaluator:
                 tool_results.append(
                     {
                         "tool_name": name,
+                        "arguments": arguments,
                         "ok": bool(result.get("ok")),
                         "error": result.get("error") or "",
                         "expected_error": expected_error,
@@ -89,10 +91,12 @@ class ToolLoopEvaluator:
 
         checks = {
             "completed": completed,
-            "expected_tool_sequence": _sequence_matches(observed_tools, case.expected_tool_sequence),
+            "expected_tool_sequence": _sequence_matches(observed_tools, case.expected_tool_sequence, case.scoring_mode),
             "expected_final_substrings": _contains_all(final_answer, case.expected_final_substrings),
             "no_tool_errors": all(result["ok"] or result.get("expected_error") for result in tool_results),
         }
+        if case.required_tool_arguments:
+            checks["expected_tool_arguments"] = _required_arguments_match(tool_results, case.required_tool_arguments)
         if case.max_repeated_tool_calls is not None:
             checks["no_repeated_calls"] = _max_repeated_calls(observed_tools) <= case.max_repeated_tool_calls
         score = _score(checks)
@@ -227,10 +231,77 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
                 "Call lookup_once. If it says there is no more information, stop and answer with the available fact."
             ),
             expected_tool_sequence=["lookup_once"],
-            expected_final_substrings=["no more information", "stop-token"],
+            expected_final_substrings=["no more information"],
             eval_tools=["lookup_once"],
             scoring_mode="loop_stop",
             max_iterations=4,
+            max_repeated_tool_calls=1,
+        ),
+        ToolLoopEvalCase(
+            id="branching-decision",
+            system_prompt=(
+                "Use choose_route first. Follow only the route it returns. "
+                "Do not inspect unrelated branches."
+            ),
+            prompt=(
+                "Call choose_route. It will choose the correct branch. If it returns infra, "
+                "call inspect_infra and answer with the infra finding."
+            ),
+            expected_tool_sequence=["choose_route", "inspect_infra"],
+            expected_final_substrings=["infra", "network restart window"],
+            eval_tools=["choose_route", "inspect_infra", "inspect_billing"],
+            scoring_mode="branch_path",
+            max_iterations=5,
+            max_repeated_tool_calls=1,
+        ),
+        ToolLoopEvalCase(
+            id="argument-repair",
+            system_prompt=(
+                "Extract exact tool arguments from the prompt. If a tool needs an identifier, "
+                "call it once with the required identifier instead of guessing."
+            ),
+            prompt=(
+                "Fetch ticket NX-42 by calling fetch_ticket with ticket_id NX-42. "
+                "Then answer with the ticket owner and priority."
+            ),
+            expected_tool_sequence=["fetch_ticket"],
+            expected_final_substrings=["NX-42", "Mira", "high"],
+            eval_tools=["fetch_ticket"],
+            max_iterations=4,
+            required_tool_arguments={"fetch_ticket": {"ticket_id": "NX-42"}},
+        ),
+        ToolLoopEvalCase(
+            id="parallel-fact-gathering",
+            system_prompt=(
+                "Gather all requested independent facts. The order does not matter, but each "
+                "source should be called once and the final answer must include every fact."
+            ),
+            prompt=(
+                "Call gather_fact_a, gather_fact_b, gather_fact_c, and gather_fact_d. "
+                "Then answer with all four fact tokens."
+            ),
+            expected_tool_sequence=["gather_fact_a", "gather_fact_b", "gather_fact_c", "gather_fact_d"],
+            expected_final_substrings=["redwood", "basalt", "aurora", "delta"],
+            eval_tools=["gather_fact_a", "gather_fact_b", "gather_fact_c", "gather_fact_d"],
+            scoring_mode="set_membership",
+            max_iterations=6,
+            max_repeated_tool_calls=1,
+        ),
+        ToolLoopEvalCase(
+            id="subagent-delegation-simulation",
+            system_prompt=(
+                "Treat each helper as a separate agent node. Call each required helper once, "
+                "preserve its role-specific result, and synthesize the final answer."
+            ),
+            prompt=(
+                "Ask the planner, executor, reviewer, and verifier helpers for their outputs. "
+                "Then combine their role-specific findings in one final answer."
+            ),
+            expected_tool_sequence=["ask_planner", "ask_executor", "ask_reviewer", "ask_verifier"],
+            expected_final_substrings=["sequence tasks", "patch ready", "risk is low", "checks pass"],
+            eval_tools=["ask_planner", "ask_executor", "ask_reviewer", "ask_verifier"],
+            scoring_mode="set_membership",
+            max_iterations=6,
             max_repeated_tool_calls=1,
         ),
     ]
@@ -271,6 +342,49 @@ class EvalToolExecutor:
                 "source": "lookup",
                 "fact": "no more information is available; preserve stop-token and answer now",
             }
+        if name == "choose_route":
+            return {
+                "ok": True,
+                "source": "router",
+                "route": "infra",
+                "instruction": "Use inspect_infra next. Do not inspect billing.",
+            }
+        if name == "inspect_infra":
+            return {
+                "ok": True,
+                "source": "infra",
+                "fact": "infra route found the network restart window",
+            }
+        if name == "inspect_billing":
+            return {
+                "ok": True,
+                "source": "billing",
+                "fact": "billing route found invoice drift",
+            }
+        if name == "fetch_ticket":
+            if arguments.get("ticket_id") != "NX-42":
+                return {
+                    "ok": False,
+                    "source": "tickets",
+                    "error": "fetch_ticket requires ticket_id NX-42",
+                }
+            return {
+                "ok": True,
+                "source": "tickets",
+                "ticket_id": "NX-42",
+                "owner": "Mira",
+                "priority": "high",
+            }
+        if name.startswith("gather_fact_"):
+            return _fact_gathering_result(name)
+        if name == "ask_planner":
+            return {"ok": True, "role": "planner", "finding": "sequence tasks before execution"}
+        if name == "ask_executor":
+            return {"ok": True, "role": "executor", "finding": "patch ready"}
+        if name == "ask_reviewer":
+            return {"ok": True, "role": "reviewer", "finding": "risk is low"}
+        if name == "ask_verifier":
+            return {"ok": True, "role": "verifier", "finding": "checks pass"}
         return {"ok": False, "error": f"Unknown eval tool {name!r}"}
 
 
@@ -282,7 +396,10 @@ def eval_tool_definitions(tool_names: list[str] | None = None) -> list[dict[str,
             "function": {
                 "name": name,
                 "description": _EVAL_TOOL_DESCRIPTIONS[name],
-                "parameters": {"type": "object", "properties": {}, "additionalProperties": False},
+                "parameters": _EVAL_TOOL_PARAMETERS.get(
+                    name,
+                    {"type": "object", "properties": {}, "additionalProperties": False},
+                ),
             },
         }
         for name in names
@@ -302,6 +419,14 @@ _STEP_FACTS = {
 }
 
 
+_GATHER_FACTS = {
+    "gather_fact_a": "redwood",
+    "gather_fact_b": "basalt",
+    "gather_fact_c": "aurora",
+    "gather_fact_d": "delta",
+}
+
+
 _EVAL_TOOL_DESCRIPTIONS = {
     "read_status": "Read the deterministic eval status source. Use this first when the user asks for status.",
     "read_details": "Read the deterministic eval details source. Use this after read_status when details are requested.",
@@ -316,6 +441,33 @@ _EVAL_TOOL_DESCRIPTIONS = {
     "unstable_primary": "Primary recovery source. This tool deterministically fails and instructs use of stable_fallback.",
     "stable_fallback": "Fallback recovery source. Use this after unstable_primary reports its deterministic failure.",
     "lookup_once": "Single lookup source. It returns the available fact and says no more information exists.",
+    "choose_route": "Choose the deterministic branch for the branching eval. Always call this before branch inspection.",
+    "inspect_infra": "Inspect the infra branch selected by choose_route and return the network restart window fact.",
+    "inspect_billing": "Inspect the billing branch. This branch is intentionally not selected by choose_route.",
+    "fetch_ticket": "Fetch a deterministic ticket by ticket_id. The argument must be ticket_id NX-42.",
+    "gather_fact_a": "Gather independent fact A and return the redwood token.",
+    "gather_fact_b": "Gather independent fact B and return the basalt token.",
+    "gather_fact_c": "Gather independent fact C and return the aurora token.",
+    "gather_fact_d": "Gather independent fact D and return the delta token.",
+    "ask_planner": "Ask the planner helper for its role-specific output.",
+    "ask_executor": "Ask the executor helper for its role-specific output.",
+    "ask_reviewer": "Ask the reviewer helper for its role-specific output.",
+    "ask_verifier": "Ask the verifier helper for its role-specific output.",
+}
+
+
+_EVAL_TOOL_PARAMETERS = {
+    "fetch_ticket": {
+        "type": "object",
+        "properties": {
+            "ticket_id": {
+                "type": "string",
+                "description": "Ticket identifier. Use NX-42 for this eval.",
+            }
+        },
+        "required": ["ticket_id"],
+        "additionalProperties": False,
+    },
 }
 
 
@@ -328,6 +480,18 @@ def _step_result(name: str) -> dict[str, Any]:
         "source": name,
         "fact": fact,
         "summary": f"{name} returned fact token {fact}.",
+    }
+
+
+def _fact_gathering_result(name: str) -> dict[str, Any]:
+    fact = _GATHER_FACTS.get(name)
+    if fact is None:
+        return {"ok": False, "error": f"Unknown eval fact tool {name!r}"}
+    return {
+        "ok": True,
+        "source": name,
+        "fact": fact,
+        "summary": f"{name} returned independent fact token {fact}.",
     }
 
 
@@ -373,8 +537,31 @@ def _message_content(message: dict[str, Any]) -> str:
     return str(content)
 
 
-def _sequence_matches(observed: list[str], expected: list[str]) -> bool:
-    return not expected or observed == expected
+def _sequence_matches(observed: list[str], expected: list[str], scoring_mode: str = "strict_sequence") -> bool:
+    if not expected:
+        return not observed
+    if scoring_mode == "set_membership":
+        return sorted(observed) == sorted(expected)
+    return observed == expected
+
+
+def _required_arguments_match(
+    tool_results: list[dict[str, Any]],
+    required_arguments: dict[str, dict[str, Any]],
+) -> bool:
+    for tool_name, expected_arguments in required_arguments.items():
+        matching_results = [result for result in tool_results if result.get("tool_name") == tool_name]
+        if not matching_results:
+            return False
+        if not any(_arguments_include(result.get("arguments"), expected_arguments) for result in matching_results):
+            return False
+    return True
+
+
+def _arguments_include(arguments: Any, expected_arguments: dict[str, Any]) -> bool:
+    if not isinstance(arguments, dict):
+        return False
+    return all(arguments.get(key) == value for key, value in expected_arguments.items())
 
 
 def _contains_all(text: str, expected_substrings: list[str]) -> bool:

@@ -152,3 +152,51 @@ class BenchmarkRunSampleOrm(Base):
     __table_args__ = (
         Index("idx_benchmark_run_samples_run_id", "run_id"),
     )
+
+
+class ToolLoopEvalRunOrm(Base):
+    __tablename__ = "tool_loop_eval_runs"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    generated_at: Mapped[str] = mapped_column(Text, nullable=False)
+    model: Mapped[str] = mapped_column(Text, nullable=False)
+    target_selector: Mapped[str] = mapped_column(Text, nullable=False, default="auto", server_default="auto")
+    target_node: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    average_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    case_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    passed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (
+        Index("idx_tool_loop_eval_runs_generated_at", "generated_at"),
+        Index("idx_tool_loop_eval_runs_model", "model"),
+        Index("idx_tool_loop_eval_runs_status", "status"),
+    )
+
+
+class ToolLoopEvalCaseOrm(Base):
+    __tablename__ = "tool_loop_eval_cases"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    run_id: Mapped[str] = mapped_column(Text, nullable=False)
+    case_index: Mapped[int] = mapped_column(Integer, nullable=False)
+    case_id: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(Text, nullable=False)
+    score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
+    checks_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    error_detail: Mapped[str | None] = mapped_column(Text, nullable=True)
+    iteration_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    tool_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    observed_tool_sequence_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    expected_tool_sequence_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    scoring_mode: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tool_results_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    final_answer: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
+
+    __table_args__ = (
+        Index("idx_tool_loop_eval_cases_run_id", "run_id"),
+        Index("idx_tool_loop_eval_cases_case_id", "case_id"),
+    )

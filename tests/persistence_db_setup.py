@@ -13,7 +13,7 @@ from llama_manager.core.persistence.db_infra import (
     session_scope,
     sqlite_url_for_path,
 )
-from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm
+from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
 from llama_manager.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
@@ -31,7 +31,7 @@ TARGET_REVISIONS = {
     "audit": "20260513_0003",
     "chat_sessions": "20260523_0007",
     "downloads": "20260523_0001",
-    "benchmarks": "20260528_0003",
+    "benchmarks": "20260611_0004",
 }
 LATEST_REVISION = TARGET_REVISIONS["chat_sessions"]
 
@@ -89,6 +89,8 @@ def prepare_benchmarks_db(db_path: Path, revision: str = TARGET_REVISIONS["bench
             BenchmarkDefinitionOrm.__table__,
             BenchmarkRunOrm.__table__,
             BenchmarkRunSampleOrm.__table__,
+            ToolLoopEvalRunOrm.__table__,
+            ToolLoopEvalCaseOrm.__table__,
         ],
         revision,
     )

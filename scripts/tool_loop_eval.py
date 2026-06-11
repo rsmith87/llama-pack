@@ -8,6 +8,7 @@ import os
 import re
 import shlex
 import sys
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,8 @@ from llama_manager.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvalu
 from llama_manager.core.chat.proxy import ChatProxy
 from llama_manager.core.config import load_config
 from llama_manager.core.nodes.registry import NodeRegistry
+from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+from llama_manager.core.persistence.db_infra import resolve_persistence_urls
 from llama_manager.core.runtime.process_manager import ProcessManager
 
 
@@ -126,14 +129,7 @@ def select_cases(case_ids: list[str]) -> list[Any]:
 def cases_with_target(cases: list[ToolLoopEvalCase], target: str) -> list[ToolLoopEvalCase]:
     target = target.strip() or "auto"
     return [
-        ToolLoopEvalCase(
-            id=case.id,
-            prompt=case.prompt,
-            system_prompt=case.system_prompt,
-            expected_tool_sequence=list(case.expected_tool_sequence),
-            expected_final_substrings=list(case.expected_final_substrings),
-            request_defaults={**case.request_defaults, "target": target},
-        )
+        replace(case, request_defaults={**case.request_defaults, "target": target})
         for case in cases
     ]
 
@@ -250,6 +246,32 @@ def write_outputs(suites: list[dict[str, Any]], *, output_jsonl: Path, latest_js
     return latest
 
 
+def persist_outputs(config: Any, latest: dict[str, Any], *, target: str) -> list[dict[str, Any]]:
+    store = BenchmarkStoreOrm(db_url=resolve_persistence_urls(config).benchmarks)
+    generated_at = str(latest.get("generated_at") or datetime.now(UTC).isoformat())
+    target_selector = str(target or "auto").strip() or "auto"
+    target_node = _target_node_name(target_selector)
+    persisted = []
+    for suite in latest.get("suites") or []:
+        if isinstance(suite, dict):
+            persisted.append(
+                store.create_tool_loop_eval_run(
+                    generated_at=generated_at,
+                    target_selector=target_selector,
+                    target_node=target_node,
+                    suite=suite,
+                )
+            )
+    return persisted
+
+
+def _target_node_name(target: str) -> str | None:
+    if target.startswith("node:"):
+        node_name = target.split(":", 1)[1].strip()
+        return node_name or None
+    return None
+
+
 async def async_main(argv: list[str]) -> int:
     args = parse_args(argv)
     load_env_file(resolve_env_file(args.env_file))
@@ -259,6 +281,7 @@ async def async_main(argv: list[str]) -> int:
     suites = await run_suites(config, args.model, cases, target=args.target)
     output_jsonl, latest_json = resolve_output_paths(args, config.log_dir)
     latest = write_outputs(suites, output_jsonl=output_jsonl, latest_json=latest_json)
+    latest["persisted_runs"] = persist_outputs(config, latest, target=args.target)
     print(json.dumps(latest, indent=2, sort_keys=True))
     return 0 if all(suite["status"] == "passed" for suite in suites) else 1
 

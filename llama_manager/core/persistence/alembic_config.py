@@ -39,7 +39,13 @@ TARGET_TABLES: dict[str, tuple[str, ...]] = {
     "audit": ("audit_events",),
     "chat_sessions": ("chat_sessions",),
     "downloads": ("model_downloads",),
-    "benchmarks": ("benchmark_definitions", "benchmark_run_samples", "benchmark_runs"),
+    "benchmarks": (
+        "benchmark_definitions",
+        "benchmark_run_samples",
+        "benchmark_runs",
+        "tool_loop_eval_cases",
+        "tool_loop_eval_runs",
+    ),
 }
 
 

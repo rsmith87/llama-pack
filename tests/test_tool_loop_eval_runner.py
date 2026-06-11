@@ -258,6 +258,68 @@ def test_cases_include_target_request_default():
 
     assert cases
     assert all(case.request_defaults["target"] == "node:mac-mini" for case in cases)
+    by_id = {case.id: case for case in cases}
+    assert by_id["argument-repair"].required_tool_arguments == {"fetch_ticket": {"ticket_id": "NX-42"}}
+    assert by_id["parallel-fact-gathering"].scoring_mode == "set_membership"
+    assert by_id["linear-8-step-synthesis"].max_iterations == 10
+
+
+def test_persist_outputs_writes_tool_loop_runs_to_benchmarks_db(tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+    from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+    from tests.persistence_db_setup import prepare_benchmarks_db
+
+    db_path = tmp_path / "benchmarks.db"
+    prepare_benchmarks_db(db_path)
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path / "logs"),
+            "benchmarks_db_url": f"sqlite+pysqlite:///{db_path}",
+        }
+    )
+    latest = {
+        "generated_at": "2026-06-11T04:10:00+00:00",
+        "suite_count": 1,
+        "models": ["gpt-oss-20b"],
+        "suites": [
+            {
+                "model": "gpt-oss-20b",
+                "status": "passed",
+                "case_count": 1,
+                "passed_count": 1,
+                "failed_count": 0,
+                "average_score": 1.0,
+                "cases": [
+                    {
+                        "case_id": "avoid-unneeded-tools",
+                        "status": "passed",
+                        "score": 1.0,
+                        "checks": {"completed": True},
+                        "error": "",
+                        "iteration_count": 1,
+                        "tool_call_count": 0,
+                        "observed_tool_sequence": [],
+                        "expected_tool_sequence": [],
+                        "tool_results": [],
+                        "final_answer": "tool loop ready",
+                    }
+                ],
+            }
+        ],
+    }
+
+    persisted = runner.persist_outputs(config, latest, target="node:linux-2080ti")
+
+    assert len(persisted) == 1
+    store = BenchmarkStoreOrm(db_url=f"sqlite+pysqlite:///{db_path}")
+    runs = store.list_tool_loop_eval_runs()
+    assert [run["id"] for run in runs] == [persisted[0]["id"]]
+    assert runs[0]["target_selector"] == "node:linux-2080ti"
+    assert runs[0]["target_node"] == "linux-2080ti"
+    fetched = store.get_tool_loop_eval_run(runs[0]["id"])
+    assert fetched["cases"][0]["case_id"] == "avoid-unneeded-tools"
 
 
 def test_run_suites_records_model_routing_failure(monkeypatch, tmp_path):

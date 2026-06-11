@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request
@@ -164,12 +165,41 @@ async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request
     payload: dict[str, object] = {"model": body.model}
     if body.case_ids is not None:
         payload["case_ids"] = body.case_ids
-    return await node_registry.request_node(
+    suite = await node_registry.request_node(
         body.node,
         "POST",
         "/lm-api/v1/runtime/tool-loop-evals/run",
         payload,
         timeout=None,
+    )
+    persisted = _persist_tool_loop_suite(
+        request,
+        suite,
+        target_selector=f"node:{body.node}",
+        target_node=body.node,
+    )
+    if persisted is not None and isinstance(suite, dict):
+        suite = {**suite, "persisted_run_id": persisted["id"]}
+    return suite
+
+
+def _persist_tool_loop_suite(
+    request: Request,
+    suite: Any,
+    *,
+    target_selector: str,
+    target_node: str | None,
+) -> dict[str, Any] | None:
+    if not isinstance(suite, dict):
+        return None
+    store = getattr(request.app.state, "benchmark_store", None)
+    if store is None:
+        return None
+    return store.create_tool_loop_eval_run(
+        generated_at=datetime.now(UTC).isoformat(),
+        target_selector=target_selector,
+        target_node=target_node,
+        suite=suite,
     )
 
 

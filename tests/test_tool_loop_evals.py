@@ -37,16 +37,19 @@ def _config(tmp_path):
 
 
 class ScriptedToolProxy:
-    def __init__(self, tool_names: list[str], final_answer: str):
-        self.tool_names = tool_names
+    def __init__(self, tool_names: list[str] | list[tuple[str, str]], final_answer: str):
+        self.tool_calls = [
+            item if isinstance(item, tuple) else (item, "{}")
+            for item in tool_names
+        ]
         self.final_answer = final_answer
         self.payloads = []
 
     async def chat_with_meta(self, model_name, payload):
         self.payloads.append(payload)
         index = len(self.payloads) - 1
-        if index < len(self.tool_names):
-            name = self.tool_names[index]
+        if index < len(self.tool_calls):
+            name, arguments = self.tool_calls[index]
             return {
                 "choices": [
                     {
@@ -54,13 +57,13 @@ class ScriptedToolProxy:
                             "role": "assistant",
                             "content": "",
                             "tool_calls": [
-                                {
-                                    "id": f"call-{index}",
-                                    "type": "function",
-                                    "function": {"name": name, "arguments": "{}"},
-                                }
-                            ],
-                        }
+                                    {
+                                        "id": f"call-{index}",
+                                        "type": "function",
+                                        "function": {"name": name, "arguments": arguments},
+                                    }
+                                ],
+                            }
                     }
                 ]
             }, {"route": "local"}
@@ -86,10 +89,18 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
         "linear-8-step-synthesis",
         "tool-error-recovery",
         "avoid-loop-trap",
+        "branching-decision",
+        "argument-repair",
+        "parallel-fact-gathering",
+        "subagent-delegation-simulation",
     ] == list(cases)
     assert cases["linear-8-step-synthesis"].max_iterations >= 9
     assert cases["tool-error-recovery"].expected_error_tools == ["unstable_primary"]
     assert cases["avoid-loop-trap"].max_repeated_tool_calls == 1
+    assert cases["branching-decision"].scoring_mode == "branch_path"
+    assert cases["argument-repair"].required_tool_arguments == {"fetch_ticket": {"ticket_id": "NX-42"}}
+    assert cases["parallel-fact-gathering"].scoring_mode == "set_membership"
+    assert cases["subagent-delegation-simulation"].scoring_mode == "set_membership"
 
 
 @pytest.mark.asyncio
@@ -218,6 +229,110 @@ async def test_tool_loop_eval_penalizes_repeated_calls_in_loop_trap(tmp_path):
     assert result["status"] == "failed"
     assert result["checks"]["no_repeated_calls"] is False
     assert result["checks"]["completed"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_accepts_loop_trap_answer_without_synthetic_token(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "avoid-loop-trap")
+    proxy = ScriptedToolProxy(
+        ["lookup_once"],
+        "No more information is available.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_final_substrings"] is True
+    assert result["checks"]["no_repeated_calls"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_branching_decision_path(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "branching-decision")
+    proxy = ScriptedToolProxy(
+        ["choose_route", "inspect_infra"],
+        "The infra route found the network restart window.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["observed_tool_sequence"] == ["choose_route", "inspect_infra"]
+    assert result["scoring_mode"] == "branch_path"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_penalizes_wrong_branch(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "branching-decision")
+    proxy = ScriptedToolProxy(
+        ["choose_route", "inspect_billing"],
+        "The billing route found invoice drift.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["expected_tool_sequence"] is False
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_required_tool_arguments(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "argument-repair")
+    proxy = ScriptedToolProxy(
+        [("fetch_ticket", '{"ticket_id":"NX-42"}')],
+        "Ticket NX-42 owner is Mira and priority is high.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_tool_arguments"] is True
+    assert result["tool_results"][0]["arguments"] == {"ticket_id": "NX-42"}
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_penalizes_missing_required_tool_arguments(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "argument-repair")
+    proxy = ScriptedToolProxy(
+        [("fetch_ticket", "{}")],
+        "Ticket lookup failed.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["expected_tool_arguments"] is False
+    assert result["checks"]["no_tool_errors"] is False
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_allows_parallel_fact_order(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "parallel-fact-gathering")
+    proxy = ScriptedToolProxy(
+        ["gather_fact_c", "gather_fact_a", "gather_fact_d", "gather_fact_b"],
+        "Facts gathered: redwood, basalt, aurora, delta.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_tool_sequence"] is True
+    assert result["scoring_mode"] == "set_membership"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_subagent_delegation_simulation(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "subagent-delegation-simulation")
+    proxy = ScriptedToolProxy(
+        ["ask_planner", "ask_executor", "ask_reviewer", "ask_verifier"],
+        "Plan: sequence tasks. Executor: patch ready. Reviewer: risk is low. Verifier: checks pass.",
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_tool_sequence"] is True
+    assert result["scoring_mode"] == "set_membership"
 
 
 @pytest.mark.asyncio

@@ -16,7 +16,7 @@ Baseline branches:
 - `audit@head` -> `20260513_0003` audit baseline
 - `chat_sessions@head` -> `20260513_0004` chat sessions baseline
 - `downloads@head` -> `20260523_0001` downloads baseline
-- `benchmarks@head` -> `20260523_0002` benchmarks baseline
+- `benchmarks@head` -> `20260611_0004` benchmark runs plus tool-loop eval history
 
 Choose a target with `-x db=<target>`.
 

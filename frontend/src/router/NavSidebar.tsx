@@ -60,7 +60,7 @@ export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
           </div>
         ))}
       </nav>
-      <div className="sidebar-footer absolute bottom-0">
+      <div className="sidebar-footer">
         {appMode === "agent" && controllerUrl ? (
           <div className="sidebar-peers">
             <div className="sidebar-peers-label">Controller</div>

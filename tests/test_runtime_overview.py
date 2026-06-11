@@ -319,6 +319,11 @@ def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_p
 
     assert response.status_code == 200
     assert response.json()["status"] == "passed"
+    persisted_runs = app.state.benchmark_store.list_tool_loop_eval_runs()
+    assert len(persisted_runs) == 1
+    assert persisted_runs[0]["model"] == "gpt-oss-20b"
+    assert persisted_runs[0]["target_selector"] == "node:mac-mini"
+    assert persisted_runs[0]["target_node"] == "mac-mini"
     assert calls == [
         (
             "POST",

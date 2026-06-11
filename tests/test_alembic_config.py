@@ -76,6 +76,8 @@ def test_target_metadata_for_returns_only_selected_target_tables():
         "benchmark_definitions",
         "benchmark_run_samples",
         "benchmark_runs",
+        "tool_loop_eval_cases",
+        "tool_loop_eval_runs",
     }
     assert set(target_metadata_for("controller").tables) == {
         "artifacts",
