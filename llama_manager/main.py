@@ -257,12 +257,11 @@ def _configure_app_state(
     app.state.chat_session_store = ChatSessionStoreOrm(db_url=auth_urls.chat_sessions)
     app.state.model_download_store = ModelDownloadStoreOrm(db_url=auth_urls.downloads)
     app.state.download_manager = DownloadManager(app_config, app.state.model_download_store)
+    app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     if app_config.mode == "controller":
-        app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
         app.state.benchmark_runner = BenchmarkRunner(app.state.benchmark_store, app.state.chat_proxy)
         app.state.memory_store = ChromaMemoryStore(app_config.memory)
     else:
-        app.state.benchmark_store = None
         app.state.benchmark_runner = None
         app.state.memory_store = ChromaMemoryStore(app_config.memory)  # self-disables when enabled=False
     app.state.audit_store = AuditStoreOrm(db_url=auth_urls.audit)

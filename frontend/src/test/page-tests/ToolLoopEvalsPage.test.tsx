@@ -2,6 +2,7 @@ import { render, screen, within } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
 import { ToolLoopEvalsPage } from "../../pages/ToolLoopEvalsPage";
 import userEvent from "@testing-library/user-event";
+import { AppModeProvider } from "../../features/appMode/appModeContext";
 
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
@@ -99,7 +100,11 @@ it("renders latest tool-loop eval summaries and selected case details", async ()
     return Promise.resolve(okJson({}));
   }));
 
-  render(<ToolLoopEvalsPage />);
+  render(
+    <AppModeProvider appMode="controller">
+      <ToolLoopEvalsPage />
+    </AppModeProvider>,
+  );
 
   expect(await screen.findByRole("heading", { name: "Tool Loop Evals" })).toBeInTheDocument();
   expect(await screen.findByText("Run History")).toBeInTheDocument();
@@ -136,7 +141,7 @@ it("renders an empty state when no latest tool-loop eval exists", async () => {
   render(<ToolLoopEvalsPage />);
 
   expect(await screen.findByText("No tool-loop eval results yet.")).toBeInTheDocument();
-  expect(screen.getByText("uv run python scripts/tool_loop_eval.py --config /path/to/controller-config.yaml --model gpt-oss-20b --target node:mac-mini")).toBeInTheDocument();
+  expect(screen.getByText("Run a tool-loop eval from this page, then refresh to inspect the latest summary.")).toBeInTheDocument();
   expect(screen.getByText("/tmp/tool_loop_eval_latest.json")).toBeInTheDocument();
 });
 
@@ -361,7 +366,11 @@ it("submits a tool-loop eval run from the page", async () => {
     return Promise.resolve(okJson({}));
   }));
 
-  render(<ToolLoopEvalsPage />);
+  render(
+    <AppModeProvider appMode="controller">
+      <ToolLoopEvalsPage />
+    </AppModeProvider>,
+  );
 
   await user.selectOptions(await screen.findByLabelText("Preset"), "avoid-unneeded-tools");
   await user.click(screen.getByRole("button", { name: "Run Eval" }));
@@ -374,6 +383,148 @@ it("submits a tool-loop eval run from the page", async () => {
     case_ids: ["avoid-unneeded-tools"],
   });
   expect(await screen.findByText("tool loop ready")).toBeInTheDocument();
+});
+
+it("submits a local tool-loop eval run in agent mode", async () => {
+  const user = userEvent.setup();
+  const requests: Array<{ url: string; body?: string }> = [];
+  vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+    requests.push({ url, body: String(options?.body || "") });
+    if (url === "/lm-api/v1/models") {
+      return Promise.resolve(okJson({
+        models: [{ name: "qwen-local", status: "running" }],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({ runs: [] }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/run") {
+      return Promise.resolve(okJson({
+        model: "qwen-local",
+        status: "passed",
+        case_count: 1,
+        passed_count: 1,
+        failed_count: 0,
+        average_score: 1,
+        persisted_run_id: "run-local",
+        cases: [
+          {
+            case_id: "avoid-unneeded-tools",
+            status: "passed",
+            score: 1,
+            iteration_count: 1,
+            tool_call_count: 0,
+            observed_tool_sequence: [],
+            expected_tool_sequence: [],
+            checks: { completed: true },
+            final_answer: "local tool loop ready",
+          },
+        ],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(
+    <AppModeProvider appMode="agent">
+      <ToolLoopEvalsPage />
+    </AppModeProvider>,
+  );
+
+  expect(await screen.findByDisplayValue("qwen-local")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Node")).not.toBeInTheDocument();
+  await user.selectOptions(screen.getByLabelText("Preset"), "avoid-unneeded-tools");
+  await user.click(screen.getByRole("button", { name: "Run Eval" }));
+
+  const localRunRequest = requests.find((request) => request.url === "/lm-api/v1/runtime/tool-loop-evals/run");
+  expect(localRunRequest).toBeTruthy();
+  expect(JSON.parse(String(localRunRequest?.body))).toEqual({
+    model: "qwen-local",
+    case_ids: ["avoid-unneeded-tools"],
+  });
+  expect(requests.some((request) => request.url === "/lm-api/v1/nodes/models")).toBe(false);
+  expect(await screen.findByText("local tool loop ready")).toBeInTheDocument();
+  expect(screen.getByText(/Persisted run cases .* local/)).toBeInTheDocument();
+});
+
+it("keeps the local run button disabled in agent mode until a model is selected", async () => {
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/models") return Promise.resolve(okJson({ models: [] }));
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") return Promise.resolve(okJson({ runs: [] }));
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(
+    <AppModeProvider appMode="agent">
+      <ToolLoopEvalsPage />
+    </AppModeProvider>,
+  );
+
+  expect(await screen.findByRole("button", { name: "Run Eval" })).toBeDisabled();
+  expect(screen.queryByLabelText("Node")).not.toBeInTheDocument();
+});
+
+it("renders local history targets", async () => {
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/models") return Promise.resolve(okJson({ models: [{ name: "qwen-local" }] }));
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-local-history",
+            generated_at: "2026-06-11T12:10:00+00:00",
+            model: "qwen-local",
+            target_selector: "local",
+            target_node: null,
+            status: "passed",
+            average_score: 1,
+            case_count: 1,
+            passed_count: 1,
+            failed_count: 0,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(
+    <AppModeProvider appMode="agent">
+      <ToolLoopEvalsPage />
+    </AppModeProvider>,
+  );
+
+  expect(await screen.findByText("local")).toBeInTheDocument();
 });
 
 it("exposes real-world scenario presets in the run form", async () => {
@@ -446,7 +597,11 @@ it("updates the model field when the selected node changes", async () => {
     return Promise.resolve(okJson({}));
   }));
 
-  render(<ToolLoopEvalsPage />);
+  render(
+    <AppModeProvider appMode="controller">
+      <ToolLoopEvalsPage />
+    </AppModeProvider>,
+  );
 
   expect(await screen.findByDisplayValue("gemma-4-E4B-it-OBLITERATED-Q8_0")).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Node"), "linux-2080ti");

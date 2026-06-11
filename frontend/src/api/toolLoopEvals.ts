@@ -3,6 +3,7 @@ import type {
   ToolLoopEvalLatest,
   ToolLoopEvalNodeRunRequest,
   ToolLoopEvalRunDetail,
+  ToolLoopEvalRunRequest,
   ToolLoopEvalRunsResponse,
   ToolLoopEvalSuite,
 } from "../types/index";
@@ -21,4 +22,8 @@ export function getToolLoopEvalRun(runId: string) {
 
 export function startToolLoopEvalNodeRun(payload: ToolLoopEvalNodeRunRequest) {
   return apiPost<ToolLoopEvalSuite & { persisted_run_id?: string }>("/runtime/tool-loop-evals/node-run", payload);
+}
+
+export function startToolLoopEvalRun(payload: ToolLoopEvalRunRequest) {
+  return apiPost<ToolLoopEvalSuite & { persisted_run_id?: string }>("/runtime/tool-loop-evals/run", payload);
 }

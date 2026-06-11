@@ -1,13 +1,16 @@
 import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
+import { listModels } from "../../api/models";
 import { getNodeModels } from "../../api/nodes";
 import {
   getToolLoopEvalLatest,
   getToolLoopEvalRun,
   listToolLoopEvalRuns,
   startToolLoopEvalNodeRun,
+  startToolLoopEvalRun,
 } from "../../api/toolLoopEvals";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField } from "../../components/ui";
+import { useAppMode } from "../../features/appMode/appModeContext";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import type {
   LocalModel,
@@ -140,6 +143,12 @@ function firstCase(suite: ToolLoopEvalSuite | null): ToolLoopEvalCaseResult | nu
   return suite?.cases?.[0] || null;
 }
 
+function runTargetLabel(suite: ToolLoopEvalSuite | ToolLoopEvalRunDetail | null): string {
+  if (!suite) return "";
+  const run = suite as ToolLoopEvalRunDetail;
+  return String(run.target_node || run.target_selector || "");
+}
+
 function nodeModelName(model: LocalModel): string {
   return String(model.name || model.id || model.model || "");
 }
@@ -165,6 +174,9 @@ function flattenNodeModels(payload: unknown): LocalModel[] {
 }
 
 export function ToolLoopEvalsPage() {
+  const appMode = useAppMode();
+  const isLocalMode = appMode === "agent";
+  const isControllerMode = appMode === "controller";
   const { data, loading, error, refresh } = useAsyncResource<ToolLoopEvalLatest | null>(
     () => getToolLoopEvalLatest(),
     null,
@@ -183,8 +195,13 @@ export function ToolLoopEvalsPage() {
     loading: nodesLoading,
     error: nodesError,
   } = useAsyncResource<LocalModel[]>(
-    async () => flattenNodeModels(await getNodeModels()),
+    async () => {
+      if (isLocalMode) return asModelArray(await listModels());
+      if (isControllerMode) return flattenNodeModels(await getNodeModels());
+      return [];
+    },
     [],
+    [isControllerMode, isLocalMode],
   );
   const suites = data?.suites || [];
   const historyRuns = historyData.runs || [];
@@ -199,17 +216,18 @@ export function ToolLoopEvalsPage() {
   const [submitMessage, setSubmitMessage] = useState("");
 
   const nodeOptions = useMemo(
-    () => Array.from(new Set(nodeModels.map((model) => String(model.node || model.node_name || "")).filter(Boolean))),
-    [nodeModels],
+    () => isControllerMode ? Array.from(new Set(nodeModels.map((model) => String(model.node || model.node_name || "")).filter(Boolean))) : [],
+    [isControllerMode, nodeModels],
   );
   const modelOptions = useMemo(
-    () => nodeModels.filter((model) => !runNode || model.node === runNode || model.node_name === runNode),
-    [nodeModels, runNode],
+    () => isLocalMode ? nodeModels : nodeModels.filter((model) => !runNode || model.node === runNode || model.node_name === runNode),
+    [isLocalMode, nodeModels, runNode],
   );
 
   useEffect(() => {
     if (!runNode && nodeOptions.length) setRunNode(nodeOptions[0]);
-  }, [nodeOptions, runNode]);
+    if (isLocalMode && runNode) setRunNode("");
+  }, [isLocalMode, nodeOptions, runNode]);
 
   useEffect(() => {
     setRunModel(modelOptions.length ? nodeModelName(modelOptions[0]) : "");
@@ -251,7 +269,11 @@ export function ToolLoopEvalsPage() {
     event.preventDefault();
     const node = runNode.trim();
     const model = runModel.trim();
-    if (!node || !model) {
+    if (!model) {
+      setRunError("Model is required to run tool-loop evals.");
+      return;
+    }
+    if (!isLocalMode && !node) {
       setRunError("Node and model are required to run tool-loop evals.");
       return;
     }
@@ -260,17 +282,16 @@ export function ToolLoopEvalsPage() {
     setSubmitMessage("");
     try {
       const payload = {
-        node,
         model,
         ...(runPreset === "all" ? {} : { case_ids: [runPreset] }),
       };
-      const suite = await startToolLoopEvalNodeRun(payload);
+      const suite = isLocalMode ? await startToolLoopEvalRun(payload) : await startToolLoopEvalNodeRun({ node, ...payload });
       setSelectedRun({
         id: suite.persisted_run_id,
         generated_at: new Date().toISOString(),
         model: suite.model,
-        target_selector: `node:${node}`,
-        target_node: node,
+        target_selector: isLocalMode ? "local" : `node:${node}`,
+        target_node: isLocalMode ? null : node,
         status: suite.status,
         average_score: suite.average_score,
         case_count: suite.case_count,
@@ -302,13 +323,15 @@ export function ToolLoopEvalsPage() {
       </div>
       <ErrorBanner message={error || historyError || nodesError || runError || data?.error || ""} />
 
-      <Panel title="Run Tool-Loop Eval" eyebrow="Controller-triggered node run">
+      <Panel title="Run Tool-Loop Eval" eyebrow={isLocalMode ? "Local instance run" : isControllerMode ? "Controller-triggered node run" : "Runtime mode loading"}>
         <form className="tool-loop-run-form stacked-controls" onSubmit={(event) => void submitRun(event)}>
-          <FormField label="Node">
-            <select value={runNode} onChange={(event) => setRunNode(event.target.value)} disabled={nodesLoading || runLoading}>
-              {nodeOptions.length ? nodeOptions.map((node) => <option key={node} value={node}>{node}</option>) : <option value="">No reachable nodes</option>}
-            </select>
-          </FormField>
+          {isControllerMode ? (
+            <FormField label="Node">
+              <select value={runNode} onChange={(event) => setRunNode(event.target.value)} disabled={nodesLoading || runLoading}>
+                {nodeOptions.length ? nodeOptions.map((node) => <option key={node} value={node}>{node}</option>) : <option value="">No reachable nodes</option>}
+              </select>
+            </FormField>
+          ) : null}
           <FormField label="Model">
             <input
               list="tool-loop-model-options"
@@ -320,7 +343,7 @@ export function ToolLoopEvalsPage() {
             <datalist id="tool-loop-model-options">
               {modelOptions.map((model) => {
                 const name = nodeModelName(model);
-                return <option key={`${model.node || model.node_name}-${name}`} value={name} />;
+                return <option key={`${model.node || model.node_name || "local"}-${name}`} value={name} />;
               })}
             </datalist>
           </FormField>
@@ -334,7 +357,7 @@ export function ToolLoopEvalsPage() {
             </select>
           </FormField>
           <div className="tool-loop-run-actions">
-            <Button type="submit" variant="primary" disabled={runLoading || !runNode || !runModel}>
+            <Button type="submit" variant="primary" disabled={runLoading || !runModel || (!isLocalMode && !isControllerMode) || (isControllerMode && !runNode)}>
               {runLoading ? "Running..." : "Run Eval"}
             </Button>
             {submitMessage ? <span className="muted">{submitMessage}</span> : null}
@@ -374,8 +397,7 @@ export function ToolLoopEvalsPage() {
 
       {!loading && !data?.available ? (
         <Panel title="No tool-loop eval results yet." eyebrow="Latest results">
-          <p className="muted">Run the local evaluator, then refresh this page.</p>
-          <code className="tool-loop-command">uv run python scripts/tool_loop_eval.py --config /path/to/controller-config.yaml --model gpt-oss-20b --target node:mac-mini</code>
+          <p className="muted">Run a tool-loop eval from this page, then refresh to inspect the latest summary.</p>
           <p className="muted tool-loop-path">{data?.path || "logs/tool_loop_eval_latest.json"}</p>
         </Panel>
       ) : null}
@@ -421,7 +443,7 @@ export function ToolLoopEvalsPage() {
 
       {activeSuite ? (
         <div className="tool-loop-grid">
-          <Panel title={activeSuite?.model || "Model"} eyebrow={selectedRun ? "Persisted run cases" : "Cases"}>
+          <Panel title={activeSuite?.model || "Model"} eyebrow={selectedRun ? `Persisted run cases${runTargetLabel(activeSuite) ? ` · ${runTargetLabel(activeSuite)}` : ""}` : "Cases"}>
             <div className="tool-loop-case-list">
               {(activeSuite?.cases || []).map((item) => (
                 <button

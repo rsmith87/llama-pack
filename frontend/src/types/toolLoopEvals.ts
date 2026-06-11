@@ -82,3 +82,8 @@ export type ToolLoopEvalNodeRunRequest = {
   model: string;
   case_ids?: string[];
 };
+
+export type ToolLoopEvalRunRequest = {
+  model: string;
+  case_ids?: string[];
+};

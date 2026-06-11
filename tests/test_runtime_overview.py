@@ -241,6 +241,11 @@ def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
     assert body["model"] == "qwen"
     assert body["status"] == "passed"
     assert body["cases"][0]["case_id"] == "avoid-unneeded-tools"
+    persisted_runs = app.state.benchmark_store.list_tool_loop_eval_runs()
+    assert len(persisted_runs) == 1
+    assert persisted_runs[0]["model"] == "qwen"
+    assert persisted_runs[0]["target_selector"] == "local"
+    assert persisted_runs[0]["target_node"] is None
 
 
 def test_agent_tool_loop_eval_run_starts_or_adopts_model_before_eval(tmp_path):
@@ -289,6 +294,38 @@ def test_agent_tool_loop_eval_run_starts_or_adopts_model_before_eval(tmp_path):
     assert response.json()["status"] == "passed"
     assert calls[0] == ("start", "qwen")
     assert ("chat", "http://127.0.0.1:8081/v1/chat/completions") in calls
+
+
+def test_controller_tool_loop_eval_run_rejects_local_eval(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        json={"model": "qwen", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "tool-loop eval run is only available in agent mode"
+
+
+def test_agent_tool_loop_eval_node_run_rejects_controller_proxy(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/node-run",
+        json={"node": "mac-mini", "model": "qwen", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "tool-loop node eval run is only available in controller mode"
 
 
 def test_agent_tool_loop_eval_run_executes_live_workspace_scenario(tmp_path):

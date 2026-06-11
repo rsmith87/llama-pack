@@ -179,7 +179,16 @@ async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict
                 request.app.state.chat_scheduler,
             ).run_suite(body.model, live_scenarios)
         )
-    return _merge_tool_loop_suites(body.model, suites)
+    suite = _merge_tool_loop_suites(body.model, suites)
+    persisted = _persist_tool_loop_suite(
+        request,
+        suite,
+        target_selector="local",
+        target_node=None,
+    )
+    if persisted is not None:
+        suite = {**suite, "persisted_run_id": persisted["id"]}
+    return suite
 
 
 @router.post("/tool-loop-evals/node-run")
