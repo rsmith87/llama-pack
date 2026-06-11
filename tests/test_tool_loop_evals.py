@@ -117,6 +117,38 @@ async def test_tool_loop_eval_scores_expected_tool_order_and_final_answer(tmp_pa
 
 
 @pytest.mark.asyncio
+async def test_tool_loop_eval_forces_agent_runs_to_local_target(tmp_path):
+    class Proxy:
+        def __init__(self):
+            self.payloads = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.payloads.append(payload)
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "done",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    proxy = Proxy()
+    case = ToolLoopEvalCase(
+        id="agent-local-target",
+        prompt="Answer directly.",
+        request_defaults={"target": "node:mac-mini"},
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert proxy.payloads[0]["target"] == "local"
+
+
+@pytest.mark.asyncio
 async def test_tool_loop_eval_records_max_iteration_failures(tmp_path):
     class Proxy:
         async def chat_with_meta(self, model_name, payload):

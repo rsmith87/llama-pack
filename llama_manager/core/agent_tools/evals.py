@@ -35,6 +35,8 @@ class ToolLoopEvaluator:
             "max_tokens": 512,
             **case.request_defaults,
         }
+        if self.config.mode == "agent":
+            base_payload["target"] = "local"
         tool_defs = self.registry.openai_tools()
         observed_tools: list[str] = []
         tool_results: list[dict[str, Any]] = []
