@@ -1,3 +1,5 @@
+import json
+
 from fastapi.testclient import TestClient
 
 from llama_manager.core.config import NodeConfig, load_config
@@ -69,6 +71,61 @@ def test_runtime_overview_reports_agent_runtime_state(tmp_path):
     assert body["running_models"]["available"] is True
     assert body["running_models"]["count"] == 0
     assert body["downloads"]["available"] is True
+
+
+def test_tool_loop_eval_latest_reports_missing_file(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/tool-loop-evals/latest")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "available": False,
+        "path": str(tmp_path / "tool_loop_eval_latest.json"),
+        "generated_at": None,
+        "suite_count": 0,
+        "models": [],
+        "suites": [],
+    }
+
+
+def test_tool_loop_eval_latest_returns_runner_summary(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    latest = {
+        "generated_at": "2026-06-11T12:00:00+00:00",
+        "suite_count": 1,
+        "models": ["gpt-oss-20b"],
+        "suites": [
+            {
+                "model": "gpt-oss-20b",
+                "status": "passed",
+                "case_count": 1,
+                "passed_count": 1,
+                "failed_count": 0,
+                "average_score": 1.0,
+                "cases": [],
+            }
+        ],
+    }
+    (tmp_path / "tool_loop_eval_latest.json").write_text(json.dumps(latest), encoding="utf-8")
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/tool-loop-evals/latest")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["available"] is True
+    assert body["path"] == str(tmp_path / "tool_loop_eval_latest.json")
+    assert body["generated_at"] == latest["generated_at"]
+    assert body["models"] == ["gpt-oss-20b"]
+    assert body["suites"][0]["average_score"] == 1.0
 
 
 def test_runtime_overview_reports_controller_runtime_state(tmp_path):

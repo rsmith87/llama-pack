@@ -17,6 +17,7 @@ import { QuantizationPage } from "./pages/QuantizationPage";
 import { ControllerOpsPage } from "./pages/ControllerOpsPage";
 import { EmbeddingsPage } from "./pages/EmbeddingsPage";
 import { RuntimeOverviewPage } from "./pages/RuntimeOverviewPage";
+import { ToolLoopEvalsPage } from "./pages/ToolLoopEvalsPage";
 import { AuditPage } from "./pages/AuditPage";
 import { BenchmarksPage } from "./pages/BenchmarksPage";
 import { ApiKeysPage } from "./pages/ApiKeysPage";
@@ -48,6 +49,7 @@ export default function App() {
                       <Route path="/ui/controller-ops" element={<ControllerOpsPage />} />
                       <Route path="/ui/embeddings" element={<EmbeddingsPage />} />
                       <Route path="/ui/runtime" element={<RuntimeOverviewPage />} />
+                      <Route path="/ui/tool-loop-evals" element={<ToolLoopEvalsPage />} />
                       <Route path="/ui/audit" element={<AuditPage />} />
                       <Route path="/ui/benchmarks" element={<BenchmarksPage />} />
                       <Route path="/ui/api-keys" element={<ApiKeysPage />} />

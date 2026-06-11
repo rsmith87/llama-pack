@@ -1,4 +1,4 @@
-export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
+export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "tool-loop-evals" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
 export type PageKey = BuiltInPageKey | string;
 export type PageIcon =
   | "dashboard"
@@ -11,9 +11,9 @@ export type PageIcon =
   | "quantize"
   | "controller"
   | "runtime"
+  | "benchmark"
   | "embeddings"
   | "audit"
-  | "benchmark"
   | "api-keys"
   | "plugins"
   | "settings"
@@ -58,6 +58,7 @@ export const pages: PageDefinition[] = [
   { key: "quantization", label: "Quantization", path: "/ui/quantization", icon: "quantize", section: "models" },
   { key: "benchmarks", label: "Benchmarks", path: "/ui/benchmarks", icon: "benchmark", section: "models", hideInModes: ["agent"] },
   { key: "runtime-overview", label: "Overview", path: "/ui/runtime", icon: "runtime", section: "runtime" },
+  { key: "tool-loop-evals", label: "Tool Loop Evals", path: "/ui/tool-loop-evals", icon: "benchmark", section: "runtime" },
   { key: "embeddings", label: "Embeddings", path: "/ui/embeddings", icon: "embeddings", section: "runtime" },
   { key: "plugins", label: "Plugins", path: "/ui/plugins", icon: "plugins", section: "plugins", hideInModes: ["agent"] },
   { key: "setup", label: "Setup", path: "/ui/setup", icon: "setup", section: "system" },

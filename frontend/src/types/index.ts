@@ -11,3 +11,4 @@ export * from "./nodes";
 export * from "./operations";
 export * from "./streaming";
 export * from "./threads";
+export * from "./toolLoopEvals";

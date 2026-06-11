@@ -586,3 +586,45 @@ Returns:
 |---|---|---|
 | `query` | required | Natural language search query. Must be non-empty. |
 | `top_k` | store `top_k` | Max results to return (1–20). |
+
+---
+
+## Tool-Loop Evaluations
+
+Use `scripts/tool_loop_eval.py` to run deterministic tool-loop evaluations
+against one or more local tool-capable models. The runner uses the same
+agent-local tool execution path as `/v1/chat/completions` with
+`tool_runtime: "agent"`, then writes an append-only JSONL history and a latest
+summary JSON file for UI/API consumption.
+
+```bash
+rtk uv run python scripts/tool_loop_eval.py --config /path/to/controller-config.yaml --model gpt-oss-20b --target node:mac-mini
+```
+
+Default output paths are:
+
+- `logs/tool_loop_eval_results.jsonl`
+- `logs/tool_loop_eval_latest.json`
+
+The built-in first-pass cases expect these tools to exist in the active
+agent-mode config:
+
+```yaml
+agent_tools:
+  enabled: true
+  tools:
+    read_status:
+      type: file_read
+      description: Read status.
+      path: ./logs/tool-loop-status.txt
+    read_details:
+      type: file_read
+      description: Read details.
+      path: ./logs/tool-loop-details.txt
+```
+
+Run multiple models by repeating `--model`; route to a specific controller node
+with `--target node:<name>`; run a single built-in case with `--case <case-id>`.
+Node targets require a controller-mode config that defines the node. Running
+the command with an agent-mode config will resolve the model as local to that
+process instead of going through the controller.

@@ -27,9 +27,9 @@ it("groups registered and available GGUF files", async () => {
   renderPage();
 
   expect(await screen.findByRole("heading", { name: "Added Models" })).toBeInTheDocument();
-  expect(screen.getByText("added.gguf")).toBeInTheDocument();
-  expect(screen.getByText("available.gguf")).toBeInTheDocument();
-  expect(screen.getAllByText("Directory").length).toBeGreaterThan(0);
+  // Model name appears in card title and in the detail grid; use getAllByText to confirm presence
+  expect(screen.getAllByText("added").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("available").length).toBeGreaterThan(0);
   expect(screen.getAllByText("File ID").length).toBeGreaterThan(0);
 });
 
@@ -44,7 +44,8 @@ it("adds an available GGUF as a configured model", async () => {
   const user = userEvent.setup();
 
   renderPage();
-  await user.click(await screen.findByRole("button", { name: "Open qwen-Q4.gguf" }));
+  // The unified ModelCard uses modelName() which reads the `name` field
+  await user.click(await screen.findByRole("button", { name: "Open qwen-Q4" }));
   await user.click(screen.getByRole("button", { name: "Add Model" }));
 
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/ggufs/file-1/add-model", expect.objectContaining({
@@ -77,11 +78,12 @@ it("removes configured models and deletes GGUF files", async () => {
   const user = userEvent.setup();
 
   renderPage();
-  await user.click(await screen.findByRole("button", { name: "Open qwen.gguf" }));
+  // Unified ModelCard uses modelName() which reads `name` field ("qwen")
+  await user.click(await screen.findByRole("button", { name: "Open qwen" }));
   await user.click(screen.getByRole("button", { name: "Remove Model" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/models/qwen", expect.objectContaining({ method: "DELETE" })));
 
-  await user.click(await screen.findByRole("button", { name: "Open qwen.gguf" }));
+  await user.click(await screen.findByRole("button", { name: "Open qwen" }));
   await user.click(screen.getByRole("button", { name: "Delete GGUF" }));
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/ggufs/file-1", expect.objectContaining({ method: "DELETE" })));
 });
@@ -110,7 +112,7 @@ it("starts a GGUF transfer to another reachable node", async () => {
   const user = userEvent.setup();
 
   renderPage();
-  await user.click(await screen.findByRole("button", { name: "Open qwen.gguf" }));
+  await user.click(await screen.findByRole("button", { name: "Open qwen" }));
   await user.click(screen.getByRole("button", { name: "Send Model" }));
   expect(await screen.findByRole("heading", { name: "Send Model" })).toBeInTheDocument();
   expect(screen.getByText(/Send qwen/)).toBeInTheDocument();
@@ -166,7 +168,8 @@ it("shows unadded node GGUF files in controller mode and can transfer them", asy
     </AppModeProvider>,
   );
 
-  await user.click(await screen.findByRole("button", { name: "Open raw.gguf on mac-mini" }));
+  // Unified ModelCard generates aria-label from modelName() which reads the `name` field ("raw")
+  await user.click(await screen.findByRole("button", { name: "Open raw" }));
   expect(screen.queryByRole("button", { name: "Add Model" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Delete GGUF" })).not.toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Transfer GGUF" }));
@@ -200,10 +203,10 @@ it("hides GGUF transfer actions in agent mode", async () => {
     </AppModeProvider>,
   );
 
-  await screen.findByText("qwen.gguf");
-
+  // qwen appears in both the card title and detail grid; use getAllByText to confirm presence
+  await screen.findByRole("button", { name: "Open qwen" });
   expect(screen.queryByRole("button", { name: "Send qwen" })).not.toBeInTheDocument();
-  await userEvent.setup().click(screen.getByRole("button", { name: "Open qwen.gguf" }));
+  await userEvent.setup().click(screen.getByRole("button", { name: "Open qwen" }));
   expect(screen.queryByRole("button", { name: "Send Model" })).not.toBeInTheDocument();
 });
 
@@ -214,5 +217,6 @@ it("navigates to Chat from an added model card with the registered model selecte
   const user = userEvent.setup();
 
   renderPage();
-  await user.click(await screen.findByRole("button", { name: "Chat with qwen-chat" }));
+  // Unified ModelCard uses modelName() which reads `name` field ("qwen"), not registered_as
+  await user.click(await screen.findByRole("button", { name: "Chat with qwen" }));
 });

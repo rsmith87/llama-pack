@@ -1006,3 +1006,11 @@ textarea {
   position: relative;
   top: 0;
 }
+
+.controller-mode .nodes-page-list .node.node-full {
+  grid-template-columns: repeat(1, 1fr);
+}
+
+.controller-mode .nodes-page-list .node.node-full .model-cards {
+  grid-template-columns: repeat(3, 32%);
+}

@@ -81,6 +81,27 @@ it("renders primary React navigation and defaults to dashboard", async () => {
   expect(screen.queryByText("Legacy UI")).not.toBeInTheDocument();
 });
 
+it("routes to the tool-loop evals page from the runtime navigation", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: true, json: async () => ({ plugins: [] }) });
+      if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") return Promise.resolve({ ok: true, json: async () => ({ available: false, path: "/tmp/tool_loop_eval_latest.json", generated_at: null, suite_count: 0, models: [], suites: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(await screen.findByRole("link", { name: "Tool Loop Evals" }));
+
+  expect(await screen.findByRole("heading", { name: "Tool Loop Evals" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Tool Loop Evals" })).toHaveClass("active");
+});
+
 it("routes first-run users to setup when auth bootstrap is required", async () => {
   vi.stubGlobal(
     "fetch",

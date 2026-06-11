@@ -54,7 +54,7 @@ export function AppLayout() {
 
   return (
     <AppModeProvider appMode={appMode}>
-      <div className={`app-shell ${navOpen ? "mobile-nav-open" : ""}`}>
+      <div className={`app-shell ${appMode}-mode ${navOpen ? "mobile-nav-open" : ""}`}>
         <NavSidebar activePage={activePage} onClose={() => setNavOpen(false)} />
         <div className="app-main">
           <header className="app-header">

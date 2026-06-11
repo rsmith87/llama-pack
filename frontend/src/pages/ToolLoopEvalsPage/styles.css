@@ -1,0 +1,94 @@
+.tool-loop-evals-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4, 1.5rem);
+}
+
+.tool-loop-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  gap: var(--space-4, 1.5rem);
+}
+
+.tool-loop-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-3, 1rem);
+  margin-bottom: var(--space-3, 1rem);
+}
+
+.tool-loop-summary div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.tool-loop-summary strong,
+.tool-loop-path,
+.tool-loop-answer,
+.tool-loop-sequence {
+  overflow-wrap: anywhere;
+}
+
+.tool-loop-case-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.tool-loop-case-button {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 0.4rem;
+  padding: 0.75rem;
+  text-align: left;
+}
+
+.tool-loop-case-button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 20%, transparent);
+}
+
+.tool-loop-case-heading {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+.tool-loop-checks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.tool-loop-answer {
+  background: var(--surface-subtle, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.tool-loop-command {
+  background: var(--surface-subtle, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: block;
+  overflow-wrap: anywhere;
+  padding: 0.75rem;
+  white-space: normal;
+}
+
+@media (max-width: 900px) {
+  .tool-loop-grid,
+  .tool-loop-summary {
+    grid-template-columns: 1fr;
+  }
+}

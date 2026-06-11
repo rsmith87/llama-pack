@@ -7,6 +7,7 @@ import { startModel, stopModel } from "../../api/models";
 import { startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
+import { ModelCard } from "../../components/ModelCard";
 import { useLogModal } from "../../features/logs/logModalContext";
 import type { DashboardData, LocalModel } from "../../types/index";
 import { useNavigateToPage } from "../../hooks/useNavigateToPage";
@@ -14,13 +15,11 @@ import { transferDestinationOptions, type NodeRecord } from "../../features/node
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
-import { GgufCard } from "../../components/GgufCard";
 import { modelName, statusTone } from "../../features/models";
 import { TIMERS } from "../../constants";
 import { 
   percent,
   modelFileId,
-  isGgufBacked,
   modelNode,
   modelForNode,
   nodeName,
@@ -142,14 +141,11 @@ export function DashboardPage() {
   function renderModelCard(model: LocalModel, key: string) {
     const name = modelName(model);
     const resolvedNode = modelNode(model, data);
-    const destinationOptions = resolvedNode ? transferDestinationOptions(nodeRecords, resolvedNode) : [];
-    const canSend = Boolean(resolvedNode && isGgufBacked(model) && destinationOptions.length);
     return (
-      <GgufCard
+      <ModelCard
         key={key}
         model={model}
         resolvedNode={resolvedNode}
-        canSend={canSend}
         actingModel={actingModel}
         onOpen={() => navigateToPage("gguf-library")}
         onStart={() => void runModelAction(model, "start")}

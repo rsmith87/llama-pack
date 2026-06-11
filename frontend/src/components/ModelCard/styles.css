@@ -1,4 +1,5 @@
 /* Uses existing global library-card selectors from app.css */
+
 .library-sections {
   display: grid;
   gap: 14px;
@@ -11,23 +12,6 @@
   align-items: start;
 }
 
-.library-cards .model-actions button {
-  font-size: 11px;
-  min-height: 26px;
-  padding: 4px 8px;
-}
-
-.library-cards .model-actions button:nth-child(1) {
-  border-color: rgba(55, 213, 229, 0.7);
-  background: linear-gradient(135deg, #14b8c7, #0f7f91);
-  color: #061014;
-  font-weight: 800;
-}
-
-.library-cards .model-actions button:nth-child(2) {
-  color: var(--danger);
-}
-
 .library-card {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -35,6 +19,10 @@
   background: linear-gradient(180deg, var(--card-strong), var(--card));
   display: grid;
   gap: 10px;
+}
+
+.library-card.active {
+  box-shadow: 0 0 0 1px var(--success), 0 4px 12px var(--shadow-strong);
 }
 
 .library-card-button {
@@ -107,6 +95,7 @@
   color: var(--warning);
 }
 
+/* Badge and action row */
 .library-card-badges,
 .modal-actions {
   display: flex;
@@ -114,6 +103,64 @@
   flex-wrap: wrap;
 }
 
+/* Model action buttons (from the unified card) */
+.model-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.model-actions button {
+  font-size: 11px;
+  min-height: 26px;
+  padding: 4px 8px;
+}
+
+/* First action button: Start/Add — styled with a teal gradient */
+.model-actions button:nth-child(1) {
+  border-color: rgba(55, 213, 229, 0.7);
+  background: linear-gradient(135deg, #14b8c7, #0f7f91);
+  color: #061014;
+  font-weight: 800;
+}
+
+/* Second action button: Stop — danger color */
+.model-actions button:nth-child(2) {
+  color: var(--danger);
+}
+
+/* Detail grid */
+.model-card-detail-grid {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  font-size: 11px;
+}
+
+.model-card-detail-grid div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 5px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.model-card-detail-grid dt {
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  order: -1;
+}
+
+.model-card-detail-grid dd {
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+}
+
+/* Library detail panels */
 .library-detail,
 .library-controls {
   display: grid;

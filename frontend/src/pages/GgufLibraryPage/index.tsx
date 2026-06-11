@@ -5,7 +5,6 @@ import { createGgufTransfer, addGgufModel, deleteConfiguredModel, deleteGguf, li
 import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge } from "../../components/ui";
-import { IoAdd, IoChatbubbles, IoCamera, IoCheckmarkCircle, IoDocumentText, IoPencil, IoSend, IoTrash } from "react-icons/io5";
 import { ModelCard } from "../../components/ModelCard";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
@@ -217,63 +216,25 @@ export function GgufLibraryPage() {
   }
 
   function renderCard(file: GgufFile) {
-    const badge = receivedBadgeText(file);
     const name = fileName(file);
-    const registeredName = String(file.registered_as || suggestedGgufModelName(file));
-    const active = isActiveModel(file);
+    const badge = receivedBadgeText(file);
+    // Create a model-like object so the unified ModelCard can read status, path, etc.
+    const model = {
+      ...file,
+      status: file.registered ? "added" : "discovered",
+    };
     return (
       <ModelCard
         key={fileId(file)}
-        className={active ? "active" : ""}
-        title={name}
+        model={model}
         onOpen={() => openDetail(file)}
-        openLabel={`Open ${name}`}
-        badges={(
-          <>
-            <StatusBadge tone={file.registered ? "success" : "muted"}>
-              {file.registered ? <IoCheckmarkCircle /> : <IoDocumentText />}
-            </StatusBadge>
-            {file.vision ? <StatusBadge tone="muted"><span title="Vision model — has mmproj"><IoCamera /></span></StatusBadge> : null}
-            {badge ? <StatusBadge tone="warning">{badge}</StatusBadge> : null}
-          </>
-        )}
-        actions={(
-          <>
-            {!file.registered ? (
-              <Button onClick={() => openDetail(file)} aria-label={`Add ${name}`}>
-                <IoAdd /> Add
-              </Button>
-            ) : null}
-            {file.registered ? (
-              <Button variant="ghost" onClick={() => openEdit(file)} aria-label={`Edit ${registeredName}`}>
-                <IoPencil />
-              </Button>
-            ) : null}
-            {file.registered ? (
-              <Button variant="warning" onClick={() => navigate(`/ui/chat?${chatSearch(registeredName)}`)} aria-label={`Chat with ${registeredName}`}>
-                <IoChatbubbles />
-              </Button>
-            ) : null}
-            {file.registered && canTransferBetweenNodes ? (
-              <Button onClick={() => { setSelected(file); void openTransferModal(); }} aria-label={`Send ${registeredName}`}>
-                <IoSend />
-              </Button>
-            ) : null}
-            {file.registered ? (
-              <Button variant="danger" onClick={() => void removeFile(file)} aria-label={`Remove ${registeredName}`}>
-                <IoTrash />
-              </Button>
-            ) : null}
-          </>
-        )}
+        onAdd={!file.registered ? () => openDetail(file) : undefined}
+        onEdit={file.registered ? () => openEdit(file) : undefined}
+        onChat={file.registered ? () => navigate(`/ui/chat?${chatSearch(name)}`) : undefined}
+        onTransfer={file.registered && canTransferBetweenNodes ? () => { setSelected(file); void openTransferModal(); } : undefined}
+        onDelete={file.registered ? () => void removeFile(file) : undefined}
       >
-        <dl className="model-card-detail-grid">
-          <div><dt>Size</dt><dd>{sizeLabel(file.size_bytes)}</dd></div>
-          {file.registered ? <div><dt>Added as</dt><dd>{registeredName}</dd></div> : null}
-          <div><dt>Directory</dt><dd>{compactPath(file.model_dir)}</dd></div>
-          <div><dt>Path</dt><dd>{compactPath(file.path)}</dd></div>
-          <div><dt>File ID</dt><dd>{fileId(file)}</dd></div>
-        </dl>
+        {badge ? <StatusBadge tone="warning">{badge}</StatusBadge> : null}
       </ModelCard>
     );
   }
@@ -320,34 +281,15 @@ export function GgufLibraryPage() {
                     </div>
                     <div className="library-cards">
                       {nodeFiles.length ? nodeFiles.filter((file) => !isMmproj(file)).map((file) => {
-                        const name = fileName(file);
+                        const nodeGgufModel = { ...file, status: file.registered ? "added" : "discovered" };
                         return (
                           <ModelCard
                             key={`${nodeName}-${fileId(file)}`}
-                            title={name}
+                            model={nodeGgufModel}
+                            resolvedNode={nodeName}
                             onOpen={() => openNodeGgufDetail(nodeName, file)}
-                            openLabel={`Open ${name} on ${nodeName}`}
-                            badges={(
-                              <>
-                                <StatusBadge tone={file.registered ? "success" : "muted"}>
-                                  {file.registered ? <IoCheckmarkCircle /> : <IoDocumentText />}
-                                </StatusBadge>
-                              </>
-                            )}
-                            actions={(
-                              <Button onClick={() => { openNodeGgufDetail(nodeName, file); void openTransferModal(nodeName); }} aria-label={`Transfer ${name} from ${nodeName}`}>
-                                <IoSend />
-                              </Button>
-                            )}
-                          >
-                            <dl className="model-card-detail-grid">
-                              <div><dt>Size</dt><dd>{sizeLabel(file.size_bytes)}</dd></div>
-                              {file.registered ? <div><dt>Added as</dt><dd>{String(file.registered_as || suggestedGgufModelName(file))}</dd></div> : null}
-                              <div><dt>Node</dt><dd>{nodeName}</dd></div>
-                              <div><dt>Path</dt><dd>{compactPath(file.path)}</dd></div>
-                              <div><dt>File ID</dt><dd>{fileId(file)}</dd></div>
-                            </dl>
-                          </ModelCard>
+                            onTransfer={() => { openNodeGgufDetail(nodeName, file); void openTransferModal(nodeName); }}
+                          />
                         );
                       }) : (
                         <EmptyState message={String(node.error || (node.reachable ? "No GGUF files reported." : "Stale heartbeat — no GGUF data."))} />

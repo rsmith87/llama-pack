@@ -1,34 +1,240 @@
 import "./styles.css";
 import type { ReactNode } from "react";
+import type { LocalModel } from "../../types/models";
+import { Button, StatusBadge } from "../ui";
+import { isActiveModel } from "../../features/models/modelStatus";
+import { modelName, statusTone } from "../../features/models";
+import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
 
-type ModelCardProps = {
-  title: ReactNode;
+/* ---------- helpers ---------- */
+
+function numberLabel(value: number): string {
+  return new Intl.NumberFormat("en-US").format(value);
+}
+
+function sizeLabel(value: number | undefined): string | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) return null;
+  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`;
+  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`;
+  return `${numberLabel(value)} B`;
+}
+
+/**
+ * Read a potentially model-related field from an object that may be either
+ * a LocalModel (fields directly) or a GgufFile (fields prefixed with "model_").
+ */
+function field(model: Record<string, unknown>, localKey: string, ggufKey: string): unknown {
+  return model[localKey] ?? model[ggufKey] ?? undefined;
+}
+
+function num(model: Record<string, unknown>, localKey: string, ggufKey: string): number | undefined {
+  const v = field(model, localKey, ggufKey);
+  return typeof v === "number" ? v : undefined;
+}
+
+function str(model: Record<string, unknown>, localKey: string, ggufKey: string): string | undefined {
+  const v = field(model, localKey, ggufKey);
+  return typeof v === "string" ? v : undefined;
+}
+
+/* ---------- props ---------- */
+
+export type ModelCardProps = {
+  /** The model or GGUF-file-like object to display. */
+  model: LocalModel | Record<string, unknown>;
+
+  /** Override the displayed node name. */
+  resolvedNode?: string | null;
+
+  /** Unique key for back-to-back actions. */
+  actingModel?: string;
+
+  // -- open / inspect --
   onOpen?: () => void;
-  openLabel?: string;
-  meta?: ReactNode;
-  badges?: ReactNode;
-  actions?: ReactNode;
+
+  // -- lifecycle --
+  onStart?: () => void;
+  onStop?: () => void;
+
+  // -- actions --
+  onChat?: () => void;
+  onBenchmark?: () => void;
+  onTransfer?: () => void;
+  onLogs?: () => void;
+
+  // -- library management (GGUF library page) --
+  onAdd?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
+
+  /** Extra content rendered below the detail grid. */
   children?: ReactNode;
-  className?: string;
 };
 
-export function ModelCard({ title, onOpen, openLabel, meta, badges, actions, children, className = "" }: ModelCardProps) {
+/* ---------- component ---------- */
+
+export function ModelCard({
+  model,
+  resolvedNode,
+  actingModel = "",
+  onOpen,
+  onStart,
+  onStop,
+  onChat,
+  onBenchmark,
+  onTransfer,
+  onLogs,
+  onAdd,
+  onEdit,
+  onDelete,
+  children,
+}: ModelCardProps) {
+  const raw = model as Record<string, unknown>;
+  const name = modelName(model as Parameters<typeof modelName>[0]);
+  const active = isActiveModel(model as Parameters<typeof isActiveModel>[0]);
+  const status = str(raw, "status", "status") || "available";
+  const port = num(raw, "port", "model_port");
+  const pid = num(raw, "pid", "pid");
+  const ctx = num(raw, "ctx", "model_ctx");
+  const gpuLayers = num(raw, "gpu_layers", "model_gpu_layers");
+  const host = str(raw, "host", "host");
+  const reasoning = str(raw, "reasoning", "model_reasoning");
+  const reasoningBudget = num(raw, "reasoning_budget", "model_reasoning_budget");
+  const promptTemplate = str(raw, "prompt_template", "model_prompt_template");
+  const bytes = num(raw, "size_bytes", "size_bytes");
+  const favorite = Boolean(raw.favorite);
+  const registered = Boolean(raw.registered);
+  const registeredAs = str(raw, "registered_as", "registered_as");
+  const filePath = str(raw, "path", "path") || str(raw, "model_path", "model_path") || "";
+  const fileDir = str(raw, "model_dir", "model_dir") || "";
+  const vision = Boolean(raw.vision || (raw as { supports?: { vision?: boolean } }).supports?.vision);
+  const fileId = str(raw, "file_id", "file_id") || str(raw, "id", "id") || "";
+
+  const hasActions = Boolean(onStart || onStop || onChat || onBenchmark || onTransfer || onLogs || onAdd || onEdit || onDelete);
+
+  const details: Array<[string, string]> = [];
+  if (port !== undefined) details.push(["Port", String(port)]);
+  if (pid !== undefined) details.push(["PID", String(pid)]);
+  if (ctx !== undefined) details.push(["Context", numberLabel(ctx)]);
+  if (gpuLayers !== undefined) details.push(["GPU Layers", String(gpuLayers)]);
+  if (host) details.push(["Host", host]);
+  if (reasoning) {
+    details.push(["Reasoning", reasoningBudget !== undefined ? `${reasoning} / ${numberLabel(reasoningBudget)}` : reasoning]);
+  }
+  if (promptTemplate) details.push(["Template", promptTemplate]);
+  if (bytes !== undefined) {
+    const label = sizeLabel(bytes);
+    if (label) details.push(["Size", label]);
+  }
+  if (fileId) details.push(["File ID", fileId]);
+  if (fileDir) details.push(["Directory", fileDir]);
+  if (registeredAs) details.push(["Added as", registeredAs]);
+
+  /** Render a button action row if at least one handler is provided. */
+  function actions() {
+    if (!hasActions) return null;
+    return (
+      <div className="model-actions">
+        {onAdd ? (
+          <Button onClick={onAdd} aria-label={`Add ${name}`}>
+            Add
+          </Button>
+        ) : null}
+        {onEdit ? (
+          <Button variant="ghost" onClick={onEdit} aria-label={`Edit ${name}`}>
+            Edit
+          </Button>
+        ) : null}
+        {onStart ? (
+          <Button variant="success" onClick={onStart} disabled={actingModel === `start:${name}`} aria-label={`Start ${name}`}>
+            <IoPlaySharp />
+          </Button>
+        ) : null}
+        {onStop ? (
+          <Button variant="danger" onClick={onStop} disabled={actingModel === `stop:${name}`} aria-label={`Stop ${name}`}>
+            <IoStop />
+          </Button>
+        ) : null}
+        {onChat ? (
+          <Button variant="warning" onClick={onChat} aria-label={`Chat with ${name}`}>
+            <IoChatbubbles />
+          </Button>
+        ) : null}
+        {onBenchmark ? (
+          <Button type="button" onClick={onBenchmark} aria-label={`Benchmark ${name}`}>
+            <IoStatsChart />
+          </Button>
+        ) : null}
+        {onTransfer ? (
+          <Button variant="success" onClick={onTransfer} aria-label={`Send ${name}`}>
+            <IoSend />
+          </Button>
+        ) : null}
+        {onLogs ? (
+          <Button type="button" onClick={onLogs} aria-label={`View logs for ${name}`}>
+            <IoTerminal />
+          </Button>
+        ) : null}
+        {onDelete ? (
+          <Button variant="danger" onClick={onDelete} aria-label={`Remove ${name}`}>
+            Delete
+          </Button>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
-    <article className={`library-card ${className}`.trim()}>
+    <article className={`library-card ${active ? "active" : ""}`.trim()}>
       {onOpen ? (
-        <button type="button" className="library-card-button" onClick={onOpen} aria-label={openLabel || "Open"}>
-          <strong>{title}</strong>
-          {meta}
+        <button type="button" className="library-card-button" onClick={onOpen} aria-label={`Open ${name}`}>
+          <strong>{name}</strong>
         </button>
       ) : (
         <div className="library-card-button">
-          <strong>{title}</strong>
-          {meta}
+          <strong>{name}</strong>
         </div>
       )}
-      {badges ? <div className="library-card-badges">{badges}</div> : null}
+
+      {/* Badge row */}
+      <div className="library-card-badges">
+        <StatusBadge tone={statusTone(status)}>
+          <IoCheckmarkCircle /> {status}
+        </StatusBadge>
+        <StatusBadge tone="muted">
+          <IoHome /> {resolvedNode || (registered ? "local" : "discovered")}
+        </StatusBadge>
+        {favorite ? (
+          <StatusBadge tone="warning">
+            <IoStar /> favorite
+          </StatusBadge>
+        ) : null}
+        {vision ? (
+          <StatusBadge tone="muted">Vision</StatusBadge>
+        ) : null}
+      </div>
+
+      {/* Detail grid */}
+      {filePath || details.length > 0 ? (
+        <dl className="model-card-detail-grid">
+          {filePath ? (
+            <div>
+              <dt>Path</dt>
+              <dd>{filePath}</dd>
+            </div>
+          ) : null}
+          {details.map(([label, value]) => (
+            <div key={label}>
+              <dt>{label}</dt>
+              <dd>{value}</dd>
+            </div>
+          ))}
+        </dl>
+      ) : null}
+
       {children}
-      {actions ? <div className="model-actions">{actions}</div> : null}
+
+      {actions()}
     </article>
   );
 }

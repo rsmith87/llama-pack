@@ -202,7 +202,7 @@ it("sends dashboard local models to another reachable node", async () => {
   const user = userEvent.setup();
 
   renderDashboardPage();
-  await user.click(await screen.findByRole("button", { name: "Send Model for mistral" }));
+  await user.click(await screen.findByRole("button", { name: "Send mistral" }));
 
   expect(await screen.findByRole("heading", { name: "Send mistral" })).toBeInTheDocument();
   expect(screen.queryByRole("option", { name: "mac-mini" })).not.toBeInTheDocument();

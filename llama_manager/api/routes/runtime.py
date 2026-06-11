@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Request
 
 from llama_manager.core.runtime.route_preview import RoutePreviewRequest, RoutePreviewService
@@ -45,6 +47,43 @@ async def route_preview(body: RoutePreviewRequest, request: Request) -> dict[str
         node_registry=getattr(request.app.state, "node_registry", None),
     )
     return await service.preview(body)
+
+
+@router.get("/tool-loop-evals/latest")
+async def tool_loop_eval_latest(request: Request) -> dict[str, object]:
+    config = request.app.state.config
+    path = config.log_dir / "tool_loop_eval_latest.json"
+    if not path.exists():
+        return {
+            "available": False,
+            "path": str(path),
+            "generated_at": None,
+            "suite_count": 0,
+            "models": [],
+            "suites": [],
+        }
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception as exc:
+        return {
+            "available": False,
+            "path": str(path),
+            "generated_at": None,
+            "suite_count": 0,
+            "models": [],
+            "suites": [],
+            "error": str(exc),
+        }
+    if not isinstance(payload, dict):
+        payload = {}
+    return {
+        "available": True,
+        "path": str(path),
+        "generated_at": payload.get("generated_at"),
+        "suite_count": int(payload.get("suite_count") or 0),
+        "models": payload.get("models") if isinstance(payload.get("models"), list) else [],
+        "suites": payload.get("suites") if isinstance(payload.get("suites"), list) else [],
+    }
 
 
 def _agent_tools_summary(config) -> dict[str, object]:
