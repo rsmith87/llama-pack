@@ -69,6 +69,71 @@ function checks(result?: ToolLoopEvalCaseResult): Array<[string, boolean]> {
   return Object.entries(result?.checks || {}).map(([key, value]) => [key, Boolean(value)]);
 }
 
+function jsonBlock(value: unknown): string {
+  return JSON.stringify(value ?? {}, null, 2);
+}
+
+function timelineEntries(result: ToolLoopEvalCaseResult): Array<{
+  index: number;
+  toolName: string;
+  ok: boolean;
+  expected: boolean;
+  repeated: boolean;
+  call: Record<string, unknown>;
+  toolResult: Record<string, unknown>;
+  error: string;
+}> {
+  const expected = result.expected_tool_sequence || [];
+  const seen = new Map<string, number>();
+  const toolResults = result.tool_results || [];
+  if (toolResults.length) {
+    return toolResults.map((toolResult, index) => {
+      const toolName = String(toolResult.tool_name || toolResult.function?.name || result.observed_tool_sequence?.[index] || "-");
+      const count = (seen.get(toolName) || 0) + 1;
+      seen.set(toolName, count);
+      return {
+        index,
+        toolName,
+        ok: toolResult.ok !== false,
+        expected: expected.includes(toolName),
+        repeated: count > 1,
+        call: {
+          tool_call_id: toolResult.tool_call_id || `step-${index + 1}`,
+          type: "function",
+          function: toolResult.function || {
+            name: toolName,
+            arguments: toolResult.raw_arguments || jsonBlock(toolResult.arguments || {}),
+          },
+        },
+        toolResult: toolResult.result || {
+          ok: toolResult.ok !== false,
+          error: toolResult.error || "",
+          arguments: toolResult.arguments || {},
+        },
+        error: String(toolResult.error || ""),
+      };
+    });
+  }
+  return (result.observed_tool_sequence || []).map((toolName, index) => {
+    const count = (seen.get(toolName) || 0) + 1;
+    seen.set(toolName, count);
+    return {
+      index,
+      toolName,
+      ok: true,
+      expected: expected.includes(toolName),
+      repeated: count > 1,
+      call: {
+        tool_call_id: `step-${index + 1}`,
+        type: "function",
+        function: { name: toolName, arguments: "{}" },
+      },
+      toolResult: { ok: true },
+      error: "",
+    };
+  });
+}
+
 function firstCase(suite: ToolLoopEvalSuite | null): ToolLoopEvalCaseResult | null {
   return suite?.cases?.[0] || null;
 }
@@ -391,6 +456,7 @@ export function ToolLoopEvalsPage() {
                     <StatusBadge key={key} tone={ok ? "success" : "danger"}>{key}</StatusBadge>
                   ))}
                 </div>
+                <ToolCallTimeline result={activeCase} />
                 {activeCase.error ? <ErrorBanner message={activeCase.error} /> : null}
                 <p className="muted">Final answer</p>
                 <pre className="tool-loop-answer">{activeCase.final_answer || "-"}</pre>
@@ -401,6 +467,65 @@ export function ToolLoopEvalsPage() {
           </Panel>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function ToolCallTimeline({ result }: { result: ToolLoopEvalCaseResult }) {
+  const entries = timelineEntries(result);
+  const missingTools = (result.expected_tool_sequence || []).filter(
+    (toolName) => !(result.observed_tool_sequence || []).includes(toolName),
+  );
+  if (!entries.length && !missingTools.length) return null;
+  return (
+    <div className="tool-loop-timeline" aria-label="Tool call timeline">
+      <div className="tool-loop-section-heading">
+        <strong>Tool Call Timeline</strong>
+        <span className="muted">{entries.length} call{entries.length === 1 ? "" : "s"}</span>
+      </div>
+      <div className="tool-loop-timeline-list">
+        {entries.map((entry) => (
+          <details key={`${entry.index}-${entry.toolName}`} className={`tool-loop-step ${entry.ok ? "" : "failed"}`}>
+            <summary>
+              <span className="tool-loop-step-index">{entry.index + 1}</span>
+              <span className="tool-loop-step-name">{entry.toolName}</span>
+              <StatusBadge tone={entry.ok ? "success" : "danger"}>{entry.ok ? "ok" : "error"}</StatusBadge>
+              {!entry.expected ? <StatusBadge tone="warning">unexpected</StatusBadge> : null}
+              {entry.repeated ? <StatusBadge tone="warning">repeated</StatusBadge> : null}
+              <button
+                type="button"
+                className="tool-loop-inspect-label"
+                aria-label={`Inspect tool call ${entry.index + 1} ${entry.toolName}`}
+                onClick={(event) => {
+                  event.preventDefault();
+                  const details = event.currentTarget.closest("details");
+                  if (details) details.open = !details.open;
+                }}
+              >
+                Inspect
+              </button>
+            </summary>
+            <div className="tool-loop-step-detail">
+              <div>
+                <p className="muted">Function call</p>
+                <pre className="tool-loop-json">{jsonBlock(entry.call)}</pre>
+              </div>
+              <div>
+                <p className="muted">Tool result</p>
+                <pre className="tool-loop-json">{jsonBlock(entry.toolResult)}</pre>
+              </div>
+              {entry.error ? <ErrorBanner message={entry.error} /> : null}
+            </div>
+          </details>
+        ))}
+        {missingTools.map((toolName) => (
+          <div key={`missing-${toolName}`} className="tool-loop-step missing">
+            <span className="tool-loop-step-index">-</span>
+            <span className="tool-loop-step-name">{toolName}</span>
+            <StatusBadge tone="danger">missing</StatusBadge>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

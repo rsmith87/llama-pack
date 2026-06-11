@@ -181,6 +181,9 @@ async def test_tool_loop_eval_scores_expected_tool_order_and_final_answer(tmp_pa
     assert result["tool_call_count"] == 2
     assert result["iteration_count"] == 3
     assert result["observed_tool_sequence"] == ["read_status", "read_details"]
+    assert result["tool_results"][0]["tool_call_id"] == "call-1"
+    assert result["tool_results"][0]["raw_arguments"] == "{}"
+    assert result["tool_results"][0]["function"] == {"name": "read_status", "arguments": "{}"}
     assert result["checks"] == {
         "completed": True,
         "expected_tool_sequence": True,
@@ -394,6 +397,34 @@ async def test_tool_loop_eval_scores_real_world_design_doc_sectioned_answer(tmp_
             "Expose grouped real-world scenarios alongside synthetic presets.\n"
             "## Risks\n"
             "Schema churn and backward compatibility are the main rollout risks.\n"
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_final_substrings"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_real_world_design_doc_typographic_answer(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "technical-design-doc-draft")
+    proxy = ScriptedToolProxy(
+        [
+            "read_design_requirements",
+            "inspect_existing_api_contract",
+            "inspect_persistence_constraints",
+            "inspect_frontend_requirements",
+            "read_rollout_risks",
+        ],
+        (
+            "**Durable Tool‑Loop Eval History - Technical Design Document**\n"
+            "| **1. Overview** | Persist comparable run summaries for future model comparisons. |\n"
+            "| **2. Goals** | Keep the API contract stable and expose grouped Real‑World Scenarios. |\n"
+            "| **3. Architecture** | On each controller-triggered node run, record case details. |\n"
+            "| **5. Persistence Constraints** | Store results in the benchmark database. |\n"
+            "| **6. Frontend Requirements** | Add real-world scenarios alongside synthetic presets. |\n"
+            "| **8. Risk Mitigation** | Schema churn and backward compatibility are rollout risks. |\n"
         ),
     )
 

@@ -81,11 +81,102 @@
   gap: 0.5rem;
 }
 
+.tool-loop-section-heading {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  justify-content: space-between;
+  margin-top: var(--space-3, 1rem);
+}
+
+.tool-loop-timeline {
+  display: grid;
+  gap: 0.75rem;
+  margin: var(--space-3, 1rem) 0;
+}
+
+.tool-loop-timeline-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.tool-loop-step {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.tool-loop-step.failed,
+.tool-loop-step.missing {
+  border-color: color-mix(in srgb, var(--danger, #b42318) 42%, var(--line));
+}
+
+.tool-loop-step summary,
+.tool-loop-step.missing {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: auto minmax(0, 1fr) auto auto auto;
+  list-style: none;
+  padding: 0.65rem 0.75rem;
+}
+
+.tool-loop-step summary::-webkit-details-marker {
+  display: none;
+}
+
+.tool-loop-step-index {
+  align-items: center;
+  background: var(--surface-subtle, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  display: inline-flex;
+  font-size: 0.8rem;
+  height: 1.6rem;
+  justify-content: center;
+  width: 1.6rem;
+}
+
+.tool-loop-step-name {
+  font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tool-loop-inspect-label {
+  background: transparent;
+  border: 0;
+  color: var(--accent);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+}
+
+.tool-loop-step-detail {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.75rem;
+  padding: 0.75rem;
+}
+
 .tool-loop-answer {
   background: var(--surface-subtle, rgba(127, 127, 127, 0.08));
   border: 1px solid var(--line);
   border-radius: 8px;
   margin: 0;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+}
+
+.tool-loop-json {
+  background: var(--surface-subtle, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin: 0;
+  max-height: 20rem;
+  overflow: auto;
   padding: 0.75rem;
   white-space: pre-wrap;
 }
@@ -110,5 +201,10 @@
   .tool-loop-run-actions {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .tool-loop-step summary,
+  .tool-loop-step.missing {
+    grid-template-columns: auto minmax(0, 1fr);
   }
 }

@@ -66,17 +66,25 @@ class ToolLoopEvaluator:
             for tool_call in tool_calls:
                 function = tool_call.get("function") or {}
                 name = str(function.get("name") or "")
+                raw_arguments = function.get("arguments")
                 observed_tools.append(name)
-                arguments = _parse_arguments(function.get("arguments"))
+                arguments = _parse_arguments(raw_arguments)
                 result = await self.executor.execute(name, arguments, request_id=request_id, model=model_name)
                 expected_error = name in case.expected_error_tools and not bool(result.get("ok"))
                 tool_results.append(
                     {
+                        "tool_call_id": tool_call.get("id") or name,
                         "tool_name": name,
+                        "function": {
+                            "name": name,
+                            "arguments": raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments or {}),
+                        },
+                        "raw_arguments": raw_arguments if isinstance(raw_arguments, str) else json.dumps(raw_arguments or {}),
                         "arguments": arguments,
                         "ok": bool(result.get("ok")),
                         "error": result.get("error") or "",
                         "expected_error": expected_error,
+                        "result": result,
                     }
                 )
                 messages.append(
@@ -332,7 +340,7 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
                 "Architecture",
                 "Persistence",
                 "Frontend",
-                "Risks",
+                "Risk",
                 "durable",
                 "eval history",
                 "controller",
@@ -658,8 +666,20 @@ def _arguments_include(arguments: Any, expected_arguments: dict[str, Any]) -> bo
 
 
 def _contains_all(text: str, expected_substrings: list[str]) -> bool:
-    normalized = text.lower()
-    return all(substring.lower() in normalized for substring in expected_substrings)
+    normalized = _normalize_match_text(text)
+    return all(_normalize_match_text(substring) in normalized for substring in expected_substrings)
+
+
+def _normalize_match_text(text: str) -> str:
+    return (
+        text.lower()
+        .replace("\u2010", "-")
+        .replace("\u2011", "-")
+        .replace("\u2012", "-")
+        .replace("\u2013", "-")
+        .replace("\u2014", "-")
+        .replace("\u2212", "-")
+    )
 
 
 def _score(checks: dict[str, bool]) -> float:

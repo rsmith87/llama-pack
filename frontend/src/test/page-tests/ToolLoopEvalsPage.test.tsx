@@ -210,6 +210,101 @@ it("loads persisted run detail from the history table", async () => {
   expect(screen.getByText("billing route found invoice drift")).toBeInTheDocument();
 });
 
+it("renders expandable tool-call timeline details", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-3",
+            generated_at: "2026-06-11T12:20:00+00:00",
+            model: "gpt-oss-20b",
+            target_selector: "node:linux-2080ti",
+            target_node: "linux-2080ti",
+            status: "passed",
+            average_score: 1,
+            case_count: 1,
+            passed_count: 1,
+            failed_count: 0,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-3") {
+      return Promise.resolve(okJson({
+        id: "run-3",
+        generated_at: "2026-06-11T12:20:00+00:00",
+        model: "gpt-oss-20b",
+        target_selector: "node:linux-2080ti",
+        target_node: "linux-2080ti",
+        status: "passed",
+        average_score: 1,
+        case_count: 1,
+        passed_count: 1,
+        failed_count: 0,
+        cases: [
+          {
+            case_id: "technical-design-doc-draft",
+            status: "passed",
+            score: 1,
+            iteration_count: 6,
+            tool_call_count: 2,
+            observed_tool_sequence: ["read_design_requirements", "inspect_existing_api_contract"],
+            expected_tool_sequence: ["read_design_requirements", "inspect_existing_api_contract"],
+            checks: { completed: true, expected_tool_sequence: true, no_tool_errors: true, no_repeated_calls: true },
+            tool_results: [
+              {
+                tool_call_id: "call-req",
+                tool_name: "read_design_requirements",
+                raw_arguments: "{}",
+                arguments: {},
+                ok: true,
+                error: "",
+                function: { name: "read_design_requirements", arguments: "{}" },
+                result: { ok: true, source: "requirements", problem: "durable eval history" },
+              },
+              {
+                tool_call_id: "call-api",
+                tool_name: "inspect_existing_api_contract",
+                raw_arguments: "{}",
+                arguments: {},
+                ok: true,
+                error: "",
+              },
+            ],
+            final_answer: "Overview Goals Architecture Persistence Frontend Risk durable eval history",
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  await user.click(await screen.findByRole("button", { name: "View run gpt-oss-20b" }));
+
+  expect(await screen.findByText("Tool Call Timeline")).toBeInTheDocument();
+  expect(screen.getByText("read_design_requirements")).toBeInTheDocument();
+  expect(screen.getByText("inspect_existing_api_contract")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Inspect tool call 1 read_design_requirements" }));
+
+  expect(screen.getAllByText("Function call").length).toBeGreaterThan(0);
+  expect(screen.getByText(/"tool_call_id": "call-req"/)).toBeInTheDocument();
+  expect(screen.getByText(/"problem": "durable eval history"/)).toBeInTheDocument();
+});
+
 it("submits a tool-loop eval run from the page", async () => {
   const user = userEvent.setup();
   const requests: Array<{ url: string; body?: string }> = [];

@@ -20,7 +20,17 @@ export type ToolLoopEvalCaseResult = {
   observed_tool_sequence?: string[];
   expected_tool_sequence?: string[];
   scoring_mode?: string | null;
-  tool_results?: Array<{ tool_name?: string; ok?: boolean; error?: string; arguments?: Record<string, unknown> }>;
+  tool_results?: Array<{
+    tool_call_id?: string;
+    tool_name?: string;
+    function?: { name?: string; arguments?: string };
+    raw_arguments?: string;
+    ok?: boolean;
+    error?: string;
+    expected_error?: boolean;
+    arguments?: Record<string, unknown>;
+    result?: Record<string, unknown>;
+  }>;
   final_answer?: string;
 };
 
