@@ -160,11 +160,17 @@ async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request
         node = node_registry.get_node_config(body.node)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
-    node_url = f"{_node_base_url(body.node, node.url)}/lm-api/v1/runtime/tool-loop-evals/run"
+    _node_base_url(body.node, node.url)
     payload: dict[str, object] = {"model": body.model}
     if body.case_ids is not None:
         payload["case_ids"] = body.case_ids
-    return await node_registry._request("POST", node_url, node.api_key, node.verify_tls, payload)
+    return await node_registry.request_node(
+        body.node,
+        "POST",
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        payload,
+        timeout=None,
+    )
 
 
 def _agent_tools_summary(config) -> dict[str, object]:

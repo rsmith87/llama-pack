@@ -120,6 +120,69 @@ async def test_request_node_rejects_node_url_without_http_scheme():
         await registry.request_node("mac-mini", "GET", "/lm-api/v1/models")
 
 
+@pytest.mark.asyncio
+async def test_request_node_allows_long_running_default_request(monkeypatch):
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "mac-mini": {
+                    "url": "https://mac-mini.local",
+                    "api_key": "secret",
+                    "verify_tls": False,
+                }
+            },
+        }
+    )
+    registry = NodeRegistry(config=config)
+    seen = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeClient:
+        def __init__(self, timeout=None, verify=True):
+            seen["timeout"] = timeout
+            seen["verify"] = verify
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def request(self, method, url, headers, json):
+            seen["method"] = method
+            seen["url"] = url
+            seen["headers"] = headers
+            seen["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr("llama_manager.core.nodes.registry.httpx.AsyncClient", FakeClient)
+
+    result = await registry.request_node(
+        "mac-mini",
+        "POST",
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        {"model": "gpt-oss-20b"},
+        timeout=None,
+    )
+
+    assert result == {"ok": True}
+    assert seen == {
+        "timeout": None,
+        "verify": False,
+        "method": "POST",
+        "url": "https://mac-mini.local/lm-api/v1/runtime/tool-loop-evals/run",
+        "headers": {"X-Llama-Manager-Key": "secret"},
+        "json": {"model": "gpt-oss-20b"},
+    }
+
+
 def test_updates_static_node_runtime_config_without_changing_registration():
     config = load_config(
         {

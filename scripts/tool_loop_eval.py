@@ -190,6 +190,7 @@ async def run_node_suites(config: Any, models: list[str], cases: list[Any], node
                     "POST",
                     "/lm-api/v1/runtime/tool-loop-evals/run",
                     {"model": model, "case_ids": case_ids},
+                    timeout=None,
                 )
             )
         except Exception as exc:

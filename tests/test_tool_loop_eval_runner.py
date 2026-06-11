@@ -316,8 +316,8 @@ def test_run_suites_with_controller_node_target_calls_agent_eval_endpoint(monkey
         def __init__(self, config):
             pass
 
-        async def request_node(self, node, method, path, json_body=None):
-            calls.append((node, method, path, json_body))
+        async def request_node(self, node, method, path, json_body=None, *, timeout=10):
+            calls.append((node, method, path, json_body, timeout))
             return {"model": "gpt-oss-20b", "status": "passed", "case_count": 1, "passed_count": 1, "failed_count": 0, "average_score": 1.0, "cases": []}
 
     monkeypatch.setattr(runner, "NodeRegistry", FakeNodeRegistry)
@@ -338,6 +338,7 @@ def test_run_suites_with_controller_node_target_calls_agent_eval_endpoint(monkey
             "POST",
             "/lm-api/v1/runtime/tool-loop-evals/run",
             {"model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
+            None,
         )
     ]
 

@@ -26,6 +26,7 @@ class NodeRegistry:
     ):
         self.config = config
         self._request = request or self._default_request
+        self._uses_default_request = request is None
         self._store = store
         self._dynamic_nodes: dict[str, NodeConfig] = {}
         self._node_overrides: dict[str, NodeConfig] = {}
@@ -78,10 +79,14 @@ class NodeRegistry:
         method: str,
         path: str,
         json_body: dict[str, Any] | None = None,
+        *,
+        timeout: float | None = 10,
     ) -> dict[str, Any]:
         node = self._get_node(node_name)
         base_url = _validated_base_url(node_name, node.url)
         url = f"{base_url}/{path.lstrip('/')}"
+        if self._uses_default_request:
+            return await self._default_request(method, url, node.api_key, node.verify_tls, json_body, timeout=timeout)
         if json_body is None:
             return await self._request(method, url, node.api_key, node.verify_tls)
         return await self._request(method, url, node.api_key, node.verify_tls, json_body)
@@ -132,11 +137,13 @@ class NodeRegistry:
         api_key: str | None,
         verify_tls: bool,
         json_body: dict[str, Any] | None = None,
+        *,
+        timeout: float | None = 10,
     ) -> dict[str, Any]:
         headers: dict[str, str] = {}
         if api_key:
             headers["X-Llama-Manager-Key"] = api_key
-        async with httpx.AsyncClient(timeout=10, verify=verify_tls) as client:
+        async with httpx.AsyncClient(timeout=timeout, verify=verify_tls) as client:
             response = await client.request(method, url, headers=headers, json=json_body)
             response.raise_for_status()
             return response.json()
