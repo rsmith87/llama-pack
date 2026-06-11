@@ -103,7 +103,7 @@ class LiveToolLoopEvaluator:
                 "expected_tool_sequence": sorted(observed_tools) == sorted(scenario.expected_tool_sequence),
                 "expected_final_substrings": _contains_all(final_answer, ["created", "notes"]),
                 "no_tool_errors": all(bool(result.get("ok")) for result in tool_results),
-                "no_repeated_calls": _max_repeated_calls(observed_tools) <= scenario.max_repeated_tool_calls,
+                "no_repeated_calls": _max_repeated_call_signatures(tool_results) <= scenario.max_repeated_tool_calls,
                 **artifact_checks,
             }
             score = _score(checks)
@@ -148,6 +148,7 @@ def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:
             prompt=(
                 "Use the workspace tools to inspect the notes app brief and starter files. "
                 "Create docs/notes-app-design.md with a concise implementation design. "
+                "The design must include sections named Overview, Data model, API, Frontend, Collaboration, and Risk. "
                 "Do not implement registration or account-management flows."
             ),
             expected_tool_sequence=[
@@ -349,8 +350,15 @@ def _normalize_match_text(text: str) -> str:
     )
 
 
-def _max_repeated_calls(observed: list[str]) -> int:
-    counts = {name: observed.count(name) for name in set(observed)}
+def _max_repeated_call_signatures(tool_results: list[dict[str, Any]]) -> int:
+    signatures = [
+        (
+            str(result.get("tool_name") or ""),
+            json.dumps(result.get("arguments") or {}, sort_keys=True, separators=(",", ":")),
+        )
+        for result in tool_results
+    ]
+    counts = {signature: signatures.count(signature) for signature in set(signatures)}
     return max(counts.values(), default=0)
 
 

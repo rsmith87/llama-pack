@@ -106,3 +106,45 @@ async def test_live_collaborative_notes_design_penalizes_forbidden_auth_artifact
 
     assert result["status"] == "failed"
     assert result["checks"]["no_forbidden_artifact_substrings"] is False
+
+
+@pytest.mark.asyncio
+async def test_live_collaborative_notes_design_allows_distinct_repeated_tool_reads(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+    design = (
+        "Overview Data model API Frontend Collaboration Risk notes collaborators user_id note_id registration"
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("read_workspace_file", {"path": "README.md"}),
+            ("read_workspace_file", {"path": "schema-notes.md"}),
+            ("search_workspace", {"query": "user_id"}),
+            ("write_notes_app_design", {"content": design}),
+        ]
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["no_repeated_calls"] is True
+
+
+@pytest.mark.asyncio
+async def test_live_collaborative_notes_design_penalizes_duplicate_identical_tool_calls(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+    design = (
+        "Overview Data model API Frontend Collaboration Risk notes collaborators user_id note_id registration"
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("read_workspace_file", {"path": "README.md"}),
+            ("read_workspace_file", {"path": "README.md"}),
+            ("search_workspace", {"query": "user_id"}),
+            ("write_notes_app_design", {"content": design}),
+        ]
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["no_repeated_calls"] is False
