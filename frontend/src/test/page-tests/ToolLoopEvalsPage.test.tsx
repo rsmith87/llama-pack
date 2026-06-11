@@ -13,6 +13,51 @@ afterEach(() => {
 
 it("renders latest tool-loop eval summaries and selected case details", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-1",
+            generated_at: "2026-06-11T12:10:00+00:00",
+            model: "gpt-oss-20b",
+            target_selector: "node:mac-mini",
+            target_node: "mac-mini",
+            status: "passed",
+            average_score: 1,
+            case_count: 2,
+            passed_count: 2,
+            failed_count: 0,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-1") {
+      return Promise.resolve(okJson({
+        id: "run-1",
+        generated_at: "2026-06-11T12:10:00+00:00",
+        model: "gpt-oss-20b",
+        target_selector: "node:mac-mini",
+        target_node: "mac-mini",
+        status: "passed",
+        average_score: 1,
+        case_count: 2,
+        passed_count: 2,
+        failed_count: 0,
+        cases: [
+          {
+            case_id: "avoid-unneeded-tools",
+            status: "passed",
+            score: 1,
+            iteration_count: 1,
+            tool_call_count: 0,
+            observed_tool_sequence: [],
+            expected_tool_sequence: [],
+            checks: { completed: true },
+            final_answer: "tool loop ready",
+          },
+        ],
+      }));
+    }
     if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
       return Promise.resolve(okJson({
         available: true,
@@ -56,8 +101,10 @@ it("renders latest tool-loop eval summaries and selected case details", async ()
   render(<ToolLoopEvalsPage />);
 
   expect(await screen.findByRole("heading", { name: "Tool Loop Evals" })).toBeInTheDocument();
+  expect(await screen.findByText("Run History")).toBeInTheDocument();
+  expect(screen.getByText("mac-mini")).toBeInTheDocument();
   expect(screen.getAllByText("gpt-oss-20b").length).toBeGreaterThan(0);
-  expect(screen.getByText("2 / 2")).toBeInTheDocument();
+  expect(screen.getAllByText("2 / 2").length).toBeGreaterThan(0);
   expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
   expect(screen.getAllByText("two-step-tool-synthesis").length).toBeGreaterThan(0);
   expect(screen.getAllByText("read_status -> read_details").length).toBeGreaterThan(0);
@@ -69,6 +116,9 @@ it("renders latest tool-loop eval summaries and selected case details", async ()
 
 it("renders an empty state when no latest tool-loop eval exists", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({ runs: [] }));
+    }
     if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
       return Promise.resolve(okJson({
         available: false,
@@ -87,4 +137,74 @@ it("renders an empty state when no latest tool-loop eval exists", async () => {
   expect(await screen.findByText("No tool-loop eval results yet.")).toBeInTheDocument();
   expect(screen.getByText("uv run python scripts/tool_loop_eval.py --config /path/to/controller-config.yaml --model gpt-oss-20b --target node:mac-mini")).toBeInTheDocument();
   expect(screen.getByText("/tmp/tool_loop_eval_latest.json")).toBeInTheDocument();
+});
+
+it("loads persisted run detail from the history table", async () => {
+  const user = (await import("@testing-library/user-event")).default.setup();
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-2",
+            generated_at: "2026-06-11T12:15:00+00:00",
+            model: "qwen",
+            target_selector: "node:linux-2080ti",
+            target_node: "linux-2080ti",
+            status: "failed",
+            average_score: 0.5,
+            case_count: 2,
+            passed_count: 1,
+            failed_count: 1,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-2") {
+      return Promise.resolve(okJson({
+        id: "run-2",
+        generated_at: "2026-06-11T12:15:00+00:00",
+        model: "qwen",
+        target_selector: "node:linux-2080ti",
+        target_node: "linux-2080ti",
+        status: "failed",
+        average_score: 0.5,
+        case_count: 2,
+        passed_count: 1,
+        failed_count: 1,
+        cases: [
+          {
+            case_id: "branching-decision",
+            status: "failed",
+            score: 0.5,
+            iteration_count: 2,
+            tool_call_count: 2,
+            observed_tool_sequence: ["choose_route", "inspect_billing"],
+            expected_tool_sequence: ["choose_route", "inspect_infra"],
+            checks: { expected_tool_sequence: false },
+            final_answer: "billing route found invoice drift",
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  await user.click(await screen.findByRole("button", { name: "View run qwen" }));
+
+  expect((await screen.findAllByText("branching-decision")).length).toBeGreaterThan(0);
+  expect(screen.getAllByText("choose_route -> inspect_billing").length).toBeGreaterThan(0);
+  expect(screen.getByText("billing route found invoice drift")).toBeInTheDocument();
 });

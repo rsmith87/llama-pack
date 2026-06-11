@@ -359,6 +359,95 @@ def test_controller_tool_loop_eval_node_run_rejects_node_url_without_scheme(tmp_
     assert response.json()["detail"] == "nodes.mac-mini.url must start with http:// or https://"
 
 
+def test_tool_loop_eval_runs_api_lists_persisted_history(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    app.state.benchmark_store.create_tool_loop_eval_run(
+        generated_at="2026-06-11T04:10:00+00:00",
+        target_selector="node:mac-mini",
+        target_node="mac-mini",
+        suite={
+            "model": "gpt-oss-20b",
+            "status": "passed",
+            "case_count": 1,
+            "passed_count": 1,
+            "failed_count": 0,
+            "average_score": 1.0,
+            "cases": [],
+        },
+    )
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/tool-loop-evals/runs?model=gpt-oss-20b&status=passed")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["runs"][0]["model"] == "gpt-oss-20b"
+    assert body["runs"][0]["target_node"] == "mac-mini"
+    assert body["runs"][0]["status"] == "passed"
+    assert "cases" not in body["runs"][0]
+
+
+def test_tool_loop_eval_run_api_returns_case_detail(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    run = app.state.benchmark_store.create_tool_loop_eval_run(
+        generated_at="2026-06-11T04:10:00+00:00",
+        target_selector="node:mac-mini",
+        target_node="mac-mini",
+        suite={
+            "model": "gpt-oss-20b",
+            "status": "passed",
+            "case_count": 1,
+            "passed_count": 1,
+            "failed_count": 0,
+            "average_score": 1.0,
+            "cases": [
+                {
+                    "case_id": "avoid-unneeded-tools",
+                    "status": "passed",
+                    "score": 1.0,
+                    "checks": {"completed": True},
+                    "error": "",
+                    "iteration_count": 1,
+                    "tool_call_count": 0,
+                    "observed_tool_sequence": [],
+                    "expected_tool_sequence": [],
+                    "scoring_mode": "strict_sequence",
+                    "tool_results": [],
+                    "final_answer": "tool loop ready",
+                }
+            ],
+        },
+    )
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.get(f"/lm-api/v1/runtime/tool-loop-evals/runs/{run['id']}")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == run["id"]
+    assert body["cases"][0]["case_id"] == "avoid-unneeded-tools"
+    assert body["cases"][0]["checks"] == {"completed": True}
+
+
+def test_tool_loop_eval_run_api_returns_404_for_missing_run(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/tool-loop-evals/runs/missing")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Tool-loop eval run not found"
+
+
 def test_runtime_overview_reports_controller_runtime_state(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     async def fake_request(method, url, api_key, verify_tls, json_body=None):

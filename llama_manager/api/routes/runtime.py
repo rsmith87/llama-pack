@@ -4,7 +4,7 @@ import json
 from datetime import UTC, datetime
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
 
 from llama_manager.core.agent_tools.evals import ToolLoopEvaluator, default_tool_loop_eval_cases
@@ -105,6 +105,26 @@ async def tool_loop_eval_latest(request: Request) -> dict[str, object]:
     }
 
 
+@router.get("/tool-loop-evals/runs")
+async def tool_loop_eval_runs(
+    request: Request,
+    model: str | None = Query(default=None),
+    status: str | None = Query(default=None),
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, object]:
+    store = _benchmark_store(request)
+    return {"runs": store.list_tool_loop_eval_runs(model=model, status=status, limit=limit)}
+
+
+@router.get("/tool-loop-evals/runs/{run_id}")
+async def tool_loop_eval_run_detail(run_id: str, request: Request) -> dict[str, object]:
+    store = _benchmark_store(request)
+    run = store.get_tool_loop_eval_run(run_id)
+    if run is None:
+        raise HTTPException(status_code=404, detail="Tool-loop eval run not found")
+    return run
+
+
 @router.post("/tool-loop-evals/node-chat")
 async def tool_loop_eval_node_chat(body: ToolLoopNodeChatRequest, request: Request) -> dict[str, object]:
     config = request.app.state.config
@@ -201,6 +221,13 @@ def _persist_tool_loop_suite(
         target_node=target_node,
         suite=suite,
     )
+
+
+def _benchmark_store(request: Request) -> Any:
+    store = getattr(request.app.state, "benchmark_store", None)
+    if store is None:
+        raise HTTPException(status_code=503, detail="benchmark store is not available")
+    return store
 
 
 def _agent_tools_summary(config) -> dict[str, object]:

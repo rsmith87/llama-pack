@@ -629,28 +629,18 @@ Default output paths are:
 - \`logs/tool_loop_eval_results.jsonl\`
 - \`logs/tool_loop_eval_latest.json\`
 
-The built-in first-pass cases expect these tools to exist in the active
-agent-mode config:
-
-\`\`\`yaml
-agent_tools:
-  enabled: true
-  tools:
-    read_status:
-      type: file_read
-      description: Read status.
-      path: ./logs/tool-loop-status.txt
-    read_details:
-      type: file_read
-      description: Read details.
-      path: ./logs/tool-loop-details.txt
-\`\`\`
+The built-in cases use deterministic eval-only tools instead of the target
+agent's configured tools. This keeps runs comparable across nodes and models:
+the current baseline tools are \`read_status\` and \`read_details\`.
 
 Run multiple models by repeating \`--model\`; route to a specific controller node
 with \`--target node:<name>\`; run a single built-in case with \`--case <case-id>\`.
 Node targets require a controller-mode config that defines the node. Running
 the command with an agent-mode config will resolve the model as local to that
 process instead of going through the controller.
+
+See [Tool-Loop Eval Presets](tool-loop-eval-presets.md) for the preset roadmap
+and scoring model.
 `,
     headings: [
       {
@@ -774,7 +764,7 @@ process instead of going through the controller.
         "anchor": "tool-loop-evaluations"
       }
     ],
-    searchBody: "Agent Tools Agent tools give a coding agent structured, operator-controlled access to the local machine. Most tools are read-only; write-capable tools must be explicitly configured by the operator and are constrained by and per-tool limits. Each tool is a named YAML entry under with a and a that is shown to the LLM. Configuration skeleton --- Tool Types Run a fixed configured command and return stdout/stderr. Fields Field Default Description --- --- --- required Command array passed to the subprocess directly (no shell). Override the global timeout for this tool. --- Read a single configured file. Fields Field Default Description --- --- --- required File to read. Must resolve under . --- Read a file selected by the model under a configured root directory. The model must pass a relative argument; absolute paths and traversal outside the configured root are rejected. Example model arguments: Fields Field Default Description --- --- --- required Root directory for relative file reads. Must resolve under . Reject files larger than this limit before reading. --- Write, append, or create a single configured file. The model supplies only the argument; the destination path and write mode are fixed in YAML. Model arguments: Fields Field Default Description --- --- --- required File to write. Must resolve under . Parent directories are created if needed. , , or . fails if the file already exists. Reject content larger than this limit (1–1048576 bytes). --- Call a fixed HTTP endpoint and return the raw response body as text. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Override the global timeout. --- Call a fixed HTTP endpoint and return bounded parsed JSON. Returns a structured error if the response is not valid JSON. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Truncate response body before parsing. Override the global timeout. --- List files and directories under a configured path without shelling out. Fields Field Default Description --- --- --- required Directory to list. Must resolve under . Recurse into subdirectories. Max recursion depth when (0–32). Max entries to return (1–5000). Include dotfiles and hidden directories. --- Search file names under a configured root by glob pattern. Safe equivalent of or . Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern relative to . Include hidden files and directories. Max results to return (1–5000). --- Search file contents under a configured root. Safe equivalent of bounded . The agent provides a argument at call time (defined via ). Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern to filter which files to search. Case-sensitive matching. Treat as a compiled regex instead of a substring. Max total matches to return (1–2000). Skip files larger than this (bytes). --- Report read-only git state for a configured repository: current branch and changed files. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max changed files to return. Override the global timeout. --- Show the unstaged diff ( ) for a configured repository, bounded by . Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max diff lines to return (1–1000). Override the global timeout. --- Show recent commit metadata for a configured repository. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max commits to return (1–200). Override the global timeout. Returns , , , and for each commit. --- Report runtime health for locally managed model servers. Reads internal Llama Manager process state — no shell commands. Fields Field Default Description --- --- --- Max processes to return (1–5000). Returns , , , , and for each process. --- Return the last N lines of a configured log file without shelling out. Fields Field Default Description --- --- --- required Log file to read. Must resolve under . Max lines to return from the end of the file (1–1000). --- Run read-only SQL queries against one configured SQLite database, or against one of several configured databases selected by stem name. Only queries whose first non-comment token is or are allowed, and connections open in SQLite read-only mode. Single database: Multiple databases: Model arguments: For a single configured , omit : Fields Field Default Description --- --- --- optional SQLite database file. Required unless is set. Must resolve under . Multiple SQLite database files. The model chooses one with , using the file stem such as . Max rows to return (1–5000). --- Fetch a URL and return the page content. The agent provides the at call time. HTML is stripped to readable text by default using BeautifulSoup. Fields Field Default Description --- --- --- (open) If non-empty, only these domains and their subdomains are permitted. Strip HTML tags and extract visible text via BeautifulSoup. Truncate the response body before parsing (bytes). Override the global timeout. Built-in SSRF protection (always enforced, regardless of ): - Blocks , , - Blocks RFC 1918 private ranges: , , - Blocks link-local: , - Only and schemes are allowed ( , , etc. are rejected) --- Safety Rules - All path-based local tools ( , , , , , , , , , , and ) require to be set and will reject any path that does not resolve under a configured root. - is the only filesystem-mutating tool. It writes only to its configured , enforces , and rejects content larger than . - opens databases read-only and accepts only / queries after comments are stripped. - and URLs are fixed in YAML; the agent cannot supply or modify URLs at call time. - blocks loopback, private IP ranges, and non-http(s) schemes at all times. Set to further restrict which public sites the agent can reach. - reads in-memory state only — no subprocess or filesystem access. - Git tools are read-only status, diff, and log views. No commit, checkout, or push tools are implemented. --- Memory Tool Types These tools interact with the controller's semantic memory store (ChromaDB + ). They are only registered when the controller's memory subsystem is enabled and the store is not disabled. See for the config block. --- Write an observation or fact into the controller's memory store. The write is fire-and-forget — the tool returns immediately without waiting for the embedding and storage to complete. Near-identical entries (cosine similarity ≥ 0.92) are deduplicated server-side. Model arguments at call time: Fields (all optional in YAML — no static config beyond and ) Argument Default Description --- --- --- required The fact or observation to store. Must be non-empty. Memory tier: , , or . Optional topic label for grouping. Optional list of tag strings. --- Search the controller's memory store by semantic similarity and return the most relevant entries. The model provides the search query at call time. Model arguments at call time: Returns: Fields Argument Default Description --- --- --- required Natural language search query. Must be non-empty. store Max results to return (1–20). --- Tool-Loop Evaluations Use to run deterministic tool-loop evaluations against one or more local tool-capable models. The runner uses the same agent-local tool execution path as with , then writes an append-only JSONL history and a latest summary JSON file for UI/API consumption. Default output paths are: - - The built-in first-pass cases expect these tools to exist in the active agent-mode config: Run multiple models by repeating ; route to a specific controller node with ; run a single built-in case with . Node targets require a controller-mode config that defines the node. Running the command with an agent-mode config will resolve the model as local to that process instead of going through the controller.",
+    searchBody: "Agent Tools Agent tools give a coding agent structured, operator-controlled access to the local machine. Most tools are read-only; write-capable tools must be explicitly configured by the operator and are constrained by and per-tool limits. Each tool is a named YAML entry under with a and a that is shown to the LLM. Configuration skeleton --- Tool Types Run a fixed configured command and return stdout/stderr. Fields Field Default Description --- --- --- required Command array passed to the subprocess directly (no shell). Override the global timeout for this tool. --- Read a single configured file. Fields Field Default Description --- --- --- required File to read. Must resolve under . --- Read a file selected by the model under a configured root directory. The model must pass a relative argument; absolute paths and traversal outside the configured root are rejected. Example model arguments: Fields Field Default Description --- --- --- required Root directory for relative file reads. Must resolve under . Reject files larger than this limit before reading. --- Write, append, or create a single configured file. The model supplies only the argument; the destination path and write mode are fixed in YAML. Model arguments: Fields Field Default Description --- --- --- required File to write. Must resolve under . Parent directories are created if needed. , , or . fails if the file already exists. Reject content larger than this limit (1–1048576 bytes). --- Call a fixed HTTP endpoint and return the raw response body as text. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Override the global timeout. --- Call a fixed HTTP endpoint and return bounded parsed JSON. Returns a structured error if the response is not valid JSON. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Truncate response body before parsing. Override the global timeout. --- List files and directories under a configured path without shelling out. Fields Field Default Description --- --- --- required Directory to list. Must resolve under . Recurse into subdirectories. Max recursion depth when (0–32). Max entries to return (1–5000). Include dotfiles and hidden directories. --- Search file names under a configured root by glob pattern. Safe equivalent of or . Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern relative to . Include hidden files and directories. Max results to return (1–5000). --- Search file contents under a configured root. Safe equivalent of bounded . The agent provides a argument at call time (defined via ). Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern to filter which files to search. Case-sensitive matching. Treat as a compiled regex instead of a substring. Max total matches to return (1–2000). Skip files larger than this (bytes). --- Report read-only git state for a configured repository: current branch and changed files. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max changed files to return. Override the global timeout. --- Show the unstaged diff ( ) for a configured repository, bounded by . Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max diff lines to return (1–1000). Override the global timeout. --- Show recent commit metadata for a configured repository. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max commits to return (1–200). Override the global timeout. Returns , , , and for each commit. --- Report runtime health for locally managed model servers. Reads internal Llama Manager process state — no shell commands. Fields Field Default Description --- --- --- Max processes to return (1–5000). Returns , , , , and for each process. --- Return the last N lines of a configured log file without shelling out. Fields Field Default Description --- --- --- required Log file to read. Must resolve under . Max lines to return from the end of the file (1–1000). --- Run read-only SQL queries against one configured SQLite database, or against one of several configured databases selected by stem name. Only queries whose first non-comment token is or are allowed, and connections open in SQLite read-only mode. Single database: Multiple databases: Model arguments: For a single configured , omit : Fields Field Default Description --- --- --- optional SQLite database file. Required unless is set. Must resolve under . Multiple SQLite database files. The model chooses one with , using the file stem such as . Max rows to return (1–5000). --- Fetch a URL and return the page content. The agent provides the at call time. HTML is stripped to readable text by default using BeautifulSoup. Fields Field Default Description --- --- --- (open) If non-empty, only these domains and their subdomains are permitted. Strip HTML tags and extract visible text via BeautifulSoup. Truncate the response body before parsing (bytes). Override the global timeout. Built-in SSRF protection (always enforced, regardless of ): - Blocks , , - Blocks RFC 1918 private ranges: , , - Blocks link-local: , - Only and schemes are allowed ( , , etc. are rejected) --- Safety Rules - All path-based local tools ( , , , , , , , , , , and ) require to be set and will reject any path that does not resolve under a configured root. - is the only filesystem-mutating tool. It writes only to its configured , enforces , and rejects content larger than . - opens databases read-only and accepts only / queries after comments are stripped. - and URLs are fixed in YAML; the agent cannot supply or modify URLs at call time. - blocks loopback, private IP ranges, and non-http(s) schemes at all times. Set to further restrict which public sites the agent can reach. - reads in-memory state only — no subprocess or filesystem access. - Git tools are read-only status, diff, and log views. No commit, checkout, or push tools are implemented. --- Memory Tool Types These tools interact with the controller's semantic memory store (ChromaDB + ). They are only registered when the controller's memory subsystem is enabled and the store is not disabled. See for the config block. --- Write an observation or fact into the controller's memory store. The write is fire-and-forget — the tool returns immediately without waiting for the embedding and storage to complete. Near-identical entries (cosine similarity ≥ 0.92) are deduplicated server-side. Model arguments at call time: Fields (all optional in YAML — no static config beyond and ) Argument Default Description --- --- --- required The fact or observation to store. Must be non-empty. Memory tier: , , or . Optional topic label for grouping. Optional list of tag strings. --- Search the controller's memory store by semantic similarity and return the most relevant entries. The model provides the search query at call time. Model arguments at call time: Returns: Fields Argument Default Description --- --- --- required Natural language search query. Must be non-empty. store Max results to return (1–20). --- Tool-Loop Evaluations Use to run deterministic tool-loop evaluations against one or more local tool-capable models. The runner uses the same agent-local tool execution path as with , then writes an append-only JSONL history and a latest summary JSON file for UI/API consumption. Default output paths are: - - The built-in cases use deterministic eval-only tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models: the current baseline tools are and . Run multiple models by repeating ; route to a specific controller node with ; run a single built-in case with . Node targets require a controller-mode config that defines the node. Running the command with an agent-mode config will resolve the model as local to that process instead of going through the controller. See Tool-Loop Eval Presets for the preset roadmap and scoring model.",
   },
   {
     id: "api",
@@ -6861,5 +6851,324 @@ Frontend development workflow:
       }
     ],
     searchBody: "Setup This page covers installation, onboarding, admin keys, migrations, smoke checks, and local test/build commands. Quick Start Guided terminal setup for a fresh controller or agent: The wizard asks whether the machine is a controller, agent, or single-machine setup. It then runs dependency sync, onboarding, optional llama.cpp setup for agents, and optional service startup. Repeatable non-interactive controller setup: Repeatable non-interactive agent setup: UI-first setup remains available for a fresh controller: Then open the web UI and follow Setup. On first run, the Setup Assistant creates the first admin key before showing controller/agent guidance. The UI does not write config files or run migrations in this version; it generates script-backed commands and verifies backend, auth, mode, and node status after login. Script-first setup for a controller: Script-first setup for an agent: The onboarding scripts write local secrets to , which is ignored by git. The start/stop helper scripts source that file automatically. For encrypted controller/agent traffic, set up Caddy before switching and to HTTPS; see for the operator checklist and for the design rationale. Two network exposure modes are supported: - Direct LAN HTTP: set and use URLs. This is simpler but sends API keys and traffic in plaintext. - Caddy/local TLS: set and use URLs. Uvicorn is reachable only from the local machine, and Caddy is the LAN-facing listener. Manual setup remains available: is the recommended install path because this repository includes a lockfile. It also avoids shell-specific ambiguity where may not exist or may resolve to something other than CPython pip. If you need a pip-based editable install, use an explicit supported interpreter: Or use the helper scripts: Onboarding Scripts Onboard a fresh controller without manually copying config or generating keys: The controller onboarding script writes local secrets to , including and the first generated admin API key when migrations are enabled. To enable controller semantic memory during the same setup step: That installs the extras, downloads the default embedding model to , writes a working block to the controller config, and records in . Use or to choose different local paths. Onboard a fresh agent: The agent onboarding script keeps and as environment placeholders in the generated config, and writes the real LAN URLs to alongside the agent API key, controller registration key, config path, host, and port. and source automatically. To make agent setup closer to one command, let onboarding install llama.cpp first: picks Metal on Apple Silicon, CUDA when is available, and CPU otherwise. Use , , or to force a specific build. The installer prints the matching , , and values after it verifies , , the converter, and the llama.cpp Python venv. The controller registration key comes from the controller machine's after runs: Copy that value to each agent as . Regenerate a local key and print the matching update for the other machines: Script defaults: First Admin Key Neuraxis fails closed until you create an admin key or configure . creates the first admin key for fresh controller setup and stores it in . For manual setup, create the first admin key from the terminal: The command stores a hashed key in and prints the raw API key once. Use that key in the UI login form, or send it as for API requests. To create more keys later, log in as an admin and use the auth key management UI/API. There is no built-in login fallback. For local development, create a throwaway admin key with the same command. For static shared secrets in agent/controller config, prefer the onboarding or rotation scripts: For one-off manual values, generate a strong URL-safe value with: Use the printed value for matching config fields such as , , , and . Linux Agent Smoke Test Linux agent smoke test for the setup: The smoke test validates the Linux agent config and runtime paths, starts the agent with that config, checks the agent , and waits until the controller lists the expected node with a fresh heartbeat. Add if you want the script to stop the agent after a successful run. Schema Migrations Run migration upgrades before starting the app or creating admin keys. Persistence is now Alembic-managed and SQLAlchemy-backed across all app databases. Alembic is scaffolded with multiple DB targets: - - - - - - Select a target via . Examples: If is omitted, target defaults to . Use target-qualified heads such as ; unqualified is ambiguous because each database target has its own Alembic branch. Testing Full test suite: The pytest suite installs dependencies with before running the React frontend unit tests, so does not need to be checked in. React frontend unit tests: React production build: The Vite build writes static assets to , which is included in Python package data for release builds. Frontend development workflow: - Frontend - starts the controller backend + React Vite dev server, or reports that the stack is currently up. - starts the agent backend + React Vite dev server, or reports that the stack is currently up. - starts backend + React Vite dev server in one command and auto-detects agent/controller mode from config. - starts the backend and the React Vite dev server together for local development. - starts only the React Vite dev server when a backend is already running.",
+  },
+  {
+    id: "tool-loop-eval-presets",
+    title: "Tool-Loop Eval Presets",
+    sourcePath: "docs/tool-loop-eval-presets.md",
+    content: `# Tool-Loop Eval Presets
+
+This note tracks the roadmap for deterministic tool-call loop evaluations in
+Neuraxis. The goal is to compare tool-capable models on loop quality: selecting
+the right tools, preserving intermediate facts, recovering from errors, and
+stopping with a final answer instead of drifting into repeated calls.
+
+## Current Baseline
+
+The first-pass eval harness uses deterministic in-process eval tools instead
+of the target agent's configured tools. This keeps runs comparable across
+nodes and models.
+
+Current eval tools:
+
+- \`read_status\`: returns a fixed status fact.
+- \`read_details\`: returns a fixed details fact.
+- \`read_step_1\` through \`read_step_8\`: return fixed linear-synthesis fact
+  tokens.
+- \`unstable_primary\` and \`stable_fallback\`: simulate deterministic recovery
+  from a tool error.
+- \`lookup_once\`: returns a stop condition for loop-control scoring.
+- \`choose_route\`, \`inspect_infra\`, and \`inspect_billing\`: simulate a
+  branch-selection workflow.
+- \`fetch_ticket\`: requires an exact \`ticket_id\` argument.
+- \`gather_fact_a\` through \`gather_fact_d\`: simulate independent fact-gathering
+  subtasks where call order does not matter.
+- \`ask_planner\`, \`ask_executor\`, \`ask_reviewer\`, and \`ask_verifier\`: simulate
+  role-shaped helper agent nodes.
+
+Current presets:
+
+- \`two-step-tool-synthesis\`: call \`read_status\`, then \`read_details\`, then
+  combine both facts in the final answer.
+- \`avoid-unneeded-tools\`: answer directly without calling tools.
+- \`linear-4-step-synthesis\`: call four deterministic step tools in strict
+  order, then synthesize the four fact tokens.
+- \`linear-8-step-synthesis\`: call eight deterministic step tools in strict
+  order, then synthesize the eight fact tokens.
+- \`tool-error-recovery\`: observe a deterministic primary-tool failure, use the
+  fallback tool, and answer from the recovered fact.
+- \`avoid-loop-trap\`: call one lookup tool, observe that no more information is
+  available, and stop without repeating the lookup.
+- \`branching-decision\`: call a route selector, follow only the selected branch,
+  and answer from that branch.
+- \`argument-repair\`: call a ticket lookup with the exact required argument and
+  answer from the ticket result.
+- \`parallel-fact-gathering\`: call four independent fact tools in any order and
+  synthesize all returned facts.
+- \`subagent-delegation-simulation\`: call four role-shaped helper tools and
+  preserve each helper's output in the final answer.
+
+These establish two baseline behaviors:
+
+- The model can follow a short required tool sequence.
+- The model can avoid tools when the prompt does not need them.
+
+## Preset Roadmap
+
+### Linear 4-Step Synthesis
+
+Status: implemented.
+
+Purpose: verify short-horizon multi-tool persistence.
+
+Expected behavior:
+
+- Call four tools in a strict order.
+- Preserve one fact from each tool.
+- Produce a final answer that includes all required facts.
+
+Scoring emphasis:
+
+- Strict sequence match.
+- Final-answer fact coverage.
+- No repeated or extra tool calls.
+
+### Linear 8-Step Synthesis
+
+Status: implemented.
+
+Purpose: test longer-horizon loop control without adding branching complexity.
+
+Expected behavior:
+
+- Call eight tools in a strict order.
+- Accumulate all facts.
+- Stop after the eighth tool and produce a final answer.
+
+Scoring emphasis:
+
+- Sequence completion.
+- No premature final answer.
+- No repeated calls after enough evidence is gathered.
+
+### Tool-Error Recovery
+
+Status: implemented.
+
+Purpose: measure whether the model can recover from a tool failure.
+
+Expected behavior:
+
+- Call a primary tool.
+- Observe a deterministic error.
+- Call the documented fallback tool.
+- Use the fallback result in the final answer.
+
+Scoring emphasis:
+
+- Expected recovery path.
+- Final-answer fact coverage from fallback output.
+- No repeated calls to the failing tool.
+
+### Avoid Loop Trap
+
+Status: implemented.
+
+Purpose: measure stopping behavior when a tool says there is no more useful
+information.
+
+Expected behavior:
+
+- Call the lookup tool.
+- Observe a deterministic "no more information" result.
+- Stop and answer with the available fact instead of repeatedly searching.
+
+Scoring emphasis:
+
+- Low repeated-call count.
+- Final answer present.
+- No max-iteration failure.
+
+### Branching Lookup
+
+Status: implemented as \`branching-decision\`.
+
+Purpose: test conditional tool selection.
+
+Expected behavior:
+
+- Call an initial routing tool.
+- Choose the correct next tool based on the routing result.
+- Avoid the branch that does not apply.
+
+Scoring emphasis:
+
+- Branch-aware expected path.
+- Penalize calling both branches unless the preset explicitly allows it.
+- Final-answer fact coverage.
+
+### Parallelizable Subtasks
+
+Status: implemented as \`parallel-fact-gathering\`.
+
+Purpose: model independent helper-node style workflows without requiring
+parallel execution.
+
+Expected behavior:
+
+- Gather several independent facts.
+- Tool order may vary.
+- Produce a final answer that includes every required fact.
+
+Scoring emphasis:
+
+- Set membership instead of strict sequence.
+- Missing-fact penalties.
+- Extra-call penalties only when calls are irrelevant or repeated.
+
+### Argument Repair
+
+Status: implemented as \`argument-repair\`.
+
+Purpose: measure whether the model can preserve required tool-call arguments
+instead of issuing a syntactically valid but semantically empty call.
+
+Expected behavior:
+
+- Extract the exact ticket id from the prompt.
+- Call the lookup tool with the required \`ticket_id\`.
+- Use the returned owner and priority in the final answer.
+
+Scoring emphasis:
+
+- Required argument match.
+- Tool success after argument extraction.
+- Final-answer fact coverage.
+
+### Delegation Simulation
+
+Status: implemented as \`subagent-delegation-simulation\`.
+
+Purpose: approximate future Neuraxis subagent workflows using deterministic
+helper tools.
+
+Expected behavior:
+
+- Call role-shaped helpers such as planner, executor, reviewer, and verifier.
+- Combine outputs into a final answer.
+- Preserve distinctions between helper roles.
+
+Scoring emphasis:
+
+- Required helper coverage.
+- Final synthesis quality through fact coverage.
+- No repeated delegation after a helper has already answered.
+
+## Scoring Model
+
+Each preset should declare its scoring mode explicitly:
+
+- \`strict_sequence\`: observed tool sequence must match the expected sequence.
+- \`ordered_prefix\`: required sequence must appear in order, with limited extras.
+- \`set_membership\`: all required tools must be called, order does not matter.
+- \`branch_path\`: the expected tool path depends on an earlier tool result.
+- \`loop_stop\`: repeated calls and max-iteration failures are the main risk.
+
+Common checks:
+
+- \`completed\`: the model produced a final assistant answer.
+- \`expected_tool_sequence\`: the expected sequence/path/set was satisfied.
+- \`expected_final_substrings\`: required facts appear in the final answer.
+- \`expected_tool_arguments\`: required tool arguments were included in the
+  observed calls.
+- \`no_tool_errors\`: tool calls succeeded, except in presets where a specific
+  error is expected.
+- \`no_repeated_calls\`: repeated calls stay below the preset threshold.
+
+## Implementation Notes
+
+- Eval tools should remain deterministic and isolated from configured agent
+  tools.
+- Presets should be small data definitions where possible. Add custom executor
+  behavior only when the preset needs branching, state, or error simulation.
+- The first harder batch is 4-step, 8-step, tool-error recovery, and loop-trap.
+  The second batch adds branching, argument repair, order-insensitive
+  fact-gathering, and helper-node delegation simulation.
+- Long presets should raise \`agent_tools.max_iterations\` only for the eval run,
+  not require operators to change their normal agent config.
+- The CLI still writes \`tool_loop_eval_results.jsonl\` and
+  \`tool_loop_eval_latest.json\` for lightweight latest-summary reads.
+- Durable run history is stored in the benchmarks database using
+  \`tool_loop_eval_runs\` and \`tool_loop_eval_cases\`; frontend history surfaces
+  should read from that store instead of scraping JSONL.
+`,
+    headings: [
+      {
+        "level": 1,
+        "text": "Tool-Loop Eval Presets",
+        "anchor": "tool-loop-eval-presets"
+      },
+      {
+        "level": 2,
+        "text": "Current Baseline",
+        "anchor": "current-baseline"
+      },
+      {
+        "level": 2,
+        "text": "Preset Roadmap",
+        "anchor": "preset-roadmap"
+      },
+      {
+        "level": 3,
+        "text": "Linear 4-Step Synthesis",
+        "anchor": "linear-4-step-synthesis"
+      },
+      {
+        "level": 3,
+        "text": "Linear 8-Step Synthesis",
+        "anchor": "linear-8-step-synthesis"
+      },
+      {
+        "level": 3,
+        "text": "Tool-Error Recovery",
+        "anchor": "tool-error-recovery"
+      },
+      {
+        "level": 3,
+        "text": "Avoid Loop Trap",
+        "anchor": "avoid-loop-trap"
+      },
+      {
+        "level": 3,
+        "text": "Branching Lookup",
+        "anchor": "branching-lookup"
+      },
+      {
+        "level": 3,
+        "text": "Parallelizable Subtasks",
+        "anchor": "parallelizable-subtasks"
+      },
+      {
+        "level": 3,
+        "text": "Argument Repair",
+        "anchor": "argument-repair"
+      },
+      {
+        "level": 3,
+        "text": "Delegation Simulation",
+        "anchor": "delegation-simulation"
+      },
+      {
+        "level": 2,
+        "text": "Scoring Model",
+        "anchor": "scoring-model"
+      },
+      {
+        "level": 2,
+        "text": "Implementation Notes",
+        "anchor": "implementation-notes"
+      }
+    ],
+    searchBody: "Tool-Loop Eval Presets This note tracks the roadmap for deterministic tool-call loop evaluations in Neuraxis. The goal is to compare tool-capable models on loop quality: selecting the right tools, preserving intermediate facts, recovering from errors, and stopping with a final answer instead of drifting into repeated calls. Current Baseline The first-pass eval harness uses deterministic in-process eval tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current eval tools: - : returns a fixed status fact. - : returns a fixed details fact. - through : return fixed linear-synthesis fact tokens. - and : simulate deterministic recovery from a tool error. - : returns a stop condition for loop-control scoring. - , , and : simulate a branch-selection workflow. - : requires an exact argument. - through : simulate independent fact-gathering subtasks where call order does not matter. - , , , and : simulate role-shaped helper agent nodes. Current presets: - : call , then , then combine both facts in the final answer. - : answer directly without calling tools. - : call four deterministic step tools in strict order, then synthesize the four fact tokens. - : call eight deterministic step tools in strict order, then synthesize the eight fact tokens. - : observe a deterministic primary-tool failure, use the fallback tool, and answer from the recovered fact. - : call one lookup tool, observe that no more information is available, and stop without repeating the lookup. - : call a route selector, follow only the selected branch, and answer from that branch. - : call a ticket lookup with the exact required argument and answer from the ticket result. - : call four independent fact tools in any order and synthesize all returned facts. - : call four role-shaped helper tools and preserve each helper's output in the final answer. These establish two baseline behaviors: - The model can follow a short required tool sequence. - The model can avoid tools when the prompt does not need them. Preset Roadmap Linear 4-Step Synthesis Status: implemented. Purpose: verify short-horizon multi-tool persistence. Expected behavior: - Call four tools in a strict order. - Preserve one fact from each tool. - Produce a final answer that includes all required facts. Scoring emphasis: - Strict sequence match. - Final-answer fact coverage. - No repeated or extra tool calls. Linear 8-Step Synthesis Status: implemented. Purpose: test longer-horizon loop control without adding branching complexity. Expected behavior: - Call eight tools in a strict order. - Accumulate all facts. - Stop after the eighth tool and produce a final answer. Scoring emphasis: - Sequence completion. - No premature final answer. - No repeated calls after enough evidence is gathered. Tool-Error Recovery Status: implemented. Purpose: measure whether the model can recover from a tool failure. Expected behavior: - Call a primary tool. - Observe a deterministic error. - Call the documented fallback tool. - Use the fallback result in the final answer. Scoring emphasis: - Expected recovery path. - Final-answer fact coverage from fallback output. - No repeated calls to the failing tool. Avoid Loop Trap Status: implemented. Purpose: measure stopping behavior when a tool says there is no more useful information. Expected behavior: - Call the lookup tool. - Observe a deterministic \"no more information\" result. - Stop and answer with the available fact instead of repeatedly searching. Scoring emphasis: - Low repeated-call count. - Final answer present. - No max-iteration failure. Branching Lookup Status: implemented as . Purpose: test conditional tool selection. Expected behavior: - Call an initial routing tool. - Choose the correct next tool based on the routing result. - Avoid the branch that does not apply. Scoring emphasis: - Branch-aware expected path. - Penalize calling both branches unless the preset explicitly allows it. - Final-answer fact coverage. Parallelizable Subtasks Status: implemented as . Purpose: model independent helper-node style workflows without requiring parallel execution. Expected behavior: - Gather several independent facts. - Tool order may vary. - Produce a final answer that includes every required fact. Scoring emphasis: - Set membership instead of strict sequence. - Missing-fact penalties. - Extra-call penalties only when calls are irrelevant or repeated. Argument Repair Status: implemented as . Purpose: measure whether the model can preserve required tool-call arguments instead of issuing a syntactically valid but semantically empty call. Expected behavior: - Extract the exact ticket id from the prompt. - Call the lookup tool with the required . - Use the returned owner and priority in the final answer. Scoring emphasis: - Required argument match. - Tool success after argument extraction. - Final-answer fact coverage. Delegation Simulation Status: implemented as . Purpose: approximate future Neuraxis subagent workflows using deterministic helper tools. Expected behavior: - Call role-shaped helpers such as planner, executor, reviewer, and verifier. - Combine outputs into a final answer. - Preserve distinctions between helper roles. Scoring emphasis: - Required helper coverage. - Final synthesis quality through fact coverage. - No repeated delegation after a helper has already answered. Scoring Model Each preset should declare its scoring mode explicitly: - : observed tool sequence must match the expected sequence. - : required sequence must appear in order, with limited extras. - : all required tools must be called, order does not matter. - : the expected tool path depends on an earlier tool result. - : repeated calls and max-iteration failures are the main risk. Common checks: - : the model produced a final assistant answer. - : the expected sequence/path/set was satisfied. - : required facts appear in the final answer. - : required tool arguments were included in the observed calls. - : tool calls succeeded, except in presets where a specific error is expected. - : repeated calls stay below the preset threshold. Implementation Notes - Eval tools should remain deterministic and isolated from configured agent tools. - Presets should be small data definitions where possible. Add custom executor behavior only when the preset needs branching, state, or error simulation. - The first harder batch is 4-step, 8-step, tool-error recovery, and loop-trap. The second batch adds branching, argument repair, order-insensitive fact-gathering, and helper-node delegation simulation. - Long presets should raise only for the eval run, not require operators to change their normal agent config. - The CLI still writes and for lightweight latest-summary reads. - Durable run history is stored in the benchmarks database using and ; frontend history surfaces should read from that store instead of scraping JSONL.",
   },
 ];

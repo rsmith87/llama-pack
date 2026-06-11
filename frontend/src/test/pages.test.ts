@@ -23,6 +23,7 @@ describe("page route model", () => {
       "quantization",
       "benchmarks",
       "runtime-overview",
+      "tool-loop-evals",
       "embeddings",
       "plugins",
       "setup",
@@ -65,7 +66,7 @@ describe("page route model", () => {
       { label: "Gateway", pages: ["chat", "api-keys", "audit"] },
       { label: "Operations", pages: ["dashboard", "nodes", "controller-ops"] },
       { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization", "benchmarks"] },
-      { label: "Runtime", pages: ["runtime-overview", "embeddings"] },
+      { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals", "embeddings"] },
       { label: "Plugins", pages: ["plugins"] },
       { label: "System", pages: ["setup", "settings", "docs"] },
     ]);
@@ -76,7 +77,7 @@ describe("page route model", () => {
       { label: "Gateway", pages: ["chat"] },
       { label: "Operations", pages: ["dashboard"] },
       { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization"] },
-      { label: "Runtime", pages: ["runtime-overview", "embeddings"] },
+      { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals", "embeddings"] },
       { label: "System", pages: ["setup", "settings", "docs"] },
     ]);
   });

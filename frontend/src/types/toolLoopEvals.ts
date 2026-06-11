@@ -3,6 +3,8 @@ export type ToolLoopEvalCheckMap = {
   expected_tool_sequence?: boolean;
   expected_final_substrings?: boolean;
   no_tool_errors?: boolean;
+  expected_tool_arguments?: boolean;
+  no_repeated_calls?: boolean;
 };
 
 export type ToolLoopEvalCaseResult = {
@@ -16,7 +18,8 @@ export type ToolLoopEvalCaseResult = {
   tool_call_count?: number;
   observed_tool_sequence?: string[];
   expected_tool_sequence?: string[];
-  tool_results?: Array<{ tool_name?: string; ok?: boolean; error?: string }>;
+  scoring_mode?: string | null;
+  tool_results?: Array<{ tool_name?: string; ok?: boolean; error?: string; arguments?: Record<string, unknown> }>;
   final_answer?: string;
 };
 
@@ -38,4 +41,27 @@ export type ToolLoopEvalLatest = {
   models?: string[];
   suites?: ToolLoopEvalSuite[];
   error?: string;
+};
+
+export type ToolLoopEvalRunSummary = {
+  id?: string;
+  generated_at?: string | null;
+  model?: string;
+  target_selector?: string;
+  target_node?: string | null;
+  status?: string;
+  average_score?: number;
+  case_count?: number;
+  passed_count?: number;
+  failed_count?: number;
+  error?: string | null;
+  created_at?: string;
+};
+
+export type ToolLoopEvalRunDetail = ToolLoopEvalRunSummary & {
+  cases?: ToolLoopEvalCaseResult[];
+};
+
+export type ToolLoopEvalRunsResponse = {
+  runs?: ToolLoopEvalRunSummary[];
 };
