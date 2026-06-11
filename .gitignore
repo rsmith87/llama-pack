@@ -59,3 +59,4 @@ docs/superpowers/specs/2026-06-02-mobile-remote-client-v1-design.md
 plugins/neuraxis_business_plugin
 packages
 frontend/src/generated
+!frontend/src/features/logs
