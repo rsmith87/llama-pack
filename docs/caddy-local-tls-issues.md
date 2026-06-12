@@ -1,6 +1,6 @@
 # Caddy Local TLS — Incidents & Troubleshooting Notes
 
-Real-world issues encountered running the Neuraxis local TLS setup.
+Real-world issues encountered running the Llama Pack local TLS setup.
 See [caddy-local-tls.md](caddy-local-tls.md) for the full setup and renewal
 reference.
 
@@ -77,9 +77,9 @@ sudo systemctl status step-ca
 **Step 2 — Re-issue the expired cert** (run on the mac-mini):
 
 ```bash
-step ca certificate mac-mini.local ~/neuraxis-certs/mac-mini.crt ~/neuraxis-certs/mac-mini.key \
+step ca certificate mac-mini.local ~/llama-pack-certs/mac-mini.crt ~/llama-pack-certs/mac-mini.key \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/ca-root.crt \
+  --root ~/llama-pack-certs/ca-root.crt \
   --not-after 24h \
   --force
 ```
@@ -87,21 +87,21 @@ step ca certificate mac-mini.local ~/neuraxis-certs/mac-mini.crt ~/neuraxis-cert
 **Step 3 — Rebuild the fullchain and reload Caddy** (run on the mac-mini):
 
 ```bash
-cd /Users/robertsmith/Apps/neuraxis
+cd /Users/robertsmith/Apps/llama-pack
 scripts/renew_caddy_mac_mini.sh
 ```
 
 Wrapper script content (`scripts/renew_caddy_mac_mini.sh`):
 
 ```bash
-cd /Users/robertsmith/Apps/neuraxis
+cd /Users/robertsmith/Apps/llama-pack
 scripts/renew_caddy_step_cert.sh \
   --name mac-mini \
-  --leaf ~/neuraxis-certs/mac-mini.crt \
-  --key ~/neuraxis-certs/mac-mini.key \
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \
+  --leaf ~/llama-pack-certs/mac-mini.crt \
+  --key ~/llama-pack-certs/mac-mini.key \
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \
   --ca-url https://pi-controller.local:8443 \
-  --root ~/neuraxis-certs/root_ca.crt \
+  --root ~/llama-pack-certs/root_ca.crt \
   --cert-dir /opt/homebrew/etc/caddy/certs \
   --owner robertsmith \
   --group staff \
@@ -168,7 +168,7 @@ If you move scheduling to `launchd` (recommended), copy the wrapper script to a
 stable user path first:
 
 ```bash
-install -m 755 /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh \
+install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \
   /Users/robertsmith/bin/renew_caddy_mac_mini.sh
 ```
 
