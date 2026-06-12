@@ -20,7 +20,7 @@ docs/todo
 !docs/todo/
 !docs/todo/plugin-database-contract-implementation-plan.md
 llamacpp_handler.egg-info
-.env
+.llama_pack.env
 .neuraxis_agent.pid
 frontend-tests/node_modules
 .worktrees/
