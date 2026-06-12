@@ -146,6 +146,55 @@
   margin: var(--space-3, 1rem) 0;
 }
 
+.tool-loop-trace {
+  display: grid;
+  gap: 0.75rem;
+  margin: var(--space-3, 1rem) 0;
+}
+
+.tool-loop-trace-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.tool-loop-trace-controls label {
+  align-items: center;
+  display: inline-flex;
+  gap: 0.5rem;
+}
+
+.tool-loop-trace-list {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.tool-loop-trace-event {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+}
+
+.tool-loop-trace-event.failed {
+  border-color: color-mix(in srgb, var(--danger, #b42318) 42%, var(--line));
+}
+
+.tool-loop-trace-event summary {
+  align-items: center;
+  cursor: pointer;
+  display: grid;
+  gap: 0.5rem;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  list-style: none;
+  padding: 0.65rem 0.75rem;
+}
+
+.tool-loop-trace-event summary::-webkit-details-marker {
+  display: none;
+}
+
 .tool-loop-timeline-list {
   display: grid;
   gap: 0.5rem;

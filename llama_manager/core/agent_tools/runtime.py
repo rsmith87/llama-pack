@@ -6,6 +6,7 @@ from uuid import uuid4
 
 from llama_manager.core.agent_tools.executor import ToolExecutor
 from llama_manager.core.agent_tools.registry import ToolRegistry
+from llama_manager.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_manager.core.config.models import AppConfig
 
 if TYPE_CHECKING:
@@ -20,11 +21,18 @@ class AgentToolLoop:
         proxy: Any,
         process_manager: ProcessManager | None = None,
         memory_store: ChromaMemoryStore | None = None,
+        trace_recorder: RuntimeTraceRecorder | None = None,
     ) -> None:
         self.config = config
         self.proxy = proxy
         self.registry = ToolRegistry(config.agent_tools)
-        self.executor = ToolExecutor(config, process_manager=process_manager, memory_store=memory_store)
+        self.trace_recorder = trace_recorder
+        self.executor = ToolExecutor(
+            config,
+            process_manager=process_manager,
+            memory_store=memory_store,
+            trace_recorder=trace_recorder,
+        )
 
     async def run(
         self,
@@ -38,12 +46,25 @@ class AgentToolLoop:
         tool_defs = self.registry.openai_tools()
         last_meta: dict[str, Any] = {}
 
-        for _ in range(self.config.agent_tools.max_iterations):
+        for iteration in range(self.config.agent_tools.max_iterations):
+            self._emit(
+                "assistant_turn_started",
+                model=model_name,
+                title=f"Assistant turn {iteration + 1}",
+                payload={"iteration": iteration + 1},
+            )
             request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
             response, last_meta = await self.proxy.chat_with_meta(model_name, request_payload)
             message = _assistant_message(response)
             tool_calls = _tool_calls(message)
             if not tool_calls:
+                self._emit(
+                    "assistant_message_completed",
+                    status="passed",
+                    model=model_name,
+                    title="Assistant answered",
+                    payload={"content": message.get("content") or ""},
+                )
                 return response, last_meta
 
             messages.append(message)
@@ -51,17 +72,29 @@ class AgentToolLoop:
                 function = tool_call.get("function") or {}
                 name = str(function.get("name") or "")
                 arguments = _parse_arguments(function.get("arguments"))
-                result = await self.executor.execute(name, arguments, request_id=request_id, model=model_name)
+                tool_call_id = str(tool_call.get("id") or name)
+                result = await self.executor.execute(
+                    name,
+                    arguments,
+                    request_id=request_id,
+                    model=model_name,
+                    tool_call_id=tool_call_id,
+                )
                 messages.append(
                     {
                         "role": "tool",
-                        "tool_call_id": tool_call.get("id") or name,
+                        "tool_call_id": tool_call_id,
                         "name": name,
                         "content": json.dumps(result),
                     }
                 )
 
         raise RuntimeError("agent tool loop reached max_iterations before final assistant response")
+
+    def _emit(self, event_type: str, **kwargs: Any) -> dict[str, Any] | None:
+        if self.trace_recorder is None:
+            return None
+        return self.trace_recorder.emit(event_type, **kwargs)
 
 
 def _assistant_message(response: dict[str, Any]) -> dict[str, Any]:

@@ -198,6 +198,7 @@ class ToolLoopEvalCaseOrm(Base):
     unexpected_tools_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     scoring_mode: Mapped[str | None] = mapped_column(Text, nullable=True)
     tool_results_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    trace_events_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     diagnostics_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
     final_answer: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 

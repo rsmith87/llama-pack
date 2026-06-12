@@ -12,6 +12,7 @@ import httpx
 
 from llama_manager.core.agent_tools.executor import ToolExecutor
 from llama_manager.core.agent_tools.registry import ToolRegistry
+from llama_manager.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_manager.core.config.models import AgentToolDefinitionConfig, AgentToolsConfig, AppConfig
 
 
@@ -29,10 +30,19 @@ class LiveToolLoopScenario:
 
 
 class LiveToolLoopEvaluator:
-    def __init__(self, config: AppConfig, proxy: Any, executor_factory: Any | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        proxy: Any,
+        executor_factory: Any | None = None,
+        trace_recorder: RuntimeTraceRecorder | None = None,
+        emit_suite_events: bool = True,
+    ) -> None:
         self.config = config
         self.proxy = proxy
         self.executor_factory = executor_factory or ToolExecutor
+        self.trace_recorder = trace_recorder
+        self.emit_suite_events = emit_suite_events
 
     async def run_case(self, model_name: str, scenario: LiveToolLoopScenario, request_id: str | None = None) -> dict[str, Any]:
         request_id = request_id or str(uuid4())
@@ -41,7 +51,7 @@ class LiveToolLoopEvaluator:
             _seed_notes_workspace(workspace)
             live_config = _live_notes_config(self.config, workspace, scenario.max_iterations)
             tool_defs = ToolRegistry(live_config.agent_tools).openai_tools()
-            executor = self.executor_factory(live_config)
+            executor = self.executor_factory(live_config, trace_recorder=self.trace_recorder)
             messages: list[dict[str, Any]] = [{"role": "user", "content": scenario.prompt}]
             observed_tools: list[str] = []
             tool_results: list[dict[str, Any]] = []
@@ -49,9 +59,23 @@ class LiveToolLoopEvaluator:
             completed = False
             error = ""
             iteration_count = 0
+            self._emit(
+                "case_started",
+                case_id=scenario.id,
+                model=model_name,
+                title=f"{scenario.id} started",
+                payload={"prompt": scenario.prompt, "expected_tool_sequence": list(scenario.expected_tool_sequence)},
+            )
 
             for _ in range(scenario.max_iterations):
                 iteration_count += 1
+                self._emit(
+                    "assistant_turn_started",
+                    case_id=scenario.id,
+                    model=model_name,
+                    title=f"Assistant turn {iteration_count}",
+                    payload={"iteration": iteration_count},
+                )
                 payload = {
                     "temperature": 0.0,
                     **scenario.request_defaults,
@@ -67,6 +91,14 @@ class LiveToolLoopEvaluator:
                 tool_calls = _tool_calls(message)
                 if not tool_calls:
                     final_answer = _message_content(message)
+                    self._emit(
+                        "assistant_message_completed",
+                        status="passed",
+                        case_id=scenario.id,
+                        model=model_name,
+                        title="Assistant answered",
+                        payload={"content": final_answer, "iteration": iteration_count},
+                    )
                     completed = True
                     break
                 messages.append(message)
@@ -95,10 +127,18 @@ class LiveToolLoopEvaluator:
                             }
                         )
                         break
-                    result = await executor.execute(name, arguments, request_id=request_id, model=model_name)
+                    tool_call_id = str(tool_call.get("id") or name)
+                    result = await executor.execute(
+                        name,
+                        arguments,
+                        request_id=request_id,
+                        model=model_name,
+                        case_id=scenario.id,
+                        tool_call_id=tool_call_id,
+                    )
                     tool_results.append(
                         {
-                            "tool_call_id": tool_call.get("id") or name,
+                            "tool_call_id": tool_call_id,
                             "tool_name": name,
                             "function": {
                                 "name": name,
@@ -126,6 +166,22 @@ class LiveToolLoopEvaluator:
                 error = "live tool loop reached max_iterations before final assistant response"
 
             if error and not tool_results and not final_answer:
+                self._emit(
+                    "case_scored",
+                    status="failed",
+                    case_id=scenario.id,
+                    model=model_name,
+                    title=f"{scenario.id} scored",
+                    payload={"score": 0.0, "error": error},
+                )
+                self._emit(
+                    "case_completed",
+                    status="failed",
+                    case_id=scenario.id,
+                    model=model_name,
+                    title=f"{scenario.id} completed",
+                    payload={"status": "failed", "error": error},
+                )
                 return {
                     "case_id": scenario.id,
                     "case_category": "live_workspace",
@@ -151,6 +207,7 @@ class LiveToolLoopEvaluator:
                     "unexpected_tools": [],
                     "scoring_mode": "set_membership",
                     "tool_results": [],
+                    "trace_events": self.trace_recorder.events_for_case(scenario.id) if self.trace_recorder is not None else [],
                     "final_answer": "",
                     "artifacts": _artifact_payloads(workspace, scenario.expected_artifacts),
                 }
@@ -167,11 +224,28 @@ class LiveToolLoopEvaluator:
             score = _score(checks)
             missing_expected_tools, unexpected_tools = _tool_sequence_delta(observed_tools, scenario.expected_tool_sequence)
             artifact_diagnostics = _artifact_diagnostics(workspace, scenario)
+            status = "passed" if score == 1.0 else "failed"
+            self._emit(
+                "case_scored",
+                status=status,
+                case_id=scenario.id,
+                model=model_name,
+                title=f"{scenario.id} scored",
+                payload={"score": score, "checks": checks},
+            )
+            self._emit(
+                "case_completed",
+                status=status,
+                case_id=scenario.id,
+                model=model_name,
+                title=f"{scenario.id} completed",
+                payload={"status": status, "error": error},
+            )
             return {
                 "case_id": scenario.id,
                 "case_category": "live_workspace",
                 "model": model_name,
-                "status": "passed" if score == 1.0 else "failed",
+                "status": status,
                 "score": score,
                 "checks": checks,
                 "error": error,
@@ -184,16 +258,24 @@ class LiveToolLoopEvaluator:
                 **artifact_diagnostics,
                 "scoring_mode": "set_membership",
                 "tool_results": tool_results,
+                "trace_events": self.trace_recorder.events_for_case(scenario.id) if self.trace_recorder is not None else [],
                 "final_answer": final_answer,
                 "artifacts": _artifact_payloads(workspace, scenario.expected_artifacts),
             }
 
     async def run_suite(self, model_name: str, scenarios: list[LiveToolLoopScenario]) -> dict[str, Any]:
+        if self.emit_suite_events:
+            self._emit(
+                "run_started",
+                model=model_name,
+                title="Live tool-loop eval run started",
+                payload={"case_count": len(scenarios), "case_ids": [scenario.id for scenario in scenarios]},
+            )
         results = [await self.run_case(model_name, scenario) for scenario in scenarios]
         passed_count = sum(1 for result in results if result["status"] == "passed")
         failed_count = len(results) - passed_count
         average_score = round(sum(float(result["score"]) for result in results) / len(results), 4) if results else 0.0
-        return {
+        suite = {
             "model": model_name,
             "status": "passed" if failed_count == 0 else "failed",
             "case_count": len(results),
@@ -202,6 +284,20 @@ class LiveToolLoopEvaluator:
             "average_score": average_score,
             "cases": results,
         }
+        if self.emit_suite_events:
+            self._emit(
+                "run_completed" if failed_count == 0 else "run_failed",
+                status=suite["status"],
+                model=model_name,
+                title="Live tool-loop eval run completed",
+                payload={"status": suite["status"], "case_count": len(results)},
+            )
+        return suite
+
+    def _emit(self, event_type: str, **kwargs: Any) -> dict[str, Any] | None:
+        if self.trace_recorder is None:
+            return None
+        return self.trace_recorder.emit(event_type, **kwargs)
 
 
 def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:

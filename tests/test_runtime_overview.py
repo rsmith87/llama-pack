@@ -281,6 +281,92 @@ def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
     assert persisted_runs[0]["target_instance"] == "agent-a"
 
 
+def test_agent_tool_loop_eval_run_stream_emits_trace_events_and_persists(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_chat_request(url, payload):
+        tool_message_count = len([message for message in payload.get("messages", []) if message.get("role") == "tool"])
+        if tool_message_count == 0:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {"name": "read_status", "arguments": "{}"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        if tool_message_count == 1:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call-2",
+                                    "type": "function",
+                                    "function": {"name": "read_details", "arguments": "{}"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        return {"choices": [{"message": {"role": "assistant", "content": "green calibration window"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "node_name": "agent-a",
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True, "tools": {}},
+            }
+        ),
+        process_manager=type("PM", (), {"status": lambda self, name: {"running": True, "port": 8081}})(),
+        chat_request=fake_chat_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    with client.stream(
+        "POST",
+        "/lm-api/v1/runtime/tool-loop-evals/run/stream",
+        json={"model": "qwen", "case_ids": ["two-step-tool-synthesis"]},
+    ) as response:
+        assert response.status_code == 200
+        assert response.headers["content-type"].startswith("text/event-stream")
+        text = "".join(response.iter_text())
+
+    events = [
+        json.loads(line.removeprefix("data:").strip())
+        for line in text.splitlines()
+        if line.startswith("data:")
+    ]
+    event_types = [event["event_type"] for event in events]
+    assert "run_started" in event_types
+    assert "tool_call_started" in event_types
+    assert "tool_call_completed" in event_types
+    assert "run_completed" in event_types
+    final_event = events[-1]
+    assert final_event["event_type"] == "run_completed"
+    assert final_event["payload"]["suite"]["persisted_run_id"]
+    persisted = app.state.benchmark_store.get_tool_loop_eval_run(final_event["payload"]["suite"]["persisted_run_id"])
+    assert persisted["cases"][0]["trace_events"]
+
+
 def test_standalone_tool_loop_eval_run_persists_local_instance_scope(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
 
@@ -552,6 +638,83 @@ def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_p
             {"model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
         )
     ]
+
+
+def test_controller_tool_loop_eval_node_run_stream_persists_agent_trace_events(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        return {
+            "model": "gpt-oss-20b",
+            "status": "passed",
+            "case_count": 1,
+            "passed_count": 1,
+            "failed_count": 0,
+            "average_score": 1.0,
+            "cases": [
+                {
+                    "case_id": "avoid-unneeded-tools",
+                    "status": "passed",
+                    "score": 1.0,
+                    "checks": {"completed": True},
+                    "iteration_count": 1,
+                    "tool_call_count": 0,
+                    "observed_tool_sequence": [],
+                    "expected_tool_sequence": [],
+                    "scoring_mode": "strict_sequence",
+                    "tool_results": [],
+                    "trace_events": [
+                        {
+                            "id": "agent-trace-1",
+                            "trace_id": "agent-trace",
+                            "sequence": 1,
+                            "timestamp": "2026-06-12T00:00:00+00:00",
+                            "event_type": "assistant_message_completed",
+                            "source": "tool_loop_eval",
+                            "scope": "eval_case",
+                            "status": "passed",
+                            "case_id": "avoid-unneeded-tools",
+                            "model": "gpt-oss-20b",
+                            "title": "Assistant answered",
+                            "payload": {"content": "tool loop ready"},
+                        }
+                    ],
+                    "final_answer": "tool loop ready",
+                }
+            ],
+        }
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"mac-mini": {"url": "http://mac-mini", "api_key": "node-secret", "verify_tls": False}},
+            }
+        ),
+        controller_request=fake_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    with client.stream(
+        "POST",
+        "/lm-api/v1/runtime/tool-loop-evals/node-run/stream",
+        json={"node": "mac-mini", "model": "gpt-oss-20b", "case_ids": ["avoid-unneeded-tools"]},
+    ) as response:
+        assert response.status_code == 200
+        text = "".join(response.iter_text())
+
+    events = [
+        json.loads(line.removeprefix("data:").strip())
+        for line in text.splitlines()
+        if line.startswith("data:")
+    ]
+    assert [event["event_type"] for event in events] == ["assistant_message_completed", "run_completed"]
+    persisted_run_id = events[-1]["payload"]["suite"]["persisted_run_id"]
+    persisted = app.state.benchmark_store.get_tool_loop_eval_run(persisted_run_id)
+    assert persisted["cases"][0]["trace_events"][0]["event_type"] == "assistant_message_completed"
 
 
 def test_controller_tool_loop_eval_node_run_returns_agent_error_detail(tmp_path):

@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from llama_manager.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
+from llama_manager.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_manager.core.config import load_config
 
 
@@ -196,6 +197,39 @@ async def test_tool_loop_eval_scores_expected_tool_order_and_final_answer(tmp_pa
         "no_tool_errors": True,
     }
     assert result["final_answer"] == "Combined answer: alpha status and beta details."
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_records_trace_events_for_replay(tmp_path):
+    case = ToolLoopEvalCase(
+        id="traceable-case",
+        prompt="Read status and answer.",
+        expected_tool_sequence=["read_status"],
+        expected_final_substrings=["alpha status"],
+    )
+    recorder = RuntimeTraceRecorder(trace_id="eval-trace", source="tool_loop_eval", scope="eval_run")
+
+    result = await ToolLoopEvaluator(_config(tmp_path), ScriptedToolProxy(["read_status"], "alpha status"), trace_recorder=recorder).run_case(
+        "gpt-oss-20b",
+        case,
+        request_id="eval-trace",
+    )
+
+    event_types = [event["event_type"] for event in result["trace_events"]]
+    assert event_types == [
+        "case_started",
+        "assistant_turn_started",
+        "tool_call_started",
+        "tool_call_completed",
+        "assistant_turn_started",
+        "assistant_message_completed",
+        "case_scored",
+        "case_completed",
+    ]
+    assert result["trace_events"][0]["case_id"] == "traceable-case"
+    assert result["trace_events"][2]["tool_call_id"] == "call-0"
+    assert result["trace_events"][2]["payload"]["arguments"] == {}
+    assert result["trace_events"][3]["payload"]["result"]["ok"] is True
 
 
 @pytest.mark.asyncio

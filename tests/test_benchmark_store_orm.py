@@ -207,6 +207,24 @@ class TestToolLoopEvalRuns:
                         "unexpected_tools": [],
                         "scoring_mode": "strict_sequence",
                         "tool_results": [{"tool_name": "read_status", "ok": True}],
+                        "trace_events": [
+                            {
+                                "id": "trace-1-000001",
+                                "trace_id": "trace-1",
+                                "sequence": 1,
+                                "timestamp": "2026-06-12T00:00:00+00:00",
+                                "event_type": "tool_call_completed",
+                                "source": "tool_loop_eval",
+                                "scope": "eval_case",
+                                "status": "passed",
+                                "case_id": "two-step-tool-synthesis",
+                                "tool_call_id": "call-1",
+                                "model": "gpt-oss-20b-mxfp4:default",
+                                "title": "read_status completed",
+                                "summary": "",
+                                "payload": {"result": {"ok": True}},
+                            }
+                        ],
                         "final_answer": "green calibration window",
                         "diagnostics": {
                             "missing_artifact_substrings": {"docs/notes-app-design.md": ["registration"]},
@@ -257,6 +275,8 @@ class TestToolLoopEvalRuns:
         ]
         assert fetched["cases"][0]["observed_tool_sequence"] == ["read_status", "read_details"]
         assert fetched["cases"][0]["tool_results"] == [{"tool_name": "read_status", "ok": True}]
+        assert fetched["cases"][0]["trace_events"][0]["event_type"] == "tool_call_completed"
+        assert fetched["cases"][0]["trace_events"][0]["payload"] == {"result": {"ok": True}}
         assert fetched["cases"][0]["missing_expected_tools"] == []
         assert fetched["cases"][0]["unexpected_tools"] == []
         assert fetched["cases"][0]["diagnostics"] == {

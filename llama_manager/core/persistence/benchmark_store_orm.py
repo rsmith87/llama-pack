@@ -531,6 +531,7 @@ def _tool_loop_case_row(run_id: str, case_index: int, case: dict[str, Any]) -> T
         unexpected_tools_json=json.dumps(case.get("unexpected_tools") or []),
         scoring_mode=case.get("scoring_mode"),
         tool_results_json=json.dumps(case.get("tool_results") or []),
+        trace_events_json=json.dumps(case.get("trace_events") or []),
         diagnostics_json=json.dumps(_tool_loop_case_diagnostics(case)),
         final_answer=str(case.get("final_answer") or ""),
     )
@@ -572,6 +573,7 @@ def _tool_loop_case_to_dict(row: ToolLoopEvalCaseOrm) -> dict[str, Any]:
         "unexpected_tools": json.loads(row.unexpected_tools_json),
         "scoring_mode": row.scoring_mode,
         "tool_results": json.loads(row.tool_results_json),
+        "trace_events": json.loads(row.trace_events_json),
         "diagnostics": json.loads(row.diagnostics_json),
         "final_answer": row.final_answer,
     }

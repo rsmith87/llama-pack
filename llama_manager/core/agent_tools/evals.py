@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from llama_manager.core.agent_tools.executor import ToolExecutor
+from llama_manager.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_manager.core.config.models import AppConfig
 
 
@@ -28,10 +29,19 @@ class ToolLoopEvalCase:
 
 
 class ToolLoopEvaluator:
-    def __init__(self, config: AppConfig, proxy: Any, executor: ToolExecutor | None = None) -> None:
+    def __init__(
+        self,
+        config: AppConfig,
+        proxy: Any,
+        executor: ToolExecutor | None = None,
+        trace_recorder: RuntimeTraceRecorder | None = None,
+        emit_suite_events: bool = True,
+    ) -> None:
         self.config = config
         self.proxy = proxy
         self.executor = executor or EvalToolExecutor()
+        self.trace_recorder = trace_recorder
+        self.emit_suite_events = emit_suite_events
 
     async def run_case(self, model_name: str, case: ToolLoopEvalCase, request_id: str | None = None) -> dict[str, Any]:
         request_id = request_id or str(uuid4())
@@ -52,14 +62,36 @@ class ToolLoopEvaluator:
         completed = False
 
         max_iterations = case.max_iterations or self.config.agent_tools.max_iterations
+        self._emit(
+            "case_started",
+            case_id=case.id,
+            model=model_name,
+            title=f"{case.id} started",
+            payload={"prompt": case.prompt, "expected_tool_sequence": list(case.expected_tool_sequence)},
+        )
         for _ in range(max_iterations):
             iteration_count += 1
+            self._emit(
+                "assistant_turn_started",
+                case_id=case.id,
+                model=model_name,
+                title=f"Assistant turn {iteration_count}",
+                payload={"iteration": iteration_count},
+            )
             request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
             response, _meta = await self.proxy.chat_with_meta(model_name, request_payload)
             message = _assistant_message(response)
             tool_calls = _tool_calls(message)
             if not tool_calls:
                 final_answer = _message_content(message)
+                self._emit(
+                    "assistant_message_completed",
+                    status="passed",
+                    case_id=case.id,
+                    model=model_name,
+                    title="Assistant answered",
+                    payload={"content": final_answer, "iteration": iteration_count},
+                )
                 completed = True
                 break
 
@@ -70,11 +102,29 @@ class ToolLoopEvaluator:
                 raw_arguments = function.get("arguments")
                 observed_tools.append(name)
                 arguments = _parse_arguments(raw_arguments)
+                tool_call_id = str(tool_call.get("id") or name)
+                self._emit(
+                    "tool_call_started",
+                    case_id=case.id,
+                    tool_call_id=tool_call_id,
+                    model=model_name,
+                    title=f"{name} started",
+                    payload={"tool_name": name, "arguments": arguments, "raw_arguments": raw_arguments},
+                )
                 result = await self.executor.execute(name, arguments, request_id=request_id, model=model_name)
                 expected_error = name in case.expected_error_tools and not bool(result.get("ok"))
+                self._emit(
+                    "tool_call_completed" if result.get("ok") else "tool_call_failed",
+                    status="passed" if result.get("ok") or expected_error else "failed",
+                    case_id=case.id,
+                    tool_call_id=tool_call_id,
+                    model=model_name,
+                    title=f"{name} {'completed' if result.get('ok') else 'failed'}",
+                    payload={"tool_name": name, "arguments": arguments, "result": result, "expected_error": expected_error},
+                )
                 tool_results.append(
                     {
-                        "tool_call_id": tool_call.get("id") or name,
+                        "tool_call_id": tool_call_id,
                         "tool_name": name,
                         "function": {
                             "name": name,
@@ -111,11 +161,28 @@ class ToolLoopEvaluator:
             checks["no_repeated_calls"] = _max_repeated_calls(observed_tools) <= case.max_repeated_tool_calls
         score = _score(checks)
         missing_expected_tools, unexpected_tools = _tool_sequence_delta(observed_tools, case.expected_tool_sequence)
+        status = "passed" if score == 1.0 else "failed"
+        self._emit(
+            "case_scored",
+            status=status,
+            case_id=case.id,
+            model=model_name,
+            title=f"{case.id} scored",
+            payload={"score": score, "checks": checks},
+        )
+        self._emit(
+            "case_completed",
+            status=status,
+            case_id=case.id,
+            model=model_name,
+            title=f"{case.id} completed",
+            payload={"status": status, "error": error},
+        )
         return {
             "case_id": case.id,
             "case_category": case.category,
             "model": model_name,
-            "status": "passed" if score == 1.0 else "failed",
+            "status": status,
             "score": score,
             "checks": checks,
             "error": error,
@@ -127,10 +194,18 @@ class ToolLoopEvaluator:
             "unexpected_tools": unexpected_tools,
             "scoring_mode": case.scoring_mode,
             "tool_results": tool_results,
+            "trace_events": self.trace_recorder.events_for_case(case.id) if self.trace_recorder is not None else [],
             "final_answer": final_answer,
         }
 
     async def run_suite(self, model_name: str, cases: list[ToolLoopEvalCase]) -> dict[str, Any]:
+        if self.emit_suite_events:
+            self._emit(
+                "run_started",
+                model=model_name,
+                title="Tool-loop eval run started",
+                payload={"case_count": len(cases), "case_ids": [case.id for case in cases]},
+            )
         results = [await self.run_case(model_name, case) for case in cases]
         passed_count = sum(1 for result in results if result["status"] == "passed")
         failed_count = len(results) - passed_count
@@ -138,7 +213,7 @@ class ToolLoopEvaluator:
             sum(float(result["score"]) for result in results) / len(results),
             4,
         ) if results else 0.0
-        return {
+        suite = {
             "model": model_name,
             "status": "passed" if failed_count == 0 else "failed",
             "case_count": len(results),
@@ -147,6 +222,20 @@ class ToolLoopEvaluator:
             "average_score": average_score,
             "cases": results,
         }
+        if self.emit_suite_events:
+            self._emit(
+                "run_completed" if failed_count == 0 else "run_failed",
+                status=suite["status"],
+                model=model_name,
+                title="Tool-loop eval run completed",
+                payload={"status": suite["status"], "case_count": len(results)},
+            )
+        return suite
+
+    def _emit(self, event_type: str, **kwargs: Any) -> dict[str, Any] | None:
+        if self.trace_recorder is None:
+            return None
+        return self.trace_recorder.emit(event_type, **kwargs)
 
 
 def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:

@@ -7,8 +7,8 @@ import {
   getToolLoopEvalPresets,
   getToolLoopEvalRun,
   listToolLoopEvalRuns,
-  startToolLoopEvalNodeRun,
-  startToolLoopEvalRun,
+  streamToolLoopEvalNodeRun,
+  streamToolLoopEvalRun,
 } from "../../api/toolLoopEvals";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
@@ -25,6 +25,7 @@ import type {
   ToolLoopEvalRunSummary,
   ToolLoopEvalRunsResponse,
   ToolLoopEvalSuite,
+  TraceEvent,
 } from "../../types/index";
 
 function scorePercent(score?: number): string {
@@ -123,6 +124,12 @@ function timelineEntries(result: ToolLoopEvalCaseResult): Array<{
       error: "",
     };
   });
+}
+
+function traceEventsForCase(result: ToolLoopEvalCaseResult, liveEvents: TraceEvent[]): TraceEvent[] {
+  if (result.trace_events?.length) return result.trace_events;
+  const caseId = result.case_id || "";
+  return liveEvents.filter((event) => !caseId || event.case_id === caseId);
 }
 
 function firstCase(suite: ToolLoopEvalSuite | null): ToolLoopEvalCaseResult | null {
@@ -225,6 +232,8 @@ export function ToolLoopEvalsPage() {
   const [comparisonRuns, setComparisonRuns] = useState<ToolLoopEvalRunDetail[]>([]);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [comparisonError, setComparisonError] = useState("");
+  const [liveTraceEvents, setLiveTraceEvents] = useState<TraceEvent[]>([]);
+  const [replayToken, setReplayToken] = useState(0);
 
   const nodeOptions = useMemo(
     () => isControllerMode ? Array.from(new Set(nodeModels.map((model) => String(model.node || model.node_name || "")).filter(Boolean))) : [],
@@ -327,7 +336,11 @@ export function ToolLoopEvalsPage() {
         model,
         ...(runPreset === "all" ? {} : { case_ids: [runPreset] }),
       };
-      const suite = isLocalMode ? await startToolLoopEvalRun(payload) : await startToolLoopEvalNodeRun({ node, ...payload });
+      setLiveTraceEvents([]);
+      setReplayToken((value) => value + 1);
+      const suite = isLocalMode
+        ? await streamToolLoopEvalRun(payload, (event) => setLiveTraceEvents((current) => [...current, event]))
+        : await streamToolLoopEvalNodeRun({ node, ...payload }, (event) => setLiveTraceEvents((current) => [...current, event]));
       setSelectedRun({
         id: suite.persisted_run_id,
         generated_at: new Date().toISOString(),
@@ -558,6 +571,10 @@ export function ToolLoopEvalsPage() {
                 </div>
                 {hasDiagnostics(activeCase) ? <ToolLoopDiagnostics result={activeCase} /> : null}
                 <ToolCallTimeline result={activeCase} />
+                <TraceReplayPanel
+                  events={traceEventsForCase(activeCase, liveTraceEvents)}
+                  autoPlayToken={replayToken}
+                />
                 {activeCase.error ? <ErrorBanner message={activeCase.error} /> : null}
                 <p className="muted">Final answer</p>
                 <pre className="tool-loop-answer">{activeCase.final_answer || "-"}</pre>
@@ -759,6 +776,86 @@ function ToolCallTimeline({ result }: { result: ToolLoopEvalCaseResult }) {
             <span className="tool-loop-step-name">{toolName}</span>
             <StatusBadge tone="danger">missing</StatusBadge>
           </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TraceReplayPanel({ events, autoPlayToken }: { events: TraceEvent[]; autoPlayToken: number }) {
+  const [playing, setPlaying] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(events.length);
+  const [speedMs, setSpeedMs] = useState(450);
+
+  useEffect(() => {
+    setVisibleCount(events.length);
+    setPlaying(false);
+  }, [events]);
+
+  useEffect(() => {
+    if (!autoPlayToken || !events.length) return;
+    setVisibleCount(0);
+    setPlaying(true);
+  }, [autoPlayToken, events.length]);
+
+  useEffect(() => {
+    if (!playing) return;
+    if (visibleCount >= events.length) {
+      setPlaying(false);
+      return;
+    }
+    const timer = window.setTimeout(() => setVisibleCount((count) => Math.min(count + 1, events.length)), speedMs);
+    return () => window.clearTimeout(timer);
+  }, [events.length, playing, speedMs, visibleCount]);
+
+  if (!events.length) return null;
+  const visibleEvents = events.slice(0, visibleCount);
+  return (
+    <div className="tool-loop-trace" aria-label="Runtime trace replay">
+      <div className="tool-loop-section-heading">
+        <strong>Runtime Trace</strong>
+        <span className="muted">{visibleEvents.length} / {events.length} events</span>
+      </div>
+      <div className="tool-loop-trace-controls">
+        <Button
+          type="button"
+          onClick={() => {
+            if (visibleCount >= events.length) setVisibleCount(0);
+            setPlaying((value) => !value);
+          }}
+        >
+          {playing ? "Pause" : "Replay"}
+        </Button>
+        <Button
+          type="button"
+          onClick={() => {
+            setVisibleCount(0);
+            setPlaying(true);
+          }}
+        >
+          Restart
+        </Button>
+        <label>
+          <span className="muted">Speed</span>
+          <select value={speedMs} onChange={(event) => setSpeedMs(Number(event.target.value))}>
+            <option value={700}>Slow</option>
+            <option value={450}>Normal</option>
+            <option value={180}>Fast</option>
+          </select>
+        </label>
+      </div>
+      <div className="tool-loop-trace-list">
+        {visibleEvents.map((event) => (
+          <details key={event.id || `${event.sequence}-${event.event_type}`} className={`tool-loop-trace-event ${event.status === "failed" ? "failed" : ""}`}>
+            <summary>
+              <span className="tool-loop-step-index">{event.sequence ?? "-"}</span>
+              <span className="tool-loop-step-name">{event.title || event.event_type || "trace event"}</span>
+              <StatusBadge tone={event.status === "failed" ? "danger" : event.status === "passed" ? "success" : "muted"}>
+                {event.status || "running"}
+              </StatusBadge>
+            </summary>
+            <pre className="tool-loop-json">{jsonBlock(event.payload || {})}</pre>
+          </details>
         ))}
       </div>
     </div>

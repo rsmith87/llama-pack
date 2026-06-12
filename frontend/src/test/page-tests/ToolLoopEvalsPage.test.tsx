@@ -8,6 +8,19 @@ function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
 
+function okStream(events: unknown[]) {
+  const text = events.map((event) => `event: ${(event as { event_type?: string }).event_type || "message"}\ndata: ${JSON.stringify(event)}\n\n`).join("");
+  return {
+    ok: true,
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode(text));
+        controller.close();
+      },
+    }),
+  };
+}
+
 function presetCatalog(payload = {}) {
   return {
     preset_count: 2,
@@ -225,6 +238,10 @@ it("loads persisted run detail from the history table", async () => {
             observed_tool_sequence: ["choose_route", "inspect_billing"],
             expected_tool_sequence: ["choose_route", "inspect_infra"],
             checks: { expected_tool_sequence: false },
+            trace_events: [
+              { id: "trace-history-1", event_type: "case_started", sequence: 1, status: "running", title: "Case started", payload: {} },
+              { id: "trace-history-2", event_type: "tool_call_started", sequence: 2, status: "running", title: "choose_route started", payload: { tool_name: "choose_route" } },
+            ],
             final_answer: "billing route found invoice drift",
           },
         ],
@@ -250,6 +267,10 @@ it("loads persisted run detail from the history table", async () => {
   expect((await screen.findAllByText("branching-decision")).length).toBeGreaterThan(0);
   expect(screen.getAllByText("choose_route -> inspect_billing").length).toBeGreaterThan(0);
   expect(screen.getByText("billing route found invoice drift")).toBeInTheDocument();
+  expect(screen.getByLabelText("Runtime trace replay")).toBeInTheDocument();
+  expect(screen.getByText("2 / 2 events")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Replay" }));
+  expect(screen.getByText("0 / 2 events")).toBeInTheDocument();
 });
 
 it("renders expandable tool-call timeline details", async () => {
@@ -655,29 +676,43 @@ it("submits a tool-loop eval run from the page", async () => {
         suites: [],
       }));
     }
-    if (url === "/lm-api/v1/runtime/tool-loop-evals/node-run") {
-      return Promise.resolve(okJson({
-        model: "gpt-oss-20b",
-        status: "passed",
-        case_count: 1,
-        passed_count: 1,
-        failed_count: 0,
-        average_score: 1,
-        persisted_run_id: "run-new",
-        cases: [
-          {
-            case_id: "avoid-unneeded-tools",
-            status: "passed",
-            score: 1,
-            iteration_count: 1,
-            tool_call_count: 0,
-            observed_tool_sequence: [],
-            expected_tool_sequence: [],
-            checks: { completed: true },
-            final_answer: "tool loop ready",
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/node-run/stream") {
+      return Promise.resolve(okStream([
+        { id: "trace-1", event_type: "run_started", status: "running", sequence: 1, payload: {} },
+        {
+          id: "trace-2",
+          event_type: "run_completed",
+          status: "passed",
+          sequence: 2,
+          payload: {
+            suite: {
+              model: "gpt-oss-20b",
+              status: "passed",
+              case_count: 1,
+              passed_count: 1,
+              failed_count: 0,
+              average_score: 1,
+              persisted_run_id: "run-new",
+              cases: [
+                {
+                  case_id: "avoid-unneeded-tools",
+                  status: "passed",
+                  score: 1,
+                  iteration_count: 1,
+                  tool_call_count: 0,
+                  observed_tool_sequence: [],
+                  expected_tool_sequence: [],
+                  checks: { completed: true },
+                  trace_events: [
+                    { id: "case-trace-1", event_type: "assistant_message_completed", sequence: 1, status: "passed", title: "Assistant answered", payload: { content: "tool loop ready" } },
+                  ],
+                  final_answer: "tool loop ready",
+                },
+              ],
+            },
           },
-        ],
-      }));
+        },
+      ]));
     }
     return Promise.resolve(okJson({}));
   }));
@@ -691,7 +726,7 @@ it("submits a tool-loop eval run from the page", async () => {
   await user.selectOptions(await screen.findByLabelText("Preset"), "avoid-unneeded-tools");
   await user.click(screen.getByRole("button", { name: "Run Eval" }));
 
-  const runRequest = requests.find((request) => request.url === "/lm-api/v1/runtime/tool-loop-evals/node-run");
+  const runRequest = requests.find((request) => request.url === "/lm-api/v1/runtime/tool-loop-evals/node-run/stream");
   expect(runRequest).toBeTruthy();
   expect(JSON.parse(String(runRequest?.body))).toEqual({
     node: "mac-mini",
@@ -727,29 +762,42 @@ it("submits a local tool-loop eval run in agent mode", async () => {
         suites: [],
       }));
     }
-    if (url === "/lm-api/v1/runtime/tool-loop-evals/run") {
-      return Promise.resolve(okJson({
-        model: "qwen-local",
-        status: "passed",
-        case_count: 1,
-        passed_count: 1,
-        failed_count: 0,
-        average_score: 1,
-        persisted_run_id: "run-local",
-        cases: [
-          {
-            case_id: "avoid-unneeded-tools",
-            status: "passed",
-            score: 1,
-            iteration_count: 1,
-            tool_call_count: 0,
-            observed_tool_sequence: [],
-            expected_tool_sequence: [],
-            checks: { completed: true },
-            final_answer: "local tool loop ready",
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/run/stream") {
+      return Promise.resolve(okStream([
+        {
+          id: "trace-local",
+          event_type: "run_completed",
+          status: "passed",
+          sequence: 1,
+          payload: {
+            suite: {
+              model: "qwen-local",
+              status: "passed",
+              case_count: 1,
+              passed_count: 1,
+              failed_count: 0,
+              average_score: 1,
+              persisted_run_id: "run-local",
+              cases: [
+                {
+                  case_id: "avoid-unneeded-tools",
+                  status: "passed",
+                  score: 1,
+                  iteration_count: 1,
+                  tool_call_count: 0,
+                  observed_tool_sequence: [],
+                  expected_tool_sequence: [],
+                  checks: { completed: true },
+                  trace_events: [
+                    { id: "case-trace-local", event_type: "assistant_message_completed", sequence: 1, status: "passed", title: "Assistant answered", payload: { content: "local tool loop ready" } },
+                  ],
+                  final_answer: "local tool loop ready",
+                },
+              ],
+            },
           },
-        ],
-      }));
+        },
+      ]));
     }
     return Promise.resolve(okJson({}));
   }));
@@ -765,7 +813,7 @@ it("submits a local tool-loop eval run in agent mode", async () => {
   await user.selectOptions(screen.getByLabelText("Preset"), "avoid-unneeded-tools");
   await user.click(screen.getByRole("button", { name: "Run Eval" }));
 
-  const localRunRequest = requests.find((request) => request.url === "/lm-api/v1/runtime/tool-loop-evals/run");
+  const localRunRequest = requests.find((request) => request.url === "/lm-api/v1/runtime/tool-loop-evals/run/stream");
   expect(localRunRequest).toBeTruthy();
   expect(JSON.parse(String(localRunRequest?.body))).toEqual({
     model: "qwen-local",

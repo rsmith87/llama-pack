@@ -10,6 +10,23 @@ export type ToolLoopEvalCheckMap = {
   no_forbidden_artifact_substrings?: boolean;
 };
 
+export type TraceEvent = {
+  id?: string;
+  trace_id?: string;
+  sequence?: number;
+  timestamp?: string;
+  event_type?: string;
+  source?: string;
+  scope?: string;
+  status?: string;
+  case_id?: string;
+  tool_call_id?: string;
+  model?: string;
+  title?: string;
+  summary?: string;
+  payload?: Record<string, unknown>;
+};
+
 export type ToolLoopEvalCaseResult = {
   case_id?: string;
   case_category?: string;
@@ -36,6 +53,7 @@ export type ToolLoopEvalCaseResult = {
     arguments?: Record<string, unknown>;
     result?: Record<string, unknown>;
   }>;
+  trace_events?: TraceEvent[];
   diagnostics?: Record<string, unknown>;
   final_answer?: string;
 };

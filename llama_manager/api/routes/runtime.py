@@ -1,15 +1,19 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from datetime import UTC, datetime
 from typing import Any
+from uuid import uuid4
 
 import httpx
 from fastapi import APIRouter, HTTPException, Query, Request
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
 from llama_manager.core.agent_tools.evals import ToolLoopEvaluator, default_tool_loop_eval_cases
 from llama_manager.core.agent_tools.live_evals import LiveToolLoopEvaluator, default_live_tool_loop_scenarios
+from llama_manager.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_manager.core.runtime.route_preview import RoutePreviewRequest, RoutePreviewService
 
 
@@ -253,6 +257,56 @@ async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict
     return suite
 
 
+@router.post("/tool-loop-evals/run/stream")
+async def tool_loop_eval_run_stream(body: ToolLoopRunRequest, request: Request) -> StreamingResponse:
+    config = request.app.state.config
+    if config.mode == "controller":
+        raise HTTPException(status_code=400, detail="tool-loop local eval run is only available outside controller mode")
+    if not config.agent_tools.enabled:
+        raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
+    process_manager = getattr(request.app.state, "process_manager", None)
+    if process_manager is not None and hasattr(process_manager, "start"):
+        try:
+            process_manager.start(body.model)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+    cases, live_scenarios = _select_tool_loop_workloads(body.case_ids)
+    recorder = RuntimeTraceRecorder(trace_id=str(uuid4()), source="tool_loop_eval", scope="eval_run")
+
+    async def run_and_close() -> None:
+        try:
+            suites = await _execute_tool_loop_suites(request, body.model, cases, live_scenarios, recorder)
+            suite = _merge_tool_loop_suites(body.model, suites)
+            persisted = _persist_tool_loop_suite(
+                request,
+                suite,
+                target_selector=_local_target_selector(config),
+                target_node=None,
+                target_instance=_local_target_instance(config),
+            )
+            if persisted is not None:
+                suite = {**suite, "persisted_run_id": persisted["id"]}
+            recorder.emit(
+                "run_completed" if suite.get("status") == "passed" else "run_failed",
+                status=str(suite.get("status") or "failed"),
+                model=body.model,
+                title="Tool-loop eval stream completed",
+                payload={"suite": suite},
+            )
+        except Exception as exc:
+            recorder.emit(
+                "run_failed",
+                status="failed",
+                model=body.model,
+                title="Tool-loop eval stream failed",
+                payload={"error": str(exc)},
+            )
+        finally:
+            recorder.close()
+
+    return StreamingResponse(_stream_trace_events(recorder, run_and_close), media_type="text/event-stream")
+
+
 @router.post("/tool-loop-evals/node-run")
 async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request) -> dict[str, object]:
     config = request.app.state.config
@@ -294,6 +348,75 @@ async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request
     return suite
 
 
+@router.post("/tool-loop-evals/node-run/stream")
+async def tool_loop_eval_node_run_stream(body: ToolLoopNodeRunRequest, request: Request) -> StreamingResponse:
+    config = request.app.state.config
+    if config.mode != "controller":
+        raise HTTPException(status_code=400, detail="tool-loop node eval run is only available in controller mode")
+    node_registry = getattr(request.app.state, "node_registry", None)
+    if node_registry is None:
+        raise HTTPException(status_code=503, detail="node registry is not available")
+    try:
+        node = node_registry.get_node_config(body.node)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    _node_base_url(body.node, node.url)
+    recorder = RuntimeTraceRecorder(trace_id=str(uuid4()), source="tool_loop_eval", scope="eval_run")
+
+    async def run_and_close() -> None:
+        try:
+            payload: dict[str, object] = {"model": body.model}
+            if body.case_ids is not None:
+                payload["case_ids"] = body.case_ids
+            if getattr(node_registry, "_uses_default_request", False):
+                suite = await _stream_node_tool_loop_eval(node, body.node, payload, recorder)
+            else:
+                suite = await node_registry.request_node(
+                    body.node,
+                    "POST",
+                    "/lm-api/v1/runtime/tool-loop-evals/run",
+                    payload,
+                    timeout=None,
+                )
+                _replay_suite_trace_events(recorder, suite)
+            persisted = _persist_tool_loop_suite(
+                request,
+                suite,
+                target_selector=f"node:{body.node}",
+                target_node=body.node,
+                target_instance=body.node,
+            )
+            if persisted is not None and isinstance(suite, dict):
+                suite = {**suite, "persisted_run_id": persisted["id"]}
+            recorder.emit(
+                "run_completed" if isinstance(suite, dict) and suite.get("status") == "passed" else "run_failed",
+                status=str(suite.get("status") if isinstance(suite, dict) else "failed"),
+                model=body.model,
+                title="Tool-loop node eval stream completed",
+                payload={"suite": suite},
+            )
+        except httpx.HTTPStatusError as exc:
+            recorder.emit(
+                "run_failed",
+                status="failed",
+                model=body.model,
+                title="Tool-loop node eval stream failed",
+                payload={"error": f"Node {body.node} tool-loop eval failed: {_node_error_detail(exc.response)}"},
+            )
+        except Exception as exc:
+            recorder.emit(
+                "run_failed",
+                status="failed",
+                model=body.model,
+                title="Tool-loop node eval stream failed",
+                payload={"error": str(exc)},
+            )
+        finally:
+            recorder.close()
+
+    return StreamingResponse(_stream_trace_events(recorder, run_and_close), media_type="text/event-stream")
+
+
 def _persist_tool_loop_suite(
     request: Request,
     suite: Any,
@@ -314,6 +437,155 @@ def _persist_tool_loop_suite(
         target_instance=target_instance,
         suite=suite,
     )
+
+
+async def _execute_tool_loop_suites(
+    request: Request,
+    model: str,
+    cases: list[Any],
+    live_scenarios: list[Any],
+    recorder: RuntimeTraceRecorder | None,
+) -> list[dict[str, Any]]:
+    suites: list[dict[str, Any]] = []
+    if recorder is not None:
+        recorder.emit(
+            "run_started",
+            model=model,
+            title="Tool-loop eval run started",
+            payload={
+                "case_count": len(cases) + len(live_scenarios),
+                "case_ids": [case.id for case in cases] + [scenario.id for scenario in live_scenarios],
+            },
+        )
+    if cases:
+        suites.append(
+            await ToolLoopEvaluator(
+                request.app.state.config,
+                request.app.state.chat_scheduler,
+                executor=None,
+                trace_recorder=recorder,
+                emit_suite_events=False,
+            ).run_suite(model, cases)
+        )
+    if live_scenarios:
+        suites.append(
+            await LiveToolLoopEvaluator(
+                request.app.state.config,
+                request.app.state.chat_scheduler,
+                trace_recorder=recorder,
+                emit_suite_events=False,
+            ).run_suite(model, live_scenarios)
+        )
+    return suites
+
+
+async def _stream_trace_events(recorder: RuntimeTraceRecorder, runner: Any):
+    task = asyncio.create_task(runner())
+    try:
+        async for event in recorder.stream():
+            yield _encode_trace_sse(event)
+        await task
+    finally:
+        if not task.done():
+            task.cancel()
+
+
+def _encode_trace_sse(event: dict[str, Any]) -> str:
+    return (
+        f"id: {event['id']}\n"
+        f"event: {event['event_type']}\n"
+        f"data: {json.dumps(event, separators=(',', ':'))}\n\n"
+    )
+
+
+def _replay_suite_trace_events(recorder: RuntimeTraceRecorder, suite: Any) -> None:
+    if not isinstance(suite, dict):
+        return
+    for case in suite.get("cases") or []:
+        if not isinstance(case, dict):
+            continue
+        for event in case.get("trace_events") or []:
+            if not isinstance(event, dict):
+                continue
+            recorder.emit(
+                str(event.get("event_type") or "trace_event"),
+                status=str(event.get("status") or "running"),
+                scope=str(event.get("scope") or "eval_case"),
+                case_id=event.get("case_id") if isinstance(event.get("case_id"), str) else case.get("case_id"),
+                tool_call_id=event.get("tool_call_id") if isinstance(event.get("tool_call_id"), str) else None,
+                model=event.get("model") if isinstance(event.get("model"), str) else suite.get("model"),
+                title=str(event.get("title") or ""),
+                summary=str(event.get("summary") or ""),
+                payload=event.get("payload") if isinstance(event.get("payload"), dict) else {},
+            )
+
+
+async def _stream_node_tool_loop_eval(node: Any, node_name: str, payload: dict[str, object], recorder: RuntimeTraceRecorder) -> dict[str, Any]:
+    base_url = _node_base_url(node_name, node.url)
+    headers = {"X-Llama-Manager-Key": node.api_key} if node.api_key else {}
+    suite: dict[str, Any] | None = None
+    async with httpx.AsyncClient(timeout=None, verify=node.verify_tls) as client:
+        async with client.stream(
+            "POST",
+            f"{base_url}/lm-api/v1/runtime/tool-loop-evals/run/stream",
+            json=payload,
+            headers=headers,
+        ) as response:
+            response.raise_for_status()
+            buffer = ""
+            async for chunk in response.aiter_text():
+                events, buffer = _parse_trace_sse_chunk(buffer + chunk)
+                for event in events:
+                    recorder.emit(
+                        str(event.get("event_type") or "trace_event"),
+                        status=str(event.get("status") or "running"),
+                        scope=str(event.get("scope") or "eval_case"),
+                        case_id=event.get("case_id") if isinstance(event.get("case_id"), str) else None,
+                        tool_call_id=event.get("tool_call_id") if isinstance(event.get("tool_call_id"), str) else None,
+                        model=event.get("model") if isinstance(event.get("model"), str) else None,
+                        title=str(event.get("title") or ""),
+                        summary=str(event.get("summary") or ""),
+                        payload=event.get("payload") if isinstance(event.get("payload"), dict) else {},
+                    )
+                    maybe_suite = event.get("payload", {}).get("suite") if isinstance(event.get("payload"), dict) else None
+                    if isinstance(maybe_suite, dict):
+                        suite = maybe_suite
+            events, _buffer = _parse_trace_sse_chunk(buffer + "\n\n")
+            for event in events:
+                recorder.emit(
+                    str(event.get("event_type") or "trace_event"),
+                    status=str(event.get("status") or "running"),
+                    scope=str(event.get("scope") or "eval_case"),
+                    case_id=event.get("case_id") if isinstance(event.get("case_id"), str) else None,
+                    tool_call_id=event.get("tool_call_id") if isinstance(event.get("tool_call_id"), str) else None,
+                    model=event.get("model") if isinstance(event.get("model"), str) else None,
+                    title=str(event.get("title") or ""),
+                    summary=str(event.get("summary") or ""),
+                    payload=event.get("payload") if isinstance(event.get("payload"), dict) else {},
+                )
+                maybe_suite = event.get("payload", {}).get("suite") if isinstance(event.get("payload"), dict) else None
+                if isinstance(maybe_suite, dict):
+                    suite = maybe_suite
+    if suite is None:
+        raise RuntimeError("Node tool-loop eval stream ended without a final suite")
+    return suite
+
+
+def _parse_trace_sse_chunk(text: str) -> tuple[list[dict[str, Any]], str]:
+    parts = text.split("\n\n")
+    buffer = parts.pop() or ""
+    events: list[dict[str, Any]] = []
+    for part in parts:
+        data_lines = [line.removeprefix("data:").strip() for line in part.splitlines() if line.startswith("data:")]
+        if not data_lines:
+            continue
+        try:
+            parsed = json.loads("\n".join(data_lines))
+        except ValueError:
+            continue
+        if isinstance(parsed, dict):
+            events.append(parsed)
+    return events, buffer
 
 
 def _node_error_detail(response: httpx.Response) -> str:

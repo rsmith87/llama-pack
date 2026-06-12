@@ -1,6 +1,6 @@
 from sqlalchemy import Index
 
-from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm, ToolLoopEvalRunOrm
+from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
 
 
 def _col(table, name: str):
@@ -71,3 +71,13 @@ def test_tool_loop_eval_runs_orm_schema_parity():
 
     index_names = {idx.name for idx in table.indexes if isinstance(idx, Index)}
     assert "idx_tool_loop_eval_runs_target_instance" in index_names
+
+
+def test_tool_loop_eval_cases_orm_schema_parity():
+    table = ToolLoopEvalCaseOrm.__table__
+    assert table.name == "tool_loop_eval_cases"
+    assert _col(table, "id").primary_key is True
+    assert _col(table, "run_id").nullable is False
+    assert _col(table, "case_id").nullable is False
+    assert _col(table, "tool_results_json").nullable is False
+    assert _col(table, "trace_events_json").nullable is False
