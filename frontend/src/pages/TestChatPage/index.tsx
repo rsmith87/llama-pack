@@ -134,7 +134,7 @@ export function TestChatPage() {
             return;
           }
           setStatus("Test chat API key is not configured");
-          setError("Set NEURAXIS_TEST_CHAT_API_KEY and restart the server.");
+          setError("Set LLAMA_PACK_TEST_CHAT_API_KEY and restart the server.");
           return;
         }
         setSessionActive(true);

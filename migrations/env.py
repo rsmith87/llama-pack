@@ -8,9 +8,9 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlalchemy.engine.url import make_url
 
-from llama_manager.core.config import load_config
-from llama_manager.core.persistence.alembic_config import parse_alembic_target, resolve_target_url_from_config, target_metadata_for
-from llama_manager.core.persistence import models as _models  # noqa: F401
+from llama_pack.core.config import load_config
+from llama_pack.core.persistence.alembic_config import parse_alembic_target, resolve_target_url_from_config, target_metadata_for
+from llama_pack.core.persistence import models as _models  # noqa: F401
 
 
 config = context.config
@@ -25,7 +25,7 @@ def _selected_target() -> str:
 
 
 def _selected_url() -> str:
-    source = os.getenv("NEURAXIS_CONFIG")
+    source = os.getenv("LLAMA_PACK_CONFIG")
     app_config = load_config(source)
     return resolve_target_url_from_config(config=app_config, target=_selected_target())
 

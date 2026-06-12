@@ -1,9 +1,9 @@
 from datetime import datetime
 import sqlite3
 
-from llama_manager.core.threads.models import ThreadEventRecord, ThreadRecord
-from llama_manager.core.threads import store as thread_store_module
-from llama_manager.core.threads.store import ThreadStore
+from llama_pack.core.threads.models import ThreadEventRecord, ThreadRecord
+from llama_pack.core.threads import store as thread_store_module
+from llama_pack.core.threads.store import ThreadStore
 
 
 def test_thread_store_creates_thread_and_public_events(tmp_path):

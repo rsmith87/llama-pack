@@ -1,19 +1,19 @@
 # Configuration
 
-Set `NEURAXIS_CONFIG` to a YAML file path. Set `NEURAXIS_MODE` to override the mode without editing the file.
+Set `LLAMA_PACK_CONFIG` to a YAML file path. Set `LLAMA_PACK_MODE` to override the mode without editing the file.
 
 ## Network Exposure
 
-Neuraxis can run in either direct HTTP mode or behind Caddy:
+Llama Pack can run in either direct HTTP mode or behind Caddy:
 
 | Mode | Uvicorn bind | URLs | Notes |
 | --- | --- | --- | --- |
-| Direct LAN HTTP | `NEURAXIS_HOST=0.0.0.0` | `http://<host>:9137` | Simple setup, but controller/agent traffic is plaintext. |
-| Caddy/local TLS | `NEURAXIS_HOST=127.0.0.1` | `https://<host>.local` | Recommended for encrypted inter-machine traffic. Caddy listens on `443` and proxies to local uvicorn. |
+| Direct LAN HTTP | `LLAMA_PACK_HOST=0.0.0.0` | `http://<host>:9137` | Simple setup, but controller/agent traffic is plaintext. |
+| Caddy/local TLS | `LLAMA_PACK_HOST=127.0.0.1` | `https://<host>.local` | Recommended for encrypted inter-machine traffic. Caddy listens on `443` and proxies to local uvicorn. |
 
 The `models.*.host` fields below control `llama-server` bind addresses, not the
-Neuraxis FastAPI/uvicorn bind address. Prefer `127.0.0.1` for model hosts when
-Neuraxis proxies model access.
+Llama Pack FastAPI/uvicorn bind address. Prefer `127.0.0.1` for model hosts when
+Llama Pack proxies model access.
 
 ```yaml
 mode: agent
@@ -57,7 +57,7 @@ nodes:
   mac-mini:
     url: http://127.0.0.1:9000
   windows-2080ti:
-    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: ${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
 ```
 
 ## Split Config Files
@@ -82,7 +82,7 @@ files:
 
 Linked paths are resolved relative to the root config file. Linked file values
 are loaded first, then inline values in the root config override linked values.
-Environment placeholders such as `${NEURAXIS_AGENT_URL}` are expanded
+Environment placeholders such as `${LLAMA_PACK_AGENT_URL}` are expanded
 after the files are merged.
 
 `models`, `nodes`, `agent_tools`, and `memory` are direct section files. Their
@@ -108,16 +108,16 @@ python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
-controller_url: ${NEURAXIS_CONTROLLER_URL}
+controller_url: ${LLAMA_PACK_CONTROLLER_URL}
 node_name: mac-mini
-agent_url: ${NEURAXIS_AGENT_URL}
+agent_url: ${LLAMA_PACK_AGENT_URL}
 heartbeat_interval_seconds: 30
 ```
 
 ```yaml
 # config/auth.yaml
-agent_api_key: ${NEURAXIS_AGENT_API_KEY}
-controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+agent_api_key: ${LLAMA_PACK_AGENT_API_KEY}
+controller_registration_key_outbound: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 ```
 
 ```yaml
@@ -283,7 +283,7 @@ models:
 Nested `profiles` are optional. When present, the model key is the logical
 family and each profile is a concrete runtime instance such as
 `qwen-coder:fast` or `qwen-coder:long`. Profile values override the base model
-for startup; if a profile omits `port`, Neuraxis derives one from the base
+for startup; if a profile omits `port`, Llama Pack derives one from the base
 port plus the profile `order`.
 
 Optional `strengths` and `cost_tier` metadata help the route preview explain
@@ -297,8 +297,8 @@ For scripted setup, install llama.cpp before or during agent onboarding:
 ```bash
 scripts/install_llama_cpp.sh --backend auto
 scripts/onboard_agent.sh \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL" \
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL" \
   --install-llama-cpp \
   --llama-cpp-backend auto
 ```
@@ -327,7 +327,7 @@ nodes:
   mac-mini:
     url: http://127.0.0.1:9000
   windows-2080ti:
-    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: ${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
     api_key: your-agent-api-key-if-enabled
     verify_tls: true
     max_running_models: 1   # optional — limits concurrent model instances on this node
@@ -392,7 +392,7 @@ scripts/start_controller.sh
 mode: controller
 log_dir: /home/{user_name}/llama-manager/logs
 
-controller_registration_key: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 controller_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/controller_state.db
@@ -402,22 +402,22 @@ chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/ch
 
 nodes:
   mac-mini:
-    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
-    api_key: ${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    url: ${LLAMA_PACK_MAC_MINI_AGENT_URL}
+    api_key: ${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
-    url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}
-    api_key: ${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    url: ${LLAMA_PACK_LINUX_2080TI_AGENT_URL}
+    api_key: ${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 ```
 
 Manual startup is also available:
 
 ```bash
-NEURAXIS_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
+LLAMA_PACK_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9137
 ```
 
-Agents should run `scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"`, or manually keep `controller_url` as `${NEURAXIS_CONTROLLER_URL}`, keep `agent_url` as `${NEURAXIS_AGENT_URL}`, and send the same registration key through `controller_registration_key_outbound`.
+Agents should run `scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"`, or manually keep `controller_url` as `${LLAMA_PACK_CONTROLLER_URL}`, keep `agent_url` as `${LLAMA_PACK_AGENT_URL}`, and send the same registration key through `controller_registration_key_outbound`.
 
 For the current Raspberry Pi controller topology and smoke checks, see
 [Raspberry Pi Controller Topology](pi-controller-topology.md).
@@ -462,8 +462,8 @@ scripts/onboard_controller.sh --enable-memory
 
 The onboarding script installs the optional `controller-memory` extras,
 downloads the default embedding model, writes the `memory:` block, validates
-the controller config, and stores `NEURAXIS_MEMORY_MODEL_PATH` in
-`.neuraxis.env`. Override paths when needed:
+the controller config, and stores `LLAMA_PACK_MEMORY_MODEL_PATH` in
+`.llama_pack.env`. Override paths when needed:
 
 ```bash
 scripts/onboard_controller.sh \
@@ -560,7 +560,7 @@ agent_tools:
   tool_timeout_seconds: 10
   safe_roots:
     - ./logs
-    - /Users/{user_name}/Apps/neuraxis
+    - /Users/{user_name}/Apps/llama-pack
   tools:
     list_runtime_status:
       type: shell
@@ -573,11 +573,11 @@ agent_tools:
     read_project_file:
       type: file_read_dynamic
       description: Read a project or log file by relative path.
-      path: /Users/{user_name}/Apps/neuraxis
+      path: /Users/{user_name}/Apps/llama-pack
     list_project_files:
       type: directory_list
       description: List top-level and one-level-deep project files.
-      path: /Users/{user_name}/Apps/neuraxis
+      path: /Users/{user_name}/Apps/llama-pack
       recursive: true
       max_depth: 1
       max_entries: 200
@@ -602,7 +602,7 @@ tail -f ./logs/agent_tool_calls.jsonl
 ```bash
 curl -s http://127.0.0.1:9137/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [

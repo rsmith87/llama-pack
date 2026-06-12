@@ -60,7 +60,7 @@ export function DocsPage() {
       <aside className="docs-sidebar" aria-label="Documentation navigation">
         <div className="docs-brand">
           <Link to="/ui/setup" className="docs-back-link">← Back to app</Link>
-          <h1 className="docs-brand-title">Neuraxis Docs</h1>
+          <h1 className="docs-brand-title">Llama Pack Docs</h1>
         </div>
 
         <div className="docs-search-wrap">

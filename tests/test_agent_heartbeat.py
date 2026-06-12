@@ -2,8 +2,8 @@ import asyncio
 
 import pytest
 
-from llama_manager.core.nodes.heartbeat import AgentHeartbeatClient
-from llama_manager.core.config import load_config
+from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
+from llama_pack.core.config import load_config
 
 
 @pytest.mark.asyncio

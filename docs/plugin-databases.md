@@ -1,6 +1,6 @@
 # Plugin Database Contract
 
-This design defines how Neuraxis plugins store durable data without coupling
+This design defines how Llama Pack plugins store durable data without coupling
 core to plugin-owned schemas or models.
 
 Plugins may need persistent data for usage accounting, identity mappings,
@@ -62,7 +62,7 @@ database = context.get_database("main")
 
 context.add_migration_target(
     "main",
-    directory="neuraxis_business/migrations/main",
+    directory="llama_pack_business/migrations/main",
     database=database,
 )
 ```
@@ -81,7 +81,7 @@ lifecycle, not the schema.
 
 Plugins define schema changes as versioned migration files in the plugin package
 or repository. Alembic-style migrations are preferred because they are explicit,
-reviewable, ordered, and compatible with the existing Neuraxis persistence
+reviewable, ordered, and compatible with the existing Llama Pack persistence
 tooling.
 
 Core should extend the existing plugin migration metadata into an executable
@@ -92,10 +92,10 @@ GET  /lm-api/v1/plugins/{plugin_id}/migrations/status
 POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade
 ```
 
-A later CLI can wrap the same service:
+A later CLI could wrap the same service. No core CLI is shipped yet:
 
 ```bash
-uv run neuraxis plugins migrate {plugin_id} {target_id}
+curl -X POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade
 ```
 
 Migration status should include:
@@ -134,7 +134,7 @@ Plugins own:
 - Plugin data retention and export semantics.
 - Tests that prove plugin migrations and stores work.
 
-This boundary keeps core generic. A paid add-on such as `neuraxis_business` can
+This boundary keeps core generic. A paid add-on such as `llama_pack_business` can
 store business identity, usage, quota, audit, and reporting data without making
 core aware of those models.
 
@@ -157,7 +157,7 @@ example:
 ```text
 core:controller
 core:auth
-plugin:neuraxis_business:main
+plugin:llama_pack_business:main
 ```
 
 ## Failure Handling

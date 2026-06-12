@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${NEURAXIS_ENV_FILE:-$ROOT_DIR/.neuraxis.env}"
+ENV_FILE="${LLAMA_PACK_ENV_FILE:-$ROOT_DIR/.llama_pack.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -16,16 +16,16 @@ if [[ -f "$VENV_ACTIVATE" ]]; then
   source "$VENV_ACTIVATE"
 fi
 
-CONTROLLER_PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.neuraxis_controller.pid}"
-FRONTEND_PID_FILE="${NEURAXIS_FRONTEND_PID_FILE:-$ROOT_DIR/.neuraxis_frontend.pid}"
+CONTROLLER_PID_FILE="${LLAMA_PACK_PID_FILE:-$ROOT_DIR/.llama_pack_controller.pid}"
+FRONTEND_PID_FILE="${LLAMA_PACK_FRONTEND_PID_FILE:-$ROOT_DIR/.llama_pack_frontend.pid}"
 DEFAULT_CONFIG="$ROOT_DIR/config.example.yaml"
 if [[ -f "$ROOT_DIR/config.yaml" ]]; then
   DEFAULT_CONFIG="$ROOT_DIR/config.yaml"
 fi
-CONFIG="${NEURAXIS_CONFIG:-$DEFAULT_CONFIG}"
+CONFIG="${LLAMA_PACK_CONFIG:-$DEFAULT_CONFIG}"
 
 print_debug_config_keys() {
-  if [[ "${NEURAXIS_DEBUG_CONFIG_KEYS:-0}" != "1" ]]; then
+  if [[ "${LLAMA_PACK_DEBUG_CONFIG_KEYS:-0}" != "1" ]]; then
     return
   fi
 
@@ -36,8 +36,8 @@ print_debug_config_keys() {
     python_bin="${PYTHON:-python3}"
   fi
 
-  NEURAXIS_CONFIG="$CONFIG" NEURAXIS_MODE=controller "$python_bin" - <<'PY'
-from llama_manager.core.config import load_config
+  LLAMA_PACK_CONFIG="$CONFIG" LLAMA_PACK_MODE=controller "$python_bin" - <<'PY'
+from llama_pack.core.config import load_config
 
 config = load_config()
 print("Resolved controller auth config:")
@@ -81,14 +81,14 @@ fi
 print_debug_config_keys
 
 if [[ "$CONTROLLER_RUNNING" == "1" && "$FRONTEND_RUNNING" == "1" ]]; then
-  echo "Neuraxis controller stack is currently up."
+  echo "Llama Pack controller stack is currently up."
   exit 0
 fi
 
 if [[ "$CONTROLLER_RUNNING" == "1" ]]; then
-  echo "Neuraxis controller is currently up."
+  echo "Llama Pack controller is currently up."
 else
-  NEURAXIS_START_FRONTEND=0 "$ROOT_DIR/scripts/start_controller.sh"
+  LLAMA_PACK_START_FRONTEND=0 "$ROOT_DIR/scripts/start_controller.sh"
   if is_running "$FRONTEND_PID_FILE"; then
     FRONTEND_RUNNING=1
   else
@@ -97,7 +97,7 @@ else
 fi
 
 if [[ "$FRONTEND_RUNNING" == "1" ]]; then
-  echo "Neuraxis React frontend is currently up."
+  echo "Llama Pack React frontend is currently up."
 else
   "$ROOT_DIR/scripts/start_frontend.sh"
 fi

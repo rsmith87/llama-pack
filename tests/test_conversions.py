@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from llama_manager.core.config import load_config
-from llama_manager.core.model_assets.conversions import ConversionManager
+from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.conversions import ConversionManager
 
 
 class FakeProcess:

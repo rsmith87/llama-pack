@@ -1,9 +1,9 @@
 from pathlib import Path
 
-from llama_manager.core.config import load_config
-from llama_manager.core.model_assets.library import GgufLibrary
-from llama_manager.core.runtime.process_manager import ProcessManager
-from llama_manager.core.runtime.profile_catalog import build_profile_catalog
+from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.runtime.process_manager import ProcessManager
+from llama_pack.core.runtime.profile_catalog import build_profile_catalog
 
 
 def test_gguf_library_lists_files_with_stable_ids(tmp_path):

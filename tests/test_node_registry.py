@@ -1,9 +1,9 @@
 import pytest
 
-from llama_manager.core.config import NodeConfig, load_config
-from llama_manager.core.nodes.registry import NodeRegistry
-from llama_manager.storage.db import InMemoryStore
-from llama_manager.api.routes.nodes.common import stream_node_request
+from llama_pack.core.config import NodeConfig, load_config
+from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.storage.db import InMemoryStore
+from llama_pack.api.routes.nodes.common import stream_node_request
 
 
 def test_dynamic_nodes_and_heartbeats_persist_via_store():
@@ -162,7 +162,7 @@ async def test_request_node_allows_long_running_default_request(monkeypatch):
             seen["json"] = json
             return FakeResponse()
 
-    monkeypatch.setattr("llama_manager.core.nodes.registry.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("llama_pack.core.nodes.registry.httpx.AsyncClient", FakeClient)
 
     result = await registry.request_node(
         "mac-mini",
@@ -263,7 +263,7 @@ async def test_stream_node_request_relays_upstream_chunks(monkeypatch):
             seen["headers"] = headers
             return FakeStream()
 
-    monkeypatch.setattr("llama_manager.api.routes.nodes.common.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("llama_pack.api.routes.nodes.common.httpx.AsyncClient", FakeClient)
 
     response = await stream_node_request(registry, "win", "/logs/qwen/stream?lines=200")
     body = b""

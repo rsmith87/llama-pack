@@ -3,7 +3,7 @@ requires = ["setuptools>=64", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "neuraxis"
+name = "llama-pack"
 version = "0.1.0"
 description = "FastAPI llama.cpp process manager and controller"
 requires-python = ">=3.11"
@@ -37,10 +37,10 @@ dev = [
 ]
 
 [tool.setuptools.packages.find]
-include = ["llama_manager*"]
+include = ["llama_pack*"]
 
 [tool.setuptools.package-data]
-llama_manager = ["ui/*", "ui/assets/*"]
+llama_pack = ["ui/*", "ui/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

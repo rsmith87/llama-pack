@@ -1,4 +1,4 @@
-from llama_manager.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
+from llama_pack.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
 from tests.persistence_db_setup import prepare_chat_sessions_db
 
 

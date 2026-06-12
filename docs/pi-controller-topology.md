@@ -6,9 +6,9 @@ This is the first known-good three-machine deployment:
 
 | Role | Node name | URL | Notes |
 | --- | --- | --- | --- |
-| Controller | raspberry-pi-controller | `$NEURAXIS_CONTROLLER_URL` | Runs `mode: controller`; agents register and heartbeat here. |
-| Agent | mac-mini | `$NEURAXIS_AGENT_URL` on the Mac mini; `$NEURAXIS_MAC_MINI_AGENT_URL` on the controller | Local Mac mini agent config points at the Raspberry Pi controller. |
-| Agent | linux-2080ti | `$NEURAXIS_LINUX_2080TI_AGENT_URL` | 2080 Ti box agent; confirm the current value from the Pi controller `/nodes` output. |
+| Controller | raspberry-pi-controller | `$LLAMA_PACK_CONTROLLER_URL` | Runs `mode: controller`; agents register and heartbeat here. |
+| Agent | mac-mini | `$LLAMA_PACK_AGENT_URL` on the Mac mini; `$LLAMA_PACK_MAC_MINI_AGENT_URL` on the controller | Local Mac mini agent config points at the Raspberry Pi controller. |
+| Agent | linux-2080ti | `$LLAMA_PACK_LINUX_2080TI_AGENT_URL` | 2080 Ti box agent; confirm the current value from the Pi controller `/nodes` output. |
 
 The important topology rule is that every agent uses the Raspberry Pi URL as
 `controller_url`, and the controller uses each agent's `agent_url` to proxy
@@ -20,21 +20,21 @@ The Mac mini local config currently has:
 
 ```yaml
 mode: agent
-controller_url: ${NEURAXIS_CONTROLLER_URL}
+controller_url: ${LLAMA_PACK_CONTROLLER_URL}
 node_name: mac-mini
-agent_url: ${NEURAXIS_AGENT_URL}
+agent_url: ${LLAMA_PACK_AGENT_URL}
 heartbeat_interval_seconds: 30
 ```
 
-Keep `NEURAXIS_AGENT_API_KEY` and
-`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND` in `.neuraxis.env`,
+Keep `LLAMA_PACK_AGENT_API_KEY` and
+`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND` in `.llama_pack.env`,
 not in tracked docs or config examples.
 
-The Mac mini `.neuraxis.env` should also include:
+The Mac mini `.llama_pack.env` should also include:
 
 ```bash
-export NEURAXIS_CONTROLLER_URL=http://<raspberry-pi-lan-address>:9137
-export NEURAXIS_AGENT_URL=http://<mac-mini-lan-address>:9137
+export LLAMA_PACK_CONTROLLER_URL=http://<raspberry-pi-lan-address>:9137
+export LLAMA_PACK_AGENT_URL=http://<mac-mini-lan-address>:9137
 ```
 
 ## Smoke Checks
@@ -44,7 +44,7 @@ Run these from the Mac mini or any machine on the same network.
 Controller health:
 
 ```bash
-curl -s "$NEURAXIS_CONTROLLER_URL/health"
+curl -s "$LLAMA_PACK_CONTROLLER_URL/health"
 ```
 
 Expected shape:
@@ -60,7 +60,7 @@ Expected shape:
 Mac mini agent health:
 
 ```bash
-curl -s "$NEURAXIS_AGENT_URL/health"
+curl -s "$LLAMA_PACK_AGENT_URL/health"
 ```
 
 Expected shape:
@@ -75,8 +75,8 @@ Expected shape:
 Controller node inventory, with an admin/controller API key:
 
 ```bash
-curl -s "$NEURAXIS_CONTROLLER_URL/nodes" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_CONTROLLER_API_KEY"
+curl -s "$LLAMA_PACK_CONTROLLER_URL/nodes" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_API_KEY"
 ```
 
 Expected checks:
@@ -89,8 +89,8 @@ Expected checks:
 Linux 2080 Ti agent health, after confirming the current URL from `/nodes`:
 
 ```bash
-curl -s "$NEURAXIS_LINUX_2080TI_AGENT_URL/health" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_LINUX_2080TI_AGENT_API_KEY"
+curl -s "$LLAMA_PACK_LINUX_2080TI_AGENT_URL/health" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY"
 ```
 
 ## Agent Startup
@@ -105,10 +105,10 @@ The agent config must include:
 
 ```yaml
 mode: agent
-controller_url: ${NEURAXIS_CONTROLLER_URL}
+controller_url: ${LLAMA_PACK_CONTROLLER_URL}
 node_name: NODE_NAME
-agent_url: ${NEURAXIS_AGENT_URL}
-controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+agent_url: ${LLAMA_PACK_AGENT_URL}
+controller_registration_key_outbound: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 ```
 
 ## Controller Startup
@@ -125,11 +125,11 @@ The controller config should include both agents under `nodes`:
 mode: controller
 nodes:
   mac-mini:
-    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
-    api_key: ${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    url: ${LLAMA_PACK_MAC_MINI_AGENT_URL}
+    api_key: ${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
   linux-2080ti:
-    url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}
-    api_key: ${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    url: ${LLAMA_PACK_LINUX_2080TI_AGENT_URL}
+    api_key: ${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
 ```
 
 ## Troubleshooting
@@ -139,8 +139,8 @@ or controller API key and retry with `X-Llama-Manager-Key`.
 
 If a node is listed but not fresh, check that the agent has:
 
-- `controller_url: ${NEURAXIS_CONTROLLER_URL}` and the Pi URL in `.neuraxis.env`
+- `controller_url: ${LLAMA_PACK_CONTROLLER_URL}` and the Pi URL in `.llama_pack.env`
 - the correct `node_name`
-- `agent_url: ${NEURAXIS_AGENT_URL}` and its LAN-reachable URL in `.neuraxis.env`
+- `agent_url: ${LLAMA_PACK_AGENT_URL}` and its LAN-reachable URL in `.llama_pack.env`
 - the same registration key value the Pi expects
 - a running `scripts/start_agent.sh` process

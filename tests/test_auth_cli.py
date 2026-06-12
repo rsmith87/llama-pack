@@ -1,7 +1,7 @@
-from llama_manager.auth import main
-from llama_manager.core.config import load_config
-from llama_manager.core.persistence.auth_store_orm import AuthStoreOrm
-from llama_manager.core.persistence.db_infra import resolve_persistence_urls
+from llama_pack.auth import main
+from llama_pack.core.config import load_config
+from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
+from llama_pack.core.persistence.db_infra import resolve_persistence_urls
 from tests.persistence_db_setup import prepare_auth_db
 
 

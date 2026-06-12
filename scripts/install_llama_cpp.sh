@@ -12,7 +12,7 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/install_llama_cpp.sh [options]
 
-Download, build, and verify llama.cpp for Neuraxis agent hosts.
+Download, build, and verify llama.cpp for Llama Pack agent hosts.
 
 Options:
   --backend BACKEND       Build backend: auto, cuda, metal, or cpu. Default: auto
@@ -115,7 +115,7 @@ esac
 print_config() {
   cat <<EOF
 
-Neuraxis config values:
+Llama Pack config values:
   llama_server_bin: $LLAMA_SERVER_BIN
   llama_cpp_dir: $INSTALL_DIR
   python_bin: $PYTHON_BIN

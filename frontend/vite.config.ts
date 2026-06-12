@@ -18,7 +18,7 @@ export default defineConfig({
     },
   },
   build: {
-    outDir: "../llama_manager/ui",
+    outDir: "../llama_pack/ui",
     emptyOutDir: true,
   },
   test: {

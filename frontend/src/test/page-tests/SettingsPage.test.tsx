@@ -58,7 +58,7 @@ it("generates config and env exports from settings fields", async () => {
 
   expect(screen.getByText(/mode: agent/)).toBeInTheDocument();
   expect(screen.getByText(/controller_url: "http:\/\/controller:9137"/)).toBeInTheDocument();
-  expect(screen.getByText(/NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND='reg-key'/)).toBeInTheDocument();
+  expect(screen.getByText(/LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND='reg-key'/)).toBeInTheDocument();
 });
 
 it("copies and downloads generated config utilities", async () => {
@@ -88,7 +88,7 @@ it("copies and downloads generated config utilities", async () => {
   expect(await screen.findByText("Env exports copied")).toBeInTheDocument();
 
   await user.click(screen.getByRole("button", { name: "Download env.sh" }));
-  expect(anchor.download).toBe("llama-manager.env.sh");
+  expect(anchor.download).toBe("llama-pack.env.sh");
 });
 
 it("generates helper keys and applies the first generated key", async () => {

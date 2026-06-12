@@ -32,24 +32,24 @@ and dynamic behavior in focused controller modules.
 ## Manifest Schema
 
 ```yaml
-id: neuraxis_business
-name: Neuraxis Business
+id: llama_pack_business
+name: Llama Pack Business
 version: "1.0"
 requires_core: "1.0"
 backend_api_version: "1.0"
 frontend_api_version: "1.0"
-entrypoint: neuraxis_business.plugin:plugin
+entrypoint: llama_pack_business.plugin:plugin
 
 frontend:
-  static_dir: neuraxis_business/static
+  static_dir: llama_pack_business/static
   style_entries:
     - business.css
   pages:
-    - route: /ui/plugins/neuraxis_business/overview
+    - route: /ui/plugins/llama_pack_business/overview
       template: templates/overview.html
       controller: controllers/overview.js
       title: Business Overview
-    - route: /ui/plugins/neuraxis_business/documents
+    - route: /ui/plugins/llama_pack_business/documents
       template: templates/documents.html
       controller: controllers/documents.js
       title: Documents
@@ -109,9 +109,9 @@ should prefer the `lp-plugin-*` classes where they fit.
 ## Recommended Layout
 
 ```text
-plugins/neuraxis_business_plugin/
+plugins/llama_pack_business_plugin/
 |-- plugin.yaml
-`-- neuraxis_business/
+`-- llama_pack_business/
     |-- plugin.py
     `-- static/
         |-- business.css

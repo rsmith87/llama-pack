@@ -94,7 +94,7 @@ export function AppLayout() {
             ) : null}
             {showLoginRequired ? (
               <Panel title="Login Required" eyebrow="Session">
-                <p className="muted">Log in to Neuraxis to continue.</p>
+                <p className="muted">Log in to Llama Pack to continue.</p>
               </Panel>
             ) : null}
             {activePage.pluginId && activePage.secondaryNavigation?.length ? (

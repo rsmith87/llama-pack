@@ -5,7 +5,7 @@ requires_core: "1.0"
 backend_api_version: "1.0"
 frontend_api_version: "1.0"
 entrypoint: hello_plugin.plugin:plugin
-description: Minimal sample plugin for the Neuraxis plugin runtime.
+description: Minimal sample plugin for the Llama Pack plugin runtime.
 modes:
   - controller
 config_schema:

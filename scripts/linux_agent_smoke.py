@@ -140,13 +140,13 @@ def wait_for_controller_registration(
 
 def start_agent(config_path: Path, host: str, port: int) -> subprocess.Popen[str]:
     env = os.environ.copy()
-    env["NEURAXIS_CONFIG"] = str(config_path)
+    env["LLAMA_PACK_CONFIG"] = str(config_path)
     return subprocess.Popen(
         [
             sys.executable,
             "-m",
             "uvicorn",
-            "llama_manager.main:app",
+            "llama_pack.main:app",
             "--host",
             host,
             "--port",
@@ -175,12 +175,12 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     )
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--node", default="linux-2080ti")
-    parser.add_argument("--host", default=os.getenv("NEURAXIS_HOST", "127.0.0.1"))
-    parser.add_argument("--port", type=int, default=int(os.getenv("NEURAXIS_PORT", "9137")))
+    parser.add_argument("--host", default=os.getenv("LLAMA_PACK_HOST", "127.0.0.1"))
+    parser.add_argument("--port", type=int, default=int(os.getenv("LLAMA_PACK_PORT", "9137")))
     parser.add_argument("--timeout", type=float, default=45)
     parser.add_argument(
         "--controller-api-key",
-        default=os.getenv("NEURAXIS_CONTROLLER_API_KEY"),
+        default=os.getenv("LLAMA_PACK_CONTROLLER_API_KEY"),
         help="API key for GET /nodes when the controller has auth enabled.",
     )
     parser.add_argument(
@@ -197,7 +197,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
 
 
 def main(argv: list[str] | None = None) -> int:
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     args = parse_args(argv or sys.argv[1:])
     config_path = args.config.resolve()

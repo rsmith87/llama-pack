@@ -4,8 +4,8 @@ import json
 
 from fastapi.testclient import TestClient as RawTestClient
 
-from llama_manager.core.config import load_config
-from llama_manager.main import create_app
+from llama_pack.core.config import load_config
+from llama_pack.main import create_app
 from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
@@ -219,7 +219,7 @@ def test_external_app_key_can_list_client_safe_models(tmp_path):
             {
                 "id": "gemma",
                 "object": "model",
-                "owned_by": "neuraxis",
+                "owned_by": "llama-pack",
                 "metadata": {
                     "display_label": "gemma",
                     "request_types": ["general"],
@@ -233,7 +233,7 @@ def test_external_app_key_can_list_client_safe_models(tmp_path):
             {
                 "id": "qwen",
                 "object": "model",
-                "owned_by": "neuraxis",
+                "owned_by": "llama-pack",
                 "metadata": {
                     "display_label": "qwen",
                     "request_types": ["coding"],
@@ -285,7 +285,7 @@ def test_external_app_key_can_list_live_controller_node_models_without_static_ro
         {
             "id": "gemma-4-E4B-it",
             "object": "model",
-            "owned_by": "neuraxis",
+            "owned_by": "llama-pack",
             "metadata": {
                 "display_label": "gemma-4-E4B-it",
                 "request_types": [],
@@ -340,7 +340,7 @@ def test_external_app_key_can_run_non_streaming_chat_diagnostics(tmp_path):
     assert payload["route"] == {"node": "linux-2080ti", "model": "qwen", "route": "node:linux-2080ti"}
     assert payload["error"] is None
     assert calls[0]["model_name"] == "qwen"
-    assert calls[0]["payload"]["messages"] == [{"role": "user", "content": "Neuraxis client diagnostic: reply with ok."}]
+    assert calls[0]["payload"]["messages"] == [{"role": "user", "content": "Llama Pack client diagnostic: reply with ok."}]
 
 
 def test_external_app_key_can_run_streaming_chat_diagnostics(tmp_path):

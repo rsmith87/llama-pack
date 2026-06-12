@@ -1,12 +1,12 @@
 import json
 
-from llama_manager.core.persistence.dto.commands import (
+from llama_pack.core.persistence.dto.commands import (
     CreateApiKeyCommand,
     CreateAuditEventCommand,
     CreateJobCommand,
     SaveChatSessionCommand,
 )
-from llama_manager.core.persistence.dto.converters import (
+from llama_pack.core.persistence.dto.converters import (
     build_api_key_orm,
     build_audit_event_orm,
     build_chat_session_orm,
@@ -19,8 +19,8 @@ from llama_manager.core.persistence.dto.converters import (
     to_job_event_record,
     to_job_record,
 )
-from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm
-from llama_manager.core.persistence.models.orchestration import ArtifactOrm, JobEventOrm, JobOrm
+from llama_pack.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm
+from llama_pack.core.persistence.models.orchestration import ArtifactOrm, JobEventOrm, JobOrm
 
 
 def test_build_job_orm_and_record_conversion_roundtrip():

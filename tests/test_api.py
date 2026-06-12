@@ -10,11 +10,11 @@ from sqlalchemy import update
 import time
 
 from tests.helpers import authenticated_client as TestClient
-from llama_manager.core.persistence.audit_store_orm import AuditStoreOrm
-from llama_manager.core.persistence.auth_store_orm import AuthStoreOrm
-from llama_manager.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
-from llama_manager.core.persistence.models.orchestration import JobOrm
-from llama_manager.core.orchestration.store_orm import OrchestrationStoreOrm
+from llama_pack.core.persistence.audit_store_orm import AuditStoreOrm
+from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
+from llama_pack.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
+from llama_pack.core.persistence.models.orchestration import JobOrm
+from llama_pack.core.orchestration.store_orm import OrchestrationStoreOrm
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
 WORKER_HEADERS = {"X-Llama-Manager-Key": "node-secret"}
@@ -56,9 +56,9 @@ def test_controller_background_sweeper_requeues_expired_attempt(tmp_path):
 
         assert refreshed["status"] == "queued"
 
-from llama_manager.core.config import load_config
-from llama_manager.core.runtime.process_manager import ProcessManager
-from llama_manager.main import create_app
+from llama_pack.core.config import load_config
+from llama_pack.core.runtime.process_manager import ProcessManager
+from llama_pack.main import create_app
 
 
 class StubProcessManager:
@@ -822,7 +822,7 @@ def test_nodes_status_includes_cert_expiry_seconds(monkeypatch):
         return -42
 
     monkeypatch.setattr(
-        "llama_manager.api.routes.nodes.aggregate.probe_cert_expiry_seconds",
+        "llama_pack.api.routes.nodes.aggregate.probe_cert_expiry_seconds",
         fake_probe,
     )
 
@@ -872,7 +872,7 @@ def test_nodes_models_includes_cert_expiry_seconds(monkeypatch):
         return 3600
 
     monkeypatch.setattr(
-        "llama_manager.api.routes.nodes.aggregate.probe_cert_expiry_seconds",
+        "llama_pack.api.routes.nodes.aggregate.probe_cert_expiry_seconds",
         fake_probe,
     )
 
@@ -883,11 +883,11 @@ def test_nodes_models_includes_cert_expiry_seconds(monkeypatch):
 
 
 def test_ui_index_is_served(monkeypatch, tmp_path):
-    from llama_manager.api.routes import ui
+    from llama_pack.api.routes import ui
 
     ui_dir = tmp_path / "ui"
     ui_dir.mkdir(parents=True, exist_ok=True)
-    (ui_dir / "index.html").write_text("<html><body>Neuraxis</body></html>", encoding="utf-8")
+    (ui_dir / "index.html").write_text("<html><body>Llama Pack</body></html>", encoding="utf-8")
     monkeypatch.setattr(ui, "UI_DIR", ui_dir)
     app = create_app(
         config=load_config({"mode": "agent"}),
@@ -900,7 +900,7 @@ def test_ui_index_is_served(monkeypatch, tmp_path):
     response = client.get("/")
 
     assert response.status_code == 200
-    assert "Neuraxis" in response.text
+    assert "Llama Pack" in response.text
 
 
 def test_conversion_routes():
@@ -935,7 +935,7 @@ def test_quantization_routes():
 
 
 def test_download_log_stream_route_replays_existing_log(tmp_path, monkeypatch):
-    from llama_manager.api.routes import downloads as download_routes
+    from llama_pack.api.routes import downloads as download_routes
 
     log_path = tmp_path / "logs" / "downloads" / "hf-qwen.log"
     log_path.parent.mkdir(parents=True)
@@ -1295,7 +1295,7 @@ def test_openai_compat_agent_tool_runtime_uses_chat_scheduler_admission_hooks(tm
     )
     app.state.plugin_registry.hooks.add_policy_hook(
         "test_plugin",
-        "neuraxis.chat_admission",
+        "llama_pack.chat_admission",
         lambda payload: {"allowed": False, "message": "blocked by business policy"},
     )
     client = TestClient(app)
@@ -1314,7 +1314,7 @@ def test_openai_compat_agent_tool_runtime_uses_chat_scheduler_admission_hooks(tm
 
 
 def test_extract_openai_sse_json_ignores_done_and_bad_json():
-    from llama_manager.api.routes.compat_chat import extract_openai_sse_json
+    from llama_pack.api.routes.compat_chat import extract_openai_sse_json
 
     chunk = (
         b'data: {"choices":[{"delta":{"content":"hi"}}]}\n\n'
@@ -1328,7 +1328,7 @@ def test_extract_openai_sse_json_ignores_done_and_bad_json():
 
 
 def test_stream_payload_has_tool_call_detects_delta_tool_calls():
-    from llama_manager.api.routes.compat_chat import stream_payload_has_tool_call
+    from llama_pack.api.routes.compat_chat import stream_payload_has_tool_call
 
     payload = {
         "choices": [
@@ -1351,7 +1351,7 @@ def test_stream_payload_has_tool_call_detects_delta_tool_calls():
 
 
 def test_stream_payload_has_tool_call_detects_finish_reason():
-    from llama_manager.api.routes.compat_chat import stream_payload_has_tool_call
+    from llama_pack.api.routes.compat_chat import stream_payload_has_tool_call
 
     payload = {"choices": [{"delta": {}, "finish_reason": "tool_calls"}]}
 
@@ -1359,7 +1359,7 @@ def test_stream_payload_has_tool_call_detects_finish_reason():
 
 
 def test_stream_payload_has_tool_call_ignores_content_only_chunks():
-    from llama_manager.api.routes.compat_chat import stream_payload_has_tool_call
+    from llama_pack.api.routes.compat_chat import stream_payload_has_tool_call
 
     payload = {"choices": [{"delta": {"content": "plain answer"}}]}
 
@@ -3243,7 +3243,7 @@ def test_controller_health_reports_expired_tls_certificate(monkeypatch):
                     "[SSL: CERTIFICATE_VERIFY_FAILED] certificate verify failed: certificate has expired"
                 ) from exc
 
-    monkeypatch.setattr("llama_manager.api.routes.health.httpx.AsyncClient", FakeClient)
+    monkeypatch.setattr("llama_pack.api.routes.health.httpx.AsyncClient", FakeClient)
     client = RawTestClient(app)
 
     response = client.get("/lm-api/v1/health/controller")
@@ -3320,7 +3320,7 @@ def test_setup_bootstrap_admin_response_does_not_leak_config_or_registration_key
     text = response.text
     assert "controller-registration-secret" not in text
     assert "config.yaml" not in text
-    assert ".neuraxis.env" not in text
+    assert ".llama_pack.env" not in text
     assert "LLAMA" + "_MANAGER" not in text
 
 
@@ -3568,7 +3568,7 @@ def test_create_app_fails_when_migrations_not_applied(tmp_path):
 
 
 def test_module_fallback_app_reports_startup_error_at_root(monkeypatch):
-    import llama_manager.main as main_module
+    import llama_pack.main as main_module
 
     def _raise_startup_error():
         raise RuntimeError("schema missing")
@@ -3750,7 +3750,7 @@ def test_download_recommendations_route_returns_machine_fit_models(tmp_path):
     app.state.download_manager._hf_api = FakeHfApi([])
 
     with patch(
-        "llama_manager.core.runtime.health_check.get_system_metrics",
+        "llama_pack.core.runtime.health_check.get_system_metrics",
         return_value={
             "platform": "Darwin",
             "architecture": "arm64",
@@ -3776,7 +3776,7 @@ def test_download_recommendations_route_works_for_controller(tmp_path):
     app.state.download_manager._hf_api = FakeHfApi([])
 
     with patch(
-        "llama_manager.core.runtime.health_check.get_system_metrics",
+        "llama_pack.core.runtime.health_check.get_system_metrics",
         return_value={
             "platform": "Linux",
             "architecture": "x86_64",
@@ -3826,7 +3826,7 @@ def test_download_recommendations_route_includes_multimodal_discoveries_with_mmp
     app.state.download_manager._hf_api = RouteRecommendationHfApi()
 
     with patch(
-        "llama_manager.core.runtime.health_check.get_system_metrics",
+        "llama_pack.core.runtime.health_check.get_system_metrics",
         return_value={"platform": "Darwin", "architecture": "arm64", "ram": {"total": 16 * 1024**3}, "vram": None},
     ):
         client = TestClient(app)

@@ -1,6 +1,6 @@
-# Neuraxis
+# Llama Pack
 
-Neuraxis is a secure local/private LLM gateway with an operations console.
+Llama Pack is a secure local/private LLM gateway with an operations console.
 It gives your apps one stable private AI backend while giving you an operator UI
 for the machines, models, keys, routing, logs, and jobs behind it.
 
@@ -22,7 +22,7 @@ runtime.
 Guided setup:
 
 ```bash
-scripts/setup_neuraxis.sh
+scripts/setup_llama_pack.sh
 ```
 
 The wizard asks whether this machine is a controller, agent, or single-machine
@@ -37,32 +37,32 @@ scripts/onboard_controller.sh
 scripts/start_controller.sh
 ```
 
-The controller onboarding script writes `.neuraxis.env`, including
-`NEURAXIS_CONTROLLER_REGISTRATION_KEY`. Give that registration key to each
-agent as `NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
+The controller onboarding script writes `.llama_pack.env`, including
+`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY`. Give that registration key to each
+agent as `LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
 
 Script-first agent:
 
 ```bash
 uv sync
 scripts/install_llama_cpp.sh --backend auto
-cp .neuraxis.env.example .neuraxis.env
-# Edit .neuraxis.env:
-# - set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND to the controller's
-#   NEURAXIS_CONTROLLER_REGISTRATION_KEY
-# - set NEURAXIS_CONTROLLER_URL to the controller URL
-# - set NEURAXIS_AGENT_URL to this agent's URL
+cp .llama_pack.env.example .llama_pack.env
+# Edit .llama_pack.env:
+# - set LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND to the controller's
+#   LLAMA_PACK_CONTROLLER_REGISTRATION_KEY
+# - set LLAMA_PACK_CONTROLLER_URL to the controller URL
+# - set LLAMA_PACK_AGENT_URL to this agent's URL
 set -a
-source .neuraxis.env
+source .llama_pack.env
 set +a
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/start_agent.sh
 ```
 
-The onboarding scripts write local secrets to `.neuraxis.env`, which is
+The onboarding scripts write local secrets to `.llama_pack.env`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
 
 Manual setup, migrations, admin keys, smoke tests, and test commands are in
@@ -103,7 +103,7 @@ scripts/start_controller.sh
 scripts/start_agent.sh
 scripts/stop_server.sh
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
 uv run pytest -v
 ```
 

@@ -6,26 +6,26 @@
 
 **Architecture:** Core will expose safe plugin-local database handles through `PluginContext`, store migration target metadata with enough information to refresh and execute Alembic migrations explicitly, and add an authenticated API endpoint for per-target upgrades. Plugin schemas remain fully plugin-owned; core only resolves paths, reports status, runs explicit migration commands, and records health.
 
-**Tech Stack:** Python 3.13, FastAPI, SQLAlchemy, Alembic, pytest, existing `llama_manager.core.plugins` runtime, existing `llama_manager.core.persistence.db_infra` helpers.
+**Tech Stack:** Python 3.13, FastAPI, SQLAlchemy, Alembic, pytest, existing `llama_pack.core.plugins` runtime, existing `llama_pack.core.persistence.db_infra` helpers.
 
 ---
 
 ## File Structure
 
-- Create `llama_manager/core/plugins/databases.py`
+- Create `llama_pack/core/plugins/databases.py`
   - Owns `PluginDatabase`, safe database-name validation, and state-dir path resolution.
-- Modify `llama_manager/core/plugins/context.py`
+- Modify `llama_pack/core/plugins/context.py`
   - Adds `get_database(name="main")`.
   - Keeps `get_state_dir()` for non-database plugin state.
   - Allows `add_migration_target(..., database=database)` or `database_url=database.url`.
-- Modify `llama_manager/core/plugins/migrations.py`
+- Modify `llama_pack/core/plugins/migrations.py`
   - Adds migration status refresh fields and explicit runner support.
   - Adds Alembic command execution helper for plugin migration directories.
-- Modify `llama_manager/core/plugins/registry.py`
+- Modify `llama_pack/core/plugins/registry.py`
   - Adds `upgrade_migration_target(plugin_id, target_id)`.
   - Refreshes target status before payload generation when possible.
   - Records migration execution health.
-- Modify `llama_manager/api/routes/plugins.py`
+- Modify `llama_pack/api/routes/plugins.py`
   - Adds `POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade`.
 - Modify `tests/test_plugins.py`
   - Adds core tests for safe database handles, invalid names, migration registration, and explicit migration execution.
@@ -49,7 +49,7 @@
   - `docs/plugins.md` and `docs/architecture.md` link to that contract.
   - `.gitignore` has a narrow exception for the tracked plan file under
     `docs/todo/`.
-- `plugins/neuraxis_business_plugin/` is ignored and is a local/private
+- `plugins/llama_pack_business_plugin/` is ignored and is a local/private
   development copy. Do not rely on it as core contract coverage and do not make
   core depend on business plugin code. Use `plugins/hello_plugin/` and generated
   fixture plugins in `tests/test_plugins.py` for core plugin runtime tests.
@@ -60,7 +60,7 @@
   should only resolve a safe path and SQLAlchemy URL. The plugin store or
   migration execution creates the file when needed.
 - Be careful with Alembic script directories. Plugin migration directories are
-  relative to the configured plugin root, not the Neuraxis repository root.
+  relative to the configured plugin root, not the Llama Pack repository root.
   Store the plugin root on `PluginRecord` during loading so status refresh and
   upgrade execution can resolve relative migration directories correctly.
 - Existing `PluginMigrationTarget.runner` is currently metadata-only plumbing.
@@ -73,16 +73,16 @@
   target. It must not run all plugin migrations implicitly and must not touch
   core Alembic branches.
 - The project currently uses SQLite URLs from
-  `llama_manager.core.persistence.db_infra.sqlite_url_for_path()`. Use that
+  `llama_pack.core.persistence.db_infra.sqlite_url_for_path()`. Use that
   helper for plugin database URLs to stay consistent with core persistence.
 - The exact current loader root variable is `path` in
-  `llama_manager/core/plugins/loader.py::_load_one(...)`.
+  `llama_pack/core/plugins/loader.py::_load_one(...)`.
 
 ## Task 1: Plugin Database Handles
 
 **Files:**
-- Create: `llama_manager/core/plugins/databases.py`
-- Modify: `llama_manager/core/plugins/context.py`
+- Create: `llama_pack/core/plugins/databases.py`
+- Modify: `llama_pack/core/plugins/context.py`
 - Test: `tests/test_plugins.py`
 
 - [ ] **Step 1: Write failing tests for database handle resolution**
@@ -163,7 +163,7 @@ Expected: both tests fail because `PluginContext` has no `get_database()`.
 
 - [ ] **Step 3: Add database handle implementation**
 
-Create `llama_manager/core/plugins/databases.py`:
+Create `llama_pack/core/plugins/databases.py`:
 
 ```python
 from __future__ import annotations
@@ -172,7 +172,7 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from llama_manager.core.persistence.db_infra import sqlite_url_for_path
+from llama_pack.core.persistence.db_infra import sqlite_url_for_path
 
 
 _DATABASE_NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -200,10 +200,10 @@ def resolve_plugin_database(plugin_id: str, state_dir: Path, name: str = "main")
     return PluginDatabase(name=name, path=database_path, url=sqlite_url_for_path(database_path))
 ```
 
-Modify `llama_manager/core/plugins/context.py`:
+Modify `llama_pack/core/plugins/context.py`:
 
 ```python
-from llama_manager.core.plugins.databases import PluginDatabase, resolve_plugin_database
+from llama_pack.core.plugins.databases import PluginDatabase, resolve_plugin_database
 ```
 
 Add this method to `PluginContext` after `get_state_dir()`:
@@ -237,15 +237,15 @@ Expected: all plugin tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add llama_manager/core/plugins/databases.py llama_manager/core/plugins/context.py tests/test_plugins.py
+git add llama_pack/core/plugins/databases.py llama_pack/core/plugins/context.py tests/test_plugins.py
 git commit -m "feat: add plugin database handles"
 ```
 
 ## Task 2: Migration Targets Use Plugin Databases
 
 **Files:**
-- Modify: `llama_manager/core/plugins/context.py`
-- Modify: `llama_manager/core/plugins/migrations.py`
+- Modify: `llama_pack/core/plugins/context.py`
+- Modify: `llama_pack/core/plugins/migrations.py`
 - Modify: `tests/test_plugins.py`
 
 - [ ] **Step 1: Write failing test for database-backed migration registration**
@@ -296,7 +296,7 @@ Expected: fail with unexpected keyword argument `database`.
 
 - [ ] **Step 3: Extend migration target data**
 
-Modify `llama_manager/core/plugins/migrations.py`:
+Modify `llama_pack/core/plugins/migrations.py`:
 
 ```python
 from pathlib import Path
@@ -328,10 +328,10 @@ Update `payload()`:
 
 - [ ] **Step 4: Extend `add_migration_target()`**
 
-Modify `llama_manager/core/plugins/context.py` imports:
+Modify `llama_pack/core/plugins/context.py` imports:
 
 ```python
-from llama_manager.core.plugins.databases import PluginDatabase, resolve_plugin_database
+from llama_pack.core.plugins.databases import PluginDatabase, resolve_plugin_database
 ```
 
 Update `add_migration_target()` signature:
@@ -388,15 +388,15 @@ Expected: all plugin tests pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add llama_manager/core/plugins/context.py llama_manager/core/plugins/migrations.py tests/test_plugins.py
+git add llama_pack/core/plugins/context.py llama_pack/core/plugins/migrations.py tests/test_plugins.py
 git commit -m "feat: attach migration targets to plugin databases"
 ```
 
 ## Task 3: Refresh Migration Status From Alembic
 
 **Files:**
-- Modify: `llama_manager/core/plugins/migrations.py`
-- Modify: `llama_manager/core/plugins/registry.py`
+- Modify: `llama_pack/core/plugins/migrations.py`
+- Modify: `llama_pack/core/plugins/registry.py`
 - Modify: `tests/test_plugins.py`
 
 - [ ] **Step 1: Write failing test for status refresh**
@@ -464,7 +464,7 @@ Expected: fail until status refresh can inspect the plugin database.
 
 - [ ] **Step 3: Add Alembic status helpers**
 
-Modify `llama_manager/core/plugins/migrations.py` imports:
+Modify `llama_pack/core/plugins/migrations.py` imports:
 
 ```python
 from alembic.migration import MigrationContext
@@ -512,7 +512,7 @@ Update `payload()` with:
 
 - [ ] **Step 4: Store plugin root in records**
 
-Modify `llama_manager/core/plugins/registry.py` `PluginRecord`:
+Modify `llama_pack/core/plugins/registry.py` `PluginRecord`:
 
 ```python
     root: Path | None = None
@@ -571,16 +571,16 @@ Expected: all plugin tests pass.
 - [ ] **Step 9: Commit**
 
 ```bash
-git add llama_manager/core/plugins/migrations.py llama_manager/core/plugins/registry.py llama_manager/core/plugins/loader.py tests/test_plugins.py
+git add llama_pack/core/plugins/migrations.py llama_pack/core/plugins/registry.py llama_pack/core/plugins/loader.py tests/test_plugins.py
 git commit -m "feat: refresh plugin migration status"
 ```
 
 ## Task 4: Explicit Plugin Migration Upgrade Endpoint
 
 **Files:**
-- Modify: `llama_manager/core/plugins/migrations.py`
-- Modify: `llama_manager/core/plugins/registry.py`
-- Modify: `llama_manager/api/routes/plugins.py`
+- Modify: `llama_pack/core/plugins/migrations.py`
+- Modify: `llama_pack/core/plugins/registry.py`
+- Modify: `llama_pack/api/routes/plugins.py`
 - Modify: `tests/test_plugins.py`
 
 - [ ] **Step 1: Write failing endpoint test**
@@ -647,7 +647,7 @@ Expected: fail with `404` because the route does not exist.
 
 - [ ] **Step 3: Add Alembic upgrade helper**
 
-Modify `llama_manager/core/plugins/migrations.py` imports:
+Modify `llama_pack/core/plugins/migrations.py` imports:
 
 ```python
 from alembic import command
@@ -676,7 +676,7 @@ Add method to `PluginMigrationTarget`:
 
 - [ ] **Step 4: Add registry method**
 
-Modify `llama_manager/core/plugins/registry.py`:
+Modify `llama_pack/core/plugins/registry.py`:
 
 ```python
     def upgrade_migration_target(self, plugin_id: str, target_id: str) -> PluginMigrationTarget | None:
@@ -693,7 +693,7 @@ Modify `llama_manager/core/plugins/registry.py`:
 
 - [ ] **Step 5: Add route**
 
-Modify `llama_manager/api/routes/plugins.py` after migration status route:
+Modify `llama_pack/api/routes/plugins.py` after migration status route:
 
 ```python
 @router.post("/{plugin_id}/migrations/{target_id}/upgrade")
@@ -766,7 +766,7 @@ Expected: all plugin tests pass.
 - [ ] **Step 10: Commit**
 
 ```bash
-git add llama_manager/core/plugins/migrations.py llama_manager/core/plugins/registry.py llama_manager/api/routes/plugins.py tests/test_plugins.py
+git add llama_pack/core/plugins/migrations.py llama_pack/core/plugins/registry.py llama_pack/api/routes/plugins.py tests/test_plugins.py
 git commit -m "feat: run explicit plugin migrations"
 ```
 
@@ -828,7 +828,7 @@ database = context.get_database("main")
 
 context.add_migration_target(
     "main",
-    directory="neuraxis_business/migrations/main",
+    directory="llama_pack_business/migrations/main",
     database=database,
 )
 ```
@@ -909,10 +909,10 @@ Expected: all tests pass.
 - [ ] **Step 2: Run business plugin tests**
 
 ```bash
-rtk uv run pytest plugins/neuraxis_business_plugin/tests/test_plugin_skeleton.py -q
+rtk uv run pytest plugins/llama_pack_business_plugin/tests/test_plugin_skeleton.py -q
 ```
 
-Expected: all tests pass. If the checked-in development copy of `neuraxis_business` still uses direct state-dir paths, tests should still pass because `get_state_dir()` remains supported.
+Expected: all tests pass. If the checked-in development copy of `llama_pack_business` still uses direct state-dir paths, tests should still pass because `get_state_dir()` remains supported.
 
 - [ ] **Step 3: Run full Python tests if time allows**
 

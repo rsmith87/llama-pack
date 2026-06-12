@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from llama_manager.core.config import load_config
+from llama_pack.core.config import load_config
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "model_transfer_smoke.py"

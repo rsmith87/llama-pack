@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.core.model_assets.quantizations import QuantizationManager
+from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.quantizations import QuantizationManager
 
 
 class FakeProcess:

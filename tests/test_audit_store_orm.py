@@ -1,4 +1,4 @@
-from llama_manager.core.persistence.audit_store_orm import AuditStoreOrm
+from llama_pack.core.persistence.audit_store_orm import AuditStoreOrm
 from tests.persistence_db_setup import prepare_audit_db
 
 

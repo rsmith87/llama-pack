@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG=""
-ENV_FILE="$ROOT_DIR/.neuraxis.env"
+ENV_FILE="$ROOT_DIR/.llama_pack.env"
 USERNAME="test-chat"
 
 usage() {
@@ -14,8 +14,8 @@ Create a scoped test-chat API key, store its hash in the configured auth DB,
 and write the raw key to the local env file for /ui/test-chat bootstrap.
 
 Options:
-  --config PATH      Neuraxis config path passed to python -m llama_manager.auth.
-  --env-file PATH    Secrets file to update. Default: ./.neuraxis.env
+  --config PATH      Llama Pack config path passed to python -m llama_pack.auth.
+  --env-file PATH    Secrets file to update. Default: ./.llama_pack.env
   --username NAME    Auth username for the key. Default: test-chat
   -h, --help         Show this help.
 USAGE
@@ -59,7 +59,7 @@ if [[ -n "$CONFIG" ]]; then
   AUTH_ARGS+=(--config "$CONFIG")
 fi
 
-OUTPUT="$("$PYTHON" -m llama_manager.auth "${AUTH_ARGS[@]}" create-test-chat-key --username "$USERNAME")"
+OUTPUT="$("$PYTHON" -m llama_pack.auth "${AUTH_ARGS[@]}" create-test-chat-key --username "$USERNAME")"
 KEY="$(printf '%s\n' "$OUTPUT" | awk -F': ' '/^API key: / {print $2; exit}')"
 if [[ -z "$KEY" ]]; then
   echo "$OUTPUT" >&2
@@ -74,7 +74,7 @@ import sys
 
 path = Path(sys.argv[1])
 value = sys.argv[2]
-key = "NEURAXIS_TEST_CHAT_API_KEY"
+key = "LLAMA_PACK_TEST_CHAT_API_KEY"
 line = f"export {key}={shlex.quote(value)}\n"
 prefix = f"export {key}="
 lines = path.read_text(encoding="utf-8").splitlines(keepends=True) if path.exists() else []
@@ -94,5 +94,5 @@ PY
 chmod 600 "$ENV_FILE"
 echo "$OUTPUT"
 echo
-echo "Updated NEURAXIS_TEST_CHAT_API_KEY in $ENV_FILE"
+echo "Updated LLAMA_PACK_TEST_CHAT_API_KEY in $ENV_FILE"
 echo "Source this env file and restart the controller before opening /ui/test-chat."

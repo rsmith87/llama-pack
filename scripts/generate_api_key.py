@@ -15,7 +15,7 @@ def generate_api_key(token_bytes: int = 32, prefix: str = "llm") -> str:
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Generate strong URL-safe API keys for Neuraxis agent/controller config."
+        description="Generate strong URL-safe API keys for Llama Pack agent/controller config."
     )
     parser.add_argument(
         "--bytes",

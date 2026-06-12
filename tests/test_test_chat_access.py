@@ -1,7 +1,7 @@
 from fastapi.testclient import TestClient as RawTestClient
 
-from llama_manager.core.config import load_config
-from llama_manager.main import create_app
+from llama_pack.core.config import load_config
+from llama_pack.main import create_app
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
 

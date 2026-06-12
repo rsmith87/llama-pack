@@ -1,6 +1,6 @@
 # Frontend Development
 
-The web UI lives in `frontend/` and is a Vite + React + TypeScript app. The production build is emitted into `llama_manager/ui/react` so FastAPI can serve it as static package data.
+The web UI lives in `frontend/` and is a Vite + React + TypeScript app. The production build is emitted into `llama_pack/ui/react` so FastAPI can serve it as static package data.
 
 ## Install
 
@@ -16,7 +16,7 @@ Do not commit `frontend/node_modules`.
 Start FastAPI in another terminal:
 
 ```bash
-NEURAXIS_CONFIG=config.example.yaml uv run uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
+LLAMA_PACK_CONFIG=config.example.yaml uv run uvicorn llama_pack.main:app --host 127.0.0.1 --port 9137
 ```
 
 Use your normal controller or agent config instead of `config.example.yaml` when testing real nodes and model workflows.
@@ -51,8 +51,8 @@ scripts/dev_fullstack.sh
 ```
 
 `scripts/dev_fullstack.sh` auto-detects backend mode from your active config
-(`NEURAXIS_CONFIG` or `config.yaml`) and starts `agent` or `controller`
-accordingly. Set `NEURAXIS_MODE` explicitly if you want to override this.
+(`LLAMA_PACK_CONFIG` or `config.yaml`) and starts `agent` or `controller`
+accordingly. Set `LLAMA_PACK_MODE` explicitly if you want to override this.
 
 Use `scripts/start_controller.sh` or `scripts/start_agent.sh` when you only
 want to start the backend.
@@ -69,8 +69,8 @@ Open:
 http://127.0.0.1:5173/ui/react/
 ```
 
-The script writes its PID to `.neuraxis_frontend.pid` and logs to
-`logs/neuraxis_frontend_vite.log`. Stop it with:
+The script writes its PID to `.llama_pack_frontend.pid` and logs to
+`logs/llama_pack_frontend_vite.log`. Stop it with:
 
 ```bash
 scripts/stop_frontend.sh
@@ -120,10 +120,10 @@ npm run build
 Build output is written to:
 
 ```text
-llama_manager/ui/react
+llama_pack/ui/react
 ```
 
-FastAPI serves `/` from `llama_manager/ui/react/index.html` when the React build exists. The generated `assets/*` files are content-hashed, so a rebuild may delete an old asset and add a new one.
+FastAPI serves `/` from `llama_pack/ui/react/index.html` when the React build exists. The generated `assets/*` files are content-hashed, so a rebuild may delete an old asset and add a new one.
 
 ## Project Layout
 
@@ -167,7 +167,7 @@ Core serves those files but does not bundle them into the core React build.
 
 - `frontend` is the canonical frontend test/build package.
 - `frontend-tests` has been removed after parity coverage moved into `frontend`.
-- `llama_manager/ui/react` is included in Python package data for release builds.
-- The former vanilla static console files under `llama_manager/ui/*.js`,
-  `llama_manager/ui/index.html`, and `llama_manager/ui/styles.css` have been
+- `llama_pack/ui/react` is included in Python package data for release builds.
+- The former vanilla static console files under `llama_pack/ui/*.js`,
+  `llama_pack/ui/index.html`, and `llama_pack/ui/styles.css` have been
   removed; FastAPI serves the React build directly.

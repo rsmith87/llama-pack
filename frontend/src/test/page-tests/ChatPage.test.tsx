@@ -196,15 +196,15 @@ it("renders session controls above the transcript", async () => {
 });
 
 it("streams a direct chat response and builds the request payload", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(streamResponse([
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") {
+      return streamResponse([
         'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
         'data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}\n\n',
-      ], new Headers({ "X-Llama-Manager-Route": "local:mistral" }))),
-  );
+      ], new Headers({ "X-Llama-Manager-Route": "local:mistral" }));
+    }
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -482,7 +482,10 @@ it("saves the current chat session and remembers the saved session id", async ()
     method: "POST",
     body: expect.stringContaining('"content":"Save this"'),
   }));
-  const body = JSON.parse(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1]?.body));
+  const saveCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.findLast(
+    ([url, init]) => url === "/lm-api/v1/chat/sessions" && init?.method === "POST" && typeof init.body === "string",
+  );
+  const body = JSON.parse(String(saveCall?.[1]?.body));
   expect(body.request_defaults).toMatchObject({
     temperature: 0.7,
     max_tokens: 1024,
@@ -511,50 +514,71 @@ it("saves a selected session as new without reusing the old session id", async (
 
   expect(await screen.findByText("Session saved")).toBeInTheDocument();
   expect(localStorage.getItem("lm_active_chat_session_id")).toBe("session-new");
-  const body = JSON.parse(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1]?.body));
+  const saveCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.findLast(
+    ([url, init]) => url === "/lm-api/v1/chat/sessions" && init?.method === "POST" && typeof init.body === "string",
+  );
+  const body = JSON.parse(String(saveCall?.[1]?.body));
   expect(body.id).toBeUndefined();
   expect(body.name).toBe("Forked session");
 });
 
 it("lists, loads, deletes, and resumes chat sessions", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }, { name: "qwen", status: "running" }] }))
-      .mockResolvedValueOnce(okJson([
-        { id: "session-1", name: "Older", updated_at: "2026-05-19T01:00:00Z" },
+  let sessionListRequests = 0;
+  let sessionDetailRequests = 0;
+  vi.stubGlobal("fetch", vi.fn((url: string, init?: RequestInit) => {
+    if (url === "/lm-api/v1/models") {
+      return okJson({ models: [{ name: "mistral", status: "running" }, { name: "qwen", status: "running" }] });
+    }
+    if (url === "/lm-api/v1/models/profiles") {
+      return okJson({ families: [] });
+    }
+    if (url === "/lm-api/v1/chat/sessions" && init?.method === "GET") {
+      sessionListRequests += 1;
+      if (sessionListRequests === 1) {
+        return okJson([
+          { id: "session-1", name: "Older", updated_at: "2026-05-19T01:00:00Z" },
+          { id: "session-2", name: "Recent", updated_at: new Date().toISOString() },
+        ]);
+      }
+      return okJson([
         { id: "session-2", name: "Recent", updated_at: new Date().toISOString() },
-      ]))
-      .mockResolvedValueOnce(okJson({
-        id: "session-2",
-        name: "Recent",
-        model: "qwen",
-        target_selector: "local",
-        messages: [{ role: "user", content: "loaded prompt" }, { role: "assistant", content: "loaded reply" }],
-        request_defaults: {
-          temperature: 0.2,
-          max_tokens: 256,
-          top_p: 0.9,
-          advanced: { top_k: 55, reasoning: true, stop: "END" },
-          chat_mode: "thread",
-          thread_id: "thread-loaded",
-          thread_metadata: { app: "codex", purpose: "support", priority: "high", request_type: "analysis" },
-          include_internal: true,
-        },
-      }))
-      .mockResolvedValueOnce(okJson({ deleted: true, id: "session-2" }))
-      .mockResolvedValueOnce(okJson([
-        { id: "session-2", name: "Recent", updated_at: new Date().toISOString() },
-      ]))
-      .mockResolvedValueOnce(okJson({
+      ]);
+    }
+    if (url === "/lm-api/v1/chat/sessions/session-2" && init?.method === "GET") {
+      sessionDetailRequests += 1;
+      if (sessionDetailRequests === 1) {
+        return okJson({
+          id: "session-2",
+          name: "Recent",
+          model: "qwen",
+          target_selector: "local",
+          messages: [{ role: "user", content: "loaded prompt" }, { role: "assistant", content: "loaded reply" }],
+          request_defaults: {
+            temperature: 0.2,
+            max_tokens: 256,
+            top_p: 0.9,
+            advanced: { top_k: 55, reasoning: true, stop: "END" },
+            chat_mode: "thread",
+            thread_id: "thread-loaded",
+            thread_metadata: { app: "codex", purpose: "support", priority: "high", request_type: "analysis" },
+            include_internal: true,
+          },
+        });
+      }
+      return okJson({
         id: "session-2",
         name: "Recent",
         model: "qwen",
         target_selector: "local",
         messages: [{ role: "user", content: "resume prompt" }, { role: "assistant", content: "resume reply" }],
         request_defaults: { temperature: 0.3, max_tokens: 300, top_p: 0.8 },
-      })),
-  );
+      });
+    }
+    if (url === "/lm-api/v1/chat/sessions/session-2" && init?.method === "DELETE") {
+      return okJson({ deleted: true, id: "session-2" });
+    }
+    return okJson({});
+  }));
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -592,14 +616,14 @@ it("renders telemetry chips from streamed chunks after finalization", async () =
     .mockReturnValueOnce(100)
     .mockReturnValueOnce(160)
     .mockReturnValueOnce(500);
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(streamResponse([
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") {
+      return streamResponse([
         'data: {"choices":[{"delta":{"content":"Hi"}}],"usage":{"prompt_tokens":4,"completion_tokens":8},"timings":{"prompt_ms":20,"predicted_ms":200,"predicted_n":10}}\n\n',
-      ])),
-  );
+      ]);
+    }
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -618,16 +642,18 @@ it("renders telemetry chips from fallback chat responses", async () => {
   vi.spyOn(performance, "now")
     .mockReturnValueOnce(100)
     .mockReturnValueOnce(350);
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing stream" })
-      .mockResolvedValueOnce(okJson({
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") {
+      return { ok: false, status: 404, statusText: "Not Found", text: async () => "missing stream" };
+    }
+    if (url === "/lm-api/v1/chat/mistral") {
+      return okJson({
         choices: [{ message: { role: "assistant", content: "fallback reply" } }],
         usage: { completion_tokens: 5, completion_time_ms: 100 },
-      })),
-  );
+      });
+    }
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -640,13 +666,15 @@ it("renders telemetry chips from fallback chat responses", async () => {
 });
 
 it("falls back to standard chat when streaming is unavailable", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing stream" })
-      .mockResolvedValueOnce(okJson({ choices: [{ message: { role: "assistant", content: "fallback reply" } }] })),
-  );
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") {
+      return { ok: false, status: 404, statusText: "Not Found", text: async () => "missing stream" };
+    }
+    if (url === "/lm-api/v1/chat/mistral") {
+      return okJson({ choices: [{ message: { role: "assistant", content: "fallback reply" } }] });
+    }
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -659,15 +687,15 @@ it("falls back to standard chat when streaming is unavailable", async () => {
 
 it("stops an active stream and marks the assistant response stopped", async () => {
   let aborted = false;
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockImplementationOnce((_path, init: RequestInit) => {
-        init.signal?.addEventListener("abort", () => { aborted = true; });
-        return new Promise(() => undefined);
-      }),
-  );
+  stubChatPageFetch((url, init) => {
+    if (url === "/lm-api/v1/chat/mistral/stream") {
+      init?.signal?.addEventListener("abort", () => {
+        aborted = true;
+      });
+      return new Promise(() => undefined);
+    }
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -724,12 +752,12 @@ it("aborts an active stream on unmount", async () => {
 });
 
 it("creates a thread with metadata and shows route detail", async () => {
-  vi.stubGlobal(
-    "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(okJson({ id: "thread-1", default_model: "mistral", metadata: { app: "codex", purpose: "chat", priority: "high", request_type: "coding" } })),
-  );
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/threads") {
+      return okJson({ id: "thread-1", default_model: "mistral", metadata: { app: "codex", purpose: "chat", priority: "high", request_type: "coding" } });
+    }
+    return okJson({});
+  });
   const user = userEvent.setup();
 
   render(<ChatPage />);
@@ -779,7 +807,10 @@ it("sends thread messages and refreshes transcript events", async () => {
 
   await user.click(screen.getByRole("button", { name: "Save Session" }));
   expect(await screen.findByText("Session saved")).toBeInTheDocument();
-  const body = JSON.parse(String((fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1]?.body));
+  const saveCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.findLast(
+    ([url, init]) => url === "/lm-api/v1/chat/sessions" && init?.method === "POST" && typeof init.body === "string",
+  );
+  const body = JSON.parse(String(saveCall?.[1]?.body));
   expect(body.request_defaults).toMatchObject({
     chat_mode: "thread",
     thread_id: "thread-1",

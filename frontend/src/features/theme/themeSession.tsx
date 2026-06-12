@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
 import { IoMoon, IoSunny } from "react-icons/io5";
 
-export const THEME_STORAGE_KEY = "llama-manager-theme";
+export const THEME_STORAGE_KEY = "llama-pack-theme";
 
 type Theme = "light" | "dark";
 

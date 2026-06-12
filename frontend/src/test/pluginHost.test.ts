@@ -10,7 +10,7 @@ describe("createPluginHostApi", () => {
   it("scopes API helpers to the plugin namespace", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: true }) }));
     const host = createPluginHostApi({
-      pluginId: "neuraxis_business",
+      pluginId: "llama_pack_business",
       navigate: vi.fn(),
       refreshPluginStatus: vi.fn(),
     });
@@ -18,8 +18,8 @@ describe("createPluginHostApi", () => {
     await host.apiGet("/usage/status");
     await host.apiPost("identity/users", { email: "alice@example.com" });
 
-    expect(fetch).toHaveBeenNthCalledWith(1, "/lm-api/v1/plugins/neuraxis_business/usage/status", expect.anything());
-    expect(fetch).toHaveBeenNthCalledWith(2, "/lm-api/v1/plugins/neuraxis_business/identity/users", expect.objectContaining({
+    expect(fetch).toHaveBeenNthCalledWith(1, "/lm-api/v1/plugins/llama_pack_business/usage/status", expect.anything());
+    expect(fetch).toHaveBeenNthCalledWith(2, "/lm-api/v1/plugins/llama_pack_business/identity/users", expect.objectContaining({
       method: "POST",
       body: JSON.stringify({ email: "alice@example.com" }),
     }));

@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="$ROOT_DIR/.neuraxis.env"
+ENV_FILE="$ROOT_DIR/.llama_pack.env"
 KEY_TYPE=""
 NODE_NAME="$(hostname -s 2>/dev/null || hostname)"
 AGENT_URL=""
@@ -13,16 +13,16 @@ usage() {
   cat <<'USAGE'
 Usage: scripts/regenerate_key.sh --type TYPE [options]
 
-Generate a replacement key, write it to .neuraxis.env, and print the
+Generate a replacement key, write it to .llama_pack.env, and print the
 value or config snippet needed on the other machines.
 
 Types:
-  controller-registration   Rotate NEURAXIS_CONTROLLER_REGISTRATION_KEY.
-  agent-api                 Rotate NEURAXIS_AGENT_API_KEY.
-  agent-registration        Rotate NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND.
+  controller-registration   Rotate LLAMA_PACK_CONTROLLER_REGISTRATION_KEY.
+  agent-api                 Rotate LLAMA_PACK_AGENT_API_KEY.
+  agent-registration        Rotate LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND.
 
 Options:
-  --env-file PATH           Local secrets file to update. Default: ./.neuraxis.env
+  --env-file PATH           Local secrets file to update. Default: ./.llama_pack.env
   --node NAME               Agent node name for printed controller snippet. Default: hostname
   --agent-url URL           Agent URL for printed controller snippet.
   --bytes N                 Random bytes before URL-safe encoding. Default: 32
@@ -71,13 +71,13 @@ done
 
 case "$KEY_TYPE" in
   controller-registration)
-    ENV_KEY="NEURAXIS_CONTROLLER_REGISTRATION_KEY"
+    ENV_KEY="LLAMA_PACK_CONTROLLER_REGISTRATION_KEY"
     ;;
   agent-api)
-    ENV_KEY="NEURAXIS_AGENT_API_KEY"
+    ENV_KEY="LLAMA_PACK_AGENT_API_KEY"
     ;;
   agent-registration)
-    ENV_KEY="NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND"
+    ENV_KEY="LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND"
     ;;
   "")
     echo "--type is required." >&2
@@ -133,10 +133,10 @@ case "$KEY_TYPE" in
   controller-registration)
     cat <<EOF
 New controller registration key:
-  export NEURAXIS_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
+  export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
 
 On each agent, update:
-  export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
+  export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
 
 Then restart the controller and each agent.
 EOF
@@ -144,7 +144,7 @@ EOF
   agent-api)
     cat <<EOF
 New agent API key:
-  export NEURAXIS_AGENT_API_KEY='$NEW_KEY'
+  export LLAMA_PACK_AGENT_API_KEY='$NEW_KEY'
 
 On the controller, update this node entry:
   nodes:
@@ -159,10 +159,10 @@ EOF
   agent-registration)
     cat <<EOF
 New outbound controller registration key for this agent:
-  export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
+  export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND='$NEW_KEY'
 
 On the controller, update:
-  export NEURAXIS_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
+  export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY='$NEW_KEY'
 
 Then restart the controller and this agent.
 EOF

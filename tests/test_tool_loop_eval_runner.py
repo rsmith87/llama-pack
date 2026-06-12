@@ -52,25 +52,25 @@ def test_resolve_output_paths_uses_config_log_dir(tmp_path):
 
 def test_resolve_env_file_defaults_to_repo_env(monkeypatch):
     runner = _load_runner()
-    monkeypatch.delenv("NEURAXIS_ENV_FILE", raising=False)
+    monkeypatch.delenv("LLAMA_PACK_ENV_FILE", raising=False)
 
-    assert runner.resolve_env_file(None) == runner.ROOT_DIR / ".neuraxis.env"
+    assert runner.resolve_env_file(None) == runner.ROOT_DIR / ".llama_pack.env"
 
 
 def test_resolve_env_file_uses_env_override(monkeypatch, tmp_path):
     runner = _load_runner()
     env_file = tmp_path / "custom.env"
-    monkeypatch.setenv("NEURAXIS_ENV_FILE", str(env_file))
+    monkeypatch.setenv("LLAMA_PACK_ENV_FILE", str(env_file))
 
     assert runner.resolve_env_file(None) == env_file
 
 
 def test_load_env_file_expands_config_placeholders(monkeypatch, tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     monkeypatch.delenv("MAC_MINI_URL", raising=False)
-    env_file = tmp_path / ".neuraxis.env"
+    env_file = tmp_path / ".llama_pack.env"
     env_file.write_text(
         "MAC_MINI_URL=https://mac-mini.local\n"
         "export MAC_MINI_KEY='secret key'\n",
@@ -95,10 +95,10 @@ def test_load_env_file_expands_config_placeholders(monkeypatch, tmp_path):
 
 def test_apply_node_api_key_fallback_uses_node_specific_env(monkeypatch, tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
-    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", "mac-key")
-    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "generic-key")
+    monkeypatch.setenv("LLAMA_PACK_MAC_MINI_AGENT_API_KEY", "mac-key")
+    monkeypatch.setenv("LLAMA_PACK_AGENT_API_KEY", "generic-key")
     config = load_config(
         {
             "mode": "controller",
@@ -114,10 +114,10 @@ def test_apply_node_api_key_fallback_uses_node_specific_env(monkeypatch, tmp_pat
 
 def test_apply_node_api_key_fallback_replaces_unresolved_placeholder(monkeypatch, tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
-    monkeypatch.delenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", raising=False)
-    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "generic-key")
+    monkeypatch.delenv("LLAMA_PACK_MAC_MINI_AGENT_API_KEY", raising=False)
+    monkeypatch.setenv("LLAMA_PACK_AGENT_API_KEY", "generic-key")
     config = load_config(
         {
             "mode": "controller",
@@ -125,7 +125,7 @@ def test_apply_node_api_key_fallback_replaces_unresolved_placeholder(monkeypatch
             "nodes": {
                 "mac-mini": {
                     "url": "https://mac-mini.local",
-                    "api_key": "${NEURAXIS_MAC_MINI_AGENT_API_KEY}",
+                    "api_key": "${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}",
                 }
             },
         }
@@ -138,9 +138,9 @@ def test_apply_node_api_key_fallback_replaces_unresolved_placeholder(monkeypatch
 
 def test_apply_node_api_key_fallback_preserves_configured_key(monkeypatch, tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
-    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", "env-key")
+    monkeypatch.setenv("LLAMA_PACK_MAC_MINI_AGENT_API_KEY", "env-key")
     config = load_config(
         {
             "mode": "controller",
@@ -195,7 +195,7 @@ def test_select_cases_rejects_unknown_case():
 
 def test_validate_config_allows_controller_mode_with_tools(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     config = load_config(
         {
@@ -219,7 +219,7 @@ def test_validate_config_allows_controller_mode_with_tools(tmp_path):
 
 def test_validate_config_allows_controller_node_target_without_controller_tools(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     config = load_config({"mode": "controller", "log_dir": str(tmp_path)})
 
@@ -228,7 +228,7 @@ def test_validate_config_allows_controller_node_target_without_controller_tools(
 
 def test_validate_config_rejects_node_target_with_agent_mode(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     config = load_config(
         {
@@ -253,7 +253,7 @@ def test_validate_config_rejects_node_target_with_agent_mode(tmp_path):
 
 def test_local_target_selector_uses_agent_node_name_when_configured(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     config = load_config({"mode": "agent", "log_dir": str(tmp_path), "node_name": "mac-mini"})
 
@@ -263,7 +263,7 @@ def test_local_target_selector_uses_agent_node_name_when_configured(tmp_path):
 
 def test_local_target_selector_uses_standalone_without_node_name(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
+    from llama_pack.core.config import load_config
 
     config = load_config({"mode": "agent", "log_dir": str(tmp_path)})
 
@@ -286,8 +286,8 @@ def test_cases_include_target_request_default():
 
 def test_persist_outputs_writes_tool_loop_runs_to_benchmarks_db(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
-    from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+    from llama_pack.core.config import load_config
+    from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
     from tests.persistence_db_setup import prepare_benchmarks_db
 
     db_path = tmp_path / "benchmarks.db"
@@ -345,8 +345,8 @@ def test_persist_outputs_writes_tool_loop_runs_to_benchmarks_db(tmp_path):
 
 def test_persist_outputs_records_standalone_local_scope(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.config import load_config
-    from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+    from llama_pack.core.config import load_config
+    from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
     from tests.persistence_db_setup import prepare_benchmarks_db
 
     db_path = tmp_path / "benchmarks.db"
@@ -387,8 +387,8 @@ def test_persist_outputs_records_standalone_local_scope(tmp_path):
 
 def test_run_suites_records_model_routing_failure(monkeypatch, tmp_path):
     runner = _load_runner()
-    from llama_manager.core.agent_tools.evals import ToolLoopEvalCase
-    from llama_manager.core.config import load_config
+    from llama_pack.core.agent_tools.evals import ToolLoopEvalCase
+    from llama_pack.core.config import load_config
 
     config = load_config(
         {
@@ -425,8 +425,8 @@ def test_run_suites_records_model_routing_failure(monkeypatch, tmp_path):
 
 def test_run_suites_with_controller_node_target_calls_agent_eval_endpoint(monkeypatch, tmp_path):
     runner = _load_runner()
-    from llama_manager.core.agent_tools.evals import ToolLoopEvalCase
-    from llama_manager.core.config import load_config
+    from llama_pack.core.agent_tools.evals import ToolLoopEvalCase
+    from llama_pack.core.config import load_config
 
     config = load_config(
         {
@@ -470,8 +470,8 @@ def test_run_suites_with_controller_node_target_calls_agent_eval_endpoint(monkey
 
 def test_run_suites_with_controller_node_target_reports_scheme_less_url(tmp_path):
     runner = _load_runner()
-    from llama_manager.core.agent_tools.evals import ToolLoopEvalCase
-    from llama_manager.core.config import load_config
+    from llama_pack.core.agent_tools.evals import ToolLoopEvalCase
+    from llama_pack.core.config import load_config
 
     config = load_config(
         {

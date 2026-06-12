@@ -1,17 +1,17 @@
 # Architecture Overview
 
-Neuraxis is a secure local/private LLM gateway with an operations console.
+Llama Pack is a secure local/private LLM gateway with an operations console.
 The controller owns the gateway surface for apps and operators; agents own local
 model host work such as `llama-server` process lifecycle, model utilities, and
 future agent-runtime execution.
 
 This repository is intentionally split into three layers so behavior is easier to reason about and review:
 
-- API layer (`llama_manager/api`): HTTP request/response translation and validation.
-- Core layer (`llama_manager/core`): domain logic for process management, chat routing, orchestration, and persistence workflows.
-- Provider/storage layer (`llama_manager/providers`, `llama_manager/storage`): external command composition and persistence primitives.
+- API layer (`llama_pack/api`): HTTP request/response translation and validation.
+- Core layer (`llama_pack/core`): domain logic for process management, chat routing, orchestration, and persistence workflows.
+- Provider/storage layer (`llama_pack/providers`, `llama_pack/storage`): external command composition and persistence primitives.
 
-API routes live under package-style modules in `llama_manager/api/routes`:
+API routes live under package-style modules in `llama_pack/api/routes`:
 
 - Single-resource routes use direct modules such as `routes.models`, `routes.library`, and `routes.health`.
 - Grouped surfaces use packages such as `routes.auth`, `routes.chat`, and `routes.nodes`.
@@ -28,15 +28,15 @@ Both modes share the same codebase and routes; mode-specific routes enforce beha
 
 ## Operational Scripts
 
-- `scripts/onboard_controller.sh`: creates or validates controller config, writes `.neuraxis.env`, runs migrations, creates the first admin API key, and prints the registration key for agents.
-- `scripts/onboard_agent.sh`: creates or validates agent config, writes `.neuraxis.env`, generates the agent API key, and prints the controller `nodes:` entry.
-- `scripts/start_agent.sh`, `scripts/start_controller.sh`, and `scripts/stop_server.sh`: source `.neuraxis.env` and manage local uvicorn processes.
+- `scripts/onboard_controller.sh`: creates or validates controller config, writes `.llama_pack.env`, runs migrations, creates the first admin API key, and prints the registration key for agents.
+- `scripts/onboard_agent.sh`: creates or validates agent config, writes `.llama_pack.env`, generates the agent API key, and prints the controller `nodes:` entry.
+- `scripts/start_agent.sh`, `scripts/start_controller.sh`, and `scripts/stop_server.sh`: source `.llama_pack.env` and manage local uvicorn processes.
 - `scripts/regenerate_key.sh`: rotates controller registration or agent API keys and prints the matching update for the other machines.
 
 ## Request Flow (High-Level)
 
-1. `llama_manager/main.py` builds app state (config, managers, stores).
-2. Dependencies in `llama_manager/api/dependencies.py` inject shared services.
+1. `llama_pack/main.py` builds app state (config, managers, stores).
+2. Dependencies in `llama_pack/api/dependencies.py` inject shared services.
 3. Route handlers validate request shape and call core services.
 4. Core services own business rules and persistence writes.
 
@@ -124,7 +124,7 @@ Use this checklist before opening or approving a PR:
 
 - Route vs Core boundary:
   - Route modules should do validation, dependency wiring, and HTTP error mapping only.
-  - Business decisions, retries, and state transitions belong in `llama_manager/core`.
+  - Business decisions, retries, and state transitions belong in `llama_pack/core`.
 - Error mapping:
   - Upstream/network failures should be classified (`HTTP status` vs `transport`) and not collapsed into generic strings.
   - Preserve stable response keys for UI and API consumers.

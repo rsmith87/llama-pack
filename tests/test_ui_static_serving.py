@@ -2,8 +2,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from llama_manager.main import create_app
-from llama_manager.api.routes import ui
+from llama_pack.main import create_app
+from llama_pack.api.routes import ui
 
 
 REACT_PAGE_ROUTES = [

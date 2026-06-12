@@ -4,17 +4,17 @@ from pathlib import Path
 
 from sqlalchemy import Column, MetaData, String, Table, delete
 
-from llama_manager.core.persistence.alembic_config import Base
-from llama_manager.core.config import load_config
-from llama_manager.core.persistence.db_infra import (
+from llama_pack.core.persistence.alembic_config import Base
+from llama_pack.core.config import load_config
+from llama_pack.core.persistence.db_infra import (
     create_persistence_engine,
     create_session_factory,
     default_state_dir,
     session_scope,
     sqlite_url_for_path,
 )
-from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
-from llama_manager.core.persistence.models.orchestration import (
+from llama_pack.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
+from llama_pack.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
     JobAttemptOrm,

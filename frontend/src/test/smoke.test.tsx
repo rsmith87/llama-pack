@@ -21,6 +21,6 @@ it("renders the React operations shell", async () => {
 
   render(<App />);
 
-  expect(await screen.findByRole("heading", { name: "Neuraxis" })).toBeInTheDocument();
+  expect(await screen.findByRole("heading", { name: "Llama Pack" })).toBeInTheDocument();
   expect(await screen.findByText("controller")).toBeInTheDocument();
 });

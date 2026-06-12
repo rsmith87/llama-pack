@@ -16,7 +16,7 @@ Invocation:
   python scripts/migrate_legacy_data.py [--config PATH]
 
   --config PATH   Path to llama-manager YAML config. Defaults to the value of
-                  NEURAXIS_CONFIG env var, then ./config.yaml.
+                  LLAMA_PACK_CONFIG env var, then ./config.yaml.
 
 The utility is safe to re-run: rows that already exist (by primary key) in the
 target databases are skipped.
@@ -34,8 +34,8 @@ _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-from llama_manager.core.config import load_config
-from llama_manager.core.persistence.db_infra import resolve_persistence_urls, sqlite_path_from_url
+from llama_pack.core.config import load_config
+from llama_pack.core.persistence.db_infra import resolve_persistence_urls, sqlite_path_from_url
 
 
 # ---------------------------------------------------------------------------

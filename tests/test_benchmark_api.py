@@ -5,8 +5,8 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.main import create_app
+from llama_pack.core.config import load_config
+from llama_pack.main import create_app
 from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
@@ -214,8 +214,8 @@ class TestBenchmarkRunExecution:
     """Integration test: verify the runner writes samples + aggregates to the store."""
 
     def test_runner_completes_run_with_mocked_inference(self, tmp_path):
-        from llama_manager.core.benchmarks.runner import BenchmarkRunner
-        from llama_manager.core.chat.inference_service import InferenceResult
+        from llama_pack.core.benchmarks.runner import BenchmarkRunner
+        from llama_pack.core.chat.inference_service import InferenceResult
 
         mock_result = InferenceResult(
             response_payload={"choices": [{"message": {"content": "Paris"}}]},
@@ -242,7 +242,7 @@ class TestBenchmarkRunExecution:
         runner = BenchmarkRunner(store, app.state.chat_proxy)
 
         with patch(
-            "llama_manager.core.benchmarks.runner.run_inference",
+            "llama_pack.core.benchmarks.runner.run_inference",
             new=AsyncMock(return_value=mock_result),
         ):
             asyncio.run(runner.execute_run(run["id"]))
@@ -254,8 +254,8 @@ class TestBenchmarkRunExecution:
         assert len(finished["samples"]) == 5  # factual-qa-mini has sample_count=5
 
     def test_runner_marks_partial_on_mixed_failures(self, tmp_path):
-        from llama_manager.core.benchmarks.runner import BenchmarkRunner
-        from llama_manager.core.chat.inference_service import InferenceResult
+        from llama_pack.core.benchmarks.runner import BenchmarkRunner
+        from llama_pack.core.chat.inference_service import InferenceResult
 
         call_count = 0
 
@@ -283,7 +283,7 @@ class TestBenchmarkRunExecution:
         run = store.create_run(benchmark_definition_id=def_id, model="m", status="pending")
 
         runner = BenchmarkRunner(store, app.state.chat_proxy)
-        with patch("llama_manager.core.benchmarks.runner.run_inference", new=flaky_inference):
+        with patch("llama_pack.core.benchmarks.runner.run_inference", new=flaky_inference):
             asyncio.run(runner.execute_run(run["id"]))
 
         finished = store.get_run(run["id"])
@@ -291,8 +291,8 @@ class TestBenchmarkRunExecution:
         assert 0.0 < finished["aggregate"]["success_rate"] < 1.0
 
     def test_runner_manages_model_lifecycle_and_restores(self, tmp_path):
-        from llama_manager.core.benchmarks.runner import BenchmarkRunner
-        from llama_manager.core.chat.inference_service import InferenceResult
+        from llama_pack.core.benchmarks.runner import BenchmarkRunner
+        from llama_pack.core.chat.inference_service import InferenceResult
 
         app = _controller_app(tmp_path)
         store = app.state.benchmark_store
@@ -337,7 +337,7 @@ class TestBenchmarkRunExecution:
 
         app.state.chat_proxy.node_registry.request_node = request_node
         runner = BenchmarkRunner(store, app.state.chat_proxy)
-        with patch("llama_manager.core.benchmarks.runner.run_inference", new=inference):
+        with patch("llama_pack.core.benchmarks.runner.run_inference", new=inference):
             asyncio.run(runner.execute_run(run["id"]))
 
         finished = store.get_run(run["id"])
@@ -349,7 +349,7 @@ class TestBenchmarkRunExecution:
         assert calls[-1] == ("gpu-a", "POST", "/lm-api/v1/models/other-model/start")
 
     def test_runner_marks_failed_when_managed_model_start_times_out(self, tmp_path):
-        from llama_manager.core.benchmarks.runner import BenchmarkRunner
+        from llama_pack.core.benchmarks.runner import BenchmarkRunner
 
         app = _controller_app(tmp_path)
         store = app.state.benchmark_store

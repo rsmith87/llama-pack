@@ -1,8 +1,8 @@
 # Plugin Foundation Implementation Plan
 
-This plan covers the first implementation pass for the Neuraxis plugin
+This plan covers the first implementation pass for the Llama Pack plugin
 foundation. It implements the platform pieces needed before building the
-`neuraxis_business` add-on.
+`llama_pack_business` add-on.
 
 For the long-term architecture, see [plugin-architecture.md](plugin-architecture.md).
 For the business product roadmap, see
@@ -37,7 +37,7 @@ Completed in the first incremental implementation pass:
   - In-process event envelope and emitter.
   - Plugin event subscribers with failure and timeout health recording.
   - Policy hook registry.
-  - `neuraxis.chat_admission` wired through the shared `ChatScheduler`
+  - `llama_pack.chat_admission` wired through the shared `ChatScheduler`
     admission path before scheduler capacity is consumed.
 - Phase 4 static assets and first frontend metadata pass:
   - Plugin-owned static assets served under `/plugin-assets/{plugin_id}/...`.
@@ -63,11 +63,11 @@ Completed in the first incremental implementation pass:
   - `plugins/hello_plugin/` is checked in as a real sample and integration
     target.
   - It includes a backend route, frontend metadata/static asset, event
-    subscriber, `neuraxis.chat_admission` hook example, config schema, and
+    subscriber, `llama_pack.chat_admission` hook example, config schema, and
     health check.
   - It registers current migration metadata as an integration target.
 - Business plugin repository policy:
-  - `neuraxis_business` should live in a separate private repository because it
+  - `llama_pack_business` should live in a separate private repository because it
     is intended to become a paid/private plugin.
   - Main keeps only the generic plugin runtime, docs, fixture tests, and the
     public `hello_plugin` sample.
@@ -94,13 +94,13 @@ Remaining next implementation work:
   - Dynamic plugin frontend bundle loading.
   - Frontend bundle failure isolation.
 - Separate private plugin repository:
-  - Keep `neuraxis_business` in its private paid-add-on repository and load it
+  - Keep `llama_pack_business` in its private paid-add-on repository and load it
     through configured local plugin paths during development.
   - Keep business-owned implementation tests and CI in that private repository.
 
 ## Non-Goals
 
-- Full `neuraxis_business` implementation, which belongs in the private paid
+- Full `llama_pack_business` implementation, which belongs in the private paid
   add-on repository rather than core.
 - Payment or license enforcement.
 - Sandboxed plugin execution.
@@ -115,7 +115,7 @@ Remaining next implementation work:
 Add the core plugin package:
 
 ```text
-llama_manager/core/plugins/
+llama_pack/core/plugins/
 |-- __init__.py
 |-- manifest.py
 |-- registry.py
@@ -223,12 +223,12 @@ Event envelope:
 ```json
 {
   "id": "uuid",
-  "type": "neuraxis.chat.request.completed",
+  "type": "llama_pack.chat.request.completed",
   "version": "1.0",
   "occurred_at": "2026-06-04T12:00:00Z",
   "source": {
     "kind": "core",
-    "id": "neuraxis"
+    "id": "llama-pack"
   },
   "correlation_id": "request-or-operation-id",
   "actor": {
@@ -257,16 +257,16 @@ Implementation tasks:
 
 Initial events:
 
-- `neuraxis.plugin.loaded`
-- `neuraxis.plugin.disabled`
-- `neuraxis.plugin.failed`
-- `neuraxis.plugin.config.updated`
-- `neuraxis.plugin.migration.pending`
-- `neuraxis.plugin.migration.completed`
+- `llama_pack.plugin.loaded`
+- `llama_pack.plugin.disabled`
+- `llama_pack.plugin.failed`
+- `llama_pack.plugin.config.updated`
+- `llama_pack.plugin.migration.pending`
+- `llama_pack.plugin.migration.completed`
 
 Initial hooks:
 
-- `neuraxis.chat_admission`
+- `llama_pack.chat_admission`
 
 Key tests:
 
@@ -376,7 +376,7 @@ The sample plugin should include:
 - One frontend placeholder route.
 - One static frontend asset.
 - One event subscriber.
-- One `neuraxis.chat_admission` hook example.
+- One `llama_pack.chat_admission` hook example.
 - One health check.
 
 Key tests:

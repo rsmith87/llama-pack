@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${NEURAXIS_ENV_FILE:-$ROOT_DIR/.neuraxis.env}"
+ENV_FILE="${LLAMA_PACK_ENV_FILE:-$ROOT_DIR/.llama_pack.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -10,17 +10,17 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-HOST="${NEURAXIS_HOST:-127.0.0.1}"
-PORT="${NEURAXIS_PORT:-9137}"
+HOST="${LLAMA_PACK_HOST:-127.0.0.1}"
+PORT="${LLAMA_PACK_PORT:-9137}"
 DEFAULT_CONFIG="$ROOT_DIR/config.example.yaml"
 if [[ -f "$ROOT_DIR/config.yaml" ]]; then
   DEFAULT_CONFIG="$ROOT_DIR/config.yaml"
 fi
-CONFIG="${NEURAXIS_CONFIG:-$DEFAULT_CONFIG}"
-PID_FILE="${NEURAXIS_PID_FILE:-$ROOT_DIR/.neuraxis_controller.pid}"
-LOG_FILE="${NEURAXIS_LOG_FILE:-$ROOT_DIR/logs/neuraxis_controller_uvicorn.log}"
-RUN_MIGRATIONS="${NEURAXIS_RUN_MIGRATIONS:-1}"
-START_FRONTEND="${NEURAXIS_START_FRONTEND:-0}"
+CONFIG="${LLAMA_PACK_CONFIG:-$DEFAULT_CONFIG}"
+PID_FILE="${LLAMA_PACK_PID_FILE:-$ROOT_DIR/.llama_pack_controller.pid}"
+LOG_FILE="${LLAMA_PACK_LOG_FILE:-$ROOT_DIR/logs/llama_pack_controller_uvicorn.log}"
+RUN_MIGRATIONS="${LLAMA_PACK_RUN_MIGRATIONS:-1}"
+START_FRONTEND="${LLAMA_PACK_START_FRONTEND:-0}"
 
 cd "$ROOT_DIR"
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -28,7 +28,7 @@ mkdir -p "$(dirname "$LOG_FILE")"
 if [[ -f "$PID_FILE" ]]; then
   PID="$(cat "$PID_FILE")"
   if kill -0 "$PID" 2>/dev/null; then
-    echo "Neuraxis controller is already running on PID $PID."
+    echo "Llama Pack controller is already running on PID $PID."
     echo "URL: http://$HOST:$PORT"
     exit 0
   fi
@@ -41,9 +41,9 @@ else
   PYTHON="${PYTHON:-python3}"
 fi
 
-NEURAXIS_CONFIG="$CONFIG" NEURAXIS_MODE=controller "$PYTHON" - <<'PY'
-from llama_manager.core.config import load_config
-from llama_manager.main import create_app
+LLAMA_PACK_CONFIG="$CONFIG" LLAMA_PACK_MODE=controller "$PYTHON" - <<'PY'
+from llama_pack.core.config import load_config
+from llama_pack.main import create_app
 
 config = load_config()
 if config.mode != "controller":
@@ -53,15 +53,15 @@ PY
 
 if [[ "$RUN_MIGRATIONS" != "0" ]]; then
   echo "Running controller migrations..."
-  NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=controller upgrade controller@head
-  NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=auth upgrade auth@head
-  NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=audit upgrade audit@head
-  NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=chat_sessions upgrade chat_sessions@head
-  NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=downloads upgrade downloads@head
-  NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=benchmarks upgrade benchmarks@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=controller upgrade controller@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=auth upgrade auth@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=audit upgrade audit@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=chat_sessions upgrade chat_sessions@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=downloads upgrade downloads@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=benchmarks upgrade benchmarks@head
 fi
 
-NEURAXIS_CONFIG="$CONFIG" NEURAXIS_MODE=controller nohup "$PYTHON" -m uvicorn llama_manager.main:app \
+LLAMA_PACK_CONFIG="$CONFIG" LLAMA_PACK_MODE=controller nohup "$PYTHON" -m uvicorn llama_pack.main:app \
   --host "$HOST" \
   --port "$PORT" \
   >"$LOG_FILE" 2>&1 &
@@ -69,15 +69,15 @@ NEURAXIS_CONFIG="$CONFIG" NEURAXIS_MODE=controller nohup "$PYTHON" -m uvicorn ll
 PID="$!"
 echo "$PID" > "$PID_FILE"
 
-echo "Started Neuraxis controller on PID $PID."
+echo "Started Llama Pack controller on PID $PID."
 echo "URL: http://$HOST:$PORT"
 echo "Config: $CONFIG"
 echo "Log: $LOG_FILE"
 
 if [[ "$START_FRONTEND" == "1" ]]; then
-  NEURAXIS_BACKEND_HOST="${NEURAXIS_BACKEND_HOST:-127.0.0.1}" \
-  NEURAXIS_BACKEND_PORT="$PORT" \
+  LLAMA_PACK_BACKEND_HOST="${LLAMA_PACK_BACKEND_HOST:-127.0.0.1}" \
+  LLAMA_PACK_BACKEND_PORT="$PORT" \
     "$ROOT_DIR/scripts/start_frontend.sh"
 else
-  echo "React dev UI not started. Use NEURAXIS_START_FRONTEND=1 or run scripts/start_frontend.sh."
+  echo "React dev UI not started. Use LLAMA_PACK_START_FRONTEND=1 or run scripts/start_frontend.sh."
 fi

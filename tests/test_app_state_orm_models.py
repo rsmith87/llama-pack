@@ -1,6 +1,6 @@
 from sqlalchemy import Index
 
-from llama_manager.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
+from llama_pack.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
 
 
 def _col(table, name: str):

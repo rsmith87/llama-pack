@@ -1,11 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient as FastAPITestClient
 
-from llama_manager.core.config import load_config
-from llama_manager.core.threads.models import WorkflowStep
-from llama_manager.core.threads.service import ThreadService
-from llama_manager.core.threads.store import ThreadStore
-from llama_manager.main import create_app
+from llama_pack.core.config import load_config
+from llama_pack.core.threads.models import WorkflowStep
+from llama_pack.core.threads.service import ThreadService
+from llama_pack.core.threads.store import ThreadStore
+from llama_pack.main import create_app
 from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 

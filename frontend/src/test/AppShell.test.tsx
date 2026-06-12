@@ -65,7 +65,7 @@ it("renders primary React navigation and defaults to dashboard", async () => {
   );
   render(<App />);
 
-  expect(screen.getByRole("heading", { name: "Neuraxis" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Llama Pack" })).toBeInTheDocument();
   expect(Array.from(document.querySelectorAll(".nav-section-label")).map((node) => node.textContent)).toEqual([
     "Gateway",
     "Operations",
@@ -252,7 +252,7 @@ it("renders plugin navigation from frontend pages", async () => {
 });
 
 it("keeps a refreshed plugin URL on the plugin page after metadata loads", async () => {
-  window.history.pushState({}, "", "/ui/plugins/neuraxis_business");
+  window.history.pushState({}, "", "/ui/plugins/llama_pack_business");
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
@@ -264,14 +264,14 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
           ok: true,
           json: async () => ([
             {
-              id: "neuraxis_business",
+              id: "llama_pack_business",
               name: "Business",
               version: "1.0",
               status: "enabled",
               frontend: { entry: null, style: null },
-              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
-              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+              ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
             },
           ]),
         });
@@ -284,7 +284,7 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
 
   expect(await screen.findByRole("link", { name: "Business" })).toHaveClass("active");
   expect(await screen.findByRole("heading", { name: "Business" })).toBeInTheDocument();
-  expect(window.location.pathname).toBe("/ui/plugins/neuraxis_business");
+  expect(window.location.pathname).toBe("/ui/plugins/llama_pack_business");
 });
 
 it("resolves browser history navigation to plugin pages after shell mount", async () => {
@@ -299,14 +299,14 @@ it("resolves browser history navigation to plugin pages after shell mount", asyn
           ok: true,
           json: async () => ([
             {
-              id: "neuraxis_business",
+              id: "llama_pack_business",
               name: "Business",
               version: "1.0",
               status: "enabled",
               frontend: { entry: null, style: null },
-              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
-              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+              ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
             },
           ]),
         });
@@ -320,7 +320,7 @@ it("resolves browser history navigation to plugin pages after shell mount", asyn
   expect(await screen.findByText("System Snapshot")).toBeInTheDocument();
   expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
 
-  window.history.pushState({}, "", "/ui/plugins/neuraxis_business");
+  window.history.pushState({}, "", "/ui/plugins/llama_pack_business");
   window.dispatchEvent(new PopStateEvent("popstate"));
 
   expect(await screen.findByRole("heading", { name: "Business" })).toBeInTheDocument();
@@ -344,14 +344,14 @@ it("preserves plugin navigation when a metadata refresh fails", async () => {
           ok: true,
           json: async () => ([
             {
-              id: "neuraxis_business",
+              id: "llama_pack_business",
               name: "Business",
               version: "1.0",
               status: "enabled",
               frontend: { entry: null, style: null },
-              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
-              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+              ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
             },
           ]),
         });
@@ -379,14 +379,14 @@ it("preserves plugin navigation when a later metadata refresh is unexpectedly em
           ok: true,
           json: async () => enabledCalls > 1 ? [] : [
             {
-              id: "neuraxis_business",
+              id: "llama_pack_business",
               name: "Business",
               version: "1.0",
               status: "enabled",
               frontend: { entry: null, style: null },
-              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
-              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+              ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
             },
           ],
         });
@@ -404,16 +404,16 @@ it("preserves plugin navigation when a later metadata refresh is unexpectedly em
 });
 
 it("hydrates plugin navigation from the last known metadata cache", async () => {
-  localStorage.setItem("neuraxis.pluginNavigation", JSON.stringify([
+  localStorage.setItem("llama-pack.pluginNavigation", JSON.stringify([
     {
-      id: "neuraxis_business",
+      id: "llama_pack_business",
       name: "Business",
       version: "1.0",
       status: "enabled",
       frontend: { entry: null, style: null },
-      navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+      navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
       secondary_navigation: [],
-      ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+      ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
     },
   ]));
   vi.stubGlobal(
@@ -451,20 +451,20 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
           ok: true,
           json: async () => ([
             {
-              id: "neuraxis_business",
+              id: "llama_pack_business",
               name: "Business",
               version: "1.0",
               status: "enabled",
               frontend: { entry: null, style: null },
-              navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+              navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
-              ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+              ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
             },
           ]),
         });
       }
       if (url === "/lm-api/v1/plugins/status" && token === "persisted-session") {
-        return Promise.resolve({ ok: true, json: async () => ({ plugins: [{ id: "neuraxis_business", status: "enabled", version: "1.0", health: [], warnings: [], errors: [] }] }) });
+        return Promise.resolve({ ok: true, json: async () => ({ plugins: [{ id: "llama_pack_business", status: "enabled", version: "1.0", health: [], warnings: [], errors: [] }] }) });
       }
       if (url === "/lm-api/v1/plugins/enabled" || url === "/lm-api/v1/plugins/status" || url === "/lm-api/v1/auth/me") {
         return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
@@ -482,16 +482,16 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
 });
 
 it("keeps cached plugin navigation when the persisted UI session is stale", async () => {
-  localStorage.setItem("neuraxis.pluginNavigation", JSON.stringify([
+  localStorage.setItem("llama-pack.pluginNavigation", JSON.stringify([
     {
-      id: "neuraxis_business",
+      id: "llama_pack_business",
       name: "Business",
       version: "1.0",
       status: "enabled",
       frontend: { entry: null, style: null },
-      navigation: [{ label: "Business", path: "/ui/plugins/neuraxis_business" }],
+      navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
       secondary_navigation: [],
-      ui_routes: [{ path: "/ui/plugins/neuraxis_business", label: "Business" }],
+      ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
     },
   ]));
   vi.stubGlobal(

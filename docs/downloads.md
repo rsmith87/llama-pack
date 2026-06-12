@@ -1,6 +1,6 @@
 # Model Downloads
 
-Neuraxis can download GGUF model artifacts from Hugging Face into the
+Llama Pack can download GGUF model artifacts from Hugging Face into the
 configured model library. Downloads are started through the UI or the
 `/lm-api/v1/downloads/*` API and are recorded in the downloads database.
 
@@ -43,7 +43,7 @@ Use quant listing before download when a repo contains multiple GGUF files:
 
 ```bash
 curl -s \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   "http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/quants"
 ```
 
@@ -59,7 +59,7 @@ Download an entire repo:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \
   -d '{}'
 ```
@@ -69,7 +69,7 @@ Download one GGUF file from a specific revision:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \
   -d '{
     "revision": "main",

@@ -7,10 +7,10 @@ import httpx
 import pytest
 import respx
 
-from llama_manager.core.agent_tools.executor import ToolExecutor
-from llama_manager.core.agent_tools.registry import ToolRegistry
-from llama_manager.core.agent_tools.runtime import AgentToolLoop
-from llama_manager.core.config import load_config
+from llama_pack.core.agent_tools.executor import ToolExecutor
+from llama_pack.core.agent_tools.registry import ToolRegistry
+from llama_pack.core.agent_tools.runtime import AgentToolLoop
+from llama_pack.core.config import load_config
 
 
 def test_tool_registry_emits_openai_tool_definitions(tmp_path):
@@ -225,7 +225,7 @@ async def test_tool_executor_calls_configured_http_endpoint(tmp_path, monkeypatc
             requests.append((method, url, self.timeout))
             return httpx.Response(200, text="healthy")
 
-    monkeypatch.setattr("llama_manager.core.agent_tools.adapters.http.httpx.AsyncClient", FakeAsyncClient)
+    monkeypatch.setattr("llama_pack.core.agent_tools.adapters.http.httpx.AsyncClient", FakeAsyncClient)
     config = load_config(
         {
             "mode": "agent",

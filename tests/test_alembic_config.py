@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.core.persistence.alembic_config import (
+from llama_pack.core.config import load_config
+from llama_pack.core.persistence.alembic_config import (
     Base,
     NAMING_CONVENTION,
     head_revision_for,
@@ -12,7 +12,7 @@ from llama_manager.core.persistence.alembic_config import (
     target_metadata_for,
     version_locations,
 )
-from llama_manager.core.persistence import models as _models  # noqa: F401
+from llama_pack.core.persistence import models as _models  # noqa: F401
 
 
 def test_parse_alembic_target_defaults_to_controller():

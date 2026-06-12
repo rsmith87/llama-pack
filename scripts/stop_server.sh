@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${NEURAXIS_ENV_FILE:-$ROOT_DIR/.neuraxis.env}"
+ENV_FILE="${LLAMA_PACK_ENV_FILE:-$ROOT_DIR/.llama_pack.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -15,16 +15,13 @@ TARGET="${1:-auto}"
 pid_file_for_target() {
   case "$1" in
     "agent")
-      echo "$ROOT_DIR/.neuraxis_agent.pid"
+      echo "$ROOT_DIR/.llama_pack_agent.pid"
       ;;
     "controller")
-      echo "$ROOT_DIR/.neuraxis_controller.pid"
+      echo "$ROOT_DIR/.llama_pack_controller.pid"
       ;;
     "frontend")
-      echo "$ROOT_DIR/.neuraxis_frontend.pid"
-      ;;
-    "server"|"legacy")
-      echo "$ROOT_DIR/.neuraxis.pid"
+      echo "$ROOT_DIR/.llama_pack_frontend.pid"
       ;;
     *)
       return 1
@@ -32,27 +29,26 @@ pid_file_for_target() {
   esac
 }
 
-if [[ -n "${NEURAXIS_PID_FILE:-}" ]]; then
-  PID_FILE="$NEURAXIS_PID_FILE"
+if [[ -n "${LLAMA_PACK_PID_FILE:-}" ]]; then
+  PID_FILE="$LLAMA_PACK_PID_FILE"
 elif [[ "$TARGET" == "auto" ]]; then
   PID_FILE=""
   for candidate in \
-    "$ROOT_DIR/.neuraxis_agent.pid" \
-    "$ROOT_DIR/.neuraxis_controller.pid" \
-    "$ROOT_DIR/.neuraxis_frontend.pid" \
-    "$ROOT_DIR/.neuraxis.pid"; do
+    "$ROOT_DIR/.llama_pack_agent.pid" \
+    "$ROOT_DIR/.llama_pack_controller.pid" \
+    "$ROOT_DIR/.llama_pack_frontend.pid"; do
     if [[ -f "$candidate" ]]; then
       PID_FILE="$candidate"
       break
     fi
   done
   if [[ -z "$PID_FILE" ]]; then
-    echo "No PID file found for agent, controller, frontend, or legacy server."
+    echo "No PID file found for agent, controller, or frontend."
     exit 0
   fi
 else
   if ! PID_FILE="$(pid_file_for_target "$TARGET")"; then
-    echo "Unknown target '$TARGET'. Use: agent, controller, frontend, server, legacy, or auto." >&2
+    echo "Unknown target '$TARGET'. Use: agent, controller, frontend, or auto." >&2
     exit 2
   fi
 fi
@@ -74,7 +70,7 @@ kill "$PID"
 for _ in {1..30}; do
   if ! kill -0 "$PID" 2>/dev/null; then
     rm -f "$PID_FILE"
-    echo "Stopped Neuraxis process $PID."
+    echo "Stopped Llama Pack process $PID."
     exit 0
   fi
   sleep 0.2
@@ -83,4 +79,4 @@ done
 echo "Process $PID did not stop after SIGTERM; sending SIGKILL."
 kill -9 "$PID" 2>/dev/null || true
 rm -f "$PID_FILE"
-echo "Stopped Neuraxis process $PID."
+echo "Stopped Llama Pack process $PID."

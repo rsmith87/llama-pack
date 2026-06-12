@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from llama_manager.core.agent_tools.tracing import RuntimeTraceRecorder
+from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 
 
 def test_runtime_trace_recorder_assigns_ordered_events():

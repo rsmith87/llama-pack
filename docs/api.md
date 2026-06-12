@@ -1,7 +1,7 @@
 # API
 
 This page lists the main HTTP endpoints and documents the gateway surface for
-applications that call Neuraxis as a private AI backend.
+applications that call Llama Pack as a private AI backend.
 
 ## External Chat Compatibility
 
@@ -13,7 +13,7 @@ operator, node, model, auth, audit, or settings endpoints.
 ```bash
 curl -X POST http://127.0.0.1:9137/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [
@@ -26,7 +26,7 @@ curl -X POST http://127.0.0.1:9137/v1/chat/completions \
 
 On a controller, `request_type` routes the call through
 `nodes.<name>.request_types` using the same values as threaded chat, such as
-`general`, `coding`, or `research`. Neuraxis creates a durable thread by
+`general`, `coding`, or `research`. Llama Pack creates a durable thread by
 default and returns routing metadata in response headers:
 
 ```text
@@ -46,7 +46,7 @@ app key boundary applies here:
 ```bash
 curl -X POST http://127.0.0.1:9137/api/chat \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [
@@ -72,13 +72,13 @@ for each key: last used time, endpoint, route, node, model, and request type.
 
 Standalone clients should call `GET /lm-api/v1/client-discovery` before
 presenting setup or login options. The endpoint is public so a client can detect
-Neuraxis before it has credentials.
+Llama Pack before it has credentials.
 
 Example response:
 
 ```json
 {
-  "product": "neuraxis",
+  "product": "llama-pack",
   "version": "unknown",
   "mode": "controller",
   "capabilities": {
@@ -88,7 +88,7 @@ Example response:
     "businessPlugin": false
   },
   "auth": {
-    "methods": ["neuraxis_api_key", "external_api_key"],
+    "methods": ["llama_pack_api_key", "external_api_key"],
     "sessionHeader": "X-UI-Session",
     "apiKeyHeader": "X-Llama-Manager-Key"
   },
@@ -104,8 +104,8 @@ Example response:
 }
 ```
 
-When the private `neuraxis_business` plugin is enabled and healthy enough for
-client login, discovery adds `neuraxis_business` to `auth.methods` and reports a
+When the private `llama_pack_business` plugin is enabled and healthy enough for
+client login, discovery adds `llama_pack_business` to `auth.methods` and reports a
 `businessAuth` endpoint. Clients should treat absent capability fields as
 unsupported and should prefer `/v1/chat/completions` for end-user chat.
 
@@ -132,7 +132,7 @@ Example model list response:
     {
       "id": "qwen",
       "object": "model",
-      "owned_by": "neuraxis",
+      "owned_by": "llama-pack",
       "metadata": {
         "display_label": "qwen",
         "request_types": ["coding"],
@@ -157,7 +157,7 @@ Example diagnostics request:
 ```bash
 curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_EXTERNAL_APP_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_EXTERNAL_APP_KEY" \
   -d '{"model":"qwen","request_type":"coding","stream":false}'
 ```
 
@@ -468,7 +468,7 @@ orchestration job, and targets it at the destination node's worker:
 ```bash
 curl -X POST http://127.0.0.1:9137/lm-api/v1/nodes/mac-mini/transfers \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "destination_node": "linux-2080ti",
     "source_file_id": "<gguf-file-id>",
@@ -523,7 +523,7 @@ Source-agent transfer endpoints:
   worker with the bearer token. Streams one allowed file from the source node.
 
 The source-agent endpoints are not the normal public API for users. They are
-protected by the generated transfer token in addition to normal Neuraxis API 
+protected by the generated transfer token in addition to normal Llama Pack API 
 authentication, and grants are held in source-node memory.
 
 ## Thread Endpoints

@@ -1,10 +1,10 @@
 # Plugin Architecture
 
-This document defines the Neuraxis plugin architecture. The goal is to keep the
+This document defines the Llama Pack plugin architecture. The goal is to keep the
 core product free, home-network friendly, and fully usable while allowing
-optional add-ons such as `neuraxis_business` to provide enterprise features.
+optional add-ons such as `llama_pack_business` to provide enterprise features.
 
-`neuraxis_business` is a paid private add-on and is developed in a separate
+`llama_pack_business` is a paid private add-on and is developed in a separate
 private repository; core only knows it through the generic plugin runtime.
 
 For the first implementation pass, see
@@ -30,7 +30,7 @@ For the first implementation pass, see
 
 ## Core And Plugin Boundary
 
-Neuraxis core owns:
+Llama Pack core owns:
 
 - Model management.
 - Native chat.
@@ -65,11 +65,11 @@ Prefer plugin-based configuration over a permanent top-level business flag:
 
 ```yaml
 enabled_plugins:
-  - neuraxis_business
+  - llama_pack_business
 
 plugins:
-  neuraxis_business:
-    path: /path/to/private/neuraxis_business_plugin
+  llama_pack_business:
+    path: /path/to/private/llama_pack_business_plugin
     enabled: true
 ```
 
@@ -84,7 +84,7 @@ Start with version `1.0` for:
 - Core plugin API.
 - Backend plugin API.
 - Frontend plugin API.
-- Private `neuraxis_business` plugin.
+- Private `llama_pack_business` plugin.
 
 While the plugin system is in active development, keep those versions at `1.0`.
 Once released, move to versioned releases and explicit compatibility checks.
@@ -97,7 +97,7 @@ plugin disabled and a warning explaining the incompatibility.
 Add a core plugin runtime:
 
 ```text
-llama_manager/core/plugins/
+llama_pack/core/plugins/
 |-- __init__.py
 |-- manifest.py
 |-- registry.py
@@ -117,13 +117,13 @@ contain business-specific behavior.
 Each plugin declares metadata and an entrypoint:
 
 ```yaml
-id: neuraxis_business
-name: Neuraxis Business
+id: llama_pack_business
+name: Llama Pack Business
 version: "1.0"
 requires_core: "1.0"
 backend_api_version: "1.0"
 frontend_api_version: "1.0"
-entrypoint: neuraxis_business.plugin:plugin
+entrypoint: llama_pack_business.plugin:plugin
 ```
 
 The manifest should support:
@@ -144,7 +144,7 @@ Plugin ids must match a safe identifier pattern and must be rejected if unsafe.
 Core exposes a small protocol:
 
 ```python
-class NeuraxisPlugin(Protocol):
+class Llama PackPlugin(Protocol):
     id: str
     name: str
     version: str
@@ -193,13 +193,13 @@ Example response:
 ```json
 [
   {
-    "id": "neuraxis_business",
-    "name": "Neuraxis Business",
+    "id": "llama_pack_business",
+    "name": "Llama Pack Business",
     "version": "1.0",
     "status": "enabled",
     "frontend": {
-      "entry": "/plugin-assets/neuraxis_business/business-entry.js",
-      "style": "/plugin-assets/neuraxis_business/business.css"
+      "entry": "/plugin-assets/llama_pack_business/business-entry.js",
+      "style": "/plugin-assets/llama_pack_business/business.css"
     },
     "navigation": [],
     "secondary_navigation": [],
@@ -269,9 +269,9 @@ styles. Core should only provide a frontend extension host and stable plugin API
 Recommended plugin layout:
 
 ```text
-plugins/neuraxis_business/
+plugins/llama_pack_business/
 |-- plugin.yaml
-|-- neuraxis_business/
+|-- llama_pack_business/
 |   |-- plugin.py
 |   |-- api/
 |   |-- policies/
@@ -293,8 +293,8 @@ plugins/neuraxis_business/
 Core serves plugin assets through a stable route:
 
 ```text
-/plugin-assets/neuraxis_business/business-entry.js
-/plugin-assets/neuraxis_business/business.css
+/plugin-assets/llama_pack_business/business-entry.js
+/plugin-assets/llama_pack_business/business.css
 ```
 
 Core builds should not bundle plugin frontend assets. Plugin frontend code
@@ -372,7 +372,7 @@ Primary nav
 |-- Downloads
 |-- Benchmarks
 |-- Settings
-`-- Business        only when neuraxis_business is enabled
+`-- Business        only when llama_pack_business is enabled
 ```
 
 The business area owns its own scoped secondary navigation. The secondary
@@ -425,30 +425,30 @@ Events and hooks are separate concepts:
 
 For example:
 
-- `neuraxis.chat.request.completed` is an event.
-- `neuraxis.chat_admission` is a hook.
+- `llama_pack.chat.request.completed` is an event.
+- `llama_pack.chat_admission` is a hook.
 
-Use `neuraxis.` as the prefix for core-defined events and hooks. Plugins should
+Use `llama_pack.` as the prefix for core-defined events and hooks. Plugins should
 prefix their own events and hooks with their plugin id, for example
-`neuraxis_business.usage.rollup.completed`.
+`llama_pack_business.usage.rollup.completed`.
 
 Useful core events:
 
-- `neuraxis.chat.request.accepted`
-- `neuraxis.chat.request.rejected`
-- `neuraxis.chat.request.completed`
-- `neuraxis.chat.request.failed`
-- `neuraxis.api_key.used`
-- `neuraxis.model.started`
-- `neuraxis.model.stopped`
-- `neuraxis.node.capacity.changed`
-- `neuraxis.document.retrieved`
-- `neuraxis.plugin.loaded`
-- `neuraxis.plugin.disabled`
-- `neuraxis.plugin.failed`
-- `neuraxis.plugin.config.updated`
-- `neuraxis.plugin.migration.pending`
-- `neuraxis.plugin.migration.completed`
+- `llama_pack.chat.request.accepted`
+- `llama_pack.chat.request.rejected`
+- `llama_pack.chat.request.completed`
+- `llama_pack.chat.request.failed`
+- `llama_pack.api_key.used`
+- `llama_pack.model.started`
+- `llama_pack.model.stopped`
+- `llama_pack.node.capacity.changed`
+- `llama_pack.document.retrieved`
+- `llama_pack.plugin.loaded`
+- `llama_pack.plugin.disabled`
+- `llama_pack.plugin.failed`
+- `llama_pack.plugin.config.updated`
+- `llama_pack.plugin.migration.pending`
+- `llama_pack.plugin.migration.completed`
 
 ### Event Delivery Semantics
 
@@ -472,12 +472,12 @@ Every event should use a standard envelope:
 ```json
 {
   "id": "uuid",
-  "type": "neuraxis.chat.request.completed",
+  "type": "llama_pack.chat.request.completed",
   "version": "1.0",
   "occurred_at": "2026-06-04T12:00:00Z",
   "source": {
     "kind": "core",
-    "id": "neuraxis"
+    "id": "llama-pack"
   },
   "correlation_id": "request-or-operation-id",
   "actor": {
@@ -522,10 +522,10 @@ Hook rules:
 
 Initial core hooks:
 
-- `neuraxis.chat_admission`
-- `neuraxis.api_key_authorization`
-- `neuraxis.document_access`
-- `neuraxis.retention_policy`
+- `llama_pack.chat_admission`
+- `llama_pack.api_key_authorization`
+- `llama_pack.document_access`
+- `llama_pack.retention_policy`
 
 ## Event Privacy Rules
 
@@ -597,7 +597,7 @@ tables by default.
 Initial command shape:
 
 ```bash
-uv run neuraxis plugins migrate neuraxis_business
+curl -X POST /lm-api/v1/plugins/llama_pack_business/migrations/{target_id}/upgrade
 ```
 
 Startup should expose health warnings for missing or pending plugin migrations.
@@ -668,7 +668,7 @@ same-origin and controlled:
   third-party origins.
 
 The initial implementation should only support same-origin plugin assets served
-by the Neuraxis backend.
+by the Llama Pack backend.
 
 ## Runtime Observability
 

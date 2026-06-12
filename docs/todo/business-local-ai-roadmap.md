@@ -1,6 +1,6 @@
 # Business Local AI Roadmap
 
-This plan tracks features that would make Neuraxis useful for businesses that
+This plan tracks features that would make Llama Pack useful for businesses that
 want to reduce spend on paid AI services by running local or self-hosted models.
 
 Business features should ship as an optional add-on/plugin. The core product
@@ -16,7 +16,7 @@ For the first plugin foundation implementation pass, see
 
 ## Product Goal
 
-Make Neuraxis practical for small and medium business deployments where multiple
+Make Llama Pack practical for small and medium business deployments where multiple
 employees use shared local AI capacity for chat, document work, automation, and
 internal knowledge access.
 
@@ -30,7 +30,7 @@ The product should help administrators answer:
 
 ## Product Boundary
 
-Neuraxis core owns the free, home-friendly local AI runtime:
+Llama Pack core owns the free, home-friendly local AI runtime:
 
 - Model management.
 - Native chat.
@@ -42,7 +42,7 @@ Neuraxis core owns the free, home-friendly local AI runtime:
 - Basic logs and health.
 - Plugin extension points.
 
-The optional `neuraxis_business` plugin owns enterprise-level features:
+The optional `llama_pack_business` plugin owns enterprise-level features:
 
 - Usage accounting dashboards.
 - Team, user, department, and group management.
@@ -109,7 +109,7 @@ prevents enterprise features from becoming hard dependencies in the application.
 
 ### P2: Plugin Event Contracts
 
-Status: **complete** (core + `neuraxis_business`).
+Status: **complete** (core + `llama_pack_business`).
 
 Define stable event schemas before business usage accounting depends on them:
 
@@ -120,8 +120,8 @@ Define stable event schemas before business usage accounting depends on them:
 - Queue wait, latency, token counts, status, and route metadata.
 - Tests for event subscriber delivery and privacy defaults.
 
-`ChatScheduler` now emits `neuraxis.chat.admitted`, `neuraxis.chat.rejected`,
-`neuraxis.chat.completed`, and `neuraxis.chat.failed` with a stable dict payload.
+`ChatScheduler` now emits `llama_pack.chat.admitted`, `llama_pack.chat.rejected`,
+`llama_pack.chat.completed`, and `llama_pack.chat.failed` with a stable dict payload.
 The business plugin subscribes to all four.
 
 Why this comes before usage accounting: the business plugin should consume
@@ -129,7 +129,7 @@ stable events instead of depending on route internals.
 
 ### P3: Capacity Dashboard
 
-Status: **complete** (`neuraxis_business`).
+Status: **complete** (`llama_pack_business`).
 
 Add administrator visibility into live usage:
 
@@ -150,7 +150,7 @@ healthy before employees depend on it.
 
 ### P4: Usage Accounting
 
-Status: **complete** (`neuraxis_business`).
+Status: **complete** (`llama_pack_business`).
 
 Track business-level usage even when inference is locally hosted:
 
@@ -169,7 +169,7 @@ Reports should help compare local usage against paid AI service spend.
 
 ### P5: Business Identity Foundation
 
-Status: **complete** (`neuraxis_business`).
+Status: **complete** (`llama_pack_business`).
 
 Move from shared keys toward business identity:
 
@@ -190,7 +190,7 @@ OIDC/SAML, and directory integrations are deferred.
 
 ### P6: Quotas And Workload Policy
 
-Business plugin: provided by `neuraxis_business`.
+Business plugin: provided by `llama_pack_business`.
 
 Extend capacity safety into business policy:
 
@@ -208,7 +208,7 @@ should not be able to consume the whole local cluster.
 
 ### P7: Document Upload, Retrieval, And Citations
 
-Business plugin: provided by `neuraxis_business`.
+Business plugin: provided by `llama_pack_business`.
 
 Businesses usually need more than general chat:
 
@@ -226,7 +226,7 @@ clearest replacement for paid AI products.
 
 ### P8: Governance And Data Controls
 
-Business plugin: provided by `neuraxis_business`.
+Business plugin: provided by `llama_pack_business`.
 
 Make the privacy advantages of local hosting explicit:
 
@@ -241,7 +241,7 @@ Make the privacy advantages of local hosting explicit:
 
 ### P9: Assistant And Workspace Management
 
-Business plugin: provided by `neuraxis_business`.
+Business plugin: provided by `llama_pack_business`.
 
 Let admins define reusable business assistants:
 
@@ -267,9 +267,9 @@ department-specific permissions.
 ### P10: API Migration Features
 
 Core plus business plugin. Compatibility APIs belong in core. API key scopes,
-quotas, and usage reports belong in `neuraxis_business`.
+quotas, and usage reports belong in `llama_pack_business`.
 
-Make it easy to redirect existing tools from paid APIs to Neuraxis:
+Make it easy to redirect existing tools from paid APIs to Llama Pack:
 
 - Keep improving OpenAI-compatible chat completions.
 - Support embeddings.
@@ -282,7 +282,7 @@ Make it easy to redirect existing tools from paid APIs to Neuraxis:
 
 ### P11: Local Connectors
 
-Business plugin: provided by `neuraxis_business`.
+Business plugin: provided by `llama_pack_business`.
 
 Help businesses bring existing data into local AI workflows:
 
@@ -302,7 +302,7 @@ requiring third-party cloud credentials.
 ### P12: Backup, Restore, And Operations
 
 Core plus business plugin. Basic backup guidance belongs in core. Business
-retention, audit, and compliance workflows belong in `neuraxis_business`.
+retention, audit, and compliance workflows belong in `llama_pack_business`.
 
 Support serious self-hosted deployments:
 
@@ -318,7 +318,7 @@ Support serious self-hosted deployments:
 
 ### P13: Quality Controls
 
-Business plugin: provided by `neuraxis_business`.
+Business plugin: provided by `llama_pack_business`.
 
 Give administrators a way to measure whether local models are good enough:
 

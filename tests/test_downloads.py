@@ -3,9 +3,9 @@ from datetime import UTC, datetime
 
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.core.model_assets.downloads import DownloadManager
-from llama_manager.core.model_assets.recommendations import recommend_downloads
+from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.downloads import DownloadManager
+from llama_pack.core.model_assets.recommendations import recommend_downloads
 
 
 class FakeStore:

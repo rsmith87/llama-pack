@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 CONFIG="$ROOT_DIR/config.yaml"
-ENV_FILE="$ROOT_DIR/.neuraxis.env"
+ENV_FILE="$ROOT_DIR/.llama_pack.env"
 TEMPLATE=""
 HOST="127.0.0.1"
 PORT="9137"
@@ -24,7 +24,7 @@ run controller/auth/audit/chat-session migrations, and print startup commands.
 
 Options:
   --config PATH          Controller config to create/update. Default: ./config.yaml
-  --env-file PATH        Local secrets file to create/update. Default: ./.neuraxis.env
+  --env-file PATH        Local secrets file to create/update. Default: ./.llama_pack.env
   --template PATH        Optional controller template to copy instead of generating a portable config.
   --host HOST            Uvicorn bind host. Default: 127.0.0.1 for Caddy/TLS.
                          Use 0.0.0.0 only for direct LAN HTTP without Caddy.
@@ -173,7 +173,7 @@ else
 mode: controller
 log_dir: ./logs
 
-controller_registration_key: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 controller_db_url: sqlite+pysqlite:///./state/controller_state.db
@@ -214,13 +214,13 @@ if [[ -f "$CONFIG" && "$ENABLE_MEMORY" == "true" ]]; then
   echo "Configured controller memory in: $CONFIG"
 fi
 
-if [[ -z "${NEURAXIS_CONTROLLER_REGISTRATION_KEY:-}" ]]; then
+if [[ -z "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY:-}" ]]; then
   CONTROLLER_REGISTRATION_KEY="$(scripts/generate_api_key.py)"
-  export NEURAXIS_CONTROLLER_REGISTRATION_KEY="$CONTROLLER_REGISTRATION_KEY"
-  echo "Generated NEURAXIS_CONTROLLER_REGISTRATION_KEY for this shell."
+  export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY="$CONTROLLER_REGISTRATION_KEY"
+  echo "Generated LLAMA_PACK_CONTROLLER_REGISTRATION_KEY for this shell."
 else
-  CONTROLLER_REGISTRATION_KEY="$NEURAXIS_CONTROLLER_REGISTRATION_KEY"
-  echo "Using existing NEURAXIS_CONTROLLER_REGISTRATION_KEY from the environment."
+  CONTROLLER_REGISTRATION_KEY="$LLAMA_PACK_CONTROLLER_REGISTRATION_KEY"
+  echo "Using existing LLAMA_PACK_CONTROLLER_REGISTRATION_KEY from the environment."
 fi
 
 mkdir -p logs
@@ -277,8 +277,8 @@ elif [[ "$ENABLE_MEMORY" == "true" && ! -d "$MEMORY_MODEL_PATH" ]]; then
   exit 1
 fi
 
-NEURAXIS_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
-from llama_manager.core.config import load_config
+LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" - <<'PY'
+from llama_pack.core.config import load_config
 
 config = load_config()
 if config.mode != "controller":
@@ -293,29 +293,29 @@ PY
 
 if [[ "$RUN_MIGRATIONS" == "true" ]]; then
   for db in controller auth audit chat_sessions downloads benchmarks; do
-    NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m alembic -x "db=$db" upgrade "${db}@head"
+    LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x "db=$db" upgrade "${db}@head"
   done
 fi
 
-upsert_env "NEURAXIS_CONFIG" "$CONFIG"
-upsert_env "NEURAXIS_CONTROLLER_REGISTRATION_KEY" "$CONTROLLER_REGISTRATION_KEY"
-upsert_env "NEURAXIS_HOST" "$HOST"
-upsert_env "NEURAXIS_PORT" "$PORT"
+upsert_env "LLAMA_PACK_CONFIG" "$CONFIG"
+upsert_env "LLAMA_PACK_CONTROLLER_REGISTRATION_KEY" "$CONTROLLER_REGISTRATION_KEY"
+upsert_env "LLAMA_PACK_HOST" "$HOST"
+upsert_env "LLAMA_PACK_PORT" "$PORT"
 if [[ "$ENABLE_MEMORY" == "true" ]]; then
-  upsert_env "NEURAXIS_MEMORY_MODEL_PATH" "$MEMORY_MODEL_PATH"
+  upsert_env "LLAMA_PACK_MEMORY_MODEL_PATH" "$MEMORY_MODEL_PATH"
 fi
 
-if [[ "$RUN_MIGRATIONS" == "true" && -z "${NEURAXIS_CONTROLLER_ADMIN_API_KEY:-}" ]]; then
-  ADMIN_OUTPUT="$(NEURAXIS_CONFIG="$CONFIG" "$PYTHON" -m llama_manager.auth --config "$CONFIG" create-admin "$ADMIN_USER")"
+if [[ "$RUN_MIGRATIONS" == "true" && -z "${LLAMA_PACK_CONTROLLER_ADMIN_API_KEY:-}" ]]; then
+  ADMIN_OUTPUT="$(LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m llama_pack.auth --config "$CONFIG" create-admin "$ADMIN_USER")"
   echo "$ADMIN_OUTPUT"
   CONTROLLER_ADMIN_API_KEY="$(printf '%s\n' "$ADMIN_OUTPUT" | awk -F': ' '/^API key: / {print $2}')"
   if [[ -n "$CONTROLLER_ADMIN_API_KEY" ]]; then
-    export NEURAXIS_CONTROLLER_ADMIN_API_KEY="$CONTROLLER_ADMIN_API_KEY"
-    upsert_env "NEURAXIS_CONTROLLER_ADMIN_API_KEY" "$CONTROLLER_ADMIN_API_KEY"
+    export LLAMA_PACK_CONTROLLER_ADMIN_API_KEY="$CONTROLLER_ADMIN_API_KEY"
+    upsert_env "LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" "$CONTROLLER_ADMIN_API_KEY"
   fi
-elif [[ -n "${NEURAXIS_CONTROLLER_ADMIN_API_KEY:-}" ]]; then
-  upsert_env "NEURAXIS_CONTROLLER_ADMIN_API_KEY" "$NEURAXIS_CONTROLLER_ADMIN_API_KEY"
-  echo "Using existing NEURAXIS_CONTROLLER_ADMIN_API_KEY from $ENV_FILE or the environment."
+elif [[ -n "${LLAMA_PACK_CONTROLLER_ADMIN_API_KEY:-}" ]]; then
+  upsert_env "LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" "$LLAMA_PACK_CONTROLLER_ADMIN_API_KEY"
+  echo "Using existing LLAMA_PACK_CONTROLLER_ADMIN_API_KEY from $ENV_FILE or the environment."
 else
   echo "Skipped admin API key creation because --skip-migrations was used."
 fi
@@ -328,7 +328,7 @@ Local secrets were written to:
   $ENV_FILE
 
 Give this controller-owned registration key to agents:
-  export NEURAXIS_CONTROLLER_REGISTRATION_KEY='$CONTROLLER_REGISTRATION_KEY'
+  export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY='$CONTROLLER_REGISTRATION_KEY'
 
 Start the controller:
   scripts/start_controller.sh
@@ -338,7 +338,7 @@ Memory:
   embedding_model_path: $MEMORY_MODEL_PATH
 
 Agents should use:
-  export NEURAXIS_CONTROLLER_URL='http://<controller-host>:$PORT'
-  controller_url: \${NEURAXIS_CONTROLLER_URL}
-  controller_registration_key_outbound: \${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+  export LLAMA_PACK_CONTROLLER_URL='http://<controller-host>:$PORT'
+  controller_url: \${LLAMA_PACK_CONTROLLER_URL}
+  controller_registration_key_outbound: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 EOF

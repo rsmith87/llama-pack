@@ -5,8 +5,8 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from llama_manager.core.config import load_config
-from llama_manager.main import create_app
+from llama_pack.core.config import load_config
+from llama_pack.main import create_app
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
 
@@ -18,14 +18,14 @@ def test_client_discovery_is_public_without_auth_keys(tmp_path: Path):
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["product"] == "neuraxis"
+    assert payload["product"] == "llama-pack"
     assert payload["mode"] == "controller"
     assert payload["capabilities"]["openaiChatCompletions"] is True
     assert payload["capabilities"]["streaming"] is True
     assert payload["capabilities"]["localChatSessions"] is False
     assert payload["auth"]["sessionHeader"] == "X-UI-Session"
     assert payload["auth"]["apiKeyHeader"] == "X-Llama-Manager-Key"
-    assert "neuraxis_api_key" in payload["auth"]["methods"]
+    assert "llama_pack_api_key" in payload["auth"]["methods"]
     assert "external_api_key" in payload["auth"]["methods"]
     assert payload["endpoints"]["openaiChatCompletions"] == "/v1/chat/completions"
     assert payload["endpoints"]["openaiModels"] == "/v1/models"
@@ -69,7 +69,7 @@ def test_client_discovery_does_not_advertise_missing_business_plugin(tmp_path: P
     payload = client.get("/lm-api/v1/client-discovery").json()
 
     assert payload["capabilities"]["businessPlugin"] is False
-    assert "neuraxis_business" not in payload["auth"]["methods"]
+    assert "llama_pack_business" not in payload["auth"]["methods"]
     assert "businessAuth" not in payload["endpoints"]
 
 
@@ -78,9 +78,9 @@ def test_client_discovery_advertises_enabled_business_plugin(tmp_path: Path):
     config = discovery_config(
         tmp_path,
         {
-            "enabled_plugins": ["neuraxis_business"],
+            "enabled_plugins": ["llama_pack_business"],
             "plugins": {
-                "neuraxis_business": {
+                "llama_pack_business": {
                     "path": str(plugin_dir),
                     "enabled": True,
                 }
@@ -92,23 +92,23 @@ def test_client_discovery_advertises_enabled_business_plugin(tmp_path: Path):
     payload = client.get("/lm-api/v1/client-discovery").json()
 
     assert payload["capabilities"]["businessPlugin"] is True
-    assert "neuraxis_business" in payload["auth"]["methods"]
-    assert payload["endpoints"]["businessAuth"] == "/lm-api/v1/plugins/neuraxis_business/auth/login"
+    assert "llama_pack_business" in payload["auth"]["methods"]
+    assert payload["endpoints"]["businessAuth"] == "/lm-api/v1/plugins/llama_pack_business/auth/login"
 
 
 def test_client_discovery_hides_failed_business_plugin(tmp_path: Path):
-    plugin_dir = tmp_path / "neuraxis_business"
-    package_dir = plugin_dir / "neuraxis_business"
+    plugin_dir = tmp_path / "llama_pack_business"
+    package_dir = plugin_dir / "llama_pack_business"
     package_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(
         textwrap.dedent(
             """
-            id: neuraxis_business
-            name: Neuraxis Business
+            id: llama_pack_business
+            name: Llama Pack Business
             version: "1.0"
             requires_core: "1.0"
             backend_api_version: "1.0"
-            entrypoint: neuraxis_business.plugin:plugin
+            entrypoint: llama_pack_business.plugin:plugin
             """
         ).strip(),
         encoding="utf-8",
@@ -118,9 +118,9 @@ def test_client_discovery_hides_failed_business_plugin(tmp_path: Path):
     config = discovery_config(
         tmp_path,
         {
-            "enabled_plugins": ["neuraxis_business"],
+            "enabled_plugins": ["llama_pack_business"],
             "plugins": {
-                "neuraxis_business": {
+                "llama_pack_business": {
                     "path": str(plugin_dir),
                     "enabled": True,
                 }
@@ -132,7 +132,7 @@ def test_client_discovery_hides_failed_business_plugin(tmp_path: Path):
     payload = client.get("/lm-api/v1/client-discovery").json()
 
     assert payload["capabilities"]["businessPlugin"] is False
-    assert "neuraxis_business" not in payload["auth"]["methods"]
+    assert "llama_pack_business" not in payload["auth"]["methods"]
     assert "businessAuth" not in payload["endpoints"]
 
 
@@ -149,9 +149,9 @@ def test_client_discovery_hides_business_plugin_with_health_error(tmp_path: Path
     config = discovery_config(
         tmp_path,
         {
-            "enabled_plugins": ["neuraxis_business"],
+            "enabled_plugins": ["llama_pack_business"],
             "plugins": {
-                "neuraxis_business": {
+                "llama_pack_business": {
                     "path": str(plugin_dir),
                     "enabled": True,
                 }
@@ -163,23 +163,23 @@ def test_client_discovery_hides_business_plugin_with_health_error(tmp_path: Path
     payload = client.get("/lm-api/v1/client-discovery").json()
 
     assert payload["capabilities"]["businessPlugin"] is False
-    assert "neuraxis_business" not in payload["auth"]["methods"]
+    assert "llama_pack_business" not in payload["auth"]["methods"]
     assert "businessAuth" not in payload["endpoints"]
 
 
 def write_business_plugin(root: Path, *, register_body: str = "") -> Path:
-    plugin_dir = root / "neuraxis_business"
-    package_dir = plugin_dir / "neuraxis_business"
+    plugin_dir = root / "llama_pack_business"
+    package_dir = plugin_dir / "llama_pack_business"
     package_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(
         textwrap.dedent(
             """
-            id: neuraxis_business
-            name: Neuraxis Business
+            id: llama_pack_business
+            name: Llama Pack Business
             version: "1.0"
             requires_core: "1.0"
             backend_api_version: "1.0"
-            entrypoint: neuraxis_business.plugin:plugin
+            entrypoint: llama_pack_business.plugin:plugin
             """
         ).strip(),
         encoding="utf-8",

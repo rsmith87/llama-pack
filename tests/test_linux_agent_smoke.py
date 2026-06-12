@@ -3,7 +3,7 @@ from pathlib import Path
 
 import pytest
 
-from llama_manager.core.config import load_config
+from llama_pack.core.config import load_config
 
 
 SCRIPT_PATH = Path(__file__).resolve().parents[1] / "scripts" / "linux_agent_smoke.py"
@@ -55,7 +55,7 @@ def test_validate_linux_agent_config_rejects_unexpanded_secret_placeholders():
             "controller_url": "http://controller:9137",
             "node_name": "linux-2080ti",
             "agent_url": "http://linux:9137",
-            "agent_api_key": "${NEURAXIS_AGENT_API_KEY}",
+            "agent_api_key": "${LLAMA_PACK_AGENT_API_KEY}",
             "controller_registration_key_outbound": "${JOIN_KEY}",
         }
     )

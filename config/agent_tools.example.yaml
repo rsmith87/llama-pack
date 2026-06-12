@@ -3,8 +3,8 @@ max_iterations: 4
 tool_timeout_seconds: 10.0
 safe_roots:
   - ./logs
-  - ${NEURAXIS_PROJECT_DIR}
-  - ${NEURAXIS_MODELS_DIR}
+  - ${LLAMA_PACK_PROJECT_DIR}
+  - ${LLAMA_PACK_MODELS_DIR}
 tools:
   list_runtime_status:
     type: shell
@@ -19,17 +19,17 @@ tools:
   read_project_file:
     type: file_read_dynamic
     description: Read a project or log file by relative path under the project directory.
-    path: ${NEURAXIS_PROJECT_DIR}
+    path: ${LLAMA_PACK_PROJECT_DIR}
     max_file_bytes: 524288
   local_health:
     type: http
     description: Check local health.
     method: GET
-    url: ${NEURAXIS_AGENT_URL}/health
+    url: ${LLAMA_PACK_AGENT_URL}/health
   list_project_files:
     type: directory_list
     description: List top-level and one-level-deep files in the project.
-    path: ${NEURAXIS_PROJECT_DIR}
+    path: ${LLAMA_PACK_PROJECT_DIR}
     recursive: true
     max_depth: 1
     max_entries: 300
@@ -37,7 +37,7 @@ tools:
   search_project_code:
     type: text_search
     description: Search for text or symbols in project Python source files.
-    path: ${NEURAXIS_PROJECT_DIR}
+    path: ${LLAMA_PACK_PROJECT_DIR}
     glob: "**/*.py"
     regex: true
     max_matches: 50

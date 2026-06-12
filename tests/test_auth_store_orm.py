@@ -1,6 +1,6 @@
 import pytest
 
-from llama_manager.core.persistence.auth_store_orm import AuthStoreOrm
+from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
 from tests.persistence_db_setup import prepare_auth_db
 
 

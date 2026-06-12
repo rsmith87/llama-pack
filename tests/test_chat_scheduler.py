@@ -4,7 +4,7 @@ import asyncio
 
 import pytest
 
-from llama_manager.core.chat.scheduler import ChatAdmissionError, ChatScheduler
+from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 
 
 class BlockingProxy:

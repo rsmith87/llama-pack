@@ -22,7 +22,7 @@ export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
       <div className="brand-lockup">
         <div className="brand-mark" aria-hidden="true"><BrandLogo /></div>
         <div>
-          <h1>Neuraxis</h1>
+          <h1>Llama Pack</h1>
           <p>{appMode === "agent" ? "Agent runtime" : appMode === "controller" ? "Private AI gateway" : "Gateway console"}</p>
         </div>
       </div>

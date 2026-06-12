@@ -157,7 +157,7 @@ it("loads migration controls for a configured plugin that is not enabled", async
     if (url === "/lm-api/v1/plugins/status") {
       return Promise.resolve({ ok: true, json: async () => ({
         plugins: [{
-          id: "neuraxis_business",
+          id: "llama_pack_business",
           status: "disabled",
           version: "1.0",
           health: [],
@@ -167,12 +167,12 @@ it("loads migration controls for a configured plugin that is not enabled", async
         }],
       }) });
     }
-    if (url === "/lm-api/v1/plugins/neuraxis_business/migrations/status") {
+    if (url === "/lm-api/v1/plugins/llama_pack_business/migrations/status") {
       return Promise.resolve({ ok: true, json: async () => ({
-        plugin_id: "neuraxis_business",
+        plugin_id: "llama_pack_business",
         targets: [{
           id: "main",
-          directory: "neuraxis_business/migrations",
+          directory: "llama_pack_business/migrations",
           database_url: null,
           current_revision: "20260604_0003",
           head_revision: "20260604_0004",
@@ -188,10 +188,10 @@ it("loads migration controls for a configured plugin that is not enabled", async
 
   render(<PluginsPage />);
 
-  await screen.findByRole("heading", { name: "neuraxis_business" });
-  expect(screen.getByText("neuraxis_business/migrations")).toBeInTheDocument();
+  await screen.findByRole("heading", { name: "llama_pack_business" });
+  expect(screen.getByText("llama_pack_business/migrations")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Upgrade" })).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/neuraxis_business/migrations/status", expect.anything());
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/llama_pack_business/migrations/status", expect.anything());
 });
 
 it("upgrades a pending migration target and refreshes migration status", async () => {

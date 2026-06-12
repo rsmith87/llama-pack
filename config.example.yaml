@@ -19,8 +19,8 @@
 # Any section not linked here can be kept inline as shown below.
 #
 # Network exposure:
-# - Direct LAN HTTP: set NEURAXIS_HOST=0.0.0.0 and use http://host:9137 URLs.
-# - Caddy/local TLS: set NEURAXIS_HOST=127.0.0.1 and use https://host.local URLs.
+# - Direct LAN HTTP: set LLAMA_PACK_HOST=0.0.0.0 and use http://host:9137 URLs.
+# - Caddy/local TLS: set LLAMA_PACK_HOST=127.0.0.1 and use https://host.local URLs.
 # The model host fields below are llama-server bind addresses, not the
 # Neuraxis FastAPI/uvicorn bind address.
 
@@ -110,6 +110,6 @@ models:
 
 nodes:
   mac-mini:
-    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
+    url: ${LLAMA_PACK_MAC_MINI_AGENT_URL}
   windows-2080ti:
-    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: ${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}

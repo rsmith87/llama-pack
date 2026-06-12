@@ -134,7 +134,7 @@ def _install_fake_deps(tmp_path):
 # ---------------------------------------------------------------------------
 
 def _make_memory_config(tmp_path, *, enabled=True, top_k=3):
-    from llama_manager.core.config.models import MemoryConfig
+    from llama_pack.core.config.models import MemoryConfig
     model_dir = tmp_path / "model"
     model_dir.mkdir()
     return MemoryConfig(
@@ -160,7 +160,7 @@ class TestChromaMemoryStore:
         yield
 
     def _make_store(self, tmp_path, **kwargs):
-        from llama_manager.core.memory.store import ChromaMemoryStore
+        from llama_pack.core.memory.store import ChromaMemoryStore
         return ChromaMemoryStore(_make_memory_config(tmp_path, **kwargs))
 
     @pytest.mark.asyncio
@@ -260,14 +260,14 @@ class TestInjectMemories:
 
     @pytest.mark.asyncio
     async def test_inject_prepends_system_message_when_no_existing(self, tmp_path):
-        from llama_manager.api.routes.compat_chat import _inject_memories
-        from llama_manager.core.memory.store import ChromaMemoryStore
+        from llama_pack.api.routes.compat_chat import _inject_memories
+        from llama_pack.core.memory.store import ChromaMemoryStore
 
         cfg = _make_memory_config(tmp_path)
         store = ChromaMemoryStore(cfg)
         await store.write("user prefers concise answers", tier="durable")
 
-        from llama_manager.core.config.models import MemoryConfig
+        from llama_pack.core.config.models import MemoryConfig
         app_config = MagicMock()
         app_config.memory = cfg
 
@@ -280,8 +280,8 @@ class TestInjectMemories:
 
     @pytest.mark.asyncio
     async def test_inject_prepends_to_existing_system_message(self, tmp_path):
-        from llama_manager.api.routes.compat_chat import _inject_memories
-        from llama_manager.core.memory.store import ChromaMemoryStore
+        from llama_pack.api.routes.compat_chat import _inject_memories
+        from llama_pack.core.memory.store import ChromaMemoryStore
 
         cfg = _make_memory_config(tmp_path)
         store = ChromaMemoryStore(cfg)
@@ -305,8 +305,8 @@ class TestInjectMemories:
 
     @pytest.mark.asyncio
     async def test_inject_skips_when_disabled(self, tmp_path):
-        from llama_manager.api.routes.compat_chat import _inject_memories
-        from llama_manager.core.memory.store import ChromaMemoryStore
+        from llama_pack.api.routes.compat_chat import _inject_memories
+        from llama_pack.core.memory.store import ChromaMemoryStore
 
         cfg = _make_memory_config(tmp_path, enabled=False)
         store = ChromaMemoryStore(cfg)
@@ -320,8 +320,8 @@ class TestInjectMemories:
 
     @pytest.mark.asyncio
     async def test_inject_skips_when_auto_inject_false(self, tmp_path):
-        from llama_manager.api.routes.compat_chat import _inject_memories
-        from llama_manager.core.memory.store import ChromaMemoryStore
+        from llama_pack.api.routes.compat_chat import _inject_memories
+        from llama_pack.core.memory.store import ChromaMemoryStore
 
         cfg = _make_memory_config(tmp_path)
         cfg.auto_inject = False
@@ -337,8 +337,8 @@ class TestInjectMemories:
 
     @pytest.mark.asyncio
     async def test_inject_skips_when_no_memories_found(self, tmp_path):
-        from llama_manager.api.routes.compat_chat import _inject_memories
-        from llama_manager.core.memory.store import ChromaMemoryStore
+        from llama_pack.api.routes.compat_chat import _inject_memories
+        from llama_pack.core.memory.store import ChromaMemoryStore
 
         cfg = _make_memory_config(tmp_path)
         store = ChromaMemoryStore(cfg)
@@ -359,9 +359,9 @@ class TestInjectMemories:
 def _make_app(tmp_path, *, memory_enabled=True):
     """Build a test FastAPI app with a disabled memory store (endpoint still registered)."""
     from fastapi.testclient import TestClient
-    from llama_manager.core.memory.store import ChromaMemoryStore
-    from llama_manager.api.routes import memory as memory_routes
-    from llama_manager.api.dependencies import get_memory_store
+    from llama_pack.core.memory.store import ChromaMemoryStore
+    from llama_pack.api.routes import memory as memory_routes
+    from llama_pack.api.dependencies import get_memory_store
     from fastapi import FastAPI
 
     cfg = _make_memory_config(tmp_path, enabled=memory_enabled)

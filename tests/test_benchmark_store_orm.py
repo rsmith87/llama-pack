@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
 from tests.persistence_db_setup import prepare_benchmarks_db
 
 
@@ -316,7 +316,7 @@ class TestToolLoopEvalRuns:
 
 class TestAggregateComputation:
     def test_all_success(self):
-        from llama_manager.core.persistence.benchmark_store_orm import _compute_aggregate
+        from llama_pack.core.persistence.benchmark_store_orm import _compute_aggregate
 
         samples = [
             {"status": "success", "ttft_ms": 100.0, "tokens_per_second": 20.0, "total_duration_ms": 1000.0},
@@ -330,7 +330,7 @@ class TestAggregateComputation:
         assert agg["sample_count"] == 3
 
     def test_partial_failure(self):
-        from llama_manager.core.persistence.benchmark_store_orm import _compute_aggregate
+        from llama_pack.core.persistence.benchmark_store_orm import _compute_aggregate
 
         samples = [
             {"status": "success", "ttft_ms": 100.0, "tokens_per_second": 20.0, "total_duration_ms": 500.0},
@@ -342,7 +342,7 @@ class TestAggregateComputation:
         assert agg["sample_count"] == 2
 
     def test_all_failure(self):
-        from llama_manager.core.persistence.benchmark_store_orm import _compute_aggregate
+        from llama_pack.core.persistence.benchmark_store_orm import _compute_aggregate
 
         samples = [{"status": "failed", "ttft_ms": None, "tokens_per_second": None, "total_duration_ms": None}]
         agg = _compute_aggregate(samples)

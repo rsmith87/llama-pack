@@ -1,7 +1,7 @@
 from sqlalchemy import inspect, update
 
-from llama_manager.core.persistence.models.orchestration import JobOrm
-from llama_manager.core.orchestration.store_orm import OrchestrationStoreOrm
+from llama_pack.core.persistence.models.orchestration import JobOrm
+from llama_pack.core.orchestration.store_orm import OrchestrationStoreOrm
 from tests.persistence_db_setup import prepare_controller_db
 
 
@@ -11,8 +11,8 @@ def test_orchestration_store_orm_sets_schema_version(tmp_path):
     assert inspect(store.engine).has_table("schema_meta")
 
 
-from llama_manager.core.orchestration.repo import OrchestrationRepo
-from llama_manager.core.orchestration.orchestrator import Orchestrator
+from llama_pack.core.orchestration.repo import OrchestrationRepo
+from llama_pack.core.orchestration.orchestrator import Orchestrator
 
 
 def test_orchestrator_leader_lease_single_holder(tmp_path):

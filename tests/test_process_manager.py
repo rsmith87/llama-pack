@@ -1,8 +1,8 @@
 from pathlib import Path
 from unittest.mock import patch
 
-from llama_manager.core.config import load_config
-from llama_manager.core.runtime.process_manager import ProcessManager, _AdoptedProcess
+from llama_pack.core.config import load_config
+from llama_pack.core.runtime.process_manager import ProcessManager, _AdoptedProcess
 
 
 class FakeProcess:

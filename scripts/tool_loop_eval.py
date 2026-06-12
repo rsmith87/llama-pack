@@ -17,25 +17,25 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 if str(ROOT_DIR) not in sys.path:
     sys.path.insert(0, str(ROOT_DIR))
 
-from llama_manager.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
-from llama_manager.core.chat.proxy import ChatProxy
-from llama_manager.core.config import load_config
-from llama_manager.core.nodes.registry import NodeRegistry
-from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
-from llama_manager.core.persistence.db_infra import resolve_persistence_urls
-from llama_manager.core.runtime.process_manager import ProcessManager
+from llama_pack.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
+from llama_pack.core.chat.proxy import ChatProxy
+from llama_pack.core.config import load_config
+from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+from llama_pack.core.persistence.db_infra import resolve_persistence_urls
+from llama_pack.core.runtime.process_manager import ProcessManager
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Run Neuraxis agent-tool loop evaluations against one or more tool-capable models."
+        description="Run Llama Pack agent-tool loop evaluations against one or more tool-capable models."
     )
-    parser.add_argument("--config", type=Path, default=None, help="Config path. Defaults to NEURAXIS_CONFIG, config.yaml, or config.example.yaml.")
+    parser.add_argument("--config", type=Path, default=None, help="Config path. Defaults to LLAMA_PACK_CONFIG, config.yaml, or config.example.yaml.")
     parser.add_argument("--model", action="append", required=True, help="Model name to evaluate. Repeat for multiple models.")
     parser.add_argument(
         "--target",
         default="auto",
-        help="Chat target selector passed to Neuraxis routing. Use node:<name>, for example node:mac-mini.",
+        help="Chat target selector passed to Llama Pack routing. Use node:<name>, for example node:mac-mini.",
     )
     parser.add_argument(
         "--case",
@@ -47,7 +47,7 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         "--env-file",
         type=Path,
         default=None,
-        help="Env file to load before config expansion. Defaults to NEURAXIS_ENV_FILE or ./.neuraxis.env.",
+        help="Env file to load before config expansion. Defaults to LLAMA_PACK_ENV_FILE or ./.llama_pack.env.",
     )
     parser.add_argument("--output-jsonl", type=Path, default=None, help="Append suite records to this JSONL file.")
     parser.add_argument("--latest-json", type=Path, default=None, help="Write the latest app-ready summary JSON here.")
@@ -63,10 +63,10 @@ def resolve_output_paths(args: argparse.Namespace, log_dir: Path) -> tuple[Path,
 def resolve_env_file(path: Path | None) -> Path:
     if path is not None:
         return path
-    env_file = os.getenv("NEURAXIS_ENV_FILE")
+    env_file = os.getenv("LLAMA_PACK_ENV_FILE")
     if env_file:
         return Path(env_file)
-    return ROOT_DIR / ".neuraxis.env"
+    return ROOT_DIR / ".llama_pack.env"
 
 
 def load_env_file(path: Path) -> None:
@@ -94,8 +94,8 @@ def apply_node_api_key_fallback(config: Any, node_name: str) -> None:
     if node is None or _has_resolved_value(getattr(node, "api_key", None)):
         return
     env_keys = [
-        f"NEURAXIS_{_env_name_fragment(node_name)}_AGENT_API_KEY",
-        "NEURAXIS_AGENT_API_KEY",
+        f"LLAMA_PACK_{_env_name_fragment(node_name)}_AGENT_API_KEY",
+        "LLAMA_PACK_AGENT_API_KEY",
     ]
     for env_key in env_keys:
         value = os.getenv(env_key)

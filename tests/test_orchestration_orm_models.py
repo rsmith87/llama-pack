@@ -1,6 +1,6 @@
 from sqlalchemy import Index, UniqueConstraint
 
-from llama_manager.core.persistence.models.orchestration import (
+from llama_pack.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
     JobAttemptOrm,

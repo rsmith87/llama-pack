@@ -98,7 +98,7 @@ configured root are rejected.
 read_project_file:
   type: file_read_dynamic
   description: Read a project or log file by relative path.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   max_file_bytes: 524288
 \`\`\`
 
@@ -202,7 +202,7 @@ List files and directories under a configured path without shelling out.
 list_project_files:
   type: directory_list
   description: List top-level project structure.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   recursive: true
   max_depth: 2
   max_entries: 200
@@ -230,7 +230,7 @@ Search file names under a configured root by glob pattern. Safe equivalent of
 find_python_files:
   type: file_search
   description: Find Python source files in the project.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   glob: "**/*.py"
   max_entries: 200
   include_hidden: false
@@ -257,7 +257,7 @@ The agent provides a \`query\` argument at call time (defined via \`parameters\`
 search_project_code:
   type: text_search
   description: Search for text or symbols in project Python source files.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   glob: "**/*.py"
   case_sensitive: false
   max_matches: 50
@@ -295,7 +295,7 @@ changed files.
 repo_status:
   type: git_status
   description: Show current git branch and changed files.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
 \`\`\`
 
 **Fields**
@@ -317,7 +317,7 @@ by \`max_lines\`.
 repo_diff:
   type: git_diff
   description: Show unstaged changes in the project repo.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   max_lines: 300
 \`\`\`
 
@@ -339,7 +339,7 @@ Show recent commit metadata for a configured repository.
 repo_log:
   type: git_log
   description: Show recent commits in the project repo.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   max_commits: 20
 \`\`\`
 
@@ -385,7 +385,7 @@ Return the last N lines of a configured log file without shelling out.
 inference_log:
   type: log_tail
   description: Tail the most recent lines from the inference server log.
-  path: /Users/robertsmith/Apps/neuraxis/logs/neuraxis_agent_uvicorn.log
+  path: logs/llama_pack_agent_uvicorn.log
   max_lines: 100
 \`\`\`
 
@@ -791,7 +791,7 @@ and scoring model.
     content: `# API
 
 This page lists the main HTTP endpoints and documents the gateway surface for
-applications that call Neuraxis as a private AI backend.
+applications that call Llama Pack as a private AI backend.
 
 ## External Chat Compatibility
 
@@ -803,7 +803,7 @@ operator, node, model, auth, audit, or settings endpoints.
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "model": "qwen",
     "messages": [
@@ -816,7 +816,7 @@ curl -X POST http://127.0.0.1:9137/v1/chat/completions \\
 
 On a controller, \`request_type\` routes the call through
 \`nodes.<name>.request_types\` using the same values as threaded chat, such as
-\`general\`, \`coding\`, or \`research\`. Neuraxis creates a durable thread by
+\`general\`, \`coding\`, or \`research\`. Llama Pack creates a durable thread by
 default and returns routing metadata in response headers:
 
 \`\`\`text
@@ -836,7 +836,7 @@ app key boundary applies here:
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/api/chat \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "model": "qwen",
     "messages": [
@@ -862,13 +862,13 @@ for each key: last used time, endpoint, route, node, model, and request type.
 
 Standalone clients should call \`GET /lm-api/v1/client-discovery\` before
 presenting setup or login options. The endpoint is public so a client can detect
-Neuraxis before it has credentials.
+Llama Pack before it has credentials.
 
 Example response:
 
 \`\`\`json
 {
-  "product": "neuraxis",
+  "product": "llama-pack",
   "version": "unknown",
   "mode": "controller",
   "capabilities": {
@@ -878,7 +878,7 @@ Example response:
     "businessPlugin": false
   },
   "auth": {
-    "methods": ["neuraxis_api_key", "external_api_key"],
+    "methods": ["llama_pack_api_key", "external_api_key"],
     "sessionHeader": "X-UI-Session",
     "apiKeyHeader": "X-Llama-Manager-Key"
   },
@@ -894,8 +894,8 @@ Example response:
 }
 \`\`\`
 
-When the private \`neuraxis_business\` plugin is enabled and healthy enough for
-client login, discovery adds \`neuraxis_business\` to \`auth.methods\` and reports a
+When the private \`llama_pack_business\` plugin is enabled and healthy enough for
+client login, discovery adds \`llama_pack_business\` to \`auth.methods\` and reports a
 \`businessAuth\` endpoint. Clients should treat absent capability fields as
 unsupported and should prefer \`/v1/chat/completions\` for end-user chat.
 
@@ -922,7 +922,7 @@ Example model list response:
     {
       "id": "qwen",
       "object": "model",
-      "owned_by": "neuraxis",
+      "owned_by": "llama-pack",
       "metadata": {
         "display_label": "qwen",
         "request_types": ["coding"],
@@ -947,7 +947,7 @@ Example diagnostics request:
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_EXTERNAL_APP_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_EXTERNAL_APP_KEY" \\
   -d '{"model":"qwen","request_type":"coding","stream":false}'
 \`\`\`
 
@@ -1258,7 +1258,7 @@ orchestration job, and targets it at the destination node's worker:
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/lm-api/v1/nodes/mac-mini/transfers \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "destination_node": "linux-2080ti",
     "source_file_id": "<gguf-file-id>",
@@ -1313,7 +1313,7 @@ Source-agent transfer endpoints:
   worker with the bearer token. Streams one allowed file from the source node.
 
 The source-agent endpoints are not the normal public API for users. They are
-protected by the generated transfer token in addition to normal Neuraxis API 
+protected by the generated transfer token in addition to normal Llama Pack API 
 authentication, and grants are held in source-node memory.
 
 ## Thread Endpoints
@@ -1486,7 +1486,7 @@ Response (\`200\`):
         "anchor": "memory-endpoints"
       }
     ],
-    searchBody: "API This page lists the main HTTP endpoints and documents the gateway surface for applications that call Neuraxis as a private AI backend. External Chat Compatibility Use an external app key with the OpenAI-compatible chat endpoint as the primary integration surface for other apps. External app keys are chat-only credentials: they can call the consumer completion APIs, but they cannot use admin, operator, node, model, auth, audit, or settings endpoints. On a controller, routes the call through using the same values as threaded chat, such as , , or . Neuraxis creates a durable thread by default and returns routing metadata in response headers: Send on later calls to append to the same durable record and keep thread affinity when the previous route is still eligible. The JSON response body stays OpenAI-compatible. Older Ollama clients can point at the compatibility route. The same external app key boundary applies here: preserves Ollama-style response bodies and streaming newline JSON, while still using controller routing and the same metadata headers. Successful external app calls write safe audit metadata, including key id, endpoint, request type, routed node, and model. Prompt and response text are not written to the audit event. The external app key list also stores a latest-use summary for each key: last used time, endpoint, route, node, model, and request type. Client Discovery Standalone clients should call before presenting setup or login options. The endpoint is public so a client can detect Neuraxis before it has credentials. Example response: When the private plugin is enabled and healthy enough for client login, discovery adds to and reports a endpoint. Clients should treat absent capability fields as unsupported and should prefer for end-user chat. External chat-only keys can call: - to retrieve an end-user-safe model list. - to retrieve the current client's auth method, chat capabilities, and usable model list. - to verify auth, route resolution, and non-streaming or streaming chat for setup flows. These routes intentionally avoid admin/runtime details from . For standalone end-user chat apps, prefer external app keys with the header. Use UI sessions for the built-in operator/admin UI. Plugin-provided auth modes should be discovered through client discovery and handled by plugin-owned routes. Example model list response: Example diagnostics request: Core Endpoints - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Setup assistant endpoints The setup assistant endpoints live under and support the UI-first bootstrap flow described in Setup. They are intentionally narrow: they report whether authentication still needs bootstrapping, create the first admin key only when no auth exists, and expose a secret-masked config snapshot for setup review. — Returns mode and bootstrap state: is false once either is configured or the auth store has at least one active key. — Creates the first admin key and an initial UI session. This endpoint succeeds only when static auth is not configured and the auth store has no active keys; later calls return . Response: The raw admin API key is returned once. The route also writes an audit event. — Returns a setup-oriented configuration snapshot with secrets masked as . It includes mode, log/config basics, memory settings, nodes, agent/controller URLs, worker settings, model library root, and the first configured model. See Model Downloads for the download workflow, history, logs, cancellation, and recommendations behavior. Controller Node Endpoints - - - - - - - - - - - - - - - - - - The UI includes a Nodes page for controller mode that shows node reachability, heartbeat/config metadata, reported models, and remote model Start/Stop/Restart/Logs actions. Controller Orchestration Endpoints Controller orchestration endpoints are available in controller mode only: - - - - - - - - - - - - - - - - - - - - See Benchmarks for benchmark definitions, managed runs, metrics, and comparison behavior. Job types accepts a field that determines how the agent worker processes the job. — Single chat completion routed to one node. — Embed one or more strings via a model's embeddings endpoint. — Run a suite of prompt cases against a model, collecting per-case outputs and a summary artifact. Each case can override , , , and . Accepts 1–200 cases. The completed job has one artifact per case (with , , and error if the case failed) and one artifact. Cases that fail are recorded but do not abort the remaining cases. — Download a GGUF model repo or selected GGUF files from Hugging Face on the target worker node. The agent uses its configured destination and local Hugging Face credentials/environment. must be in format. and are optional relative paths. Progress events include , , , , and . Cancelling the orchestration job cancels the local download process cooperatively. — Download, verify, register, and optionally start a GGUF model on the target worker node. This is the controller-to-agent workflow for making a Hugging Face model usable on a specific agent. The worker emits progress stages for download progress, , , and when is true. Registration uses the agent's local model library configuration and persists config on agents that were started from a writable config file. — Transfer a GGUF file from one registered node to another. Most callers should start transfers through the controller helper endpoint rather than posting jobs directly. The helper validates both nodes, asks the source node to create a one-time transfer grant, creates the orchestration job, and targets it at the destination node's worker: The created job payload has this shape: and must differ. The only supported mode is ; the source manifest includes the selected GGUF plus non-GGUF sidecars in the same model directory and any configured file under the source model roots. The destination worker fetches the source manifest, then fetches each file with . Each destination write verifies file size and SHA-256 before replacing the temporary file. Existing matching files are skipped; conflicting existing files fail the job with . Transfer helper and status endpoints: - — Controller-only public entry point. Creates a source grant and a job targeted at . - — Lists recent jobs as transfer summaries. - — Returns one transfer summary, including , , , , , and when available. Source-agent transfer endpoints: - — Called by the controller on the source node. Creates an in-memory token grant for a source GGUF file and destination node. - — Called by the destination worker with the bearer token. Returns the source file manifest. - — Called by the destination worker with the bearer token. Streams one allowed file from the source node. The source-agent endpoints are not the normal public API for users. They are protected by the generated transfer token in addition to normal Neuraxis API authentication, and grants are held in source-node memory. Thread Endpoints Thread endpoints are available in controller mode. Threads maintain a durable conversation history; each turn records user, routing, and assistant events. - — Create a thread. - — List events. Add (admin only) to include routing decisions and workflow steps. - — Post a user message and receive a routed assistant reply. - — Same, but streams the reply as SSE. The first event is followed by token delta chunks. - — Run a multi-step workflow on the thread (see below). Workflow endpoint runs a linear chain of inference steps where each step's output becomes the next step's input. Each step is routed independently through the normal routing policy. Each step is an object with: Field Default Description --- --- --- required Display name for the step (recorded in events). required System-role message sent to the model for this step. workflow Override the model for this step only. workflow Override the routing target for this step only. Response: Public thread events show only and . Internal events include a event pair (status then ) for each step, plus a event per step. If a step fails, a event and a public event are appended and the endpoint returns an error — steps that have not yet run are skipped. Memory Endpoints Available on controller nodes when the memory subsystem is enabled ( in config). Both endpoints return if the store is disabled. — Write a memory entry. Accepts agent API keys. Deduplication runs automatically: if a near-identical entry already exists (cosine similarity ≥ 0.92) it is updated in place. Response ( ): — Semantic similarity search over stored memories. Response ( ):",
+    searchBody: "API This page lists the main HTTP endpoints and documents the gateway surface for applications that call Llama Pack as a private AI backend. External Chat Compatibility Use an external app key with the OpenAI-compatible chat endpoint as the primary integration surface for other apps. External app keys are chat-only credentials: they can call the consumer completion APIs, but they cannot use admin, operator, node, model, auth, audit, or settings endpoints. On a controller, routes the call through using the same values as threaded chat, such as , , or . Llama Pack creates a durable thread by default and returns routing metadata in response headers: Send on later calls to append to the same durable record and keep thread affinity when the previous route is still eligible. The JSON response body stays OpenAI-compatible. Older Ollama clients can point at the compatibility route. The same external app key boundary applies here: preserves Ollama-style response bodies and streaming newline JSON, while still using controller routing and the same metadata headers. Successful external app calls write safe audit metadata, including key id, endpoint, request type, routed node, and model. Prompt and response text are not written to the audit event. The external app key list also stores a latest-use summary for each key: last used time, endpoint, route, node, model, and request type. Client Discovery Standalone clients should call before presenting setup or login options. The endpoint is public so a client can detect Llama Pack before it has credentials. Example response: When the private plugin is enabled and healthy enough for client login, discovery adds to and reports a endpoint. Clients should treat absent capability fields as unsupported and should prefer for end-user chat. External chat-only keys can call: - to retrieve an end-user-safe model list. - to retrieve the current client's auth method, chat capabilities, and usable model list. - to verify auth, route resolution, and non-streaming or streaming chat for setup flows. These routes intentionally avoid admin/runtime details from . For standalone end-user chat apps, prefer external app keys with the header. Use UI sessions for the built-in operator/admin UI. Plugin-provided auth modes should be discovered through client discovery and handled by plugin-owned routes. Example model list response: Example diagnostics request: Core Endpoints - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Setup assistant endpoints The setup assistant endpoints live under and support the UI-first bootstrap flow described in Setup. They are intentionally narrow: they report whether authentication still needs bootstrapping, create the first admin key only when no auth exists, and expose a secret-masked config snapshot for setup review. — Returns mode and bootstrap state: is false once either is configured or the auth store has at least one active key. — Creates the first admin key and an initial UI session. This endpoint succeeds only when static auth is not configured and the auth store has no active keys; later calls return . Response: The raw admin API key is returned once. The route also writes an audit event. — Returns a setup-oriented configuration snapshot with secrets masked as . It includes mode, log/config basics, memory settings, nodes, agent/controller URLs, worker settings, model library root, and the first configured model. See Model Downloads for the download workflow, history, logs, cancellation, and recommendations behavior. Controller Node Endpoints - - - - - - - - - - - - - - - - - - The UI includes a Nodes page for controller mode that shows node reachability, heartbeat/config metadata, reported models, and remote model Start/Stop/Restart/Logs actions. Controller Orchestration Endpoints Controller orchestration endpoints are available in controller mode only: - - - - - - - - - - - - - - - - - - - - See Benchmarks for benchmark definitions, managed runs, metrics, and comparison behavior. Job types accepts a field that determines how the agent worker processes the job. — Single chat completion routed to one node. — Embed one or more strings via a model's embeddings endpoint. — Run a suite of prompt cases against a model, collecting per-case outputs and a summary artifact. Each case can override , , , and . Accepts 1–200 cases. The completed job has one artifact per case (with , , and error if the case failed) and one artifact. Cases that fail are recorded but do not abort the remaining cases. — Download a GGUF model repo or selected GGUF files from Hugging Face on the target worker node. The agent uses its configured destination and local Hugging Face credentials/environment. must be in format. and are optional relative paths. Progress events include , , , , and . Cancelling the orchestration job cancels the local download process cooperatively. — Download, verify, register, and optionally start a GGUF model on the target worker node. This is the controller-to-agent workflow for making a Hugging Face model usable on a specific agent. The worker emits progress stages for download progress, , , and when is true. Registration uses the agent's local model library configuration and persists config on agents that were started from a writable config file. — Transfer a GGUF file from one registered node to another. Most callers should start transfers through the controller helper endpoint rather than posting jobs directly. The helper validates both nodes, asks the source node to create a one-time transfer grant, creates the orchestration job, and targets it at the destination node's worker: The created job payload has this shape: and must differ. The only supported mode is ; the source manifest includes the selected GGUF plus non-GGUF sidecars in the same model directory and any configured file under the source model roots. The destination worker fetches the source manifest, then fetches each file with . Each destination write verifies file size and SHA-256 before replacing the temporary file. Existing matching files are skipped; conflicting existing files fail the job with . Transfer helper and status endpoints: - — Controller-only public entry point. Creates a source grant and a job targeted at . - — Lists recent jobs as transfer summaries. - — Returns one transfer summary, including , , , , , and when available. Source-agent transfer endpoints: - — Called by the controller on the source node. Creates an in-memory token grant for a source GGUF file and destination node. - — Called by the destination worker with the bearer token. Returns the source file manifest. - — Called by the destination worker with the bearer token. Streams one allowed file from the source node. The source-agent endpoints are not the normal public API for users. They are protected by the generated transfer token in addition to normal Llama Pack API authentication, and grants are held in source-node memory. Thread Endpoints Thread endpoints are available in controller mode. Threads maintain a durable conversation history; each turn records user, routing, and assistant events. - — Create a thread. - — List events. Add (admin only) to include routing decisions and workflow steps. - — Post a user message and receive a routed assistant reply. - — Same, but streams the reply as SSE. The first event is followed by token delta chunks. - — Run a multi-step workflow on the thread (see below). Workflow endpoint runs a linear chain of inference steps where each step's output becomes the next step's input. Each step is routed independently through the normal routing policy. Each step is an object with: Field Default Description --- --- --- required Display name for the step (recorded in events). required System-role message sent to the model for this step. workflow Override the model for this step only. workflow Override the routing target for this step only. Response: Public thread events show only and . Internal events include a event pair (status then ) for each step, plus a event per step. If a step fails, a event and a public event are appended and the endpoint returns an error — steps that have not yet run are skipped. Memory Endpoints Available on controller nodes when the memory subsystem is enabled ( in config). Both endpoints return if the store is disabled. — Write a memory entry. Accepts agent API keys. Deduplication runs automatically: if a near-identical entry already exists (cosine similarity ≥ 0.92) it is updated in place. Response ( ): — Semantic similarity search over stored memories. Response ( ):",
   },
   {
     id: "architecture",
@@ -1494,18 +1494,18 @@ Response (\`200\`):
     sourcePath: "docs/architecture.md",
     content: `# Architecture Overview
 
-Neuraxis is a secure local/private LLM gateway with an operations console.
+Llama Pack is a secure local/private LLM gateway with an operations console.
 The controller owns the gateway surface for apps and operators; agents own local
 model host work such as \`llama-server\` process lifecycle, model utilities, and
 future agent-runtime execution.
 
 This repository is intentionally split into three layers so behavior is easier to reason about and review:
 
-- API layer (\`llama_manager/api\`): HTTP request/response translation and validation.
-- Core layer (\`llama_manager/core\`): domain logic for process management, chat routing, orchestration, and persistence workflows.
-- Provider/storage layer (\`llama_manager/providers\`, \`llama_manager/storage\`): external command composition and persistence primitives.
+- API layer (\`llama_pack/api\`): HTTP request/response translation and validation.
+- Core layer (\`llama_pack/core\`): domain logic for process management, chat routing, orchestration, and persistence workflows.
+- Provider/storage layer (\`llama_pack/providers\`, \`llama_pack/storage\`): external command composition and persistence primitives.
 
-API routes live under package-style modules in \`llama_manager/api/routes\`:
+API routes live under package-style modules in \`llama_pack/api/routes\`:
 
 - Single-resource routes use direct modules such as \`routes.models\`, \`routes.library\`, and \`routes.health\`.
 - Grouped surfaces use packages such as \`routes.auth\`, \`routes.chat\`, and \`routes.nodes\`.
@@ -1522,15 +1522,15 @@ Both modes share the same codebase and routes; mode-specific routes enforce beha
 
 ## Operational Scripts
 
-- \`scripts/onboard_controller.sh\`: creates or validates controller config, writes \`.neuraxis.env\`, runs migrations, creates the first admin API key, and prints the registration key for agents.
-- \`scripts/onboard_agent.sh\`: creates or validates agent config, writes \`.neuraxis.env\`, generates the agent API key, and prints the controller \`nodes:\` entry.
-- \`scripts/start_agent.sh\`, \`scripts/start_controller.sh\`, and \`scripts/stop_server.sh\`: source \`.neuraxis.env\` and manage local uvicorn processes.
+- \`scripts/onboard_controller.sh\`: creates or validates controller config, writes \`.llama_pack.env\`, runs migrations, creates the first admin API key, and prints the registration key for agents.
+- \`scripts/onboard_agent.sh\`: creates or validates agent config, writes \`.llama_pack.env\`, generates the agent API key, and prints the controller \`nodes:\` entry.
+- \`scripts/start_agent.sh\`, \`scripts/start_controller.sh\`, and \`scripts/stop_server.sh\`: source \`.llama_pack.env\` and manage local uvicorn processes.
 - \`scripts/regenerate_key.sh\`: rotates controller registration or agent API keys and prints the matching update for the other machines.
 
 ## Request Flow (High-Level)
 
-1. \`llama_manager/main.py\` builds app state (config, managers, stores).
-2. Dependencies in \`llama_manager/api/dependencies.py\` inject shared services.
+1. \`llama_pack/main.py\` builds app state (config, managers, stores).
+2. Dependencies in \`llama_pack/api/dependencies.py\` inject shared services.
 3. Route handlers validate request shape and call core services.
 4. Core services own business rules and persistence writes.
 
@@ -1618,7 +1618,7 @@ Use this checklist before opening or approving a PR:
 
 - Route vs Core boundary:
   - Route modules should do validation, dependency wiring, and HTTP error mapping only.
-  - Business decisions, retries, and state transitions belong in \`llama_manager/core\`.
+  - Business decisions, retries, and state transitions belong in \`llama_pack/core\`.
 - Error mapping:
   - Upstream/network failures should be classified (\`HTTP status\` vs \`transport\`) and not collapsed into generic strings.
   - Preserve stable response keys for UI and API consumers.
@@ -1679,7 +1679,7 @@ Use this checklist before opening or approving a PR:
         "anchor": "pull-request-rubric"
       }
     ],
-    searchBody: "Architecture Overview Neuraxis is a secure local/private LLM gateway with an operations console. The controller owns the gateway surface for apps and operators; agents own local model host work such as process lifecycle, model utilities, and future agent-runtime execution. This repository is intentionally split into three layers so behavior is easier to reason about and review: - API layer ( ): HTTP request/response translation and validation. - Core layer ( ): domain logic for process management, chat routing, orchestration, and persistence workflows. - Provider/storage layer ( , ): external command composition and persistence primitives. API routes live under package-style modules in : - Single-resource routes use direct modules such as , , and . - Grouped surfaces use packages such as , , and . - Shared request/response helpers stay beside their route group, for example and . Runtime Modes controls deployment behavior: - : manages local processes, model utilities, and local runtime capabilities. - : tracks nodes, serves the private AI gateway, proxies operations, and manages durable job orchestration. Both modes share the same codebase and routes; mode-specific routes enforce behavior at runtime. Operational Scripts - : creates or validates controller config, writes , runs migrations, creates the first admin API key, and prints the registration key for agents. - : creates or validates agent config, writes , generates the agent API key, and prints the controller entry. - , , and : source and manage local uvicorn processes. - : rotates controller registration or agent API keys and prints the matching update for the other machines. Request Flow (High-Level) 1. builds app state (config, managers, stores). 2. Dependencies in inject shared services. 3. Route handlers validate request shape and call core services. 4. Core services own business rules and persistence writes. Core Ownership Map - : typed config models plus file/env loading and saving. - : local process lifecycle and health payload construction. - : target resolution, transport building, capability inspection, and chat proxying. - : controller node registry plus agent heartbeat and worker loops. - : local-path plugin manifest loading, registration, events, policy hooks, route metadata, and plugin static asset ownership. - : GGUF library registration, HF conversion, and quantization workflows. - : durable job queue, attempts, events, contracts, retries, retention, archive export, and controller coordination. - : focused SQLite-backed persistence for auth, chat sessions, and audit events. - : thread creation, append-only event log, routing policy, and multi-agent fanout/aggregation. See multi-agent-routing.md. Testing Strategy - : broad route contracts, auth boundaries, setup assistant behavior, model/library operations, downloads, quantizations, node proxying, and compatibility routes. - and : config loading, split config files, environment expansion, defaults, save behavior, and migration target URL resolution. - , , and : local process lifecycle, runtime overview/route preview payloads, and helper script behavior. - , , , and : durable jobs, attempts, events, worker contracts, DTO mapping, retries, cancellation, and terminal-state behavior. - , , and : durable threads, event visibility, workflow execution, route decisions, affinity, startup decisions, and fanout routing. - : configured tool adapters, safe-root enforcement, bounded output, tool-loop behavior, memory tools, and write/query constraints. - , , , , and : model asset downloads, benchmark definitions/runs, transfer manifests, transfer execution, and smoke-script coverage. - , , , and : model library scanning, conversion/quantization workflows, sidecar handling, and model file movement. - , , , and : node registration, heartbeat, controller routing, Linux agent smoke behavior, and external chat compatibility. - Persistence stores have focused ORM tests, including auth, audit, chat sessions, app state, benchmark, and database infrastructure coverage. - Frontend/static packaging is covered by , , and , with React/Vite tests invoked through the Python suite. Plugin Runtime Plugins are enabled through and config entries and are loaded from configured local paths. Plugin manifests can declare supported runtime modes with: If is omitted, the plugin is compatible with both and . If the current runtime mode is not listed, core leaves the plugin disabled as incompatible and reports that state through . Manifests may declare a small for plugin-local config values. Core validates configured values before importing and registering the plugin. Invalid config leaves the plugin disabled with a warning in , so plugin code does not run with missing required settings. Schema fields can be marked ; those values are still passed to the plugin through but are redacted in status metadata. Plugins can register health checks with . The status endpoint runs enabled-plugin health checks dynamically, merges returned warnings/errors into the status payload, and reports health-check exceptions as plugin health errors without failing the core status route. Plugins can register migration metadata with . Core exposes the registered targets at and adds health warnings for missing or pending plugin migrations. Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugin-owned data should live in separate plugin databases under each plugin's state directory. Core provides the database location and migration lifecycle contract, but it does not import plugin models or mix plugin tables into core databases. For plugin authoring details, see Plugin Author Guide. For the plugin database boundary, see Plugin Database Contract. Review Heuristics When reviewing changes, keep responsibilities narrow: - Route files should not contain domain branching that belongs in . - Core modules should not perform implicit request parsing. - Persistence changes should include tests for retries, timeout handling, and terminal-state transitions. This keeps complexity bounded and allows reviewers to evaluate behavior by layer. Pull Request Rubric Use this checklist before opening or approving a PR: - Route vs Core boundary: - Route modules should do validation, dependency wiring, and HTTP error mapping only. - Business decisions, retries, and state transitions belong in . - Error mapping: - Upstream/network failures should be classified ( vs ) and not collapsed into generic strings. - Preserve stable response keys for UI and API consumers. - Status/result payload naming: - Use consistent keys for lifecycle states ( , , , , ). - Avoid introducing synonymous fields for the same concept. - Abstraction threshold: - Extract a helper when the same branching/payload logic appears in 2+ places. - Keep helpers private unless reused across modules. - Test expectations: - Add or update tests for state-transition changes, retry/timeout behavior, and error-shape contracts. - Ensure full suite passes before merge.",
+    searchBody: "Architecture Overview Llama Pack is a secure local/private LLM gateway with an operations console. The controller owns the gateway surface for apps and operators; agents own local model host work such as process lifecycle, model utilities, and future agent-runtime execution. This repository is intentionally split into three layers so behavior is easier to reason about and review: - API layer ( ): HTTP request/response translation and validation. - Core layer ( ): domain logic for process management, chat routing, orchestration, and persistence workflows. - Provider/storage layer ( , ): external command composition and persistence primitives. API routes live under package-style modules in : - Single-resource routes use direct modules such as , , and . - Grouped surfaces use packages such as , , and . - Shared request/response helpers stay beside their route group, for example and . Runtime Modes controls deployment behavior: - : manages local processes, model utilities, and local runtime capabilities. - : tracks nodes, serves the private AI gateway, proxies operations, and manages durable job orchestration. Both modes share the same codebase and routes; mode-specific routes enforce behavior at runtime. Operational Scripts - : creates or validates controller config, writes , runs migrations, creates the first admin API key, and prints the registration key for agents. - : creates or validates agent config, writes , generates the agent API key, and prints the controller entry. - , , and : source and manage local uvicorn processes. - : rotates controller registration or agent API keys and prints the matching update for the other machines. Request Flow (High-Level) 1. builds app state (config, managers, stores). 2. Dependencies in inject shared services. 3. Route handlers validate request shape and call core services. 4. Core services own business rules and persistence writes. Core Ownership Map - : typed config models plus file/env loading and saving. - : local process lifecycle and health payload construction. - : target resolution, transport building, capability inspection, and chat proxying. - : controller node registry plus agent heartbeat and worker loops. - : local-path plugin manifest loading, registration, events, policy hooks, route metadata, and plugin static asset ownership. - : GGUF library registration, HF conversion, and quantization workflows. - : durable job queue, attempts, events, contracts, retries, retention, archive export, and controller coordination. - : focused SQLite-backed persistence for auth, chat sessions, and audit events. - : thread creation, append-only event log, routing policy, and multi-agent fanout/aggregation. See multi-agent-routing.md. Testing Strategy - : broad route contracts, auth boundaries, setup assistant behavior, model/library operations, downloads, quantizations, node proxying, and compatibility routes. - and : config loading, split config files, environment expansion, defaults, save behavior, and migration target URL resolution. - , , and : local process lifecycle, runtime overview/route preview payloads, and helper script behavior. - , , , and : durable jobs, attempts, events, worker contracts, DTO mapping, retries, cancellation, and terminal-state behavior. - , , and : durable threads, event visibility, workflow execution, route decisions, affinity, startup decisions, and fanout routing. - : configured tool adapters, safe-root enforcement, bounded output, tool-loop behavior, memory tools, and write/query constraints. - , , , , and : model asset downloads, benchmark definitions/runs, transfer manifests, transfer execution, and smoke-script coverage. - , , , and : model library scanning, conversion/quantization workflows, sidecar handling, and model file movement. - , , , and : node registration, heartbeat, controller routing, Linux agent smoke behavior, and external chat compatibility. - Persistence stores have focused ORM tests, including auth, audit, chat sessions, app state, benchmark, and database infrastructure coverage. - Frontend/static packaging is covered by , , and , with React/Vite tests invoked through the Python suite. Plugin Runtime Plugins are enabled through and config entries and are loaded from configured local paths. Plugin manifests can declare supported runtime modes with: If is omitted, the plugin is compatible with both and . If the current runtime mode is not listed, core leaves the plugin disabled as incompatible and reports that state through . Manifests may declare a small for plugin-local config values. Core validates configured values before importing and registering the plugin. Invalid config leaves the plugin disabled with a warning in , so plugin code does not run with missing required settings. Schema fields can be marked ; those values are still passed to the plugin through but are redacted in status metadata. Plugins can register health checks with . The status endpoint runs enabled-plugin health checks dynamically, merges returned warnings/errors into the status payload, and reports health-check exceptions as plugin health errors without failing the core status route. Plugins can register migration metadata with . Core exposes the registered targets at and adds health warnings for missing or pending plugin migrations. Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugin-owned data should live in separate plugin databases under each plugin's state directory. Core provides the database location and migration lifecycle contract, but it does not import plugin models or mix plugin tables into core databases. For plugin authoring details, see Plugin Author Guide. For the plugin database boundary, see Plugin Database Contract. Review Heuristics When reviewing changes, keep responsibilities narrow: - Route files should not contain domain branching that belongs in . - Core modules should not perform implicit request parsing. - Persistence changes should include tests for retries, timeout handling, and terminal-state transitions. This keeps complexity bounded and allows reviewers to evaluate behavior by layer. Pull Request Rubric Use this checklist before opening or approving a PR: - Route vs Core boundary: - Route modules should do validation, dependency wiring, and HTTP error mapping only. - Business decisions, retries, and state transitions belong in . - Error mapping: - Upstream/network failures should be classified ( vs ) and not collapsed into generic strings. - Preserve stable response keys for UI and API consumers. - Status/result payload naming: - Use consistent keys for lifecycle states ( , , , , ). - Avoid introducing synonymous fields for the same concept. - Abstraction threshold: - Extract a helper when the same branching/payload logic appears in 2+ places. - Keep helpers private unless reused across modules. - Test expectations: - Add or update tests for state-transition changes, retry/timeout behavior, and error-shape contracts. - Ensure full suite passes before merge.",
   },
   {
     id: "benchmarks",
@@ -1720,7 +1720,7 @@ List active definitions:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/definitions
 \`\`\`
 
@@ -1731,7 +1731,7 @@ Add \`?include_archived=true\` to include archived definitions.
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/definitions \\
   -d '{
     "name": "Coding Smoke",
@@ -1765,7 +1765,7 @@ Run one definition against one or more models:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs \\
   -d '{
     "definition_id": "<definition-id>",
@@ -1795,7 +1795,7 @@ Managed-load runs isolate a model on one target node:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs \\
   -d '{
     "definition_id": "<definition-id>",
@@ -1818,7 +1818,7 @@ List recent runs:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   "http://127.0.0.1:9137/lm-api/v1/benchmarks/runs?limit=50"
 \`\`\`
 
@@ -1826,7 +1826,7 @@ Fetch a run and its samples:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs/<run-id>
 \`\`\`
 
@@ -1849,7 +1849,7 @@ Compare runs from the same definition:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs/compare \\
   -d '{"run_ids":["<run-a>","<run-b>"]}'
 \`\`\`
@@ -1903,7 +1903,7 @@ benchmark definitions.
     sourcePath: "docs/caddy-local-tls-issues.md",
     content: `# Caddy Local TLS — Incidents & Troubleshooting Notes
 
-Real-world issues encountered running the Neuraxis local TLS setup.
+Real-world issues encountered running the Llama Pack local TLS setup.
 See [caddy-local-tls.md](caddy-local-tls.md) for the full setup and renewal
 reference.
 
@@ -1980,9 +1980,9 @@ sudo systemctl status step-ca
 **Step 2 — Re-issue the expired cert** (run on the mac-mini):
 
 \`\`\`bash
-step ca certificate mac-mini.local ~/neuraxis-certs/mac-mini.crt ~/neuraxis-certs/mac-mini.key \\
+step ca certificate mac-mini.local ~/llama-pack-certs/mac-mini.crt ~/llama-pack-certs/mac-mini.key \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --not-after 24h \\
   --force
 \`\`\`
@@ -1990,21 +1990,21 @@ step ca certificate mac-mini.local ~/neuraxis-certs/mac-mini.crt ~/neuraxis-cert
 **Step 3 — Rebuild the fullchain and reload Caddy** (run on the mac-mini):
 
 \`\`\`bash
-cd /Users/robertsmith/Apps/neuraxis
+cd /Users/robertsmith/Apps/llama-pack
 scripts/renew_caddy_mac_mini.sh
 \`\`\`
 
 Wrapper script content (\`scripts/renew_caddy_mac_mini.sh\`):
 
 \`\`\`bash
-cd /Users/robertsmith/Apps/neuraxis
+cd /Users/robertsmith/Apps/llama-pack
 scripts/renew_caddy_step_cert.sh \\
   --name mac-mini \\
-  --leaf ~/neuraxis-certs/mac-mini.crt \\
-  --key ~/neuraxis-certs/mac-mini.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \\
+  --leaf ~/llama-pack-certs/mac-mini.crt \\
+  --key ~/llama-pack-certs/mac-mini.key \\
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/root_ca.crt \\
+  --root ~/llama-pack-certs/root_ca.crt \\
   --cert-dir /opt/homebrew/etc/caddy/certs \\
   --owner robertsmith \\
   --group staff \\
@@ -2071,7 +2071,7 @@ If you move scheduling to \`launchd\` (recommended), copy the wrapper script to 
 stable user path first:
 
 \`\`\`bash
-install -m 755 /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh \\
+install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \\
   /Users/robertsmith/bin/renew_caddy_mac_mini.sh
 \`\`\`
 
@@ -2140,7 +2140,7 @@ Then point your LaunchAgent \`ProgramArguments\` to:
         "anchor": "24h-certs-require-twice-daily-renewal"
       }
     ],
-    searchBody: "Caddy Local TLS — Incidents & Troubleshooting Notes Real-world issues encountered running the Neuraxis local TLS setup. See caddy-local-tls.md for the full setup and renewal reference. --- 2026-06-06 — \"500 errors on RPi\" turned out to be an expired mac-mini cert Symptom Internal calls to model endpoints were returning 500 errors. Logs on the Raspberry Pi controller showed messages like: What we thought at first Because the errors were appearing in the controller logs (running on the Pi), the assumption was that the Pi's own certificate had expired and was causing the failure. The real cause The controller's httpx calls proxy through to agent nodes. When an agent node's cert is expired, the controller is the one that throws the SSL error — not the agent itself. The error surface is always the requesting side (the Pi controller), even when the responding side (e.g. mac-mini) is the broken node. A quick check of all node cert expiries made the real culprit obvious: Output: The mac-mini cert had been expired for ~10 hours. Why won't work here only works while a cert is still valid. Once it has expired, the command is blocked. You must re-issue from scratch using . Fix Step 1 — Make sure is running on the Pi: Step 2 — Re-issue the expired cert (run on the mac-mini): Step 3 — Rebuild the fullchain and reload Caddy (run on the mac-mini): Wrapper script content ( ): Step 4 — Verify the renewed cert and full chain: Expect (leaf + intermediate + root). If you see , the fullchain was not installed — re-run Step 3. --- Key Lessons The error appears on the controller, not the broken node When a controller-side call fails with a TLS error, the node whose cert is expired is the target of that call, not necessarily the machine the error is logged on. Always check all nodes before assuming the controller itself is the problem. Check every node's expiry first Before any debugging, run the one-liner against all nodes: Caddy must serve the fullchain, not the leaf cert Serving only the leaf cert causes Python/httpx to fail with even when succeeds. Always use (leaf + intermediate concatenated) in the Caddyfile: 24h certs require twice-daily renewal With (or ), the systemd timer on Pi/Linux and the cron job on macOS must run at least twice a day. The schedule (3 AM and 3 PM) is the recommended interval. If a machine is off during both windows, the cert will expire before the next attempt. If you move scheduling to (recommended), copy the wrapper script to a stable user path first: Then point your LaunchAgent to: .",
+    searchBody: "Caddy Local TLS — Incidents & Troubleshooting Notes Real-world issues encountered running the Llama Pack local TLS setup. See caddy-local-tls.md for the full setup and renewal reference. --- 2026-06-06 — \"500 errors on RPi\" turned out to be an expired mac-mini cert Symptom Internal calls to model endpoints were returning 500 errors. Logs on the Raspberry Pi controller showed messages like: What we thought at first Because the errors were appearing in the controller logs (running on the Pi), the assumption was that the Pi's own certificate had expired and was causing the failure. The real cause The controller's httpx calls proxy through to agent nodes. When an agent node's cert is expired, the controller is the one that throws the SSL error — not the agent itself. The error surface is always the requesting side (the Pi controller), even when the responding side (e.g. mac-mini) is the broken node. A quick check of all node cert expiries made the real culprit obvious: Output: The mac-mini cert had been expired for ~10 hours. Why won't work here only works while a cert is still valid. Once it has expired, the command is blocked. You must re-issue from scratch using . Fix Step 1 — Make sure is running on the Pi: Step 2 — Re-issue the expired cert (run on the mac-mini): Step 3 — Rebuild the fullchain and reload Caddy (run on the mac-mini): Wrapper script content ( ): Step 4 — Verify the renewed cert and full chain: Expect (leaf + intermediate + root). If you see , the fullchain was not installed — re-run Step 3. --- Key Lessons The error appears on the controller, not the broken node When a controller-side call fails with a TLS error, the node whose cert is expired is the target of that call, not necessarily the machine the error is logged on. Always check all nodes before assuming the controller itself is the problem. Check every node's expiry first Before any debugging, run the one-liner against all nodes: Caddy must serve the fullchain, not the leaf cert Serving only the leaf cert causes Python/httpx to fail with even when succeeds. Always use (leaf + intermediate concatenated) in the Caddyfile: 24h certs require twice-daily renewal With (or ), the systemd timer on Pi/Linux and the cron job on macOS must run at least twice a day. The schedule (3 AM and 3 PM) is the recommended interval. If a machine is off during both windows, the cert will expire before the next attempt. If you move scheduling to (recommended), copy the wrapper script to a stable user path first: Then point your LaunchAgent to: .",
   },
   {
     id: "caddy-local-tls",
@@ -2148,20 +2148,20 @@ Then point your LaunchAgent \`ProgramArguments\` to:
     sourcePath: "docs/caddy-local-tls.md",
     content: `# Caddy Local TLS Setup
 
-This is the operator checklist for running Neuraxis controller and agent nodes
+This is the operator checklist for running Llama Pack controller and agent nodes
 over local HTTPS with Caddy.
 
-You can run Neuraxis without this TLS setup by exposing uvicorn directly on the
+You can run Llama Pack without this TLS setup by exposing uvicorn directly on the
 LAN:
 
 \`\`\`bash
-export NEURAXIS_HOST=0.0.0.0
-export NEURAXIS_PORT=9137
+export LLAMA_PACK_HOST=0.0.0.0
+export LLAMA_PACK_PORT=9137
 \`\`\`
 
 In that direct HTTP mode, controller and agent URLs use
 \`http://<host>:9137\`. That is simpler, but API keys, prompts, responses, and
-heartbeats travel in plaintext. For local TLS, change \`NEURAXIS_HOST\` to
+heartbeats travel in plaintext. For local TLS, change \`LLAMA_PACK_HOST\` to
 \`127.0.0.1\`, use \`https://<host>.local\` URLs, and expose Caddy on \`443\`.
 
 The target shape is:
@@ -2170,7 +2170,7 @@ The target shape is:
 other machines -> https://<node>.local:443 -> Caddy -> http://127.0.0.1:9137
 \`\`\`
 
-Neuraxis still uses API keys for authorization. Caddy adds transport
+Llama Pack still uses API keys for authorization. Caddy adds transport
 encryption and keeps uvicorn off the LAN.
 
 ## Hostnames
@@ -2188,9 +2188,9 @@ The same hostname must be used in:
 - \`/etc/hosts\`, mDNS, or LAN DNS
 - the certificate DNS SAN
 - the Caddy site block
-- \`NEURAXIS_CONTROLLER_URL\`, \`NEURAXIS_AGENT_URL\`, and controller \`nodes:\`
+- \`LLAMA_PACK_CONTROLLER_URL\`, \`LLAMA_PACK_AGENT_URL\`, and controller \`nodes:\`
 
-After changing \`/etc/hosts\`, restart the affected Neuraxis process so long-lived
+After changing \`/etc/hosts\`, restart the affected Llama Pack process so long-lived
 HTTP clients do not keep stale resolution behavior.
 
 ## Public Controller, Private Agents
@@ -2219,33 +2219,33 @@ In this topology:
   DNS/VPN name.
 - Public clients use only the controller URL.
 - The controller \`nodes:\` URLs use the private/VPN agent names.
-- Agents set \`NEURAXIS_CONTROLLER_URL\` to the public controller URL, because
+- Agents set \`LLAMA_PACK_CONTROLLER_URL\` to the public controller URL, because
   their heartbeat and work-claim traffic goes outbound to the controller.
-- Agents set \`NEURAXIS_AGENT_URL\` to their private/VPN URL, because that is the
+- Agents set \`LLAMA_PACK_AGENT_URL\` to their private/VPN URL, because that is the
   URL the controller uses to call them.
 
-Example controller \`.neuraxis.env\`:
+Example controller \`.llama_pack.env\`:
 
 \`\`\`bash
-export NEURAXIS_HOST=127.0.0.1
-export NEURAXIS_MAC_MINI_AGENT_URL=https://mac-mini.tailnet-name.ts.net
-export NEURAXIS_LINUX_2080TI_AGENT_URL=https://linux-2080ti.tailnet-name.ts.net
+export LLAMA_PACK_HOST=127.0.0.1
+export LLAMA_PACK_MAC_MINI_AGENT_URL=https://mac-mini.tailnet-name.ts.net
+export LLAMA_PACK_LINUX_2080TI_AGENT_URL=https://linux-2080ti.tailnet-name.ts.net
 \`\`\`
 
-Example Mac agent \`.neuraxis.env\`:
+Example Mac agent \`.llama_pack.env\`:
 
 \`\`\`bash
-export NEURAXIS_HOST=127.0.0.1
-export NEURAXIS_CONTROLLER_URL=https://controller.example.com
-export NEURAXIS_AGENT_URL=https://mac-mini.tailnet-name.ts.net
+export LLAMA_PACK_HOST=127.0.0.1
+export LLAMA_PACK_CONTROLLER_URL=https://controller.example.com
+export LLAMA_PACK_AGENT_URL=https://mac-mini.tailnet-name.ts.net
 \`\`\`
 
-Example Linux agent \`.neuraxis.env\`:
+Example Linux agent \`.llama_pack.env\`:
 
 \`\`\`bash
-export NEURAXIS_HOST=127.0.0.1
-export NEURAXIS_CONTROLLER_URL=https://controller.example.com
-export NEURAXIS_AGENT_URL=https://linux-2080ti.tailnet-name.ts.net
+export LLAMA_PACK_HOST=127.0.0.1
+export LLAMA_PACK_CONTROLLER_URL=https://controller.example.com
+export LLAMA_PACK_AGENT_URL=https://linux-2080ti.tailnet-name.ts.net
 \`\`\`
 
 Controller Caddy with a public ACME cert can be as simple as:
@@ -2293,21 +2293,21 @@ find ~ -name 'root_ca.crt' -o -name 'intermediate_ca.crt'
 Copy both CA certs to every machine and keep a local staging copy:
 
 \`\`\`bash
-mkdir -p ~/neuraxis-certs
-cp ~/.step/certs/root_ca.crt ~/neuraxis-certs/root_ca.crt
-cp ~/.step/certs/intermediate_ca.crt ~/neuraxis-certs/intermediate_ca.crt
-cat ~/neuraxis-certs/ca-root.crt ~/neuraxis-certs/intermediate_ca.crt \\
-  > ~/neuraxis-certs/neuraxis-ca-chain.crt
+mkdir -p ~/llama-pack-certs
+cp ~/.step/certs/root_ca.crt ~/llama-pack-certs/root_ca.crt
+cp ~/.step/certs/intermediate_ca.crt ~/llama-pack-certs/intermediate_ca.crt
+cat ~/llama-pack-certs/ca-root.crt ~/llama-pack-certs/intermediate_ca.crt \\
+  > ~/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 On other nodes, copy it with \`scp\` or another trusted transfer method:
 
 \`\`\`bash
-mkdir -p ~/neuraxis-certs
-# copy root_ca.crt into ~/neuraxis-certs/ca-root.crt
-# copy intermediate_ca.crt into ~/neuraxis-certs/intermediate_ca.crt
-cat ~/neuraxis-certs/root_ca.crt ~/neuraxis-certs/intermediate_ca.crt \\
-  > ~/neuraxis-certs/neuraxis-ca-chain.crt
+mkdir -p ~/llama-pack-certs
+# copy root_ca.crt into ~/llama-pack-certs/ca-root.crt
+# copy intermediate_ca.crt into ~/llama-pack-certs/intermediate_ca.crt
+cat ~/llama-pack-certs/root_ca.crt ~/llama-pack-certs/intermediate_ca.crt \\
+  > ~/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 Install the root into system trust.
@@ -2317,29 +2317,29 @@ macOS:
 \`\`\`bash
 sudo security add-trusted-cert -d -r trustRoot \\
   -k /Library/Keychains/System.keychain \\
-  ~/neuraxis-certs/ca-root.crt
+  ~/llama-pack-certs/ca-root.crt
 \`\`\`
 
 Debian, Ubuntu, and Raspberry Pi OS:
 
 \`\`\`bash
-sudo cp ~/neuraxis-certs/ca-root.crt /usr/local/share/ca-certificates/neuraxis-ca.crt
+sudo cp ~/llama-pack-certs/ca-root.crt /usr/local/share/ca-certificates/llama-pack-ca.crt
 sudo update-ca-certificates
 \`\`\`
 
 System trust is not always enough for Python/httpx on every platform. Also
-point Neuraxis at the CA chain bundle in each node's \`.neuraxis.env\`:
+point Llama Pack at the CA chain bundle in each node's \`.llama_pack.env\`:
 
 \`\`\`bash
-export SSL_CERT_FILE=/home/rsmith/neuraxis-certs/neuraxis-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/home/rsmith/neuraxis-certs/neuraxis-ca-chain.crt
+export SSL_CERT_FILE=/home/rsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=/home/rsmith/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 Use the local account path on each machine. On the Mac mini, for example:
 
 \`\`\`bash
-export SSL_CERT_FILE=/Users/robertsmith/neuraxis-certs/neuraxis-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/Users/robertsmith/neuraxis-certs/neuraxis-ca-chain.crt
+export SSL_CERT_FILE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 ## Issue Node Certificates
@@ -2369,7 +2369,7 @@ Mac agent:
 \`\`\`bash
 step ca certificate mac-mini.local mac-mini.crt mac-mini.key \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --not-after 720h
 \`\`\`
 
@@ -2378,7 +2378,7 @@ Linux agent:
 \`\`\`bash
 step ca certificate linux-2080ti.local linux-2080ti.crt linux-2080ti.key \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --not-after 720h
 \`\`\`
 
@@ -2399,8 +2399,8 @@ Use the repo helper for all three:
 \`\`\`bash
 scripts/renew_caddy_step_cert.sh \\
   --name pi-controller \\
-  --leaf ~/neuraxis-certs/pi-controller.crt \\
-  --key ~/neuraxis-certs/pi-controller.key \\
+  --leaf ~/llama-pack-certs/pi-controller.crt \\
+  --key ~/llama-pack-certs/pi-controller.key \\
   --intermediate ~/.step/certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
   --root ~/.step/certs/root_ca.crt \\
@@ -2417,11 +2417,11 @@ reload mode:
 \`\`\`bash
 scripts/renew_caddy_step_cert.sh \\
   --name mac-mini \\
-  --leaf ~/neuraxis-certs/mac-mini.crt \\
-  --key ~/neuraxis-certs/mac-mini.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \\
+  --leaf ~/llama-pack-certs/mac-mini.crt \\
+  --key ~/llama-pack-certs/mac-mini.key \\
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --cert-dir /opt/homebrew/etc/caddy/certs \\
   --owner robertsmith \\
   --group staff \\
@@ -2434,11 +2434,11 @@ Preview without changing anything:
 \`\`\`bash
 scripts/renew_caddy_step_cert.sh \\
   --name pi-controller \\
-  --leaf ~/neuraxis-certs/pi-controller.crt \\
-  --key ~/neuraxis-certs/pi-controller.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \\
+  --leaf ~/llama-pack-certs/pi-controller.crt \\
+  --key ~/llama-pack-certs/pi-controller.key \\
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --expires-in 24h \\
   --dry-run
 \`\`\`
@@ -2449,25 +2449,25 @@ Copy the examples from \`deploy/caddy/\`:
 
 \`\`\`bash
 sudo cp deploy/caddy/renew-caddy-cert.service.example \\
-  /etc/systemd/system/neuraxis-renew-caddy-cert.service
+  /etc/systemd/system/llama-pack-renew-caddy-cert.service
 sudo cp deploy/caddy/renew-caddy-cert.timer.example \\
-  /etc/systemd/system/neuraxis-renew-caddy-cert.timer
+  /etc/systemd/system/llama-pack-renew-caddy-cert.timer
 \`\`\`
 
-Edit \`/etc/systemd/system/neuraxis-renew-caddy-cert.service\` for the local
+Edit \`/etc/systemd/system/llama-pack-renew-caddy-cert.service\` for the local
 node's paths, hostname, and cert basename. Then enable the timer:
 
 \`\`\`bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now neuraxis-renew-caddy-cert.timer
-sudo systemctl list-timers | grep neuraxis-renew-caddy-cert
+sudo systemctl enable --now llama-pack-renew-caddy-cert.timer
+sudo systemctl list-timers | grep llama-pack-renew-caddy-cert
 \`\`\`
 
 Run once immediately:
 
 \`\`\`bash
-sudo systemctl start neuraxis-renew-caddy-cert.service
-sudo journalctl -u neuraxis-renew-caddy-cert.service --no-pager -n 80
+sudo systemctl start llama-pack-renew-caddy-cert.service
+sudo journalctl -u llama-pack-renew-caddy-cert.service --no-pager -n 80
 \`\`\`
 
 The timer assumes \`step-ca\` is reachable when renewal runs. If the CA server is
@@ -2479,21 +2479,21 @@ renewal windows when it is running.
 For Homebrew Caddy on macOS, use the dedicated wrapper:
 
 \`\`\`bash
-/Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh
+/Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh
 \`\`\`
 
 For scheduled runs, prefer \`launchd\` over \`cron\`. Install the wrapper into a
 stable user path and point your LaunchAgent to it:
 
 \`\`\`bash
-install -m 755 /Users/robertsmith/Apps/neuraxis/scripts/renew_caddy_mac_mini.sh \\
+install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \\
   /Users/robertsmith/bin/renew_caddy_mac_mini.sh
 \`\`\`
 
 LaunchAgent location:
 
 \`\`\`text
-~/Library/LaunchAgents/com.neuraxis.cert-renew.plist
+~/Library/LaunchAgents/com.llama-pack.cert-renew.plist
 \`\`\`
 
 \`ProgramArguments\` should execute:
@@ -2516,7 +2516,7 @@ scripts/install_caddy_fullchain.sh \\
   --name pi-controller \\
   --leaf pi-controller.crt \\
   --key pi-controller.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt
 \`\`\`
 
 The script builds \`pi-controller-fullchain.crt\` from the user-writable leaf and
@@ -2537,7 +2537,7 @@ macOS with Homebrew on Apple Silicon:
 sudo mkdir -p /opt/homebrew/etc/caddy/certs
 sudo cp mac-mini.crt /opt/homebrew/etc/caddy/certs/mac-mini.crt
 sudo cp mac-mini.key /opt/homebrew/etc/caddy/certs/mac-mini.key
-cat mac-mini.crt ~/neuraxis-certs/intermediate_ca.crt > mac-mini-fullchain.crt
+cat mac-mini.crt ~/llama-pack-certs/intermediate_ca.crt > mac-mini-fullchain.crt
 sudo cp mac-mini-fullchain.crt /opt/homebrew/etc/caddy/certs/mac-mini-fullchain.crt
 sudo chown robertsmith:staff /opt/homebrew/etc/caddy/certs/mac-mini.key
 sudo chmod 644 /opt/homebrew/etc/caddy/certs/mac-mini.crt
@@ -2621,22 +2621,22 @@ sudo pkill caddy
 brew services restart caddy
 \`\`\`
 
-## Lock Down Neuraxis
+## Lock Down Llama Pack
 
 Set uvicorn to loopback on every node:
 
 \`\`\`bash
-export NEURAXIS_HOST=127.0.0.1
+export LLAMA_PACK_HOST=127.0.0.1
 \`\`\`
 
-If using \`.neuraxis.env\`, add or update:
+If using \`.llama_pack.env\`, add or update:
 
 \`\`\`bash
-export NEURAXIS_HOST=127.0.0.1
-export NEURAXIS_PORT=9137
+export LLAMA_PACK_HOST=127.0.0.1
+export LLAMA_PACK_PORT=9137
 \`\`\`
 
-Restart Neuraxis after changing \`.neuraxis.env\`:
+Restart Llama Pack after changing \`.llama_pack.env\`:
 
 \`\`\`bash
 scripts/stop_server.sh
@@ -2644,33 +2644,33 @@ scripts/start_controller.sh   # controller machine
 scripts/start_agent.sh        # agent machines
 \`\`\`
 
-## Switch Neuraxis URLs To HTTPS
+## Switch Llama Pack URLs To HTTPS
 
-Controller \`.neuraxis.env\`:
+Controller \`.llama_pack.env\`:
 
 \`\`\`bash
-export NEURAXIS_MAC_MINI_AGENT_URL=https://mac-mini.local
-export NEURAXIS_LINUX_2080TI_AGENT_URL=https://linux-2080ti.local
-export SSL_CERT_FILE=/home/rsmith/neuraxis-certs/neuraxis-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/home/rsmith/neuraxis-certs/neuraxis-ca-chain.crt
+export LLAMA_PACK_MAC_MINI_AGENT_URL=https://mac-mini.local
+export LLAMA_PACK_LINUX_2080TI_AGENT_URL=https://linux-2080ti.local
+export SSL_CERT_FILE=/home/rsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=/home/rsmith/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
-Mac agent \`.neuraxis.env\`:
+Mac agent \`.llama_pack.env\`:
 
 \`\`\`bash
-export NEURAXIS_CONTROLLER_URL=https://pi-controller.local
-export NEURAXIS_AGENT_URL=https://mac-mini.local
-export SSL_CERT_FILE=/Users/robertsmith/neuraxis-certs/neuraxis-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/Users/robertsmith/neuraxis-certs/neuraxis-ca-chain.crt
+export LLAMA_PACK_CONTROLLER_URL=https://pi-controller.local
+export LLAMA_PACK_AGENT_URL=https://mac-mini.local
+export SSL_CERT_FILE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
-Linux agent \`.neuraxis.env\`:
+Linux agent \`.llama_pack.env\`:
 
 \`\`\`bash
-export NEURAXIS_CONTROLLER_URL=https://pi-controller.local
-export NEURAXIS_AGENT_URL=https://linux-2080ti.local
-export SSL_CERT_FILE=/home/neuraxis/neuraxis-certs/neuraxis-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/home/neuraxis/neuraxis-certs/neuraxis-ca-chain.crt
+export LLAMA_PACK_CONTROLLER_URL=https://pi-controller.local
+export LLAMA_PACK_AGENT_URL=https://linux-2080ti.local
+export SSL_CERT_FILE=/home/llama-pack/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=/home/llama-pack/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 Controller node config should use HTTPS and keep TLS verification enabled:
@@ -2679,11 +2679,11 @@ Controller node config should use HTTPS and keep TLS verification enabled:
 nodes:
   mac-mini:
     url: https://mac-mini.local
-    api_key: \${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    api_key: \${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
     url: https://linux-2080ti.local
-    api_key: \${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    api_key: \${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 \`\`\`
 
@@ -2721,14 +2721,14 @@ curl -v http://linux-2080ti.local:9137/health
 Controller node visibility:
 
 \`\`\`bash
-curl -s -H "X-Llama-Manager-Key: $NEURAXIS_CONTROLLER_ADMIN_API_KEY" \\
+curl -s -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" \\
   https://pi-controller.local/lm-api/v1/nodes
 \`\`\`
 
 Python/httpx trust from each node:
 
 \`\`\`bash
-SSL_CERT_FILE=$HOME/neuraxis-certs/neuraxis-ca-chain.crt python3 - <<'PY'
+SSL_CERT_FILE=$HOME/llama-pack-certs/llama-pack-ca-chain.crt python3 - <<'PY'
 import urllib.request
 for url in [
     "https://pi-controller.local/health",
@@ -2743,7 +2743,7 @@ Heartbeats flow from each agent to the controller. If \`/ui/nodes\` shows stale
 heartbeats, test the controller URL from the agent process environment first:
 
 \`\`\`bash
-SSL_CERT_FILE=$HOME/neuraxis-certs/neuraxis-ca-chain.crt python3 - <<'PY'
+SSL_CERT_FILE=$HOME/llama-pack-certs/llama-pack-ca-chain.crt python3 - <<'PY'
 import urllib.request
 print(urllib.request.urlopen("https://pi-controller.local/health", timeout=5).read())
 PY
@@ -2768,7 +2768,7 @@ sudo systemctl status step-ca
 
 Pi controller:
 \`\`\`bash
-step ca certificate pi-controller.local ~/neuraxis-certs/pi-controller.crt ~/neuraxis-certs/pi-controller.key \\
+step ca certificate pi-controller.local ~/llama-pack-certs/pi-controller.crt ~/llama-pack-certs/pi-controller.key \\
   --ca-url https://pi-controller.local:8443 \\
   --root ~/.step/certs/root_ca.crt \\
   --not-after 24h \\
@@ -2777,18 +2777,18 @@ step ca certificate pi-controller.local ~/neuraxis-certs/pi-controller.crt ~/neu
 
 Mac mini:
 \`\`\`bash
-step ca certificate mac-mini.local ~/neuraxis-certs/mac-mini.crt ~/neuraxis-certs/mac-mini.key \\
+step ca certificate mac-mini.local ~/llama-pack-certs/mac-mini.crt ~/llama-pack-certs/mac-mini.key \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --not-after 24h \\
   --force
 \`\`\`
 
 Linux agent:
 \`\`\`bash
-step ca certificate linux-2080ti.local ~/neuraxis-certs/linux-2080ti.crt ~/neuraxis-certs/linux-2080ti.key \\
+step ca certificate linux-2080ti.local ~/llama-pack-certs/linux-2080ti.crt ~/llama-pack-certs/linux-2080ti.key \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --not-after 24h \\
   --force
 \`\`\`
@@ -2802,11 +2802,11 @@ at least twice a day to stay ahead of expiry — the \`0 3,15 * * *\` schedule w
 \`\`\`bash
 scripts/renew_caddy_step_cert.sh \\
   --name <node> \\
-  --leaf ~/neuraxis-certs/<node>.crt \\
-  --key ~/neuraxis-certs/<node>.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \\
+  --leaf ~/llama-pack-certs/<node>.crt \\
+  --key ~/llama-pack-certs/<node>.key \\
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/ca-root.crt \\
+  --root ~/llama-pack-certs/ca-root.crt \\
   --expires-in 24h \\
   --force \\
   [--cert-dir /etc/caddy/certs --reload systemd]      # Pi / Linux
@@ -2868,7 +2868,7 @@ sudo systemctl status step-ca
 Verify the CA is reachable:
 
 \`\`\`bash
-step ca health --ca-url https://pi-controller.local:8443 --root ~/neuraxis-certs/ca-root.crt
+step ca health --ca-url https://pi-controller.local:8443 --root ~/llama-pack-certs/ca-root.crt
 \`\`\`
 
 ## Verifying Renewal Is Working
@@ -2876,27 +2876,27 @@ step ca health --ca-url https://pi-controller.local:8443 --root ~/neuraxis-certs
 **Mac — check the cron log:**
 
 \`\`\`bash
-cat ~/Library/Logs/neuraxis-renew-caddy-cert.log
+cat ~/Library/Logs/llama-pack-renew-caddy-cert.log
 \`\`\`
 
 **Pi and Linux — check the systemd timer and service:**
 
 \`\`\`bash
-sudo systemctl list-timers | grep neuraxis
-sudo journalctl -u neuraxis-renew-caddy-cert.service --no-pager -n 30
+sudo systemctl list-timers | grep llama-pack
+sudo journalctl -u llama-pack-renew-caddy-cert.service --no-pager -n 30
 \`\`\`
 
 **Force a test run on any machine** to confirm the full pipeline end-to-end:
 
 Mac:
 \`\`\`bash
-cd /Users/robertsmith/Apps/neuraxis && scripts/renew_caddy_step_cert.sh \\
+cd /Users/robertsmith/Apps/llama-pack && scripts/renew_caddy_step_cert.sh \\
   --name mac-mini \\
-  --leaf ~/neuraxis-certs/mac-mini.crt \\
-  --key ~/neuraxis-certs/mac-mini.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \\
+  --leaf ~/llama-pack-certs/mac-mini.crt \\
+  --key ~/llama-pack-certs/mac-mini.key \\
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/root_ca.crt \\
+  --root ~/llama-pack-certs/root_ca.crt \\
   --cert-dir /opt/homebrew/etc/caddy/certs \\
   --owner robertsmith \\
   --group staff \\
@@ -2909,8 +2909,8 @@ Pi:
 \`\`\`bash
 scripts/renew_caddy_step_cert.sh \\
   --name pi-controller \\
-  --leaf ~/neuraxis-certs/pi-controller.crt \\
-  --key ~/neuraxis-certs/pi-controller.key \\
+  --leaf ~/llama-pack-certs/pi-controller.crt \\
+  --key ~/llama-pack-certs/pi-controller.key \\
   --intermediate ~/.step/certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
   --root ~/.step/certs/root_ca.crt \\
@@ -2924,11 +2924,11 @@ Linux agent:
 \`\`\`bash
 scripts/renew_caddy_step_cert.sh \\
   --name linux-2080ti \\
-  --leaf ~/neuraxis-certs/linux-2080ti.crt \\
-  --key ~/neuraxis-certs/linux-2080ti.key \\
-  --intermediate ~/neuraxis-certs/intermediate_ca.crt \\
+  --leaf ~/llama-pack-certs/linux-2080ti.crt \\
+  --key ~/llama-pack-certs/linux-2080ti.key \\
+  --intermediate ~/llama-pack-certs/intermediate_ca.crt \\
   --ca-url https://pi-controller.local:8443 \\
-  --root ~/neuraxis-certs/root_ca.crt \\
+  --root ~/llama-pack-certs/root_ca.crt \\
   --cert-dir /etc/caddy/certs \\
   --expires-in 24h \\
   --reload systemd \\
@@ -2963,9 +2963,9 @@ Re-run the renewal script — the fullchain install step rebuilds
 
 | Symptom | Meaning | Fix |
 | --- | --- | --- |
-| \`HTTP/2 502\` from Caddy | TLS works, upstream Neuraxis is not reachable | Check \`curl http://127.0.0.1:9137/health\` on that node and verify \`reverse_proxy\`. |
+| \`HTTP/2 502\` from Caddy | TLS works, upstream Llama Pack is not reachable | Check \`curl http://127.0.0.1:9137/health\` on that node and verify \`reverse_proxy\`. |
 | \`certificate verify failed\` | Root CA is not trusted by the client | Install \`ca-root.crt\` into the client system trust store. |
-| \`unable to get local issuer certificate\` in Python/httpx | Missing intermediate chain or Python is not using system trust | Serve \`*-fullchain.crt\` from Caddy and set \`SSL_CERT_FILE\` to \`neuraxis-ca-chain.crt\`. |
+| \`unable to get local issuer certificate\` in Python/httpx | Missing intermediate chain or Python is not using system trust | Serve \`*-fullchain.crt\` from Caddy and set \`SSL_CERT_FILE\` to \`llama-pack-ca-chain.crt\`. |
 | \`certificate is valid for ..., not ...\` | Hostname does not match the cert SAN | Reissue the node cert with the exact \`.local\` hostname. |
 | \`step: Unknown options: ca-url, root\` | Wrong \`step\` binary or old CLI | Install Smallstep \`step-cli\`, then check \`step ca certificate --help\`. |
 | \`connect: connection refused\` on \`:8443\` | \`step-ca\` is not running | Start \`step-ca\` or enable the systemd service. See *Running step-ca As A Systemd Service*. |
@@ -2975,7 +2975,7 @@ Re-run the renewal script — the fullchain install step rebuilds
 | \`127.0.0.1:2019 already in use\` | Another Caddy process is running | Stop the manual process or restart the service cleanly. |
 | Caddy reload says cert/key permission denied | Caddy service user cannot read \`/etc/caddy/certs\` | Use \`systemctl show caddy -p User -p Group\`, then \`chown root:caddy\`, \`chmod 750\` on the cert dir, \`640\` on keys, and \`644\` on certs. |
 | Pi can ping an agent but HTTPS hangs | Firewall blocks TCP 443 | Allow \`443/tcp\` on the agent, for example \`sudo ufw allow 443/tcp\`. |
-| Admin API returns \`Unauthorized\` with \`Authorization: Bearer ...\` | Neuraxis does not use Bearer auth for admin APIs | Send \`X-Llama-Manager-Key: $NEURAXIS_CONTROLLER_ADMIN_API_KEY\`. |
+| Admin API returns \`Unauthorized\` with \`Authorization: Bearer ...\` | Llama Pack does not use Bearer auth for admin APIs | Send \`X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY\`. |
 
 ## Mobile App Note
 
@@ -3041,13 +3041,13 @@ real domain such as \`controller.example.com\`.
       },
       {
         "level": 2,
-        "text": "Lock Down Neuraxis",
-        "anchor": "lock-down-neuraxis"
+        "text": "Lock Down Llama Pack",
+        "anchor": "lock-down-llama-pack"
       },
       {
         "level": 2,
-        "text": "Switch Neuraxis URLs To HTTPS",
-        "anchor": "switch-neuraxis-urls-to-https"
+        "text": "Switch Llama Pack URLs To HTTPS",
+        "anchor": "switch-llama-pack-urls-to-https"
       },
       {
         "level": 2,
@@ -3085,7 +3085,7 @@ real domain such as \`controller.example.com\`.
         "anchor": "mobile-app-note"
       }
     ],
-    searchBody: "Caddy Local TLS Setup This is the operator checklist for running Neuraxis controller and agent nodes over local HTTPS with Caddy. You can run Neuraxis without this TLS setup by exposing uvicorn directly on the LAN: In that direct HTTP mode, controller and agent URLs use . That is simpler, but API keys, prompts, responses, and heartbeats travel in plaintext. For local TLS, change to , use URLs, and expose Caddy on . The target shape is: Neuraxis still uses API keys for authorization. Caddy adds transport encryption and keeps uvicorn off the LAN. Hostnames Use stable hostnames everywhere, not IP addresses: Role Hostname --- --- Controller Mac agent Linux agent The same hostname must be used in: - , mDNS, or LAN DNS - the certificate DNS SAN - the Caddy site block - , , and controller After changing , restart the affected Neuraxis process so long-lived HTTP clients do not keep stale resolution behavior. Public Controller, Private Agents For external user or mobile access, the best default topology is a public controller domain with private agents reachable only over a VPN/private network. In this topology: - The controller has a public DNS name and public HTTPS certificate, preferably from ACME/Let's Encrypt through Caddy. - Agents stay off the public internet. Their Caddy listeners are reachable only from the controller over Tailscale, WireGuard, a private subnet, or a private DNS/VPN name. - Public clients use only the controller URL. - The controller URLs use the private/VPN agent names. - Agents set to the public controller URL, because their heartbeat and work-claim traffic goes outbound to the controller. - Agents set to their private/VPN URL, because that is the URL the controller uses to call them. Example controller : Example Mac agent : Example Linux agent : Controller Caddy with a public ACME cert can be as simple as: Agent Caddy can still use private CA certs, Tailscale HTTPS certs, or any certificate trusted by the controller's Python runtime. If agent certs are private CA certs, the controller must still set and to the private CA chain bundle. Do not expose agent Caddy listeners publicly unless the controller cannot reach them privately. Public agents increase the attack surface and require tighter firewall, monitoring, and key-rotation discipline. Certificate Files The CA root and intermediate cert are created by on the CA machine. They are often under: If they are not there, ask Step where it keeps its files: Or search: Copy both CA certs to every machine and keep a local staging copy: On other nodes, copy it with or another trusted transfer method: Install the root into system trust. macOS: Debian, Ubuntu, and Raspberry Pi OS: System trust is not always enough for Python/httpx on every platform. Also point Neuraxis at the CA chain bundle in each node's : Use the local account path on each machine. On the Mac mini, for example: Issue Node Certificates only needs to be running when issuing or renewing certificates. Start it on the CA machine when needed: Issue each node certificate with the exact hostname clients will use. Controller: Mac agent: Linux agent: The example gives 30-day certs if the CA policy allows it. Shorter default certs work, but they need renewal sooner. Automatic Certificate Renewal Smallstep certificates are often short-lived. For this Caddy setup, renewal has three steps: 1. Renew the node leaf certificate with . 2. Rebuild the Caddy fullchain by appending the intermediate CA certificate. 3. Reload Caddy so it serves the renewed certificate. Use the repo helper for all three: For Linux agents, replace with the agent basename, such as . For macOS Homebrew Caddy, use the Homebrew cert directory and reload mode: Preview without changing anything: Linux/Pi systemd timer Copy the examples from : Edit for the local node's paths, hostname, and cert basename. Then enable the timer: Run once immediately: The timer assumes is reachable when renewal runs. If the CA server is not always running, either keep it available on the controller or schedule renewal windows when it is running. macOS scheduled renewal For Homebrew Caddy on macOS, use the dedicated wrapper: For scheduled runs, prefer over . Install the wrapper into a stable user path and point your LaunchAgent to it: LaunchAgent location: should execute: Install Certs For Caddy Caddy should serve a fullchain certificate: the node leaf certificate followed by the intermediate CA certificate. Without the intermediate, may still work in some environments while Python/httpx fails with . Linux and Raspberry Pi: The script builds from the user-writable leaf and intermediate files, then uses to write: - with mode - with mode - with mode - with owner and mode Use to preview the commands after building the local fullchain. For , replace with . macOS with Homebrew on Apple Silicon: Use to confirm . Intel Homebrew commonly uses . Caddyfiles Linux and Raspberry Pi use . Controller: Linux agent: macOS with Homebrew uses on Apple Silicon: Repo templates are also available under . Run Caddy As A Service Linux and Raspberry Pi: After Caddyfile changes: macOS Homebrew: If reports an error, run this to expose the real failure: If the error says is already in use, another Caddy process is already running. Stop the manual process, then restart the service: Lock Down Neuraxis Set uvicorn to loopback on every node: If using , add or update: Restart Neuraxis after changing : Switch Neuraxis URLs To HTTPS Controller : Mac agent : Linux agent : Controller node config should use HTTPS and keep TLS verification enabled: Verification Run from each machine: The TLS output should include: Local uvicorn should still work on the node itself: Direct remote uvicorn access should fail: Controller node visibility: Python/httpx trust from each node: Heartbeats flow from each agent to the controller. If shows stale heartbeats, test the controller URL from the agent process environment first: The controller also calls agents for model/status data, so the controller's Python environment must trust the same CA chain. Recovering From Expired Certificates only works while the cert is still valid. If a cert has already expired, renew is blocked and you must re-issue from scratch. Step 1 — Make sure is running on the Pi: Step 2 — Re-issue the cert on each node (run on the machine that owns the cert): Pi controller: Mac mini: Linux agent: The duration must be within the CA policy limit. If the CA rejects longer durations (e.g. 720h), use . With a 24h cert lifetime, cron must run at least twice a day to stay ahead of expiry — the schedule works. Step 3 — Install and reload Caddy using the renewal script with : Running step-ca As A Systemd Service does not create a systemd service automatically. Without it, the CA goes down on reboot and all renewal cron jobs fail. Create the service file on the Pi: Replace with the actual username. Find the binary path with if it is not at . The flag is required. Without it, tries to prompt for the key password interactively and fails with when run as a service. Create the password file: Enable and start: Verify the CA is reachable: Verifying Renewal Is Working Mac — check the cron log: Pi and Linux — check the systemd timer and service: Force a test run on any machine to confirm the full pipeline end-to-end: Mac: Pi: Linux agent: Expected output: . Verify the cert expiry after renewal: Verify the full chain is being served (want ): If , Caddy is serving the leaf cert only without the intermediate. Re-run the renewal script — the fullchain install step rebuilds from the leaf + intermediate. macOS scheduler gotchas - Use ( ) for better behavior across network transitions and wake/sleep. - Keep absolute paths in wrapper scripts and LaunchAgent . Troubleshooting Symptom Meaning Fix --- --- --- from Caddy TLS works, upstream Neuraxis is not reachable Check on that node and verify . Root CA is not trusted by the client Install into the client system trust store. in Python/httpx Missing intermediate chain or Python is not using system trust Serve from Caddy and set to . Hostname does not match the cert SAN Reissue the node cert with the exact hostname. Wrong binary or old CLI Install Smallstep , then check . on is not running Start or enable the systemd service. See Running step-ca As A Systemd Service. in step-ca service step-ca is prompting for a key password with no terminal Add to the line. in step-ca service systemd does not match the actual account Check on the Pi and update and in the service file. Cert already past expiry; is blocked Re-issue with , then re-run the renewal script. See Recovering From Expired Certificates. Another Caddy process is running Stop the manual process or restart the service cleanly. Caddy reload says cert/key permission denied Caddy service user cannot read Use , then , on the cert dir, on keys, and on certs. Pi can ping an agent but HTTPS hangs Firewall blocks TCP 443 Allow on the agent, for example . Admin API returns with Neuraxis does not use Bearer auth for admin APIs Send . Mobile App Note Private CA HTTPS is fine for LAN/VPN mobile testing only after the phone trusts the private root CA. For broader mobile access, prefer a public ACME cert on a real domain such as .",
+    searchBody: "Caddy Local TLS Setup This is the operator checklist for running Llama Pack controller and agent nodes over local HTTPS with Caddy. You can run Llama Pack without this TLS setup by exposing uvicorn directly on the LAN: In that direct HTTP mode, controller and agent URLs use . That is simpler, but API keys, prompts, responses, and heartbeats travel in plaintext. For local TLS, change to , use URLs, and expose Caddy on . The target shape is: Llama Pack still uses API keys for authorization. Caddy adds transport encryption and keeps uvicorn off the LAN. Hostnames Use stable hostnames everywhere, not IP addresses: Role Hostname --- --- Controller Mac agent Linux agent The same hostname must be used in: - , mDNS, or LAN DNS - the certificate DNS SAN - the Caddy site block - , , and controller After changing , restart the affected Llama Pack process so long-lived HTTP clients do not keep stale resolution behavior. Public Controller, Private Agents For external user or mobile access, the best default topology is a public controller domain with private agents reachable only over a VPN/private network. In this topology: - The controller has a public DNS name and public HTTPS certificate, preferably from ACME/Let's Encrypt through Caddy. - Agents stay off the public internet. Their Caddy listeners are reachable only from the controller over Tailscale, WireGuard, a private subnet, or a private DNS/VPN name. - Public clients use only the controller URL. - The controller URLs use the private/VPN agent names. - Agents set to the public controller URL, because their heartbeat and work-claim traffic goes outbound to the controller. - Agents set to their private/VPN URL, because that is the URL the controller uses to call them. Example controller : Example Mac agent : Example Linux agent : Controller Caddy with a public ACME cert can be as simple as: Agent Caddy can still use private CA certs, Tailscale HTTPS certs, or any certificate trusted by the controller's Python runtime. If agent certs are private CA certs, the controller must still set and to the private CA chain bundle. Do not expose agent Caddy listeners publicly unless the controller cannot reach them privately. Public agents increase the attack surface and require tighter firewall, monitoring, and key-rotation discipline. Certificate Files The CA root and intermediate cert are created by on the CA machine. They are often under: If they are not there, ask Step where it keeps its files: Or search: Copy both CA certs to every machine and keep a local staging copy: On other nodes, copy it with or another trusted transfer method: Install the root into system trust. macOS: Debian, Ubuntu, and Raspberry Pi OS: System trust is not always enough for Python/httpx on every platform. Also point Llama Pack at the CA chain bundle in each node's : Use the local account path on each machine. On the Mac mini, for example: Issue Node Certificates only needs to be running when issuing or renewing certificates. Start it on the CA machine when needed: Issue each node certificate with the exact hostname clients will use. Controller: Mac agent: Linux agent: The example gives 30-day certs if the CA policy allows it. Shorter default certs work, but they need renewal sooner. Automatic Certificate Renewal Smallstep certificates are often short-lived. For this Caddy setup, renewal has three steps: 1. Renew the node leaf certificate with . 2. Rebuild the Caddy fullchain by appending the intermediate CA certificate. 3. Reload Caddy so it serves the renewed certificate. Use the repo helper for all three: For Linux agents, replace with the agent basename, such as . For macOS Homebrew Caddy, use the Homebrew cert directory and reload mode: Preview without changing anything: Linux/Pi systemd timer Copy the examples from : Edit for the local node's paths, hostname, and cert basename. Then enable the timer: Run once immediately: The timer assumes is reachable when renewal runs. If the CA server is not always running, either keep it available on the controller or schedule renewal windows when it is running. macOS scheduled renewal For Homebrew Caddy on macOS, use the dedicated wrapper: For scheduled runs, prefer over . Install the wrapper into a stable user path and point your LaunchAgent to it: LaunchAgent location: should execute: Install Certs For Caddy Caddy should serve a fullchain certificate: the node leaf certificate followed by the intermediate CA certificate. Without the intermediate, may still work in some environments while Python/httpx fails with . Linux and Raspberry Pi: The script builds from the user-writable leaf and intermediate files, then uses to write: - with mode - with mode - with mode - with owner and mode Use to preview the commands after building the local fullchain. For , replace with . macOS with Homebrew on Apple Silicon: Use to confirm . Intel Homebrew commonly uses . Caddyfiles Linux and Raspberry Pi use . Controller: Linux agent: macOS with Homebrew uses on Apple Silicon: Repo templates are also available under . Run Caddy As A Service Linux and Raspberry Pi: After Caddyfile changes: macOS Homebrew: If reports an error, run this to expose the real failure: If the error says is already in use, another Caddy process is already running. Stop the manual process, then restart the service: Lock Down Llama Pack Set uvicorn to loopback on every node: If using , add or update: Restart Llama Pack after changing : Switch Llama Pack URLs To HTTPS Controller : Mac agent : Linux agent : Controller node config should use HTTPS and keep TLS verification enabled: Verification Run from each machine: The TLS output should include: Local uvicorn should still work on the node itself: Direct remote uvicorn access should fail: Controller node visibility: Python/httpx trust from each node: Heartbeats flow from each agent to the controller. If shows stale heartbeats, test the controller URL from the agent process environment first: The controller also calls agents for model/status data, so the controller's Python environment must trust the same CA chain. Recovering From Expired Certificates only works while the cert is still valid. If a cert has already expired, renew is blocked and you must re-issue from scratch. Step 1 — Make sure is running on the Pi: Step 2 — Re-issue the cert on each node (run on the machine that owns the cert): Pi controller: Mac mini: Linux agent: The duration must be within the CA policy limit. If the CA rejects longer durations (e.g. 720h), use . With a 24h cert lifetime, cron must run at least twice a day to stay ahead of expiry — the schedule works. Step 3 — Install and reload Caddy using the renewal script with : Running step-ca As A Systemd Service does not create a systemd service automatically. Without it, the CA goes down on reboot and all renewal cron jobs fail. Create the service file on the Pi: Replace with the actual username. Find the binary path with if it is not at . The flag is required. Without it, tries to prompt for the key password interactively and fails with when run as a service. Create the password file: Enable and start: Verify the CA is reachable: Verifying Renewal Is Working Mac — check the cron log: Pi and Linux — check the systemd timer and service: Force a test run on any machine to confirm the full pipeline end-to-end: Mac: Pi: Linux agent: Expected output: . Verify the cert expiry after renewal: Verify the full chain is being served (want ): If , Caddy is serving the leaf cert only without the intermediate. Re-run the renewal script — the fullchain install step rebuilds from the leaf + intermediate. macOS scheduler gotchas - Use ( ) for better behavior across network transitions and wake/sleep. - Keep absolute paths in wrapper scripts and LaunchAgent . Troubleshooting Symptom Meaning Fix --- --- --- from Caddy TLS works, upstream Llama Pack is not reachable Check on that node and verify . Root CA is not trusted by the client Install into the client system trust store. in Python/httpx Missing intermediate chain or Python is not using system trust Serve from Caddy and set to . Hostname does not match the cert SAN Reissue the node cert with the exact hostname. Wrong binary or old CLI Install Smallstep , then check . on is not running Start or enable the systemd service. See Running step-ca As A Systemd Service. in step-ca service step-ca is prompting for a key password with no terminal Add to the line. in step-ca service systemd does not match the actual account Check on the Pi and update and in the service file. Cert already past expiry; is blocked Re-issue with , then re-run the renewal script. See Recovering From Expired Certificates. Another Caddy process is running Stop the manual process or restart the service cleanly. Caddy reload says cert/key permission denied Caddy service user cannot read Use , then , on the cert dir, on keys, and on certs. Pi can ping an agent but HTTPS hangs Firewall blocks TCP 443 Allow on the agent, for example . Admin API returns with Llama Pack does not use Bearer auth for admin APIs Send . Mobile App Note Private CA HTTPS is fine for LAN/VPN mobile testing only after the phone trusts the private root CA. For broader mobile access, prefer a public ACME cert on a real domain such as .",
   },
   {
     id: "componentize-frontend",
@@ -3179,20 +3179,20 @@ The biggest remaining duplication is mostly **page scaffolding**, **filter/actio
     sourcePath: "docs/configuration.md",
     content: `# Configuration
 
-Set \`NEURAXIS_CONFIG\` to a YAML file path. Set \`NEURAXIS_MODE\` to override the mode without editing the file.
+Set \`LLAMA_PACK_CONFIG\` to a YAML file path. Set \`LLAMA_PACK_MODE\` to override the mode without editing the file.
 
 ## Network Exposure
 
-Neuraxis can run in either direct HTTP mode or behind Caddy:
+Llama Pack can run in either direct HTTP mode or behind Caddy:
 
 | Mode | Uvicorn bind | URLs | Notes |
 | --- | --- | --- | --- |
-| Direct LAN HTTP | \`NEURAXIS_HOST=0.0.0.0\` | \`http://<host>:9137\` | Simple setup, but controller/agent traffic is plaintext. |
-| Caddy/local TLS | \`NEURAXIS_HOST=127.0.0.1\` | \`https://<host>.local\` | Recommended for encrypted inter-machine traffic. Caddy listens on \`443\` and proxies to local uvicorn. |
+| Direct LAN HTTP | \`LLAMA_PACK_HOST=0.0.0.0\` | \`http://<host>:9137\` | Simple setup, but controller/agent traffic is plaintext. |
+| Caddy/local TLS | \`LLAMA_PACK_HOST=127.0.0.1\` | \`https://<host>.local\` | Recommended for encrypted inter-machine traffic. Caddy listens on \`443\` and proxies to local uvicorn. |
 
 The \`models.*.host\` fields below control \`llama-server\` bind addresses, not the
-Neuraxis FastAPI/uvicorn bind address. Prefer \`127.0.0.1\` for model hosts when
-Neuraxis proxies model access.
+Llama Pack FastAPI/uvicorn bind address. Prefer \`127.0.0.1\` for model hosts when
+Llama Pack proxies model access.
 
 \`\`\`yaml
 mode: agent
@@ -3236,7 +3236,7 @@ nodes:
   mac-mini:
     url: http://127.0.0.1:9000
   windows-2080ti:
-    url: \${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: \${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
 \`\`\`
 
 ## Split Config Files
@@ -3261,7 +3261,7 @@ files:
 
 Linked paths are resolved relative to the root config file. Linked file values
 are loaded first, then inline values in the root config override linked values.
-Environment placeholders such as \`\${NEURAXIS_AGENT_URL}\` are expanded
+Environment placeholders such as \`\${LLAMA_PACK_AGENT_URL}\` are expanded
 after the files are merged.
 
 \`models\`, \`nodes\`, \`agent_tools\`, and \`memory\` are direct section files. Their
@@ -3287,16 +3287,16 @@ python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
-controller_url: \${NEURAXIS_CONTROLLER_URL}
+controller_url: \${LLAMA_PACK_CONTROLLER_URL}
 node_name: mac-mini
-agent_url: \${NEURAXIS_AGENT_URL}
+agent_url: \${LLAMA_PACK_AGENT_URL}
 heartbeat_interval_seconds: 30
 \`\`\`
 
 \`\`\`yaml
 # config/auth.yaml
-agent_api_key: \${NEURAXIS_AGENT_API_KEY}
-controller_registration_key_outbound: \${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+agent_api_key: \${LLAMA_PACK_AGENT_API_KEY}
+controller_registration_key_outbound: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 \`\`\`
 
 \`\`\`yaml
@@ -3462,7 +3462,7 @@ models:
 Nested \`profiles\` are optional. When present, the model key is the logical
 family and each profile is a concrete runtime instance such as
 \`qwen-coder:fast\` or \`qwen-coder:long\`. Profile values override the base model
-for startup; if a profile omits \`port\`, Neuraxis derives one from the base
+for startup; if a profile omits \`port\`, Llama Pack derives one from the base
 port plus the profile \`order\`.
 
 Optional \`strengths\` and \`cost_tier\` metadata help the route preview explain
@@ -3476,8 +3476,8 @@ For scripted setup, install llama.cpp before or during agent onboarding:
 \`\`\`bash
 scripts/install_llama_cpp.sh --backend auto
 scripts/onboard_agent.sh \\
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \\
-  --agent-url "$NEURAXIS_AGENT_URL" \\
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \\
+  --agent-url "$LLAMA_PACK_AGENT_URL" \\
   --install-llama-cpp \\
   --llama-cpp-backend auto
 \`\`\`
@@ -3506,7 +3506,7 @@ nodes:
   mac-mini:
     url: http://127.0.0.1:9000
   windows-2080ti:
-    url: \${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: \${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
     api_key: your-agent-api-key-if-enabled
     verify_tls: true
     max_running_models: 1   # optional — limits concurrent model instances on this node
@@ -3571,7 +3571,7 @@ scripts/start_controller.sh
 mode: controller
 log_dir: /home/{user_name}/llama-manager/logs
 
-controller_registration_key: \${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 controller_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/controller_state.db
@@ -3581,22 +3581,22 @@ chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/ch
 
 nodes:
   mac-mini:
-    url: \${NEURAXIS_MAC_MINI_AGENT_URL}
-    api_key: \${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    url: \${LLAMA_PACK_MAC_MINI_AGENT_URL}
+    api_key: \${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
-    url: \${NEURAXIS_LINUX_2080TI_AGENT_URL}
-    api_key: \${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    url: \${LLAMA_PACK_LINUX_2080TI_AGENT_URL}
+    api_key: \${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 \`\`\`
 
 Manual startup is also available:
 
 \`\`\`bash
-NEURAXIS_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
+LLAMA_PACK_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9137
 \`\`\`
 
-Agents should run \`scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"\`, or manually keep \`controller_url\` as \`\${NEURAXIS_CONTROLLER_URL}\`, keep \`agent_url\` as \`\${NEURAXIS_AGENT_URL}\`, and send the same registration key through \`controller_registration_key_outbound\`.
+Agents should run \`scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"\`, or manually keep \`controller_url\` as \`\${LLAMA_PACK_CONTROLLER_URL}\`, keep \`agent_url\` as \`\${LLAMA_PACK_AGENT_URL}\`, and send the same registration key through \`controller_registration_key_outbound\`.
 
 For the current Raspberry Pi controller topology and smoke checks, see
 [Raspberry Pi Controller Topology](pi-controller-topology.md).
@@ -3641,8 +3641,8 @@ scripts/onboard_controller.sh --enable-memory
 
 The onboarding script installs the optional \`controller-memory\` extras,
 downloads the default embedding model, writes the \`memory:\` block, validates
-the controller config, and stores \`NEURAXIS_MEMORY_MODEL_PATH\` in
-\`.neuraxis.env\`. Override paths when needed:
+the controller config, and stores \`LLAMA_PACK_MEMORY_MODEL_PATH\` in
+\`.llama_pack.env\`. Override paths when needed:
 
 \`\`\`bash
 scripts/onboard_controller.sh \\
@@ -3739,7 +3739,7 @@ agent_tools:
   tool_timeout_seconds: 10
   safe_roots:
     - ./logs
-    - /Users/{user_name}/Apps/neuraxis
+    - /Users/{user_name}/Apps/llama-pack
   tools:
     list_runtime_status:
       type: shell
@@ -3752,11 +3752,11 @@ agent_tools:
     read_project_file:
       type: file_read_dynamic
       description: Read a project or log file by relative path.
-      path: /Users/{user_name}/Apps/neuraxis
+      path: /Users/{user_name}/Apps/llama-pack
     list_project_files:
       type: directory_list
       description: List top-level and one-level-deep project files.
-      path: /Users/{user_name}/Apps/neuraxis
+      path: /Users/{user_name}/Apps/llama-pack
       recursive: true
       max_depth: 1
       max_entries: 200
@@ -3781,7 +3781,7 @@ tail -f ./logs/agent_tool_calls.jsonl
 \`\`\`bash
 curl -s http://127.0.0.1:9137/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "model": "qwen",
     "messages": [
@@ -3899,7 +3899,7 @@ models:
         "anchor": "agent-local-tool-calling"
       }
     ],
-    searchBody: "Configuration Set to a YAML file path. Set to override the mode without editing the file. Network Exposure Neuraxis can run in either direct HTTP mode or behind Caddy: Mode Uvicorn bind URLs Notes --- --- --- --- Direct LAN HTTP Simple setup, but controller/agent traffic is plaintext. Caddy/local TLS Recommended for encrypted inter-machine traffic. Caddy listens on and proxies to local uvicorn. The fields below control bind addresses, not the Neuraxis FastAPI/uvicorn bind address. Prefer for model hosts when Neuraxis proxies model access. Split Config Files For small installs, a single is still fine. For controllers, multi-node agents, or configs with many models and tool definitions, the root config file can also act as a manifest that links to files in a config directory. Linked paths are resolved relative to the root config file. Linked file values are loaded first, then inline values in the root config override linked values. Environment placeholders such as are expanded after the files are merged. , , , and are direct section files. Their linked YAML content is the value of that top-level config field: , , , and are grouped files. They contain only the top-level fields that belong to that group: Unknown file keys are rejected. Grouped files are also validated so fields from the wrong group fail fast; for example, is not allowed inside . When runtime code calls for a split config, linked sections are written back to their linked files and the root manifest keeps only root-owned fields plus the mapping. This keeps generated model, node, and tool updates out of the root file when those sections are split. Plugin Config Plugins are discovered only from configured local paths. Enable a plugin by listing its id in and providing a matching entry in : Plugin manifests can declare a with , , , and fields. Required values are validated before plugin registration. Fields marked are passed to the plugin at runtime but redacted as in plugin status metadata. Plugins can also register migration metadata during : Core reports those targets through: Pending or missing plugin migrations appear as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. For the full manifest and extension API reference, see Plugin Author Guide. Agent Config Use on each machine that actually runs processes. Agent mode owns: - local model definitions under - startup for each configured model - local log files and model process lifecycle - optional local conversion/library workflows ( , , ) Example: Nested are optional. When present, the model key is the logical family and each profile is a concrete runtime instance such as or . Profile values override the base model for startup; if a profile omits , Neuraxis derives one from the base port plus the profile . Optional and metadata help the route preview explain which model should handle an explicit request type. are lowercase task labels such as , , , , and . can be , , or . Profile values override the base model for preview scoring. For scripted setup, install llama.cpp before or during agent onboarding: The backend is GPU-first: Apple Silicon selects Metal, hosts with select CUDA, and other machines fall back to CPU. Force a backend with , , or when hardware detection is not the right choice. Onboarding writes the generated agent config to the same checkout paths used by the installer. Controller Config Use on a central machine that coordinates agents. Controller mode owns: - the list (agent base URLs) - node health/status aggregation - proxying model start/stop/restart/log calls to each node Example: Node capacity (optional) Set on any node to cap how many model instances it may run simultaneously. The routing policy uses this when deciding whether to start a model on a node: - If the node is already at capacity, the route is still selected but is recorded as in the internal routing event. - If the node has room, is . - If is omitted, the policy always records . Registry-aware placement (optional) When a requested model is not currently running on any node, the routing policy checks each candidate node for model artifact presence before giving up: Presence tier Meaning --- --- Model is in the node's config (known to the agent) GGUF file exists on the node's library disk but is not yet registered Candidates with presence are always preferred over . Within each tier, the existing order is preserved. The chosen presence tier is recorded as part of the metadata in the internal routing event (e.g. ). This means the controller can route to a node that could run a model, not just nodes where one is already running, and the caller or an orchestration layer can act on the field to trigger the actual model start. See multi-agent-routing.md for the full routing decision flow. Fanout routing (optional) Add these fields to a controller config to enable multi-agent fanout: See multi-agent-routing.md for full details. Raspberry Pi Controller Config If the Raspberry Pi is the always-on coordinator, run it in mode and point all agent machines at the Pi's URL. Use as a starting point: Manual startup is also available: Agents should run , or manually keep as , keep as , and send the same registration key through . For the current Raspberry Pi controller topology and smoke checks, see Raspberry Pi Controller Topology. Optional Security And Registration Fields - Agent-side auth: requires clients to send . - Controller-to-agent auth per node: . - Auto-registration auth: on controller, on agent. - Agent heartbeat/registration fields: , , , . - Stale node timeout on controller: . - Browser external client origins: enables CORS for explicitly listed origins such as . Leave it empty for same-origin UI, CLI clients, server-to-server clients, and Electron apps that do not need browser CORS. Optional Controller Persistence And Retention Fields - : optional SQLite URL/path override for controller orchestration state. - : identifier used for controller leader leases. - : lease duration for the controller sweeper. - : active job/event retention window. - : exported archive retention window. - : archive export directory. Optional Agent Worker Fields - : opt in to background work claiming from . - : polling interval when enabled. Controller Memory Subsystem Controllers can maintain a persistent semantic memory store backed by ChromaDB and a local embedding model. Memory is controller-only — agent nodes never load ChromaDB or directly. The memory store is disabled by default. To enable it: The onboarding script installs the optional extras, downloads the default embedding model, writes the block, validates the controller config, and stores in . Override paths when needed: The resulting config includes: If extras or model installation fails, rerun the printed recovery command: For offline hosts where the extras and model are already present, use ; onboarding will still fail clearly if the embedding model directory does not exist. If or the embedding model path does not exist at startup, the store self-disables with a warning and all memory operations become silent no-ops — the controller continues to operate normally. Memory tiers Tier Written by TTL Eviction priority --- --- --- --- Explicit instruction Never Never evicted Model inference (high-value fact) from last access Low Model inference (task note) from last access First evicted TTL is access-based — each retrieval resets the clock. When the collection exceeds , the lowest-scoring ephemeral entries are pruned first. Duplicate detection uses cosine similarity (threshold 0.92); near-identical entries are updated in place rather than duplicated. Auto-injection When , the controller fetches the top- most relevant memories for every incoming chat request and prepends them as a block in the system message before routing to the selected agent. This is transparent to the agent — it sees a normal chat request with enriched context. - : maximum jobs to claim per poll. - : labels advertised to the controller claim matcher. - : numeric/string capacity advertised to the controller claim matcher. Agent workers must be registered/configured on the controller under with an . The agent sends its as when claiming or updating work; unknown nodes and nodes without an API key are rejected. The first typed worker contract is . It is intentionally narrow and reuses the existing chat payload shape ( , , sampling fields, structured-output fields, , and optional / ). Future typed contracts are tracked in . Model Capability Hints Optional chat capability hint fields per model: - : override capability introspection for JSON Schema structured output. - : override capability introspection for grammar structured output. - : capability fallback infers structured output support when args include tokens like or . - and : configure llama.cpp reasoning mode and budget for supported models. - and : mark multimodal models and point to the matching projector file. - : mark a model as a UI favorite so it sorts first in model tables. - : optional named runtime profiles grouped under the model family. Each profile can override , , , , and , and can include forward-looking metadata such as , , , , and . Agent-Local Tool Calling Agent mode can run a managed tool loop for direct local testing. Tools are disabled by default and must be named explicitly in YAML. V1 supports fixed , , , , and tools only; it does not expose arbitrary commands, paths, or URLs from model output. Tool names must match . and paths must resolve under . To test on an agent, tail the trace log and send a non-streaming OpenAI chat request with : Streaming managed-tool requests are rejected in v1. Controllers do not execute tools yet; future controller delegation should forward tool-capable turns to a selected agent and let that agent run this same local loop. Windows paths work in YAML:",
+    searchBody: "Configuration Set to a YAML file path. Set to override the mode without editing the file. Network Exposure Llama Pack can run in either direct HTTP mode or behind Caddy: Mode Uvicorn bind URLs Notes --- --- --- --- Direct LAN HTTP Simple setup, but controller/agent traffic is plaintext. Caddy/local TLS Recommended for encrypted inter-machine traffic. Caddy listens on and proxies to local uvicorn. The fields below control bind addresses, not the Llama Pack FastAPI/uvicorn bind address. Prefer for model hosts when Llama Pack proxies model access. Split Config Files For small installs, a single is still fine. For controllers, multi-node agents, or configs with many models and tool definitions, the root config file can also act as a manifest that links to files in a config directory. Linked paths are resolved relative to the root config file. Linked file values are loaded first, then inline values in the root config override linked values. Environment placeholders such as are expanded after the files are merged. , , , and are direct section files. Their linked YAML content is the value of that top-level config field: , , , and are grouped files. They contain only the top-level fields that belong to that group: Unknown file keys are rejected. Grouped files are also validated so fields from the wrong group fail fast; for example, is not allowed inside . When runtime code calls for a split config, linked sections are written back to their linked files and the root manifest keeps only root-owned fields plus the mapping. This keeps generated model, node, and tool updates out of the root file when those sections are split. Plugin Config Plugins are discovered only from configured local paths. Enable a plugin by listing its id in and providing a matching entry in : Plugin manifests can declare a with , , , and fields. Required values are validated before plugin registration. Fields marked are passed to the plugin at runtime but redacted as in plugin status metadata. Plugins can also register migration metadata during : Core reports those targets through: Pending or missing plugin migrations appear as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. For the full manifest and extension API reference, see Plugin Author Guide. Agent Config Use on each machine that actually runs processes. Agent mode owns: - local model definitions under - startup for each configured model - local log files and model process lifecycle - optional local conversion/library workflows ( , , ) Example: Nested are optional. When present, the model key is the logical family and each profile is a concrete runtime instance such as or . Profile values override the base model for startup; if a profile omits , Llama Pack derives one from the base port plus the profile . Optional and metadata help the route preview explain which model should handle an explicit request type. are lowercase task labels such as , , , , and . can be , , or . Profile values override the base model for preview scoring. For scripted setup, install llama.cpp before or during agent onboarding: The backend is GPU-first: Apple Silicon selects Metal, hosts with select CUDA, and other machines fall back to CPU. Force a backend with , , or when hardware detection is not the right choice. Onboarding writes the generated agent config to the same checkout paths used by the installer. Controller Config Use on a central machine that coordinates agents. Controller mode owns: - the list (agent base URLs) - node health/status aggregation - proxying model start/stop/restart/log calls to each node Example: Node capacity (optional) Set on any node to cap how many model instances it may run simultaneously. The routing policy uses this when deciding whether to start a model on a node: - If the node is already at capacity, the route is still selected but is recorded as in the internal routing event. - If the node has room, is . - If is omitted, the policy always records . Registry-aware placement (optional) When a requested model is not currently running on any node, the routing policy checks each candidate node for model artifact presence before giving up: Presence tier Meaning --- --- Model is in the node's config (known to the agent) GGUF file exists on the node's library disk but is not yet registered Candidates with presence are always preferred over . Within each tier, the existing order is preserved. The chosen presence tier is recorded as part of the metadata in the internal routing event (e.g. ). This means the controller can route to a node that could run a model, not just nodes where one is already running, and the caller or an orchestration layer can act on the field to trigger the actual model start. See multi-agent-routing.md for the full routing decision flow. Fanout routing (optional) Add these fields to a controller config to enable multi-agent fanout: See multi-agent-routing.md for full details. Raspberry Pi Controller Config If the Raspberry Pi is the always-on coordinator, run it in mode and point all agent machines at the Pi's URL. Use as a starting point: Manual startup is also available: Agents should run , or manually keep as , keep as , and send the same registration key through . For the current Raspberry Pi controller topology and smoke checks, see Raspberry Pi Controller Topology. Optional Security And Registration Fields - Agent-side auth: requires clients to send . - Controller-to-agent auth per node: . - Auto-registration auth: on controller, on agent. - Agent heartbeat/registration fields: , , , . - Stale node timeout on controller: . - Browser external client origins: enables CORS for explicitly listed origins such as . Leave it empty for same-origin UI, CLI clients, server-to-server clients, and Electron apps that do not need browser CORS. Optional Controller Persistence And Retention Fields - : optional SQLite URL/path override for controller orchestration state. - : identifier used for controller leader leases. - : lease duration for the controller sweeper. - : active job/event retention window. - : exported archive retention window. - : archive export directory. Optional Agent Worker Fields - : opt in to background work claiming from . - : polling interval when enabled. Controller Memory Subsystem Controllers can maintain a persistent semantic memory store backed by ChromaDB and a local embedding model. Memory is controller-only — agent nodes never load ChromaDB or directly. The memory store is disabled by default. To enable it: The onboarding script installs the optional extras, downloads the default embedding model, writes the block, validates the controller config, and stores in . Override paths when needed: The resulting config includes: If extras or model installation fails, rerun the printed recovery command: For offline hosts where the extras and model are already present, use ; onboarding will still fail clearly if the embedding model directory does not exist. If or the embedding model path does not exist at startup, the store self-disables with a warning and all memory operations become silent no-ops — the controller continues to operate normally. Memory tiers Tier Written by TTL Eviction priority --- --- --- --- Explicit instruction Never Never evicted Model inference (high-value fact) from last access Low Model inference (task note) from last access First evicted TTL is access-based — each retrieval resets the clock. When the collection exceeds , the lowest-scoring ephemeral entries are pruned first. Duplicate detection uses cosine similarity (threshold 0.92); near-identical entries are updated in place rather than duplicated. Auto-injection When , the controller fetches the top- most relevant memories for every incoming chat request and prepends them as a block in the system message before routing to the selected agent. This is transparent to the agent — it sees a normal chat request with enriched context. - : maximum jobs to claim per poll. - : labels advertised to the controller claim matcher. - : numeric/string capacity advertised to the controller claim matcher. Agent workers must be registered/configured on the controller under with an . The agent sends its as when claiming or updating work; unknown nodes and nodes without an API key are rejected. The first typed worker contract is . It is intentionally narrow and reuses the existing chat payload shape ( , , sampling fields, structured-output fields, , and optional / ). Future typed contracts are tracked in . Model Capability Hints Optional chat capability hint fields per model: - : override capability introspection for JSON Schema structured output. - : override capability introspection for grammar structured output. - : capability fallback infers structured output support when args include tokens like or . - and : configure llama.cpp reasoning mode and budget for supported models. - and : mark multimodal models and point to the matching projector file. - : mark a model as a UI favorite so it sorts first in model tables. - : optional named runtime profiles grouped under the model family. Each profile can override , , , , and , and can include forward-looking metadata such as , , , , and . Agent-Local Tool Calling Agent mode can run a managed tool loop for direct local testing. Tools are disabled by default and must be named explicitly in YAML. V1 supports fixed , , , , and tools only; it does not expose arbitrary commands, paths, or URLs from model output. Tool names must match . and paths must resolve under . To test on an agent, tail the trace log and send a non-streaming OpenAI chat request with : Streaming managed-tool requests are rejected in v1. Controllers do not execute tools yet; future controller delegation should forward tool-capable turns to a selected agent and let that agent run this same local loop. Windows paths work in YAML:",
   },
   {
     id: "downloads",
@@ -3907,7 +3907,7 @@ models:
     sourcePath: "docs/downloads.md",
     content: `# Model Downloads
 
-Neuraxis can download GGUF model artifacts from Hugging Face into the
+Llama Pack can download GGUF model artifacts from Hugging Face into the
 configured model library. Downloads are started through the UI or the
 \`/lm-api/v1/downloads/*\` API and are recorded in the downloads database.
 
@@ -3950,7 +3950,7 @@ Use quant listing before download when a repo contains multiple GGUF files:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   "http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/quants"
 \`\`\`
 
@@ -3966,7 +3966,7 @@ Download an entire repo:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \\
   -d '{}'
 \`\`\`
@@ -3976,7 +3976,7 @@ Download one GGUF file from a specific revision:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_API_KEY" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \\
   -d '{
     "revision": "main",
@@ -4059,7 +4059,7 @@ hour to avoid repeated Hugging Face API work.
         "anchor": "recommendations"
       }
     ],
-    searchBody: "Model Downloads Neuraxis can download GGUF model artifacts from Hugging Face into the configured model library. Downloads are started through the UI or the API and are recorded in the downloads database. Prerequisites - Configure at least one model library root with or the legacy . Downloads use the first configured root. - Run the downloads migration before starting the app: - Use a Python environment where is installed. The downloader runs: - For gated Hugging Face repos, sign in with and accept the model terms on Hugging Face before starting the download. Destination Layout Downloads write under the first configured model root. Repository IDs are normalized by replacing with : Each download stores the destination path, command, log path, triggering user, revision, process id, timestamps, and byte progress metadata. Selecting Files Use quant listing before download when a repo contains multiple GGUF files: The quant listing returns GGUF files with filename, repo path, size, detected quant label, and any matching multimodal projector sidecar. must be a relative path; absolute paths, parent traversal, backslashes, and non-GGUF files are rejected. Starting A Download Download an entire repo: Download one GGUF file from a specific revision: Only one active download per repo is allowed. Starting another download for the same repo while one is still running returns a conflict. Monitoring And History Useful endpoints: - - - - - - Download statuses are: Status Meaning --- --- Record was created before the child process was marked running. Hugging Face download process is active. Process exited with code 0. Process exited non-zero or startup validation failed. User cancelled a running process. Progress is computed from bytes present in the destination path. If the selected file size is known, responses include ; otherwise progress is reported as downloaded bytes with . Completed, failed, or cancelled records can be deleted. Running downloads must be cancelled before deletion. Recommendations returns suggested model downloads based on the controller health payload. Results are cached in memory for one hour to avoid repeated Hugging Face API work.",
+    searchBody: "Model Downloads Llama Pack can download GGUF model artifacts from Hugging Face into the configured model library. Downloads are started through the UI or the API and are recorded in the downloads database. Prerequisites - Configure at least one model library root with or the legacy . Downloads use the first configured root. - Run the downloads migration before starting the app: - Use a Python environment where is installed. The downloader runs: - For gated Hugging Face repos, sign in with and accept the model terms on Hugging Face before starting the download. Destination Layout Downloads write under the first configured model root. Repository IDs are normalized by replacing with : Each download stores the destination path, command, log path, triggering user, revision, process id, timestamps, and byte progress metadata. Selecting Files Use quant listing before download when a repo contains multiple GGUF files: The quant listing returns GGUF files with filename, repo path, size, detected quant label, and any matching multimodal projector sidecar. must be a relative path; absolute paths, parent traversal, backslashes, and non-GGUF files are rejected. Starting A Download Download an entire repo: Download one GGUF file from a specific revision: Only one active download per repo is allowed. Starting another download for the same repo while one is still running returns a conflict. Monitoring And History Useful endpoints: - - - - - - Download statuses are: Status Meaning --- --- Record was created before the child process was marked running. Hugging Face download process is active. Process exited with code 0. Process exited non-zero or startup validation failed. User cancelled a running process. Progress is computed from bytes present in the destination path. If the selected file size is known, responses include ; otherwise progress is reported as downloaded bytes with . Completed, failed, or cancelled records can be deleted. Running downloads must be cancelled before deletion. Recommendations returns suggested model downloads based on the controller health payload. Results are cached in memory for one hour to avoid repeated Hugging Face API work.",
   },
   {
     id: "frontend",
@@ -4067,7 +4067,7 @@ hour to avoid repeated Hugging Face API work.
     sourcePath: "docs/frontend.md",
     content: `# Frontend Development
 
-The web UI lives in \`frontend/\` and is a Vite + React + TypeScript app. The production build is emitted into \`llama_manager/ui/react\` so FastAPI can serve it as static package data.
+The web UI lives in \`frontend/\` and is a Vite + React + TypeScript app. The production build is emitted into \`llama_pack/ui/react\` so FastAPI can serve it as static package data.
 
 ## Install
 
@@ -4083,7 +4083,7 @@ Do not commit \`frontend/node_modules\`.
 Start FastAPI in another terminal:
 
 \`\`\`bash
-NEURAXIS_CONFIG=config.example.yaml uv run uvicorn llama_manager.main:app --host 127.0.0.1 --port 9137
+LLAMA_PACK_CONFIG=config.example.yaml uv run uvicorn llama_pack.main:app --host 127.0.0.1 --port 9137
 \`\`\`
 
 Use your normal controller or agent config instead of \`config.example.yaml\` when testing real nodes and model workflows.
@@ -4118,8 +4118,8 @@ scripts/dev_fullstack.sh
 \`\`\`
 
 \`scripts/dev_fullstack.sh\` auto-detects backend mode from your active config
-(\`NEURAXIS_CONFIG\` or \`config.yaml\`) and starts \`agent\` or \`controller\`
-accordingly. Set \`NEURAXIS_MODE\` explicitly if you want to override this.
+(\`LLAMA_PACK_CONFIG\` or \`config.yaml\`) and starts \`agent\` or \`controller\`
+accordingly. Set \`LLAMA_PACK_MODE\` explicitly if you want to override this.
 
 Use \`scripts/start_controller.sh\` or \`scripts/start_agent.sh\` when you only
 want to start the backend.
@@ -4136,8 +4136,8 @@ Open:
 http://127.0.0.1:5173/ui/react/
 \`\`\`
 
-The script writes its PID to \`.neuraxis_frontend.pid\` and logs to
-\`logs/neuraxis_frontend_vite.log\`. Stop it with:
+The script writes its PID to \`.llama_pack_frontend.pid\` and logs to
+\`logs/llama_pack_frontend_vite.log\`. Stop it with:
 
 \`\`\`bash
 scripts/stop_frontend.sh
@@ -4187,10 +4187,10 @@ npm run build
 Build output is written to:
 
 \`\`\`text
-llama_manager/ui/react
+llama_pack/ui/react
 \`\`\`
 
-FastAPI serves \`/\` from \`llama_manager/ui/react/index.html\` when the React build exists. The generated \`assets/*\` files are content-hashed, so a rebuild may delete an old asset and add a new one.
+FastAPI serves \`/\` from \`llama_pack/ui/react/index.html\` when the React build exists. The generated \`assets/*\` files are content-hashed, so a rebuild may delete an old asset and add a new one.
 
 ## Project Layout
 
@@ -4234,9 +4234,9 @@ Core serves those files but does not bundle them into the core React build.
 
 - \`frontend\` is the canonical frontend test/build package.
 - \`frontend-tests\` has been removed after parity coverage moved into \`frontend\`.
-- \`llama_manager/ui/react\` is included in Python package data for release builds.
-- The former vanilla static console files under \`llama_manager/ui/*.js\`,
-  \`llama_manager/ui/index.html\`, and \`llama_manager/ui/styles.css\` have been
+- \`llama_pack/ui/react\` is included in Python package data for release builds.
+- The former vanilla static console files under \`llama_pack/ui/*.js\`,
+  \`llama_pack/ui/index.html\`, and \`llama_pack/ui/styles.css\` have been
   removed; FastAPI serves the React build directly.
 `,
     headings: [
@@ -4290,11 +4290,11 @@ Core serves those files but does not bundle them into the core React build.
   },
   {
     id: "how-to-use",
-    title: "How To Use Neuraxis",
+    title: "How To Use Llama Pack",
     sourcePath: "docs/how-to-use.md",
-    content: `# How To Use Neuraxis
+    content: `# How To Use Llama Pack
 
-This guide shows how to run Neuraxis as a secure local/private LLM gateway
+This guide shows how to run Llama Pack as a secure local/private LLM gateway
 with an operations console. A controller provides the stable API surface for
 your apps, while agents run on model hosts and manage local \`llama-server\`
 processes.
@@ -4334,7 +4334,7 @@ scripts/start_controller.sh
 \`\`\`
 
 \`scripts/onboard_controller.sh\` creates \`config.yaml\` when needed, writes
-\`.neuraxis.env\`, generates \`NEURAXIS_CONTROLLER_REGISTRATION_KEY\`,
+\`.llama_pack.env\`, generates \`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY\`,
 runs migrations, and creates the first admin API key. Use
 \`--skip-migrations\` only when you want to handle migrations/admin-key creation
 manually.
@@ -4353,29 +4353,29 @@ to only write and validate config.
 For an agent host:
 
 \`\`\`bash
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 scripts/onboard_agent.sh \\
   --node mac-agent \\
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \\
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \\
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/start_agent.sh
 \`\`\`
 
 \`scripts/onboard_agent.sh\` creates an agent config, writes
-\`.neuraxis.env\`, generates \`NEURAXIS_AGENT_API_KEY\`, and prints the
+\`.llama_pack.env\`, generates \`LLAMA_PACK_AGENT_API_KEY\`, and prints the
 controller \`nodes:\` entry that must use that agent key. The generated config
 keeps \`controller_url\` and \`agent_url\` as environment placeholders; the real
 LAN URLs passed to \`--controller-url\` and \`--agent-url\` are written only to
-\`.neuraxis.env\`.
+\`.llama_pack.env\`.
 
 To rotate keys later:
 
 \`\`\`bash
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$LLAMA_PACK_AGENT_URL"
 \`\`\`
 
-The startup and stop scripts source \`.neuraxis.env\` automatically:
+The startup and stop scripts source \`.llama_pack.env\` automatically:
 
 \`\`\`bash
 scripts/start_agent.sh
@@ -4430,7 +4430,7 @@ If \`hf_models_dirs\` is present, it is used instead of the legacy single-root f
 Before creating admin keys or starting the service, apply migrations:
 
 \`\`\`bash
-export NEURAXIS_CONFIG=config.yaml
+export LLAMA_PACK_CONFIG=config.yaml
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
 alembic -x db=audit upgrade audit@head
@@ -4440,7 +4440,7 @@ alembic -x db=chat_sessions upgrade chat_sessions@head
 Before using the UI or protected API routes, create an admin key:
 
 \`\`\`bash
-uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
+uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 \`\`\`
 
 The command stores only a hash in \`log_dir/auth_store.db\` and prints the raw key once. Use that key in the UI login form or as the \`X-Llama-Manager-Key\` header for API requests. There is no \`dev\` fallback login.
@@ -4451,14 +4451,14 @@ steps for fresh controller setup.
 ## 5. Start An Agent
 
 \`\`\`bash
-NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
+LLAMA_PACK_CONFIG=config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 \`\`\`
 
 On Windows PowerShell:
 
 \`\`\`powershell
-$env:NEURAXIS_CONFIG = "config.yaml"
-uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
+$env:LLAMA_PACK_CONFIG = "config.yaml"
+uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 \`\`\`
 
 Check health:
@@ -4587,7 +4587,7 @@ scripts/onboard_controller.sh
 scripts/start_controller.sh
 \`\`\`
 
-The script generates \`.neuraxis.env\`, runs migrations, creates the first
+The script generates \`.llama_pack.env\`, runs migrations, creates the first
 admin API key, and prints the registration key for agents. The manual config
 shape is:
 
@@ -4597,7 +4597,7 @@ log_dir: ./logs
 
 nodes:
   windows-2080ti:
-    url: \${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: \${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
     api_key: windows-agent-key-if-enabled
     verify_tls: true
 
@@ -4608,11 +4608,11 @@ node_heartbeat_timeout_seconds: 90
 Run controller (different port from local agent):
 
 \`\`\`bash
-NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9100
+LLAMA_PACK_CONFIG=controller.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9100
 \`\`\`
 
-If \`controller.yaml\` is recorded in \`.neuraxis.env\` as
-\`NEURAXIS_CONFIG\`, you can also use:
+If \`controller.yaml\` is recorded in \`.llama_pack.env\` as
+\`LLAMA_PACK_CONFIG\`, you can also use:
 
 \`\`\`bash
 scripts/start_controller.sh
@@ -4622,7 +4622,7 @@ For local React UI development, start the controller and Vite dev server
 together:
 
 \`\`\`bash
-NEURAXIS_START_FRONTEND=1 scripts/start_controller.sh
+LLAMA_PACK_START_FRONTEND=1 scripts/start_controller.sh
 \`\`\`
 
 The React dev site runs at \`http://127.0.0.1:5173/ui/react/\`. See
@@ -4651,21 +4651,21 @@ Pi controller config essentials:
 \`\`\`yaml
 mode: controller
 log_dir: /home/{user_name}/llama-manager/logs
-controller_registration_key: \${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 nodes:
   mac-mini:
-    url: \${NEURAXIS_MAC_MINI_AGENT_URL}
-    api_key: \${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    url: \${LLAMA_PACK_MAC_MINI_AGENT_URL}
+    api_key: \${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
-    url: \${NEURAXIS_LINUX_2080TI_AGENT_URL}
-    api_key: \${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    url: \${LLAMA_PACK_LINUX_2080TI_AGENT_URL}
+    api_key: \${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 \`\`\`
 
-On each agent, run \`scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"\`. If the agent worker is enabled, make sure the agent's generated \`NEURAXIS_AGENT_API_KEY\` matches the corresponding \`nodes.<name>.api_key\` value on the Pi controller.
+On each agent, run \`scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"\`. If the agent worker is enabled, make sure the agent's generated \`LLAMA_PACK_AGENT_API_KEY\` matches the corresponding \`nodes.<name>.api_key\` value on the Pi controller.
 
 ## 13. Enable Agent Worker Jobs
 
@@ -4690,11 +4690,11 @@ Agent config:
 
 \`\`\`yaml
 mode: agent
-controller_url: \${NEURAXIS_CONTROLLER_URL}
+controller_url: \${LLAMA_PACK_CONTROLLER_URL}
 node_name: mac-agent
-agent_url: \${NEURAXIS_AGENT_URL}
-agent_api_key: \${NEURAXIS_AGENT_API_KEY}
-controller_registration_key_outbound: \${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+agent_url: \${LLAMA_PACK_AGENT_URL}
+agent_api_key: \${LLAMA_PACK_AGENT_API_KEY}
+controller_registration_key_outbound: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 agent_worker_enabled: true
 agent_worker_poll_interval_seconds: 2
 agent_worker_max_jobs: 1
@@ -4705,9 +4705,9 @@ agent_worker_capacity:
 \`\`\`
 
 For a new worker agent, \`scripts/onboard_agent.sh\` creates the base agent
-config and \`.neuraxis.env\`; then enable \`agent_worker_enabled\` and add the
+config and \`.llama_pack.env\`; then enable \`agent_worker_enabled\` and add the
 worker labels/capacity fields in the generated config. Keep concrete LAN URLs
-in \`.neuraxis.env\`, not in the tracked agent config.
+in \`.llama_pack.env\`, not in the tracked agent config.
 
 Create a typed generation job on the controller:
 
@@ -4786,7 +4786,7 @@ cd frontend
 npm run build
 \`\`\`
 
-The Vite build writes static assets to \`llama_manager/ui/react\`, which is
+The Vite build writes static assets to \`llama_pack/ui/react\`, which is
 included in Python package data for release builds.
 
 Frontend development workflow:
@@ -4809,7 +4809,7 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 \`\`\`
 2. Start the app normally, or use \`scripts/start_controller.sh\` if
-   \`.neuraxis.env\` points at the right config.
+   \`.llama_pack.env\` points at the right config.
 3. Run focused smoke checks for auth, audit, chat sessions, and jobs.
 
 Rollback procedure:
@@ -4821,8 +4821,8 @@ Rollback procedure:
     headings: [
       {
         "level": 1,
-        "text": "How To Use Neuraxis",
-        "anchor": "how-to-use-neuraxis"
+        "text": "How To Use Llama Pack",
+        "anchor": "how-to-use-llama-pack"
       },
       {
         "level": 2,
@@ -4900,7 +4900,7 @@ Rollback procedure:
         "anchor": "15-alembic-managed-persistence"
       }
     ],
-    searchBody: "How To Use Neuraxis This guide shows how to run Neuraxis as a secure local/private LLM gateway with an operations console. A controller provides the stable API surface for your apps, while agents run on model hosts and manage local processes. For the current Raspberry Pi controller deployment snapshot and smoke checks, see Raspberry Pi Controller Topology. 1. Install From this project directory: On Windows PowerShell: Prefer on macOS and Linux because it uses the checked-in . For pip-based installs, use an explicit supported interpreter and invoke pip as from the activated environment. For a Windows-only checklist and troubleshooting flow, see Windows Install And Troubleshooting. 2. Script-First Setup For a controller host: creates when needed, writes , generates , runs migrations, and creates the first admin API key. Use only when you want to handle migrations/admin-key creation manually. To opt into controller semantic memory in the same setup command: The memory option installs , downloads the default embedding model, and writes the required config. If the host already has the extras and model, pass to only write and validate config. For an agent host: creates an agent config, writes , generates , and prints the controller entry that must use that agent key. The generated config keeps and as environment placeholders; the real LAN URLs passed to and are written only to . To rotate keys later: The startup and stop scripts source automatically: 3. Manual Agent Config Start from: Example Mac agent: Legacy single-root config still works: If is present, it is used instead of the legacy single-root field. 4. Manual Admin Key Before creating admin keys or starting the service, apply migrations: Before using the UI or protected API routes, create an admin key: The command stores only a hash in and prints the raw key once. Use that key in the UI login form or as the header for API requests. There is no fallback login. performs these migration and first-admin-key steps for fresh controller setup. 5. Start An Agent On Windows PowerShell: Check health: Local Mac helper scripts: 6. Control Models On An Agent The underlying OpenAI-compatible endpoint remains on the model port: 7. Use Chat Features Basic API call: The Chat UI supports: - advanced sampling controls ( , , , , , , alias behavior) - structured output mode ( , , ) with mutual exclusion and client-side validation - per-model capability gating from - capability source metadata ( , , ) in the feature matrix and capabilities detail panel - capability debug tools: full JSON detail + - session save/load with persisted advanced defaults, including structured mode and schema/grammar text Useful chat endpoints: - - - - - - - - - 8. Add Existing GGUFs As Runnable Models Scan and register existing GGUF files: 9. Convert HF Models To GGUF Set config values on the agent with HF models: Use: If conversion logs show missing packages (for example ), point at the correct llama.cpp venv Python. 10. Quantize Existing GGUFs Use: 11. Create A Controller Config (Optional) For fresh controller setup, prefer the onboarding script: The script generates , runs migrations, creates the first admin API key, and prints the registration key for agents. The manual config shape is: Run controller (different port from local agent): If is recorded in as , you can also use: For local React UI development, start the controller and Vite dev server together: The React dev site runs at . See Frontend Development for frontend-only start, stop, test, and build commands. Controller endpoints include node inventory/proxy plus orchestration ( , node , stats, retention, archive export). In the UI, use the Nodes page to inspect registered agents, heartbeat freshness, reported models, and remote model Start/Stop/Restart/Logs actions. 12. Run The Controller On A Raspberry Pi Raspberry Pi integration is a good fit for the always-on controller role. The Pi runs , owns node inventory and durable orchestration state, and each agent machine points its at the Pi. The Pi template keeps agent URLs and per-node API keys in environment variables. Fill those in after each agent onboarding script prints its generated block. Pi controller config essentials: On each agent, run . If the agent worker is enabled, make sure the agent's generated matches the corresponding value on the Pi controller. 13. Enable Agent Worker Jobs The controller owns durable jobs. Agents execute jobs only when the worker is explicitly enabled. Controller config: Worker APIs fail closed: the controller only accepts requests for registered nodes that have an , and the request must send that key in . Agent config: For a new worker agent, creates the base agent config and ; then enable and add the worker labels/capacity fields in the generated config. Keep concrete LAN URLs in , not in the tracked agent config. Create a typed generation job on the controller: Watch durable events: Watch live events with SSE: Cancel cooperatively: Queued jobs cancel immediately. Assigned or running jobs move to ; workers check before and after local model execution and then report a terminal state. Typed worker contracts include , , , , , and . jobs run Hugging Face downloads on the target worker node using that agent's configured model roots and Hugging Face credentials. extends that flow by verifying the downloaded GGUF, registering it in the agent's model config, and starting it when requested. 14. Run Tests Full test suite: The pytest suite installs dependencies with before running the React frontend unit tests, so does not need to be checked in. React frontend unit tests: React production build: The Vite build writes static assets to , which is included in Python package data for release builds. Frontend development workflow: - 15. Alembic-Managed Persistence Legacy sqlite store code paths were removed after migration parity validation. The app now always uses SQLAlchemy-managed persistence implementations across all databases. Safe startup procedure when not using : 1. Run migrations for all targets: 2. Start the app normally, or use if points at the right config. 3. Run focused smoke checks for auth, audit, chat sessions, and jobs. Rollback procedure: 1. Roll back to a previous application version. 2. Keep the database at its current Alembic head unless a schema rollback is explicitly required. 3. Re-run smoke checks.",
+    searchBody: "How To Use Llama Pack This guide shows how to run Llama Pack as a secure local/private LLM gateway with an operations console. A controller provides the stable API surface for your apps, while agents run on model hosts and manage local processes. For the current Raspberry Pi controller deployment snapshot and smoke checks, see Raspberry Pi Controller Topology. 1. Install From this project directory: On Windows PowerShell: Prefer on macOS and Linux because it uses the checked-in . For pip-based installs, use an explicit supported interpreter and invoke pip as from the activated environment. For a Windows-only checklist and troubleshooting flow, see Windows Install And Troubleshooting. 2. Script-First Setup For a controller host: creates when needed, writes , generates , runs migrations, and creates the first admin API key. Use only when you want to handle migrations/admin-key creation manually. To opt into controller semantic memory in the same setup command: The memory option installs , downloads the default embedding model, and writes the required config. If the host already has the extras and model, pass to only write and validate config. For an agent host: creates an agent config, writes , generates , and prints the controller entry that must use that agent key. The generated config keeps and as environment placeholders; the real LAN URLs passed to and are written only to . To rotate keys later: The startup and stop scripts source automatically: 3. Manual Agent Config Start from: Example Mac agent: Legacy single-root config still works: If is present, it is used instead of the legacy single-root field. 4. Manual Admin Key Before creating admin keys or starting the service, apply migrations: Before using the UI or protected API routes, create an admin key: The command stores only a hash in and prints the raw key once. Use that key in the UI login form or as the header for API requests. There is no fallback login. performs these migration and first-admin-key steps for fresh controller setup. 5. Start An Agent On Windows PowerShell: Check health: Local Mac helper scripts: 6. Control Models On An Agent The underlying OpenAI-compatible endpoint remains on the model port: 7. Use Chat Features Basic API call: The Chat UI supports: - advanced sampling controls ( , , , , , , alias behavior) - structured output mode ( , , ) with mutual exclusion and client-side validation - per-model capability gating from - capability source metadata ( , , ) in the feature matrix and capabilities detail panel - capability debug tools: full JSON detail + - session save/load with persisted advanced defaults, including structured mode and schema/grammar text Useful chat endpoints: - - - - - - - - - 8. Add Existing GGUFs As Runnable Models Scan and register existing GGUF files: 9. Convert HF Models To GGUF Set config values on the agent with HF models: Use: If conversion logs show missing packages (for example ), point at the correct llama.cpp venv Python. 10. Quantize Existing GGUFs Use: 11. Create A Controller Config (Optional) For fresh controller setup, prefer the onboarding script: The script generates , runs migrations, creates the first admin API key, and prints the registration key for agents. The manual config shape is: Run controller (different port from local agent): If is recorded in as , you can also use: For local React UI development, start the controller and Vite dev server together: The React dev site runs at . See Frontend Development for frontend-only start, stop, test, and build commands. Controller endpoints include node inventory/proxy plus orchestration ( , node , stats, retention, archive export). In the UI, use the Nodes page to inspect registered agents, heartbeat freshness, reported models, and remote model Start/Stop/Restart/Logs actions. 12. Run The Controller On A Raspberry Pi Raspberry Pi integration is a good fit for the always-on controller role. The Pi runs , owns node inventory and durable orchestration state, and each agent machine points its at the Pi. The Pi template keeps agent URLs and per-node API keys in environment variables. Fill those in after each agent onboarding script prints its generated block. Pi controller config essentials: On each agent, run . If the agent worker is enabled, make sure the agent's generated matches the corresponding value on the Pi controller. 13. Enable Agent Worker Jobs The controller owns durable jobs. Agents execute jobs only when the worker is explicitly enabled. Controller config: Worker APIs fail closed: the controller only accepts requests for registered nodes that have an , and the request must send that key in . Agent config: For a new worker agent, creates the base agent config and ; then enable and add the worker labels/capacity fields in the generated config. Keep concrete LAN URLs in , not in the tracked agent config. Create a typed generation job on the controller: Watch durable events: Watch live events with SSE: Cancel cooperatively: Queued jobs cancel immediately. Assigned or running jobs move to ; workers check before and after local model execution and then report a terminal state. Typed worker contracts include , , , , , and . jobs run Hugging Face downloads on the target worker node using that agent's configured model roots and Hugging Face credentials. extends that flow by verifying the downloaded GGUF, registering it in the agent's model config, and starting it when requested. 14. Run Tests Full test suite: The pytest suite installs dependencies with before running the React frontend unit tests, so does not need to be checked in. React frontend unit tests: React production build: The Vite build writes static assets to , which is included in Python package data for release builds. Frontend development workflow: - 15. Alembic-Managed Persistence Legacy sqlite store code paths were removed after migration parity validation. The app now always uses SQLAlchemy-managed persistence implementations across all databases. Safe startup procedure when not using : 1. Run migrations for all targets: 2. Start the app normally, or use if points at the right config. 3. Run focused smoke checks for auth, audit, chat sessions, and jobs. Rollback procedure: 1. Roll back to a previous application version. 2. Keep the database at its current Alembic head unless a schema rollback is explicitly required. 3. Re-run smoke checks.",
   },
   {
     id: "multi-agent-routing",
@@ -5295,9 +5295,9 @@ This is the first known-good three-machine deployment:
 
 | Role | Node name | URL | Notes |
 | --- | --- | --- | --- |
-| Controller | raspberry-pi-controller | \`$NEURAXIS_CONTROLLER_URL\` | Runs \`mode: controller\`; agents register and heartbeat here. |
-| Agent | mac-mini | \`$NEURAXIS_AGENT_URL\` on the Mac mini; \`$NEURAXIS_MAC_MINI_AGENT_URL\` on the controller | Local Mac mini agent config points at the Raspberry Pi controller. |
-| Agent | linux-2080ti | \`$NEURAXIS_LINUX_2080TI_AGENT_URL\` | 2080 Ti box agent; confirm the current value from the Pi controller \`/nodes\` output. |
+| Controller | raspberry-pi-controller | \`$LLAMA_PACK_CONTROLLER_URL\` | Runs \`mode: controller\`; agents register and heartbeat here. |
+| Agent | mac-mini | \`$LLAMA_PACK_AGENT_URL\` on the Mac mini; \`$LLAMA_PACK_MAC_MINI_AGENT_URL\` on the controller | Local Mac mini agent config points at the Raspberry Pi controller. |
+| Agent | linux-2080ti | \`$LLAMA_PACK_LINUX_2080TI_AGENT_URL\` | 2080 Ti box agent; confirm the current value from the Pi controller \`/nodes\` output. |
 
 The important topology rule is that every agent uses the Raspberry Pi URL as
 \`controller_url\`, and the controller uses each agent's \`agent_url\` to proxy
@@ -5309,21 +5309,21 @@ The Mac mini local config currently has:
 
 \`\`\`yaml
 mode: agent
-controller_url: \${NEURAXIS_CONTROLLER_URL}
+controller_url: \${LLAMA_PACK_CONTROLLER_URL}
 node_name: mac-mini
-agent_url: \${NEURAXIS_AGENT_URL}
+agent_url: \${LLAMA_PACK_AGENT_URL}
 heartbeat_interval_seconds: 30
 \`\`\`
 
-Keep \`NEURAXIS_AGENT_API_KEY\` and
-\`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND\` in \`.neuraxis.env\`,
+Keep \`LLAMA_PACK_AGENT_API_KEY\` and
+\`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND\` in \`.llama_pack.env\`,
 not in tracked docs or config examples.
 
-The Mac mini \`.neuraxis.env\` should also include:
+The Mac mini \`.llama_pack.env\` should also include:
 
 \`\`\`bash
-export NEURAXIS_CONTROLLER_URL=http://<raspberry-pi-lan-address>:9137
-export NEURAXIS_AGENT_URL=http://<mac-mini-lan-address>:9137
+export LLAMA_PACK_CONTROLLER_URL=http://<raspberry-pi-lan-address>:9137
+export LLAMA_PACK_AGENT_URL=http://<mac-mini-lan-address>:9137
 \`\`\`
 
 ## Smoke Checks
@@ -5333,7 +5333,7 @@ Run these from the Mac mini or any machine on the same network.
 Controller health:
 
 \`\`\`bash
-curl -s "$NEURAXIS_CONTROLLER_URL/health"
+curl -s "$LLAMA_PACK_CONTROLLER_URL/health"
 \`\`\`
 
 Expected shape:
@@ -5349,7 +5349,7 @@ Expected shape:
 Mac mini agent health:
 
 \`\`\`bash
-curl -s "$NEURAXIS_AGENT_URL/health"
+curl -s "$LLAMA_PACK_AGENT_URL/health"
 \`\`\`
 
 Expected shape:
@@ -5364,8 +5364,8 @@ Expected shape:
 Controller node inventory, with an admin/controller API key:
 
 \`\`\`bash
-curl -s "$NEURAXIS_CONTROLLER_URL/nodes" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_CONTROLLER_API_KEY"
+curl -s "$LLAMA_PACK_CONTROLLER_URL/nodes" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_API_KEY"
 \`\`\`
 
 Expected checks:
@@ -5378,8 +5378,8 @@ Expected checks:
 Linux 2080 Ti agent health, after confirming the current URL from \`/nodes\`:
 
 \`\`\`bash
-curl -s "$NEURAXIS_LINUX_2080TI_AGENT_URL/health" \\
-  -H "X-Llama-Manager-Key: $NEURAXIS_LINUX_2080TI_AGENT_API_KEY"
+curl -s "$LLAMA_PACK_LINUX_2080TI_AGENT_URL/health" \\
+  -H "X-Llama-Manager-Key: $LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY"
 \`\`\`
 
 ## Agent Startup
@@ -5394,10 +5394,10 @@ The agent config must include:
 
 \`\`\`yaml
 mode: agent
-controller_url: \${NEURAXIS_CONTROLLER_URL}
+controller_url: \${LLAMA_PACK_CONTROLLER_URL}
 node_name: NODE_NAME
-agent_url: \${NEURAXIS_AGENT_URL}
-controller_registration_key_outbound: \${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+agent_url: \${LLAMA_PACK_AGENT_URL}
+controller_registration_key_outbound: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 \`\`\`
 
 ## Controller Startup
@@ -5414,11 +5414,11 @@ The controller config should include both agents under \`nodes\`:
 mode: controller
 nodes:
   mac-mini:
-    url: \${NEURAXIS_MAC_MINI_AGENT_URL}
-    api_key: \${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    url: \${LLAMA_PACK_MAC_MINI_AGENT_URL}
+    api_key: \${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
   linux-2080ti:
-    url: \${NEURAXIS_LINUX_2080TI_AGENT_URL}
-    api_key: \${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    url: \${LLAMA_PACK_LINUX_2080TI_AGENT_URL}
+    api_key: \${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
 \`\`\`
 
 ## Troubleshooting
@@ -5428,9 +5428,9 @@ or controller API key and retry with \`X-Llama-Manager-Key\`.
 
 If a node is listed but not fresh, check that the agent has:
 
-- \`controller_url: \${NEURAXIS_CONTROLLER_URL}\` and the Pi URL in \`.neuraxis.env\`
+- \`controller_url: \${LLAMA_PACK_CONTROLLER_URL}\` and the Pi URL in \`.llama_pack.env\`
 - the correct \`node_name\`
-- \`agent_url: \${NEURAXIS_AGENT_URL}\` and its LAN-reachable URL in \`.neuraxis.env\`
+- \`agent_url: \${LLAMA_PACK_AGENT_URL}\` and its LAN-reachable URL in \`.llama_pack.env\`
 - the same registration key value the Pi expects
 - a running \`scripts/start_agent.sh\` process
 `,
@@ -5474,7 +5474,7 @@ If a node is listed but not fresh, check that the agent has:
     sourcePath: "docs/plugin-databases.md",
     content: `# Plugin Database Contract
 
-This design defines how Neuraxis plugins store durable data without coupling
+This design defines how Llama Pack plugins store durable data without coupling
 core to plugin-owned schemas or models.
 
 Plugins may need persistent data for usage accounting, identity mappings,
@@ -5536,7 +5536,7 @@ database = context.get_database("main")
 
 context.add_migration_target(
     "main",
-    directory="neuraxis_business/migrations/main",
+    directory="llama_pack_business/migrations/main",
     database=database,
 )
 \`\`\`
@@ -5555,7 +5555,7 @@ lifecycle, not the schema.
 
 Plugins define schema changes as versioned migration files in the plugin package
 or repository. Alembic-style migrations are preferred because they are explicit,
-reviewable, ordered, and compatible with the existing Neuraxis persistence
+reviewable, ordered, and compatible with the existing Llama Pack persistence
 tooling.
 
 Core should extend the existing plugin migration metadata into an executable
@@ -5566,10 +5566,10 @@ GET  /lm-api/v1/plugins/{plugin_id}/migrations/status
 POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade
 \`\`\`
 
-A later CLI can wrap the same service:
+A later CLI could wrap the same service. No core CLI is shipped yet:
 
 \`\`\`bash
-uv run neuraxis plugins migrate {plugin_id} {target_id}
+curl -X POST /lm-api/v1/plugins/{plugin_id}/migrations/{target_id}/upgrade
 \`\`\`
 
 Migration status should include:
@@ -5608,7 +5608,7 @@ Plugins own:
 - Plugin data retention and export semantics.
 - Tests that prove plugin migrations and stores work.
 
-This boundary keeps core generic. A paid add-on such as \`neuraxis_business\` can
+This boundary keeps core generic. A paid add-on such as \`llama_pack_business\` can
 store business identity, usage, quota, audit, and reporting data without making
 core aware of those models.
 
@@ -5631,7 +5631,7 @@ example:
 \`\`\`text
 core:controller
 core:auth
-plugin:neuraxis_business:main
+plugin:llama_pack_business:main
 \`\`\`
 
 ## Failure Handling
@@ -5719,7 +5719,7 @@ Plugin tests should cover:
         "anchor": "testing-expectations"
       }
     ],
-    searchBody: "Plugin Database Contract This design defines how Neuraxis plugins store durable data without coupling core to plugin-owned schemas or models. Plugins may need persistent data for usage accounting, identity mappings, policy state, paid-feature configuration, reporting, connectors, or other domain-specific workflows. Core should provide a stable database and migration contract, but it should not import plugin ORM models, define plugin tables, or mix plugin data into core databases. Goals - Keep core databases focused on core runtime state. - Give each plugin isolated durable storage under the runtime . - Let plugins own their schemas, migrations, stores, and ORM/domain models. - Let core expose operator-visible migration status and explicit migration execution. - Make backup, restore, removal, and support workflows simpler by keeping plugin data separate from core data. Non-Goals - Core does not inspect or validate plugin table definitions. - Core does not import plugin ORM metadata. - Core does not auto-run plugin migrations at startup by default. - Core does not provide cross-plugin joins or shared plugin tables. - Core does not put plugin tables into , , or other core-owned databases. Storage Location Each enabled plugin receives a private state directory: Plugin databases live inside that directory. A plugin with one primary database should use: Plugins that need multiple independent stores may use additional database names: Database names should use the same safe identifier style as plugin ids: lowercase letters, numbers, and underscores. Core should reject path separators and traversal segments in database names. Core Contract Core exposes a narrow database API: The database handle should expose only core-owned plumbing: - : configured plugin-local database name. - : resolved database file path under the plugin state directory. - : SQLAlchemy-compatible SQLite URL. Plugins remain responsible for creating stores, engines, sessions, ORM models, and domain APIs from that URL. Core provides the location and migration lifecycle, not the schema. Migration Contract Plugins define schema changes as versioned migration files in the plugin package or repository. Alembic-style migrations are preferred because they are explicit, reviewable, ordered, and compatible with the existing Neuraxis persistence tooling. Core should extend the existing plugin migration metadata into an executable contract: A later CLI can wrap the same service: Migration status should include: - plugin id - target id - database URL or redacted database path - migration directory - current revision - head revision - status: , , , , or - last migration error, when available Startup should continue to report missing or pending plugin migrations as health warnings. Startup should not silently mutate plugin databases unless an explicit operator setting is added later. Ownership Boundary Core owns: - Resolving plugin database paths safely. - Ensuring plugin database files stay under the plugin state directory. - Providing SQLAlchemy-compatible URLs. - Registering migration targets. - Reporting migration status in plugin status endpoints. - Running explicit migration commands when requested. - Emitting migration lifecycle events such as pending, started, completed, and failed. Plugins own: - Tables, indexes, constraints, and migrations. - ORM models and store classes. - Reads, writes, validation, and domain behavior. - Plugin data retention and export semantics. - Tests that prove plugin migrations and stores work. This boundary keeps core generic. A paid add-on such as can store business identity, usage, quota, audit, and reporting data without making core aware of those models. Backup And Restore Separate plugin databases make backup and restore more predictable: - Core backups can include only core databases when operators want a clean core restore. - Full-instance backups can include when operators want plugin data restored too. - Paid/private plugin support can inspect plugin-owned databases without touching core runtime databases. - Plugin uninstall or reset workflows can remove a plugin state directory without schema surgery in core databases. The backup tooling should eventually expose plugin databases as named units, for example: Failure Handling Plugin database failures should degrade the plugin, not the core runtime. - If a plugin migration is missing or pending, the plugin remains enabled unless the plugin marks that migration as required for registration. - If explicit migration execution fails, core records the failure in plugin health/status and returns an operator-visible error. - If plugin store initialization fails during registration, that plugin should fail or disable itself through normal plugin registration error handling. - Core routes, auth, chat, and node management should continue to work when a plugin database is broken. Testing Expectations Core tests should cover: - Database path resolution stays inside plugin state directories. - Invalid database names are rejected. - Migration targets can be registered with plugin database URLs. - Migration status reports current, pending, missing, and failed targets. - Explicit migration execution affects only the selected plugin database. - Plugin database failures are reported in plugin status without breaking core startup. Plugin tests should cover: - Fresh database creation. - Migration from older revisions. - Store read/write behavior. - Plugin registration with missing, pending, and current schemas. - Backup/restore expectations for plugin-owned state when applicable.",
+    searchBody: "Plugin Database Contract This design defines how Llama Pack plugins store durable data without coupling core to plugin-owned schemas or models. Plugins may need persistent data for usage accounting, identity mappings, policy state, paid-feature configuration, reporting, connectors, or other domain-specific workflows. Core should provide a stable database and migration contract, but it should not import plugin ORM models, define plugin tables, or mix plugin data into core databases. Goals - Keep core databases focused on core runtime state. - Give each plugin isolated durable storage under the runtime . - Let plugins own their schemas, migrations, stores, and ORM/domain models. - Let core expose operator-visible migration status and explicit migration execution. - Make backup, restore, removal, and support workflows simpler by keeping plugin data separate from core data. Non-Goals - Core does not inspect or validate plugin table definitions. - Core does not import plugin ORM metadata. - Core does not auto-run plugin migrations at startup by default. - Core does not provide cross-plugin joins or shared plugin tables. - Core does not put plugin tables into , , or other core-owned databases. Storage Location Each enabled plugin receives a private state directory: Plugin databases live inside that directory. A plugin with one primary database should use: Plugins that need multiple independent stores may use additional database names: Database names should use the same safe identifier style as plugin ids: lowercase letters, numbers, and underscores. Core should reject path separators and traversal segments in database names. Core Contract Core exposes a narrow database API: The database handle should expose only core-owned plumbing: - : configured plugin-local database name. - : resolved database file path under the plugin state directory. - : SQLAlchemy-compatible SQLite URL. Plugins remain responsible for creating stores, engines, sessions, ORM models, and domain APIs from that URL. Core provides the location and migration lifecycle, not the schema. Migration Contract Plugins define schema changes as versioned migration files in the plugin package or repository. Alembic-style migrations are preferred because they are explicit, reviewable, ordered, and compatible with the existing Llama Pack persistence tooling. Core should extend the existing plugin migration metadata into an executable contract: A later CLI could wrap the same service. No core CLI is shipped yet: Migration status should include: - plugin id - target id - database URL or redacted database path - migration directory - current revision - head revision - status: , , , , or - last migration error, when available Startup should continue to report missing or pending plugin migrations as health warnings. Startup should not silently mutate plugin databases unless an explicit operator setting is added later. Ownership Boundary Core owns: - Resolving plugin database paths safely. - Ensuring plugin database files stay under the plugin state directory. - Providing SQLAlchemy-compatible URLs. - Registering migration targets. - Reporting migration status in plugin status endpoints. - Running explicit migration commands when requested. - Emitting migration lifecycle events such as pending, started, completed, and failed. Plugins own: - Tables, indexes, constraints, and migrations. - ORM models and store classes. - Reads, writes, validation, and domain behavior. - Plugin data retention and export semantics. - Tests that prove plugin migrations and stores work. This boundary keeps core generic. A paid add-on such as can store business identity, usage, quota, audit, and reporting data without making core aware of those models. Backup And Restore Separate plugin databases make backup and restore more predictable: - Core backups can include only core databases when operators want a clean core restore. - Full-instance backups can include when operators want plugin data restored too. - Paid/private plugin support can inspect plugin-owned databases without touching core runtime databases. - Plugin uninstall or reset workflows can remove a plugin state directory without schema surgery in core databases. The backup tooling should eventually expose plugin databases as named units, for example: Failure Handling Plugin database failures should degrade the plugin, not the core runtime. - If a plugin migration is missing or pending, the plugin remains enabled unless the plugin marks that migration as required for registration. - If explicit migration execution fails, core records the failure in plugin health/status and returns an operator-visible error. - If plugin store initialization fails during registration, that plugin should fail or disable itself through normal plugin registration error handling. - Core routes, auth, chat, and node management should continue to work when a plugin database is broken. Testing Expectations Core tests should cover: - Database path resolution stays inside plugin state directories. - Invalid database names are rejected. - Migration targets can be registered with plugin database URLs. - Migration status reports current, pending, missing, and failed targets. - Explicit migration execution affects only the selected plugin database. - Plugin database failures are reported in plugin status without breaking core startup. Plugin tests should cover: - Fresh database creation. - Migration from older revisions. - Store read/write behavior. - Plugin registration with missing, pending, and current schemas. - Backup/restore expectations for plugin-owned state when applicable.",
   },
   {
     id: "plugin-page-authoring-v1",
@@ -5759,24 +5759,24 @@ and dynamic behavior in focused controller modules.
 ## Manifest Schema
 
 \`\`\`yaml
-id: neuraxis_business
-name: Neuraxis Business
+id: llama_pack_business
+name: Llama Pack Business
 version: "1.0"
 requires_core: "1.0"
 backend_api_version: "1.0"
 frontend_api_version: "1.0"
-entrypoint: neuraxis_business.plugin:plugin
+entrypoint: llama_pack_business.plugin:plugin
 
 frontend:
-  static_dir: neuraxis_business/static
+  static_dir: llama_pack_business/static
   style_entries:
     - business.css
   pages:
-    - route: /ui/plugins/neuraxis_business/overview
+    - route: /ui/plugins/llama_pack_business/overview
       template: templates/overview.html
       controller: controllers/overview.js
       title: Business Overview
-    - route: /ui/plugins/neuraxis_business/documents
+    - route: /ui/plugins/llama_pack_business/documents
       template: templates/documents.html
       controller: controllers/documents.js
       title: Documents
@@ -5836,9 +5836,9 @@ should prefer the \`lp-plugin-*\` classes where they fit.
 ## Recommended Layout
 
 \`\`\`text
-plugins/neuraxis_business_plugin/
+plugins/llama_pack_business_plugin/
 |-- plugin.yaml
-\`-- neuraxis_business/
+\`-- llama_pack_business/
     |-- plugin.py
     \`-- static/
         |-- business.css
@@ -5945,13 +5945,13 @@ and \`static/controllers/hello.js\`.
     sourcePath: "docs/plugins.md",
     content: `# Plugin Author Guide
 
-Neuraxis plugins are trusted local Python packages loaded from configured
+Llama Pack plugins are trusted local Python packages loaded from configured
 filesystem paths. The initial plugin runtime is intentionally local-path only:
 there is no Python package entrypoint discovery, sandboxed execution, or remote
 frontend JavaScript.
 
 Use the checked-in \`plugins/hello_plugin/\` as the reference sample. Paid or
-private plugins, including the private \`neuraxis_business\` add-on, live outside
+private plugins, including the private \`llama_pack_business\` add-on, live outside
 this repository and are loaded from configured local paths.
 
 For a draft of the next plugin-page developer experience (template-first pages,
@@ -6120,7 +6120,7 @@ Event subscribers receive an event envelope with stable metadata:
 async def record_event(event):
     print(event.type, event.id, event.occurred_at)
 
-context.subscribe("neuraxis.plugin.loaded", record_event)
+context.subscribe("llama_pack.plugin.loaded", record_event)
 \`\`\`
 
 Subscriber failures and timeouts are isolated: they do not stop other
@@ -6128,19 +6128,19 @@ subscribers, but they are recorded in plugin health/status metadata.
 
 Current built-in event names include:
 
-- \`neuraxis.plugin.loaded\`
-- \`neuraxis.plugin.disabled\`
-- \`neuraxis.plugin.failed\`
-- \`neuraxis.plugin.config.updated\`
-- \`neuraxis.plugin.migration.pending\`
-- \`neuraxis.plugin.migration.completed\`
+- \`llama_pack.plugin.loaded\`
+- \`llama_pack.plugin.disabled\`
+- \`llama_pack.plugin.failed\`
+- \`llama_pack.plugin.config.updated\`
+- \`llama_pack.plugin.migration.pending\`
+- \`llama_pack.plugin.migration.completed\`
 
 ## Hooks
 
 Policy hooks run in deterministic registration order. Safety-sensitive hook
 failures reject the action.
 
-The initial hook is \`neuraxis.chat_admission\`. It runs through the shared
+The initial hook is \`llama_pack.chat_admission\`. It runs through the shared
 \`ChatScheduler\` admission path before scheduler capacity is consumed, so it
 applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and
 threaded chat surfaces that route through the scheduler.
@@ -6154,7 +6154,7 @@ async def chat_admission(payload):
         return {"allowed": False, "message": "Plugin rejected chat"}
     return {"allowed": True}
 
-context.add_policy_hook("neuraxis.chat_admission", chat_admission)
+context.add_policy_hook("llama_pack.chat_admission", chat_admission)
 \`\`\`
 
 ## Health Checks
@@ -6374,7 +6374,7 @@ Frontend plugin shell behavior is covered in \`frontend/src/components/AppShell.
 5. Open the React UI on the controller. The \`Hello\` nav item should appear in
    the \`Plugins\` section and route to a placeholder page.
 
-6. Set \`reject_chat: true\` to exercise the \`neuraxis.chat_admission\` hook. Chat
+6. Set \`reject_chat: true\` to exercise the \`llama_pack.chat_admission\` hook. Chat
    requests that route through \`ChatScheduler\` should be rejected before
    scheduler capacity is consumed.
 
@@ -6382,18 +6382,18 @@ Frontend plugin shell behavior is covered in \`frontend/src/components/AppShell.
 
 Paid or private plugins should be tracked in separate private repositories.
 Keep this repository focused on the core runtime, public extension contracts,
-and the minimal \`hello_plugin\` sample. The \`neuraxis_business\` add-on is a paid
+and the minimal \`hello_plugin\` sample. The \`llama_pack_business\` add-on is a paid
 private plugin and should not become a core runtime dependency.
 
 Recommended local development setup:
 
 \`\`\`yaml
 enabled_plugins:
-  - neuraxis_business
+  - llama_pack_business
 
 plugins:
-  neuraxis_business:
-    path: /Users/robertsmith/Apps/neuraxis-business-plugin
+  llama_pack_business:
+    path: /Users/robertsmith/Apps/llama-pack-business-plugin
     enabled: true
     config:
       organization_name: Acme
@@ -6406,7 +6406,7 @@ repository keeps fixture-based coverage for the generic plugin runtime and the
 public \`hello_plugin\` sample.
 
 Private plugins that provide end-user auth or chat policy, such as
-\`neuraxis_business\`, should expose their client-facing availability through core
+\`llama_pack_business\`, should expose their client-facing availability through core
 client discovery rather than requiring clients to scrape plugin status or know
 private route details. Core discovery should advertise plugin auth endpoints
 only when the plugin is enabled and not reporting errors that make the
@@ -6501,7 +6501,7 @@ These are not part of the current plugin foundation:
         "anchor": "deferred-work"
       }
     ],
-    searchBody: "Plugin Author Guide Neuraxis plugins are trusted local Python packages loaded from configured filesystem paths. The initial plugin runtime is intentionally local-path only: there is no Python package entrypoint discovery, sandboxed execution, or remote frontend JavaScript. Use the checked-in as the reference sample. Paid or private plugins, including the private add-on, live outside this repository and are loaded from configured local paths. For a draft of the next plugin-page developer experience (template-first pages, external styles, and action-focused controllers), see Plugin Page Authoring v1 (Draft). Enable A Plugin Add the plugin id to and provide a matching entry: Plugins whose id is not enabled, whose configured entry is disabled, or whose runtime mode is incompatible are not registered. Failed and incompatible plugins are reported through . Layout Recommended local layout: The manifest points at an object with a method. Manifest Reference Required fields: Field rules: - : lowercase safe identifier matching . - : display name. - : plugin version string. - , , : currently use . - : import path relative to the plugin root. - : optional list of and/or ; defaults to both. - : optional text. - : optional static asset metadata. - , , : optional frontend route metadata. - : optional validation schema for plugin config. Example controller-only plugin: Config Schema Plugins can declare a small config schema. Core validates config before plugin registration; invalid config leaves the plugin disabled with a warning. Supported field types: - - - - Example: Secret values are passed to plugin code through , but are redacted as in status metadata. Do not log secrets from plugin code. Backend Extension API Minimal plugin object: Available methods: - : registers backend routes under . The default prefix is . Custom prefixes must stay inside the plugin namespace and must not collide with another plugin route prefix. - : appends primary frontend navigation metadata. - : appends scoped secondary navigation metadata for plugin pages. - : appends placeholder frontend route metadata. - : subscribes to in-process best-effort events. - : registers a policy hook. - : registers a dynamic health check for . - : returns a plugin-owned SQLite database handle rooted under . - : registers plugin migration metadata and optional explicit migration execution for a plugin-owned database. - : returns the plugin's configured config values. - : returns a for the plugin's private persistent state directory ( ). The directory is not created automatically; the plugin must call before writing to it (or delegate that to a store class). Use this path to locate plugin-owned SQLite databases or other data files. The directory is scoped to the runtime , keeping plugin data alongside other app state. Events Event subscribers receive an event envelope with stable metadata: Subscriber failures and timeouts are isolated: they do not stop other subscribers, but they are recorded in plugin health/status metadata. Current built-in event names include: - - - - - - Hooks Policy hooks run in deterministic registration order. Safety-sensitive hook failures reject the action. The initial hook is . It runs through the shared admission path before scheduler capacity is consumed, so it applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and threaded chat surfaces that route through the scheduler. Example: Health Checks Health checks can be sync or async. They may return one dict, a list of dicts, or . Use or for operator-visible issues. Exceptions are caught and reported as health errors. Migration Metadata Plugins can register migration targets for visibility: Core reports those targets at: Pending or missing migrations are also surfaced as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugins that need durable data should use plugin-owned databases under their private state directory, with plugin-owned schemas and migrations. Core provides the storage location and migration lifecycle contract, but does not import plugin models or place plugin tables in core databases. See Plugin Database Contract. Frontend Metadata The backend exposes enabled plugin metadata at: For new plugin UI, prefer . Each page declares a core UI route, an HTML fragment template under , an optional controller module under , and a title. Manifest example: Core serves static files from the declared static directory under: The React shell renders plugin navigation, scoped secondary navigation, and a generic plugin host page from . The host fetches the declared HTML fragment, inserts it into the plugin container, then loads the optional controller module and calls . Minimal page controller: Legacy plugins may still use : For legacy plugin routes, the host loads as an ES module and calls its exported function. Minimal plugin frontend module: The object exposes: - : current plugin id. - , , , and : scoped helpers for . - : navigate inside the core UI. - : request a plugin status refresh. Plugin frontend modules run in the core UI origin. Treat plugin frontend code as trusted extension code and keep private/paid plugin UI in the private plugin repository. Core provides a small stable CSS class contract for plugin pages: - - - - - - - - - - Plugin assets are served with , and the React plugin host appends a version/reload query string when importing plugin controllers, styles, and legacy modules. During development, plugin frontend asset changes should only require a browser reload or the plugin page's Reload button. Core frontend rebuilds are only needed when the public host contract changes. The shell also reads and shows administrator-facing alerts for failed, incompatible, warning, or error plugin states. Administrators can inspect configured plugins at . That page shows plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. Testing Plugins Backend plugin behavior should have focused tests in . Use isolated fixture plugins for failure, collision, config, hook, event, and migration edge cases. Use as the checked-in integration target for the happy path. Recommended coverage: - Core starts with no plugins. - Enabled plugin registers metadata and routes. - Disabled, failed, and incompatible plugins do not register routes. - Route namespace and collision failures are reported. - Static assets are served only from the declared static directory. - Path traversal is rejected. - Config schema validation disables invalid plugins. - Secret config values are redacted from status metadata. - Event and hook failures are isolated and reported. - Health checks appear in . - Migration metadata appears in . - Pending or missing migrations produce health warnings. - Plugin registration does not auto-run migrations. Frontend plugin shell behavior is covered in . Hello Plugin Walkthrough 1. Enable in controller config: 2. Start the controller. 3. Confirm backend route: 4. Confirm metadata: 5. Open the React UI on the controller. The nav item should appear in the section and route to a placeholder page. 6. Set to exercise the hook. Chat requests that route through should be rejected before scheduler capacity is consumed. Private Plugin Repositories Paid or private plugins should be tracked in separate private repositories. Keep this repository focused on the core runtime, public extension contracts, and the minimal sample. The add-on is a paid private plugin and should not become a core runtime dependency. Recommended local development setup: That private plugin uses the same manifest schema, backend extension API, frontend metadata contract, health checks, and migration metadata described above. It should carry its own implementation tests and CI, while this repository keeps fixture-based coverage for the generic plugin runtime and the public sample. Private plugins that provide end-user auth or chat policy, such as , should expose their client-facing availability through core client discovery rather than requiring clients to scrape plugin status or know private route details. Core discovery should advertise plugin auth endpoints only when the plugin is enabled and not reporting errors that make the advertised feature unusable. Deferred Work These are not part of the current plugin foundation: - Dynamic React of plugin frontend bundles. - Frontend bundle failure isolation beyond backend status alerts. - Remote plugin JavaScript or third-party asset origins. - Sandboxed plugin Python or JavaScript execution. - Auto-running plugin migrations on startup. - Plugin install/update/uninstall lifecycle commands. - Python package entrypoint discovery.",
+    searchBody: "Plugin Author Guide Llama Pack plugins are trusted local Python packages loaded from configured filesystem paths. The initial plugin runtime is intentionally local-path only: there is no Python package entrypoint discovery, sandboxed execution, or remote frontend JavaScript. Use the checked-in as the reference sample. Paid or private plugins, including the private add-on, live outside this repository and are loaded from configured local paths. For a draft of the next plugin-page developer experience (template-first pages, external styles, and action-focused controllers), see Plugin Page Authoring v1 (Draft). Enable A Plugin Add the plugin id to and provide a matching entry: Plugins whose id is not enabled, whose configured entry is disabled, or whose runtime mode is incompatible are not registered. Failed and incompatible plugins are reported through . Layout Recommended local layout: The manifest points at an object with a method. Manifest Reference Required fields: Field rules: - : lowercase safe identifier matching . - : display name. - : plugin version string. - , , : currently use . - : import path relative to the plugin root. - : optional list of and/or ; defaults to both. - : optional text. - : optional static asset metadata. - , , : optional frontend route metadata. - : optional validation schema for plugin config. Example controller-only plugin: Config Schema Plugins can declare a small config schema. Core validates config before plugin registration; invalid config leaves the plugin disabled with a warning. Supported field types: - - - - Example: Secret values are passed to plugin code through , but are redacted as in status metadata. Do not log secrets from plugin code. Backend Extension API Minimal plugin object: Available methods: - : registers backend routes under . The default prefix is . Custom prefixes must stay inside the plugin namespace and must not collide with another plugin route prefix. - : appends primary frontend navigation metadata. - : appends scoped secondary navigation metadata for plugin pages. - : appends placeholder frontend route metadata. - : subscribes to in-process best-effort events. - : registers a policy hook. - : registers a dynamic health check for . - : returns a plugin-owned SQLite database handle rooted under . - : registers plugin migration metadata and optional explicit migration execution for a plugin-owned database. - : returns the plugin's configured config values. - : returns a for the plugin's private persistent state directory ( ). The directory is not created automatically; the plugin must call before writing to it (or delegate that to a store class). Use this path to locate plugin-owned SQLite databases or other data files. The directory is scoped to the runtime , keeping plugin data alongside other app state. Events Event subscribers receive an event envelope with stable metadata: Subscriber failures and timeouts are isolated: they do not stop other subscribers, but they are recorded in plugin health/status metadata. Current built-in event names include: - - - - - - Hooks Policy hooks run in deterministic registration order. Safety-sensitive hook failures reject the action. The initial hook is . It runs through the shared admission path before scheduler capacity is consumed, so it applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and threaded chat surfaces that route through the scheduler. Example: Health Checks Health checks can be sync or async. They may return one dict, a list of dicts, or . Use or for operator-visible issues. Exceptions are caught and reported as health errors. Migration Metadata Plugins can register migration targets for visibility: Core reports those targets at: Pending or missing migrations are also surfaced as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugins that need durable data should use plugin-owned databases under their private state directory, with plugin-owned schemas and migrations. Core provides the storage location and migration lifecycle contract, but does not import plugin models or place plugin tables in core databases. See Plugin Database Contract. Frontend Metadata The backend exposes enabled plugin metadata at: For new plugin UI, prefer . Each page declares a core UI route, an HTML fragment template under , an optional controller module under , and a title. Manifest example: Core serves static files from the declared static directory under: The React shell renders plugin navigation, scoped secondary navigation, and a generic plugin host page from . The host fetches the declared HTML fragment, inserts it into the plugin container, then loads the optional controller module and calls . Minimal page controller: Legacy plugins may still use : For legacy plugin routes, the host loads as an ES module and calls its exported function. Minimal plugin frontend module: The object exposes: - : current plugin id. - , , , and : scoped helpers for . - : navigate inside the core UI. - : request a plugin status refresh. Plugin frontend modules run in the core UI origin. Treat plugin frontend code as trusted extension code and keep private/paid plugin UI in the private plugin repository. Core provides a small stable CSS class contract for plugin pages: - - - - - - - - - - Plugin assets are served with , and the React plugin host appends a version/reload query string when importing plugin controllers, styles, and legacy modules. During development, plugin frontend asset changes should only require a browser reload or the plugin page's Reload button. Core frontend rebuilds are only needed when the public host contract changes. The shell also reads and shows administrator-facing alerts for failed, incompatible, warning, or error plugin states. Administrators can inspect configured plugins at . That page shows plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. Testing Plugins Backend plugin behavior should have focused tests in . Use isolated fixture plugins for failure, collision, config, hook, event, and migration edge cases. Use as the checked-in integration target for the happy path. Recommended coverage: - Core starts with no plugins. - Enabled plugin registers metadata and routes. - Disabled, failed, and incompatible plugins do not register routes. - Route namespace and collision failures are reported. - Static assets are served only from the declared static directory. - Path traversal is rejected. - Config schema validation disables invalid plugins. - Secret config values are redacted from status metadata. - Event and hook failures are isolated and reported. - Health checks appear in . - Migration metadata appears in . - Pending or missing migrations produce health warnings. - Plugin registration does not auto-run migrations. Frontend plugin shell behavior is covered in . Hello Plugin Walkthrough 1. Enable in controller config: 2. Start the controller. 3. Confirm backend route: 4. Confirm metadata: 5. Open the React UI on the controller. The nav item should appear in the section and route to a placeholder page. 6. Set to exercise the hook. Chat requests that route through should be rejected before scheduler capacity is consumed. Private Plugin Repositories Paid or private plugins should be tracked in separate private repositories. Keep this repository focused on the core runtime, public extension contracts, and the minimal sample. The add-on is a paid private plugin and should not become a core runtime dependency. Recommended local development setup: That private plugin uses the same manifest schema, backend extension API, frontend metadata contract, health checks, and migration metadata described above. It should carry its own implementation tests and CI, while this repository keeps fixture-based coverage for the generic plugin runtime and the public sample. Private plugins that provide end-user auth or chat policy, such as , should expose their client-facing availability through core client discovery rather than requiring clients to scrape plugin status or know private route details. Core discovery should advertise plugin auth endpoints only when the plugin is enabled and not reporting errors that make the advertised feature unusable. Deferred Work These are not part of the current plugin foundation: - Dynamic React of plugin frontend bundles. - Frontend bundle failure isolation beyond backend status alerts. - Remote plugin JavaScript or third-party asset origins. - Sandboxed plugin Python or JavaScript execution. - Auto-running plugin migrations on startup. - Plugin install/update/uninstall lifecycle commands. - Python package entrypoint discovery.",
   },
   {
     id: "setup",
@@ -6517,7 +6517,7 @@ and local test/build commands.
 Guided terminal setup for a fresh controller or agent:
 
 \`\`\`bash
-scripts/setup_neuraxis.sh
+scripts/setup_llama_pack.sh
 \`\`\`
 
 The wizard asks whether the machine is a controller, agent, or single-machine
@@ -6527,7 +6527,7 @@ agents, and optional service startup.
 Repeatable non-interactive controller setup:
 
 \`\`\`bash
-scripts/setup_neuraxis.sh \\
+scripts/setup_llama_pack.sh \\
   --non-interactive \\
   --role controller \\
   --host 127.0.0.1 \\
@@ -6538,13 +6538,13 @@ scripts/setup_neuraxis.sh \\
 Repeatable non-interactive agent setup:
 
 \`\`\`bash
-scripts/setup_neuraxis.sh \\
+scripts/setup_llama_pack.sh \\
   --non-interactive \\
   --role agent \\
   --node linux-2080ti \\
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \\
-  --agent-url "$NEURAXIS_AGENT_URL" \\
-  --controller-registration-key "$NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND" \\
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \\
+  --agent-url "$LLAMA_PACK_AGENT_URL" \\
+  --controller-registration-key "$LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND" \\
   --llama-cpp-backend auto \\
   --start
 \`\`\`
@@ -6575,34 +6575,34 @@ Script-first setup for an agent:
 \`\`\`bash
 uv sync
 scripts/install_llama_cpp.sh --backend auto
-cp .neuraxis.env.example .neuraxis.env
-# Edit .neuraxis.env before onboarding:
-# - NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
-#   NEURAXIS_CONTROLLER_REGISTRATION_KEY from the controller .neuraxis.env.
-# - NEURAXIS_CONTROLLER_URL should point at the controller.
-# - NEURAXIS_AGENT_URL should be the URL the controller uses for this agent.
+cp .llama_pack.env.example .llama_pack.env
+# Edit .llama_pack.env before onboarding:
+# - LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
+#   LLAMA_PACK_CONTROLLER_REGISTRATION_KEY from the controller .llama_pack.env.
+# - LLAMA_PACK_CONTROLLER_URL should point at the controller.
+# - LLAMA_PACK_AGENT_URL should be the URL the controller uses for this agent.
 set -a
-source .neuraxis.env
+source .llama_pack.env
 set +a
 scripts/onboard_agent.sh \\
   --node linux-2080ti \\
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \\
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \\
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/start_agent.sh
 \`\`\`
 
-The onboarding scripts write local secrets to \`.neuraxis.env\`, which is
+The onboarding scripts write local secrets to \`.llama_pack.env\`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
 For encrypted controller/agent traffic, set up Caddy before switching
-\`NEURAXIS_CONTROLLER_URL\` and \`NEURAXIS_AGENT_URL\` to HTTPS; see
+\`LLAMA_PACK_CONTROLLER_URL\` and \`LLAMA_PACK_AGENT_URL\` to HTTPS; see
 \`docs/caddy-local-tls.md\` for the operator checklist and
 \`docs/tls-caddy-plan.md\` for the design rationale.
 
 Two network exposure modes are supported:
 
-- Direct LAN HTTP: set \`NEURAXIS_HOST=0.0.0.0\` and use \`http://<host>:9137\`
+- Direct LAN HTTP: set \`LLAMA_PACK_HOST=0.0.0.0\` and use \`http://<host>:9137\`
   URLs. This is simpler but sends API keys and traffic in plaintext.
-- Caddy/local TLS: set \`NEURAXIS_HOST=127.0.0.1\` and use
+- Caddy/local TLS: set \`LLAMA_PACK_HOST=127.0.0.1\` and use
   \`https://<host>.local\` URLs. Uvicorn is reachable only from the local
   machine, and Caddy is the LAN-facing listener.
 
@@ -6611,15 +6611,15 @@ Manual setup remains available:
 \`\`\`bash
 uv sync
 cp config.example.yaml config.yaml
-export NEURAXIS_CONFIG=config.yaml
+export LLAMA_PACK_CONFIG=config.yaml
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
 alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
-uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
-NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
+uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
+LLAMA_PACK_CONFIG=config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 \`\`\`
 
 \`uv sync\` is the recommended install path because this repository includes a
@@ -6649,8 +6649,8 @@ Onboard a fresh controller without manually copying config or generating keys:
 scripts/onboard_controller.sh
 \`\`\`
 
-The controller onboarding script writes local secrets to \`.neuraxis.env\`,
-including \`NEURAXIS_CONTROLLER_REGISTRATION_KEY\` and the first generated
+The controller onboarding script writes local secrets to \`.llama_pack.env\`,
+including \`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY\` and the first generated
 admin API key when migrations are enabled.
 
 To enable controller semantic memory during the same setup step:
@@ -6661,31 +6661,31 @@ scripts/onboard_controller.sh --enable-memory
 
 That installs the \`controller-memory\` extras, downloads the default embedding
 model to \`./models/embedding/all-MiniLM-L6-v2\`, writes a working \`memory:\`
-block to the controller config, and records \`NEURAXIS_MEMORY_MODEL_PATH\` in
-\`.neuraxis.env\`. Use \`--memory-model-path PATH\` or \`--memory-store-path PATH\`
+block to the controller config, and records \`LLAMA_PACK_MEMORY_MODEL_PATH\` in
+\`.llama_pack.env\`. Use \`--memory-model-path PATH\` or \`--memory-store-path PATH\`
 to choose different local paths.
 
 Onboard a fresh agent:
 
 \`\`\`bash
 scripts/install_llama_cpp.sh --backend auto
-cp .neuraxis.env.example .neuraxis.env
-# Edit .neuraxis.env and set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND
-# to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY.
+cp .llama_pack.env.example .llama_pack.env
+# Edit .llama_pack.env and set LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND
+# to the controller's LLAMA_PACK_CONTROLLER_REGISTRATION_KEY.
 set -a
-source .neuraxis.env
+source .llama_pack.env
 set +a
 scripts/onboard_agent.sh \\
   --node linux-2080ti \\
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \\
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \\
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 \`\`\`
 
 The agent onboarding script keeps \`controller_url\` and \`agent_url\` as
 environment placeholders in the generated config, and writes the real LAN URLs
-to \`.neuraxis.env\` alongside the agent API key, controller registration
+to \`.llama_pack.env\` alongside the agent API key, controller registration
 key, config path, host, and port. \`scripts/start_agent.sh\` and
-\`scripts/stop_server.sh\` source \`.neuraxis.env\` automatically.
+\`scripts/stop_server.sh\` source \`.llama_pack.env\` automatically.
 
 To make agent setup closer to one command, let onboarding install llama.cpp
 first:
@@ -6693,8 +6693,8 @@ first:
 \`\`\`bash
 scripts/onboard_agent.sh \\
   --node linux-2080ti \\
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \\
-  --agent-url "$NEURAXIS_AGENT_URL" \\
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \\
+  --agent-url "$LLAMA_PACK_AGENT_URL" \\
   --install-llama-cpp \\
   --llama-cpp-backend auto
 \`\`\`
@@ -6707,40 +6707,40 @@ values after it verifies \`llama-server\`, \`llama-quantize\`, the converter, an
 the llama.cpp Python venv.
 
 The controller registration key comes from the controller machine's
-\`.neuraxis.env\` after \`scripts/onboard_controller.sh\` runs:
+\`.llama_pack.env\` after \`scripts/onboard_controller.sh\` runs:
 
 \`\`\`bash
-grep NEURAXIS_CONTROLLER_REGISTRATION_KEY .neuraxis.env
+grep LLAMA_PACK_CONTROLLER_REGISTRATION_KEY .llama_pack.env
 \`\`\`
 
 Copy that value to each agent as
-\`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND\`.
+\`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND\`.
 
 Regenerate a local key and print the matching update for the other machines:
 
 \`\`\`bash
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
 \`\`\`
 
 Script defaults:
 
 \`\`\`text
-NEURAXIS_HOST=127.0.0.1
-NEURAXIS_PORT=9137
-NEURAXIS_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
+LLAMA_PACK_HOST=127.0.0.1
+LLAMA_PACK_PORT=9137
+LLAMA_PACK_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
 \`\`\`
 
 ## First Admin Key
 
-Neuraxis fails closed until you create an admin key or configure
+Llama Pack fails closed until you create an admin key or configure
 \`agent_api_key\`. \`scripts/onboard_controller.sh\` creates the first admin key
-for fresh controller setup and stores it in \`.neuraxis.env\`.
+for fresh controller setup and stores it in \`.llama_pack.env\`.
 
 For manual setup, create the first admin key from the terminal:
 
 \`\`\`bash
-uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
+uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 \`\`\`
 
 The command stores a hashed key in \`log_dir/auth_store.db\` and prints the raw API key once. Use that key in the UI login form, or send it as \`X-Llama-Manager-Key\` for API requests. To create more keys later, log in as an admin and use the auth key management UI/API.
@@ -6752,9 +6752,9 @@ rotation scripts:
 
 \`\`\`bash
 scripts/onboard_controller.sh
-scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"
+scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
 \`\`\`
 
 For one-off manual values, generate a strong URL-safe value with:
@@ -6770,10 +6770,10 @@ Use the printed value for matching config fields such as \`agent_api_key\`, \`no
 Linux agent smoke test for the \`linux-2080ti\` setup:
 
 \`\`\`bash
-export NEURAXIS_AGENT_API_KEY=...
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export LLAMA_PACK_AGENT_API_KEY=...
+export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 # Required if the controller protects GET /nodes with an admin/API key:
-export NEURAXIS_CONTROLLER_API_KEY=...
+export LLAMA_PACK_CONTROLLER_API_KEY=...
 scripts/linux_agent_smoke.py --config linux-agent.config.example.yaml
 \`\`\`
 
@@ -6838,7 +6838,7 @@ cd frontend
 npm run build
 \`\`\`
 
-The Vite build writes static assets to \`llama_manager/ui/react\`, which is
+The Vite build writes static assets to \`llama_pack/ui/react\`, which is
 included in Python package data for release builds.
 
 Frontend development workflow:
@@ -6847,7 +6847,7 @@ Frontend development workflow:
 - \`scripts/start_controller_stack.sh\` starts the controller backend + React Vite dev server, or reports that the stack is currently up.
 - \`scripts/start_agent_stack.sh\` starts the agent backend + React Vite dev server, or reports that the stack is currently up.
 - \`scripts/dev_fullstack.sh\` starts backend + React Vite dev server in one command and auto-detects agent/controller mode from config.
-- \`NEURAXIS_START_FRONTEND=1 scripts/start_controller.sh\` starts the
+- \`LLAMA_PACK_START_FRONTEND=1 scripts/start_controller.sh\` starts the
   backend and the React Vite dev server together for local development.
 - \`scripts/start_frontend.sh\` starts only the React Vite dev server when a
   backend is already running.
@@ -6889,7 +6889,7 @@ Frontend development workflow:
         "anchor": "testing"
       }
     ],
-    searchBody: "Setup This page covers installation, onboarding, admin keys, migrations, smoke checks, and local test/build commands. Quick Start Guided terminal setup for a fresh controller or agent: The wizard asks whether the machine is a controller, agent, or single-machine setup. It then runs dependency sync, onboarding, optional llama.cpp setup for agents, and optional service startup. Repeatable non-interactive controller setup: Repeatable non-interactive agent setup: UI-first setup remains available for a fresh controller: Then open the web UI and follow Setup. On first run, the Setup Assistant creates the first admin key before showing controller/agent guidance. The UI does not write config files or run migrations in this version; it generates script-backed commands and verifies backend, auth, mode, and node status after login. Script-first setup for a controller: Script-first setup for an agent: The onboarding scripts write local secrets to , which is ignored by git. The start/stop helper scripts source that file automatically. For encrypted controller/agent traffic, set up Caddy before switching and to HTTPS; see for the operator checklist and for the design rationale. Two network exposure modes are supported: - Direct LAN HTTP: set and use URLs. This is simpler but sends API keys and traffic in plaintext. - Caddy/local TLS: set and use URLs. Uvicorn is reachable only from the local machine, and Caddy is the LAN-facing listener. Manual setup remains available: is the recommended install path because this repository includes a lockfile. It also avoids shell-specific ambiguity where may not exist or may resolve to something other than CPython pip. If you need a pip-based editable install, use an explicit supported interpreter: Or use the helper scripts: Onboarding Scripts Onboard a fresh controller without manually copying config or generating keys: The controller onboarding script writes local secrets to , including and the first generated admin API key when migrations are enabled. To enable controller semantic memory during the same setup step: That installs the extras, downloads the default embedding model to , writes a working block to the controller config, and records in . Use or to choose different local paths. Onboard a fresh agent: The agent onboarding script keeps and as environment placeholders in the generated config, and writes the real LAN URLs to alongside the agent API key, controller registration key, config path, host, and port. and source automatically. To make agent setup closer to one command, let onboarding install llama.cpp first: picks Metal on Apple Silicon, CUDA when is available, and CPU otherwise. Use , , or to force a specific build. The installer prints the matching , , and values after it verifies , , the converter, and the llama.cpp Python venv. The controller registration key comes from the controller machine's after runs: Copy that value to each agent as . Regenerate a local key and print the matching update for the other machines: Script defaults: First Admin Key Neuraxis fails closed until you create an admin key or configure . creates the first admin key for fresh controller setup and stores it in . For manual setup, create the first admin key from the terminal: The command stores a hashed key in and prints the raw API key once. Use that key in the UI login form, or send it as for API requests. To create more keys later, log in as an admin and use the auth key management UI/API. There is no built-in login fallback. For local development, create a throwaway admin key with the same command. For static shared secrets in agent/controller config, prefer the onboarding or rotation scripts: For one-off manual values, generate a strong URL-safe value with: Use the printed value for matching config fields such as , , , and . Linux Agent Smoke Test Linux agent smoke test for the setup: The smoke test validates the Linux agent config and runtime paths, starts the agent with that config, checks the agent , and waits until the controller lists the expected node with a fresh heartbeat. Add if you want the script to stop the agent after a successful run. Schema Migrations Run migration upgrades before starting the app or creating admin keys. Persistence is now Alembic-managed and SQLAlchemy-backed across all app databases. Alembic is scaffolded with multiple DB targets: - - - - - - Select a target via . Examples: If is omitted, target defaults to . Use target-qualified heads such as ; unqualified is ambiguous because each database target has its own Alembic branch. Testing Full test suite: The pytest suite installs dependencies with before running the React frontend unit tests, so does not need to be checked in. React frontend unit tests: React production build: The Vite build writes static assets to , which is included in Python package data for release builds. Frontend development workflow: - Frontend - starts the controller backend + React Vite dev server, or reports that the stack is currently up. - starts the agent backend + React Vite dev server, or reports that the stack is currently up. - starts backend + React Vite dev server in one command and auto-detects agent/controller mode from config. - starts the backend and the React Vite dev server together for local development. - starts only the React Vite dev server when a backend is already running.",
+    searchBody: "Setup This page covers installation, onboarding, admin keys, migrations, smoke checks, and local test/build commands. Quick Start Guided terminal setup for a fresh controller or agent: The wizard asks whether the machine is a controller, agent, or single-machine setup. It then runs dependency sync, onboarding, optional llama.cpp setup for agents, and optional service startup. Repeatable non-interactive controller setup: Repeatable non-interactive agent setup: UI-first setup remains available for a fresh controller: Then open the web UI and follow Setup. On first run, the Setup Assistant creates the first admin key before showing controller/agent guidance. The UI does not write config files or run migrations in this version; it generates script-backed commands and verifies backend, auth, mode, and node status after login. Script-first setup for a controller: Script-first setup for an agent: The onboarding scripts write local secrets to , which is ignored by git. The start/stop helper scripts source that file automatically. For encrypted controller/agent traffic, set up Caddy before switching and to HTTPS; see for the operator checklist and for the design rationale. Two network exposure modes are supported: - Direct LAN HTTP: set and use URLs. This is simpler but sends API keys and traffic in plaintext. - Caddy/local TLS: set and use URLs. Uvicorn is reachable only from the local machine, and Caddy is the LAN-facing listener. Manual setup remains available: is the recommended install path because this repository includes a lockfile. It also avoids shell-specific ambiguity where may not exist or may resolve to something other than CPython pip. If you need a pip-based editable install, use an explicit supported interpreter: Or use the helper scripts: Onboarding Scripts Onboard a fresh controller without manually copying config or generating keys: The controller onboarding script writes local secrets to , including and the first generated admin API key when migrations are enabled. To enable controller semantic memory during the same setup step: That installs the extras, downloads the default embedding model to , writes a working block to the controller config, and records in . Use or to choose different local paths. Onboard a fresh agent: The agent onboarding script keeps and as environment placeholders in the generated config, and writes the real LAN URLs to alongside the agent API key, controller registration key, config path, host, and port. and source automatically. To make agent setup closer to one command, let onboarding install llama.cpp first: picks Metal on Apple Silicon, CUDA when is available, and CPU otherwise. Use , , or to force a specific build. The installer prints the matching , , and values after it verifies , , the converter, and the llama.cpp Python venv. The controller registration key comes from the controller machine's after runs: Copy that value to each agent as . Regenerate a local key and print the matching update for the other machines: Script defaults: First Admin Key Llama Pack fails closed until you create an admin key or configure . creates the first admin key for fresh controller setup and stores it in . For manual setup, create the first admin key from the terminal: The command stores a hashed key in and prints the raw API key once. Use that key in the UI login form, or send it as for API requests. To create more keys later, log in as an admin and use the auth key management UI/API. There is no built-in login fallback. For local development, create a throwaway admin key with the same command. For static shared secrets in agent/controller config, prefer the onboarding or rotation scripts: For one-off manual values, generate a strong URL-safe value with: Use the printed value for matching config fields such as , , , and . Linux Agent Smoke Test Linux agent smoke test for the setup: The smoke test validates the Linux agent config and runtime paths, starts the agent with that config, checks the agent , and waits until the controller lists the expected node with a fresh heartbeat. Add if you want the script to stop the agent after a successful run. Schema Migrations Run migration upgrades before starting the app or creating admin keys. Persistence is now Alembic-managed and SQLAlchemy-backed across all app databases. Alembic is scaffolded with multiple DB targets: - - - - - - Select a target via . Examples: If is omitted, target defaults to . Use target-qualified heads such as ; unqualified is ambiguous because each database target has its own Alembic branch. Testing Full test suite: The pytest suite installs dependencies with before running the React frontend unit tests, so does not need to be checked in. React frontend unit tests: React production build: The Vite build writes static assets to , which is included in Python package data for release builds. Frontend development workflow: - Frontend - starts the controller backend + React Vite dev server, or reports that the stack is currently up. - starts the agent backend + React Vite dev server, or reports that the stack is currently up. - starts backend + React Vite dev server in one command and auto-detects agent/controller mode from config. - starts the backend and the React Vite dev server together for local development. - starts only the React Vite dev server when a backend is already running.",
   },
   {
     id: "tool-loop-eval-presets",
@@ -6898,7 +6898,7 @@ Frontend development workflow:
     content: `# Tool-Loop Eval Presets
 
 This note tracks the roadmap for deterministic tool-call loop evaluations in
-Neuraxis. The goal is to compare tool-capable models on loop quality: selecting
+Llama Pack. The goal is to compare tool-capable models on loop quality: selecting
 the right tools, preserving intermediate facts, recovering from errors, and
 stopping with a final answer instead of drifting into repeated calls.
 
@@ -7088,7 +7088,7 @@ Scoring emphasis:
 
 Status: implemented as \`subagent-delegation-simulation\`.
 
-Purpose: approximate future Neuraxis subagent workflows using deterministic
+Purpose: approximate future Llama Pack subagent workflows using deterministic
 helper tools.
 
 Expected behavior:
@@ -7208,6 +7208,6 @@ Common checks:
         "anchor": "implementation-notes"
       }
     ],
-    searchBody: "Tool-Loop Eval Presets This note tracks the roadmap for deterministic tool-call loop evaluations in Neuraxis. The goal is to compare tool-capable models on loop quality: selecting the right tools, preserving intermediate facts, recovering from errors, and stopping with a final answer instead of drifting into repeated calls. Current Baseline The first-pass eval harness uses deterministic in-process eval tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current eval tools: - : returns a fixed status fact. - : returns a fixed details fact. - through : return fixed linear-synthesis fact tokens. - and : simulate deterministic recovery from a tool error. - : returns a stop condition for loop-control scoring. - , , and : simulate a branch-selection workflow. - : requires an exact argument. - through : simulate independent fact-gathering subtasks where call order does not matter. - , , , and : simulate role-shaped helper agent nodes. Current presets: - : call , then , then combine both facts in the final answer. - : answer directly without calling tools. - : call four deterministic step tools in strict order, then synthesize the four fact tokens. - : call eight deterministic step tools in strict order, then synthesize the eight fact tokens. - : observe a deterministic primary-tool failure, use the fallback tool, and answer from the recovered fact. - : call one lookup tool, observe that no more information is available, and stop without repeating the lookup. - : call a route selector, follow only the selected branch, and answer from that branch. - : call a ticket lookup with the exact required argument and answer from the ticket result. - : call four independent fact tools in any order and synthesize all returned facts. - : call four role-shaped helper tools and preserve each helper's output in the final answer. These establish two baseline behaviors: - The model can follow a short required tool sequence. - The model can avoid tools when the prompt does not need them. Preset Roadmap Linear 4-Step Synthesis Status: implemented. Purpose: verify short-horizon multi-tool persistence. Expected behavior: - Call four tools in a strict order. - Preserve one fact from each tool. - Produce a final answer that includes all required facts. Scoring emphasis: - Strict sequence match. - Final-answer fact coverage. - No repeated or extra tool calls. Linear 8-Step Synthesis Status: implemented. Purpose: test longer-horizon loop control without adding branching complexity. Expected behavior: - Call eight tools in a strict order. - Accumulate all facts. - Stop after the eighth tool and produce a final answer. Scoring emphasis: - Sequence completion. - No premature final answer. - No repeated calls after enough evidence is gathered. Tool-Error Recovery Status: implemented. Purpose: measure whether the model can recover from a tool failure. Expected behavior: - Call a primary tool. - Observe a deterministic error. - Call the documented fallback tool. - Use the fallback result in the final answer. Scoring emphasis: - Expected recovery path. - Final-answer fact coverage from fallback output. - No repeated calls to the failing tool. Avoid Loop Trap Status: implemented. Purpose: measure stopping behavior when a tool says there is no more useful information. Expected behavior: - Call the lookup tool. - Observe a deterministic \"no more information\" result. - Stop and answer with the available fact instead of repeatedly searching. Scoring emphasis: - Low repeated-call count. - Final answer present. - No max-iteration failure. Branching Lookup Status: implemented as . Purpose: test conditional tool selection. Expected behavior: - Call an initial routing tool. - Choose the correct next tool based on the routing result. - Avoid the branch that does not apply. Scoring emphasis: - Branch-aware expected path. - Penalize calling both branches unless the preset explicitly allows it. - Final-answer fact coverage. Parallelizable Subtasks Status: implemented as . Purpose: model independent helper-node style workflows without requiring parallel execution. Expected behavior: - Gather several independent facts. - Tool order may vary. - Produce a final answer that includes every required fact. Scoring emphasis: - Set membership instead of strict sequence. - Missing-fact penalties. - Extra-call penalties only when calls are irrelevant or repeated. Argument Repair Status: implemented as . Purpose: measure whether the model can preserve required tool-call arguments instead of issuing a syntactically valid but semantically empty call. Expected behavior: - Extract the exact ticket id from the prompt. - Call the lookup tool with the required . - Use the returned owner and priority in the final answer. Scoring emphasis: - Required argument match. - Tool success after argument extraction. - Final-answer fact coverage. Delegation Simulation Status: implemented as . Purpose: approximate future Neuraxis subagent workflows using deterministic helper tools. Expected behavior: - Call role-shaped helpers such as planner, executor, reviewer, and verifier. - Combine outputs into a final answer. - Preserve distinctions between helper roles. Scoring emphasis: - Required helper coverage. - Final synthesis quality through fact coverage. - No repeated delegation after a helper has already answered. Scoring Model Each preset should declare its scoring mode explicitly: - : observed tool sequence must match the expected sequence. - : required sequence must appear in order, with limited extras. - : all required tools must be called, order does not matter. - : the expected tool path depends on an earlier tool result. - : repeated calls and max-iteration failures are the main risk. Common checks: - : the model produced a final assistant answer. - : the expected sequence/path/set was satisfied. - : required facts appear in the final answer. - : required tool arguments were included in the observed calls. - : tool calls succeeded, except in presets where a specific error is expected. - : repeated calls stay below the preset threshold. Implementation Notes - Eval tools should remain deterministic and isolated from configured agent tools. - Presets should be small data definitions where possible. Add custom executor behavior only when the preset needs branching, state, or error simulation. - The first harder batch is 4-step, 8-step, tool-error recovery, and loop-trap. The second batch adds branching, argument repair, order-insensitive fact-gathering, and helper-node delegation simulation. - Long presets should raise only for the eval run, not require operators to change their normal agent config. - The CLI still writes and for lightweight latest-summary reads. - Durable run history is stored in the benchmarks database using and ; frontend history surfaces should read from that store instead of scraping JSONL.",
+    searchBody: "Tool-Loop Eval Presets This note tracks the roadmap for deterministic tool-call loop evaluations in Llama Pack. The goal is to compare tool-capable models on loop quality: selecting the right tools, preserving intermediate facts, recovering from errors, and stopping with a final answer instead of drifting into repeated calls. Current Baseline The first-pass eval harness uses deterministic in-process eval tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current eval tools: - : returns a fixed status fact. - : returns a fixed details fact. - through : return fixed linear-synthesis fact tokens. - and : simulate deterministic recovery from a tool error. - : returns a stop condition for loop-control scoring. - , , and : simulate a branch-selection workflow. - : requires an exact argument. - through : simulate independent fact-gathering subtasks where call order does not matter. - , , , and : simulate role-shaped helper agent nodes. Current presets: - : call , then , then combine both facts in the final answer. - : answer directly without calling tools. - : call four deterministic step tools in strict order, then synthesize the four fact tokens. - : call eight deterministic step tools in strict order, then synthesize the eight fact tokens. - : observe a deterministic primary-tool failure, use the fallback tool, and answer from the recovered fact. - : call one lookup tool, observe that no more information is available, and stop without repeating the lookup. - : call a route selector, follow only the selected branch, and answer from that branch. - : call a ticket lookup with the exact required argument and answer from the ticket result. - : call four independent fact tools in any order and synthesize all returned facts. - : call four role-shaped helper tools and preserve each helper's output in the final answer. These establish two baseline behaviors: - The model can follow a short required tool sequence. - The model can avoid tools when the prompt does not need them. Preset Roadmap Linear 4-Step Synthesis Status: implemented. Purpose: verify short-horizon multi-tool persistence. Expected behavior: - Call four tools in a strict order. - Preserve one fact from each tool. - Produce a final answer that includes all required facts. Scoring emphasis: - Strict sequence match. - Final-answer fact coverage. - No repeated or extra tool calls. Linear 8-Step Synthesis Status: implemented. Purpose: test longer-horizon loop control without adding branching complexity. Expected behavior: - Call eight tools in a strict order. - Accumulate all facts. - Stop after the eighth tool and produce a final answer. Scoring emphasis: - Sequence completion. - No premature final answer. - No repeated calls after enough evidence is gathered. Tool-Error Recovery Status: implemented. Purpose: measure whether the model can recover from a tool failure. Expected behavior: - Call a primary tool. - Observe a deterministic error. - Call the documented fallback tool. - Use the fallback result in the final answer. Scoring emphasis: - Expected recovery path. - Final-answer fact coverage from fallback output. - No repeated calls to the failing tool. Avoid Loop Trap Status: implemented. Purpose: measure stopping behavior when a tool says there is no more useful information. Expected behavior: - Call the lookup tool. - Observe a deterministic \"no more information\" result. - Stop and answer with the available fact instead of repeatedly searching. Scoring emphasis: - Low repeated-call count. - Final answer present. - No max-iteration failure. Branching Lookup Status: implemented as . Purpose: test conditional tool selection. Expected behavior: - Call an initial routing tool. - Choose the correct next tool based on the routing result. - Avoid the branch that does not apply. Scoring emphasis: - Branch-aware expected path. - Penalize calling both branches unless the preset explicitly allows it. - Final-answer fact coverage. Parallelizable Subtasks Status: implemented as . Purpose: model independent helper-node style workflows without requiring parallel execution. Expected behavior: - Gather several independent facts. - Tool order may vary. - Produce a final answer that includes every required fact. Scoring emphasis: - Set membership instead of strict sequence. - Missing-fact penalties. - Extra-call penalties only when calls are irrelevant or repeated. Argument Repair Status: implemented as . Purpose: measure whether the model can preserve required tool-call arguments instead of issuing a syntactically valid but semantically empty call. Expected behavior: - Extract the exact ticket id from the prompt. - Call the lookup tool with the required . - Use the returned owner and priority in the final answer. Scoring emphasis: - Required argument match. - Tool success after argument extraction. - Final-answer fact coverage. Delegation Simulation Status: implemented as . Purpose: approximate future Llama Pack subagent workflows using deterministic helper tools. Expected behavior: - Call role-shaped helpers such as planner, executor, reviewer, and verifier. - Combine outputs into a final answer. - Preserve distinctions between helper roles. Scoring emphasis: - Required helper coverage. - Final synthesis quality through fact coverage. - No repeated delegation after a helper has already answered. Scoring Model Each preset should declare its scoring mode explicitly: - : observed tool sequence must match the expected sequence. - : required sequence must appear in order, with limited extras. - : all required tools must be called, order does not matter. - : the expected tool path depends on an earlier tool result. - : repeated calls and max-iteration failures are the main risk. Common checks: - : the model produced a final assistant answer. - : the expected sequence/path/set was satisfied. - : required facts appear in the final answer. - : required tool arguments were included in the observed calls. - : tool calls succeeded, except in presets where a specific error is expected. - : repeated calls stay below the preset threshold. Implementation Notes - Eval tools should remain deterministic and isolated from configured agent tools. - Presets should be small data definitions where possible. Add custom executor behavior only when the preset needs branching, state, or error simulation. - The first harder batch is 4-step, 8-step, tool-error recovery, and loop-trap. The second batch adds branching, argument repair, order-insensitive fact-gathering, and helper-node delegation simulation. - Long presets should raise only for the eval run, not require operators to change their normal agent config. - The CLI still writes and for lightweight latest-summary reads. - Durable run history is stored in the benchmarks database using and ; frontend history surfaces should read from that store instead of scraping JSONL.",
   },
 ];

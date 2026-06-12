@@ -1,7 +1,7 @@
 import { apiGet } from "./client";
 
 export type ClientDiscoveryResponse = {
-  product: "neuraxis";
+  product: "llama-pack";
   version: string;
   mode: string;
   capabilities: {

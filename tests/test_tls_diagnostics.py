@@ -3,9 +3,9 @@ import ssl
 import httpx
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.core.network.tls_diagnostics import TLS_RECOVERY_DOC, network_error_text
-from llama_manager.core.nodes.heartbeat import AgentHeartbeatClient
+from llama_pack.core.config import load_config
+from llama_pack.core.network.tls_diagnostics import TLS_RECOVERY_DOC, network_error_text
+from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
 
 
 def _connect_error(message: str, cause: BaseException) -> httpx.ConnectError:
@@ -74,7 +74,7 @@ async def test_agent_registration_log_includes_expired_certificate_recovery(capl
 
     client = AgentHeartbeatClient(config, request=failing_request)
 
-    with caplog.at_level("WARNING", logger="llama_manager.core.nodes.heartbeat"):
+    with caplog.at_level("WARNING", logger="llama_pack.core.nodes.heartbeat"):
         await client.start()
         await client.stop()
 

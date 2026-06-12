@@ -1,7 +1,7 @@
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.core.threads.routing import ClassifierHint, RouteDecision, RoutingPolicy
+from llama_pack.core.config import load_config
+from llama_pack.core.threads.routing import ClassifierHint, RouteDecision, RoutingPolicy
 
 
 @pytest.mark.asyncio

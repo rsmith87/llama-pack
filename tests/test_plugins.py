@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from llama_manager.core.config import AppConfig, load_config
-from llama_manager.core.chat.scheduler import ChatAdmissionError, ChatScheduler
-from llama_manager.main import create_app
+from llama_pack.core.config import AppConfig, load_config
+from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
+from llama_pack.main import create_app
 from tests.helpers import authenticated_client
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
@@ -549,7 +549,7 @@ async def test_runtime_deactivation_removes_plugin_hooks_and_events(tmp_path: Pa
                 async def reject(payload):
                     return {"allowed": False, "message": "blocked"}
                 context.subscribe("test.runtime", record)
-                context.add_policy_hook("neuraxis.chat_admission", reject)
+                context.add_policy_hook("llama_pack.chat_admission", reject)
         plugin = Plugin()
         """,
     )
@@ -558,7 +558,7 @@ async def test_runtime_deactivation_removes_plugin_hooks_and_events(tmp_path: Pa
 
     assert client.post("/lm-api/v1/plugins/runtime_plugin/deactivate").status_code == 200
     await app.state.plugin_registry.events.emit("test.runtime")
-    await app.state.plugin_registry.hooks.run_policy_hooks("neuraxis.chat_admission", {})
+    await app.state.plugin_registry.hooks.run_policy_hooks("llama_pack.chat_admission", {})
 
     import runtime_plugin.plugin as module
 
@@ -1346,7 +1346,7 @@ async def test_chat_admission_hook_rejects_before_capacity_is_consumed(tmp_path:
             def register(self, context):
                 async def reject(payload):
                     return {"allowed": False, "message": "quota exceeded"}
-                context.add_policy_hook("neuraxis.chat_admission", reject)
+                context.add_policy_hook("llama_pack.chat_admission", reject)
         plugin = Plugin()
         """,
     )
@@ -1376,14 +1376,14 @@ async def test_policy_hooks_run_in_registration_order(tmp_path: Path):
                     calls.append("first")
                 async def second(payload):
                     calls.append("second")
-                context.add_policy_hook("neuraxis.chat_admission", first)
-                context.add_policy_hook("neuraxis.chat_admission", second)
+                context.add_policy_hook("llama_pack.chat_admission", first)
+                context.add_policy_hook("llama_pack.chat_admission", second)
         plugin = Plugin()
         """,
     )
     app = create_app(config=plugin_config(tmp_path, plugin_dir))
 
-    await app.state.plugin_registry.hooks.run_policy_hooks("neuraxis.chat_admission", {})
+    await app.state.plugin_registry.hooks.run_policy_hooks("llama_pack.chat_admission", {})
 
     import ordered_plugin.plugin as module
 

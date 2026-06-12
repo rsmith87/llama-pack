@@ -7,11 +7,11 @@ import pytest
 import httpx
 from fastapi.testclient import TestClient
 
-from llama_manager.core.config.models import AppConfig, ModelConfig
-from llama_manager.core.model_assets.library import GgufLibrary
-from llama_manager.core.model_assets.transfers import TransferManager
-from llama_manager.core.nodes.worker import AgentWorker
-from llama_manager.main import create_app
+from llama_pack.core.config.models import AppConfig, ModelConfig
+from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.model_assets.transfers import TransferManager
+from llama_pack.core.nodes.worker import AgentWorker
+from llama_pack.main import create_app
 from tests.helpers import authenticated_client
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 

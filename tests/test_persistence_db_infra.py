@@ -1,7 +1,7 @@
 from sqlalchemy import text
 
-from llama_manager.core.config import load_config
-from llama_manager.core.persistence.db_infra import (
+from llama_pack.core.config import load_config
+from llama_pack.core.persistence.db_infra import (
     create_persistence_engine,
     create_session_factory,
     default_state_dir,

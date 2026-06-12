@@ -3,7 +3,7 @@
 ## Summary
 
 Llama Manager should support a mobile app that acts as a remote controller
-client for a user's home llama_manager system. V1 is not a compute node and
+client for a user's home llama_pack system. V1 is not a compute node and
 does not run local inference on the phone. The app connects to the controller,
 lets the user chat through existing controller routing, and provides a compact
 operations surface for inspecting and managing known workers and models.
@@ -15,7 +15,7 @@ changes.
 
 ## Goals
 
-- Let a user access their llama_manager controller from a phone, including from
+- Let a user access their llama_pack controller from a phone, including from
   outside the home network when they have a secure network path.
 - Support mobile chat through the controller's existing chat and routing
   system.

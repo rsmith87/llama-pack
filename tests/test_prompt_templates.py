@@ -1,4 +1,4 @@
-from llama_manager.core.chat.prompt_templates import PromptTemplateAdapter
+from llama_pack.core.chat.prompt_templates import PromptTemplateAdapter
 
 
 def test_prompt_template_adapter_uses_custom_registry_handler():

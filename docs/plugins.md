@@ -1,12 +1,12 @@
 # Plugin Author Guide
 
-Neuraxis plugins are trusted local Python packages loaded from configured
+Llama Pack plugins are trusted local Python packages loaded from configured
 filesystem paths. The initial plugin runtime is intentionally local-path only:
 there is no Python package entrypoint discovery, sandboxed execution, or remote
 frontend JavaScript.
 
 Use the checked-in `plugins/hello_plugin/` as the reference sample. Paid or
-private plugins, including the private `neuraxis_business` add-on, live outside
+private plugins, including the private `llama_pack_business` add-on, live outside
 this repository and are loaded from configured local paths.
 
 For a draft of the next plugin-page developer experience (template-first pages,
@@ -175,7 +175,7 @@ Event subscribers receive an event envelope with stable metadata:
 async def record_event(event):
     print(event.type, event.id, event.occurred_at)
 
-context.subscribe("neuraxis.plugin.loaded", record_event)
+context.subscribe("llama_pack.plugin.loaded", record_event)
 ```
 
 Subscriber failures and timeouts are isolated: they do not stop other
@@ -183,19 +183,19 @@ subscribers, but they are recorded in plugin health/status metadata.
 
 Current built-in event names include:
 
-- `neuraxis.plugin.loaded`
-- `neuraxis.plugin.disabled`
-- `neuraxis.plugin.failed`
-- `neuraxis.plugin.config.updated`
-- `neuraxis.plugin.migration.pending`
-- `neuraxis.plugin.migration.completed`
+- `llama_pack.plugin.loaded`
+- `llama_pack.plugin.disabled`
+- `llama_pack.plugin.failed`
+- `llama_pack.plugin.config.updated`
+- `llama_pack.plugin.migration.pending`
+- `llama_pack.plugin.migration.completed`
 
 ## Hooks
 
 Policy hooks run in deterministic registration order. Safety-sensitive hook
 failures reject the action.
 
-The initial hook is `neuraxis.chat_admission`. It runs through the shared
+The initial hook is `llama_pack.chat_admission`. It runs through the shared
 `ChatScheduler` admission path before scheduler capacity is consumed, so it
 applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and
 threaded chat surfaces that route through the scheduler.
@@ -209,7 +209,7 @@ async def chat_admission(payload):
         return {"allowed": False, "message": "Plugin rejected chat"}
     return {"allowed": True}
 
-context.add_policy_hook("neuraxis.chat_admission", chat_admission)
+context.add_policy_hook("llama_pack.chat_admission", chat_admission)
 ```
 
 ## Health Checks
@@ -429,7 +429,7 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
 5. Open the React UI on the controller. The `Hello` nav item should appear in
    the `Plugins` section and route to a placeholder page.
 
-6. Set `reject_chat: true` to exercise the `neuraxis.chat_admission` hook. Chat
+6. Set `reject_chat: true` to exercise the `llama_pack.chat_admission` hook. Chat
    requests that route through `ChatScheduler` should be rejected before
    scheduler capacity is consumed.
 
@@ -437,18 +437,18 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
 
 Paid or private plugins should be tracked in separate private repositories.
 Keep this repository focused on the core runtime, public extension contracts,
-and the minimal `hello_plugin` sample. The `neuraxis_business` add-on is a paid
+and the minimal `hello_plugin` sample. The `llama_pack_business` add-on is a paid
 private plugin and should not become a core runtime dependency.
 
 Recommended local development setup:
 
 ```yaml
 enabled_plugins:
-  - neuraxis_business
+  - llama_pack_business
 
 plugins:
-  neuraxis_business:
-    path: /Users/robertsmith/Apps/neuraxis-business-plugin
+  llama_pack_business:
+    path: /Users/robertsmith/Apps/llama-pack-business-plugin
     enabled: true
     config:
       organization_name: Acme
@@ -461,7 +461,7 @@ repository keeps fixture-based coverage for the generic plugin runtime and the
 public `hello_plugin` sample.
 
 Private plugins that provide end-user auth or chat policy, such as
-`neuraxis_business`, should expose their client-facing availability through core
+`llama_pack_business`, should expose their client-facing availability through core
 client discovery rather than requiring clients to scrape plugin status or know
 private route details. Core discovery should advertise plugin auth endpoints
 only when the plugin is enabled and not reporting errors that make the

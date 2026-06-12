@@ -3,10 +3,10 @@ import json
 
 import pytest
 
-from llama_manager.core.nodes.worker import AgentWorker
-from llama_manager.core.config import load_config
-from llama_manager.core.orchestration.job_contracts import validate_job_payload
-from llama_manager.main import create_app
+from llama_pack.core.nodes.worker import AgentWorker
+from llama_pack.core.config import load_config
+from llama_pack.core.orchestration.job_contracts import validate_job_payload
+from llama_pack.main import create_app
 from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 

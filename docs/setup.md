@@ -8,7 +8,7 @@ and local test/build commands.
 Guided terminal setup for a fresh controller or agent:
 
 ```bash
-scripts/setup_neuraxis.sh
+scripts/setup_llama_pack.sh
 ```
 
 The wizard asks whether the machine is a controller, agent, or single-machine
@@ -18,7 +18,7 @@ agents, and optional service startup.
 Repeatable non-interactive controller setup:
 
 ```bash
-scripts/setup_neuraxis.sh \
+scripts/setup_llama_pack.sh \
   --non-interactive \
   --role controller \
   --host 127.0.0.1 \
@@ -29,13 +29,13 @@ scripts/setup_neuraxis.sh \
 Repeatable non-interactive agent setup:
 
 ```bash
-scripts/setup_neuraxis.sh \
+scripts/setup_llama_pack.sh \
   --non-interactive \
   --role agent \
   --node linux-2080ti \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL" \
-  --controller-registration-key "$NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND" \
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL" \
+  --controller-registration-key "$LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND" \
   --llama-cpp-backend auto \
   --start
 ```
@@ -66,34 +66,34 @@ Script-first setup for an agent:
 ```bash
 uv sync
 scripts/install_llama_cpp.sh --backend auto
-cp .neuraxis.env.example .neuraxis.env
-# Edit .neuraxis.env before onboarding:
-# - NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
-#   NEURAXIS_CONTROLLER_REGISTRATION_KEY from the controller .neuraxis.env.
-# - NEURAXIS_CONTROLLER_URL should point at the controller.
-# - NEURAXIS_AGENT_URL should be the URL the controller uses for this agent.
+cp .llama_pack.env.example .llama_pack.env
+# Edit .llama_pack.env before onboarding:
+# - LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND must match the controller's
+#   LLAMA_PACK_CONTROLLER_REGISTRATION_KEY from the controller .llama_pack.env.
+# - LLAMA_PACK_CONTROLLER_URL should point at the controller.
+# - LLAMA_PACK_AGENT_URL should be the URL the controller uses for this agent.
 set -a
-source .neuraxis.env
+source .llama_pack.env
 set +a
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/start_agent.sh
 ```
 
-The onboarding scripts write local secrets to `.neuraxis.env`, which is
+The onboarding scripts write local secrets to `.llama_pack.env`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
 For encrypted controller/agent traffic, set up Caddy before switching
-`NEURAXIS_CONTROLLER_URL` and `NEURAXIS_AGENT_URL` to HTTPS; see
+`LLAMA_PACK_CONTROLLER_URL` and `LLAMA_PACK_AGENT_URL` to HTTPS; see
 `docs/caddy-local-tls.md` for the operator checklist and
 `docs/tls-caddy-plan.md` for the design rationale.
 
 Two network exposure modes are supported:
 
-- Direct LAN HTTP: set `NEURAXIS_HOST=0.0.0.0` and use `http://<host>:9137`
+- Direct LAN HTTP: set `LLAMA_PACK_HOST=0.0.0.0` and use `http://<host>:9137`
   URLs. This is simpler but sends API keys and traffic in plaintext.
-- Caddy/local TLS: set `NEURAXIS_HOST=127.0.0.1` and use
+- Caddy/local TLS: set `LLAMA_PACK_HOST=127.0.0.1` and use
   `https://<host>.local` URLs. Uvicorn is reachable only from the local
   machine, and Caddy is the LAN-facing listener.
 
@@ -102,15 +102,15 @@ Manual setup remains available:
 ```bash
 uv sync
 cp config.example.yaml config.yaml
-export NEURAXIS_CONFIG=config.yaml
+export LLAMA_PACK_CONFIG=config.yaml
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
 alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
-uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
-NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
+uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
+LLAMA_PACK_CONFIG=config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 ```
 
 `uv sync` is the recommended install path because this repository includes a
@@ -140,8 +140,8 @@ Onboard a fresh controller without manually copying config or generating keys:
 scripts/onboard_controller.sh
 ```
 
-The controller onboarding script writes local secrets to `.neuraxis.env`,
-including `NEURAXIS_CONTROLLER_REGISTRATION_KEY` and the first generated
+The controller onboarding script writes local secrets to `.llama_pack.env`,
+including `LLAMA_PACK_CONTROLLER_REGISTRATION_KEY` and the first generated
 admin API key when migrations are enabled.
 
 To enable controller semantic memory during the same setup step:
@@ -152,31 +152,31 @@ scripts/onboard_controller.sh --enable-memory
 
 That installs the `controller-memory` extras, downloads the default embedding
 model to `./models/embedding/all-MiniLM-L6-v2`, writes a working `memory:`
-block to the controller config, and records `NEURAXIS_MEMORY_MODEL_PATH` in
-`.neuraxis.env`. Use `--memory-model-path PATH` or `--memory-store-path PATH`
+block to the controller config, and records `LLAMA_PACK_MEMORY_MODEL_PATH` in
+`.llama_pack.env`. Use `--memory-model-path PATH` or `--memory-store-path PATH`
 to choose different local paths.
 
 Onboard a fresh agent:
 
 ```bash
 scripts/install_llama_cpp.sh --backend auto
-cp .neuraxis.env.example .neuraxis.env
-# Edit .neuraxis.env and set NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND
-# to the controller's NEURAXIS_CONTROLLER_REGISTRATION_KEY.
+cp .llama_pack.env.example .llama_pack.env
+# Edit .llama_pack.env and set LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND
+# to the controller's LLAMA_PACK_CONTROLLER_REGISTRATION_KEY.
 set -a
-source .neuraxis.env
+source .llama_pack.env
 set +a
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 ```
 
 The agent onboarding script keeps `controller_url` and `agent_url` as
 environment placeholders in the generated config, and writes the real LAN URLs
-to `.neuraxis.env` alongside the agent API key, controller registration
+to `.llama_pack.env` alongside the agent API key, controller registration
 key, config path, host, and port. `scripts/start_agent.sh` and
-`scripts/stop_server.sh` source `.neuraxis.env` automatically.
+`scripts/stop_server.sh` source `.llama_pack.env` automatically.
 
 To make agent setup closer to one command, let onboarding install llama.cpp
 first:
@@ -184,8 +184,8 @@ first:
 ```bash
 scripts/onboard_agent.sh \
   --node linux-2080ti \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL" \
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL" \
   --install-llama-cpp \
   --llama-cpp-backend auto
 ```
@@ -198,40 +198,40 @@ values after it verifies `llama-server`, `llama-quantize`, the converter, and
 the llama.cpp Python venv.
 
 The controller registration key comes from the controller machine's
-`.neuraxis.env` after `scripts/onboard_controller.sh` runs:
+`.llama_pack.env` after `scripts/onboard_controller.sh` runs:
 
 ```bash
-grep NEURAXIS_CONTROLLER_REGISTRATION_KEY .neuraxis.env
+grep LLAMA_PACK_CONTROLLER_REGISTRATION_KEY .llama_pack.env
 ```
 
 Copy that value to each agent as
-`NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
+`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
 
 Regenerate a local key and print the matching update for the other machines:
 
 ```bash
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
 ```
 
 Script defaults:
 
 ```text
-NEURAXIS_HOST=127.0.0.1
-NEURAXIS_PORT=9137
-NEURAXIS_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
+LLAMA_PACK_HOST=127.0.0.1
+LLAMA_PACK_PORT=9137
+LLAMA_PACK_CONFIG=./config.yaml if present, otherwise ./config.example.yaml
 ```
 
 ## First Admin Key
 
-Neuraxis fails closed until you create an admin key or configure
+Llama Pack fails closed until you create an admin key or configure
 `agent_api_key`. `scripts/onboard_controller.sh` creates the first admin key
-for fresh controller setup and stores it in `.neuraxis.env`.
+for fresh controller setup and stores it in `.llama_pack.env`.
 
 For manual setup, create the first admin key from the terminal:
 
 ```bash
-uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
+uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 ```
 
 The command stores a hashed key in `log_dir/auth_store.db` and prints the raw API key once. Use that key in the UI login form, or send it as `X-Llama-Manager-Key` for API requests. To create more keys later, log in as an admin and use the auth key management UI/API.
@@ -243,9 +243,9 @@ rotation scripts:
 
 ```bash
 scripts/onboard_controller.sh
-scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"
+scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
 ```
 
 For one-off manual values, generate a strong URL-safe value with:
@@ -261,10 +261,10 @@ Use the printed value for matching config fields such as `agent_api_key`, `nodes
 Linux agent smoke test for the `linux-2080ti` setup:
 
 ```bash
-export NEURAXIS_AGENT_API_KEY=...
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export LLAMA_PACK_AGENT_API_KEY=...
+export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 # Required if the controller protects GET /nodes with an admin/API key:
-export NEURAXIS_CONTROLLER_API_KEY=...
+export LLAMA_PACK_CONTROLLER_API_KEY=...
 scripts/linux_agent_smoke.py --config linux-agent.config.example.yaml
 ```
 
@@ -329,7 +329,7 @@ cd frontend
 npm run build
 ```
 
-The Vite build writes static assets to `llama_manager/ui/react`, which is
+The Vite build writes static assets to `llama_pack/ui/react`, which is
 included in Python package data for release builds.
 
 Frontend development workflow:
@@ -338,7 +338,7 @@ Frontend development workflow:
 - `scripts/start_controller_stack.sh` starts the controller backend + React Vite dev server, or reports that the stack is currently up.
 - `scripts/start_agent_stack.sh` starts the agent backend + React Vite dev server, or reports that the stack is currently up.
 - `scripts/dev_fullstack.sh` starts backend + React Vite dev server in one command and auto-detects agent/controller mode from config.
-- `NEURAXIS_START_FRONTEND=1 scripts/start_controller.sh` starts the
+- `LLAMA_PACK_START_FRONTEND=1 scripts/start_controller.sh` starts the
   backend and the React Vite dev server together for local development.
 - `scripts/start_frontend.sh` starts only the React Vite dev server when a
   backend is already running.

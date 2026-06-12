@@ -2,8 +2,8 @@ from pathlib import Path
 
 import pytest
 
-from llama_manager.core.config import load_config
-from llama_manager.providers.llama_cpp import build_llama_server_command
+from llama_pack.core.config import load_config
+from llama_pack.providers.llama_cpp import build_llama_server_command
 
 
 def test_load_config_reads_models_nodes_and_env_override(tmp_path, monkeypatch):
@@ -26,7 +26,7 @@ nodes:
 """,
         encoding="utf-8",
     )
-    monkeypatch.setenv("NEURAXIS_MODE", "controller")
+    monkeypatch.setenv("LLAMA_PACK_MODE", "controller")
 
     config = load_config(config_file)
 
@@ -247,12 +247,12 @@ def test_client_cors_origins_default_to_empty_and_load_from_config():
     configured = load_config(
         {
             "mode": "controller",
-            "client_cors_origins": ["http://localhost:5173", "app://neuraxis-chat"],
+            "client_cors_origins": ["http://localhost:5173", "app://llama-pack-chat"],
         }
     )
 
     assert default_config.client_cors_origins == []
-    assert configured.client_cors_origins == ["http://localhost:5173", "app://neuraxis-chat"]
+    assert configured.client_cors_origins == ["http://localhost:5173", "app://llama-pack-chat"]
 
 
 def test_agent_tools_accept_shell_file_http_and_directory_list_definitions(tmp_path):
@@ -361,11 +361,11 @@ def test_agent_tools_reject_directory_list_path_outside_safe_roots(tmp_path):
 
 
 def test_raspberry_pi_example_includes_thread_routing_defaults(monkeypatch):
-    monkeypatch.setenv("NEURAXIS_CONTROLLER_REGISTRATION_KEY", "controller-key")
-    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_URL", "http://mac:9137")
-    monkeypatch.setenv("NEURAXIS_MAC_MINI_AGENT_API_KEY", "mac-key")
-    monkeypatch.setenv("NEURAXIS_LINUX_2080TI_AGENT_URL", "http://linux:9137")
-    monkeypatch.setenv("NEURAXIS_LINUX_2080TI_AGENT_API_KEY", "linux-key")
+    monkeypatch.setenv("LLAMA_PACK_CONTROLLER_REGISTRATION_KEY", "controller-key")
+    monkeypatch.setenv("LLAMA_PACK_MAC_MINI_AGENT_URL", "http://mac:9137")
+    monkeypatch.setenv("LLAMA_PACK_MAC_MINI_AGENT_API_KEY", "mac-key")
+    monkeypatch.setenv("LLAMA_PACK_LINUX_2080TI_AGENT_URL", "http://linux:9137")
+    monkeypatch.setenv("LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY", "linux-key")
 
     config = load_config("raspberry-pi-controller.config.example.yaml")
 
@@ -410,7 +410,7 @@ def test_build_llama_server_command_uses_configured_model_options():
 
 def test_default_config_does_not_embed_machine_specific_paths(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("NEURAXIS_CONFIG", raising=False)
+    monkeypatch.delenv("LLAMA_PACK_CONFIG", raising=False)
     config = load_config()
 
     assert config.llama_cpp_dir == Path("./llama.cpp")
@@ -419,7 +419,7 @@ def test_default_config_does_not_embed_machine_specific_paths(tmp_path, monkeypa
 
 def test_load_config_prefers_local_config_yaml_when_env_unset(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("NEURAXIS_CONFIG", raising=False)
+    monkeypatch.delenv("LLAMA_PACK_CONFIG", raising=False)
     (tmp_path / "config.yaml").write_text(
         """
 mode: agent
@@ -443,7 +443,7 @@ llama_server_bin: /Users/stale/llama-server
 
 def test_load_config_falls_back_to_local_example_when_config_yaml_missing(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
-    monkeypatch.delenv("NEURAXIS_CONFIG", raising=False)
+    monkeypatch.delenv("LLAMA_PACK_CONFIG", raising=False)
     (tmp_path / "config.example.yaml").write_text(
         """
 mode: agent
@@ -639,7 +639,7 @@ def test_save_split_config_writes_models_to_linked_file(tmp_path):
         update={"path": "/models/new.gguf", "port": 8099}
     )
 
-    from llama_manager.core.config import save_config
+    from llama_pack.core.config import save_config
     save_config(config)
 
     import yaml
@@ -677,7 +677,7 @@ def test_save_split_config_writes_agent_tools_to_linked_file(tmp_path):
     config = load_config(manifest)
     config.agent_tools.max_iterations = 8
 
-    from llama_manager.core.config import save_config
+    from llama_pack.core.config import save_config
     save_config(config)
 
     import yaml
@@ -707,7 +707,7 @@ def test_save_split_config_root_manifest_stays_small(tmp_path):
     )
 
     config = load_config(manifest)
-    from llama_manager.core.config import save_config
+    from llama_pack.core.config import save_config
     save_config(config)
 
     import yaml
@@ -728,36 +728,36 @@ def test_save_split_example_auth_file_keeps_secret_placeholders(tmp_path, monkey
     _write_yaml(
         auth_file,
         {
-            "agent_api_key": "${NEURAXIS_AGENT_API_KEY}",
-            "test_chat_api_key": "${NEURAXIS_TEST_CHAT_API_KEY}",
-            "controller_registration_key": "${NEURAXIS_CONTROLLER_REGISTRATION_KEY}",
-            "controller_registration_key_outbound": "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
+            "agent_api_key": "${LLAMA_PACK_AGENT_API_KEY}",
+            "test_chat_api_key": "${LLAMA_PACK_TEST_CHAT_API_KEY}",
+            "controller_registration_key": "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}",
+            "controller_registration_key_outbound": "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
         },
     )
     manifest = tmp_path / "config.yaml"
     _write_yaml(manifest, {"mode": "agent", "files": {"auth": "config/auth.example.yaml"}})
-    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "real-agent-key")
-    monkeypatch.setenv("NEURAXIS_TEST_CHAT_API_KEY", "real-test-chat-key")
-    monkeypatch.setenv("NEURAXIS_CONTROLLER_REGISTRATION_KEY", "real-registration-key")
+    monkeypatch.setenv("LLAMA_PACK_AGENT_API_KEY", "real-agent-key")
+    monkeypatch.setenv("LLAMA_PACK_TEST_CHAT_API_KEY", "real-test-chat-key")
+    monkeypatch.setenv("LLAMA_PACK_CONTROLLER_REGISTRATION_KEY", "real-registration-key")
     monkeypatch.setenv(
-        "NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND",
+        "LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND",
         "real-registration-outbound-key",
     )
 
     config = load_config(manifest)
     assert config.agent_api_key == "real-agent-key"
 
-    from llama_manager.core.config import save_config
+    from llama_pack.core.config import save_config
     save_config(config)
 
     import yaml
     saved_auth = yaml.safe_load(auth_file.read_text(encoding="utf-8"))
-    assert saved_auth["agent_api_key"] == "${NEURAXIS_AGENT_API_KEY}"
-    assert saved_auth["test_chat_api_key"] == "${NEURAXIS_TEST_CHAT_API_KEY}"
-    assert saved_auth["controller_registration_key"] == "${NEURAXIS_CONTROLLER_REGISTRATION_KEY}"
+    assert saved_auth["agent_api_key"] == "${LLAMA_PACK_AGENT_API_KEY}"
+    assert saved_auth["test_chat_api_key"] == "${LLAMA_PACK_TEST_CHAT_API_KEY}"
+    assert saved_auth["controller_registration_key"] == "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}"
     assert (
         saved_auth["controller_registration_key_outbound"]
-        == "${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}"
+        == "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}"
     )
 
 
@@ -767,20 +767,20 @@ def test_save_single_file_example_config_keeps_secret_placeholders(tmp_path, mon
         config_file,
         {
             "mode": "agent",
-            "agent_api_key": "${NEURAXIS_AGENT_API_KEY}",
-            "test_chat_api_key": "${NEURAXIS_TEST_CHAT_API_KEY}",
+            "agent_api_key": "${LLAMA_PACK_AGENT_API_KEY}",
+            "test_chat_api_key": "${LLAMA_PACK_TEST_CHAT_API_KEY}",
         },
     )
-    monkeypatch.setenv("NEURAXIS_AGENT_API_KEY", "real-agent-key")
-    monkeypatch.setenv("NEURAXIS_TEST_CHAT_API_KEY", "real-test-chat-key")
+    monkeypatch.setenv("LLAMA_PACK_AGENT_API_KEY", "real-agent-key")
+    monkeypatch.setenv("LLAMA_PACK_TEST_CHAT_API_KEY", "real-test-chat-key")
 
     config = load_config(config_file)
     assert config.agent_api_key == "real-agent-key"
 
-    from llama_manager.core.config import save_config
+    from llama_pack.core.config import save_config
     save_config(config)
 
     import yaml
     saved = yaml.safe_load(config_file.read_text(encoding="utf-8"))
-    assert saved["agent_api_key"] == "${NEURAXIS_AGENT_API_KEY}"
-    assert saved["test_chat_api_key"] == "${NEURAXIS_TEST_CHAT_API_KEY}"
+    assert saved["agent_api_key"] == "${LLAMA_PACK_AGENT_API_KEY}"
+    assert saved["test_chat_api_key"] == "${LLAMA_PACK_TEST_CHAT_API_KEY}"

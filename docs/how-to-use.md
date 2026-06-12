@@ -1,6 +1,6 @@
-# How To Use Neuraxis
+# How To Use Llama Pack
 
-This guide shows how to run Neuraxis as a secure local/private LLM gateway
+This guide shows how to run Llama Pack as a secure local/private LLM gateway
 with an operations console. A controller provides the stable API surface for
 your apps, while agents run on model hosts and manage local `llama-server`
 processes.
@@ -40,7 +40,7 @@ scripts/start_controller.sh
 ```
 
 `scripts/onboard_controller.sh` creates `config.yaml` when needed, writes
-`.neuraxis.env`, generates `NEURAXIS_CONTROLLER_REGISTRATION_KEY`,
+`.llama_pack.env`, generates `LLAMA_PACK_CONTROLLER_REGISTRATION_KEY`,
 runs migrations, and creates the first admin API key. Use
 `--skip-migrations` only when you want to handle migrations/admin-key creation
 manually.
@@ -59,29 +59,29 @@ to only write and validate config.
 For an agent host:
 
 ```bash
-export NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
+export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
 scripts/onboard_agent.sh \
   --node mac-agent \
-  --controller-url "$NEURAXIS_CONTROLLER_URL" \
-  --agent-url "$NEURAXIS_AGENT_URL"
+  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
+  --agent-url "$LLAMA_PACK_AGENT_URL"
 scripts/start_agent.sh
 ```
 
 `scripts/onboard_agent.sh` creates an agent config, writes
-`.neuraxis.env`, generates `NEURAXIS_AGENT_API_KEY`, and prints the
+`.llama_pack.env`, generates `LLAMA_PACK_AGENT_API_KEY`, and prints the
 controller `nodes:` entry that must use that agent key. The generated config
 keeps `controller_url` and `agent_url` as environment placeholders; the real
 LAN URLs passed to `--controller-url` and `--agent-url` are written only to
-`.neuraxis.env`.
+`.llama_pack.env`.
 
 To rotate keys later:
 
 ```bash
 scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$NEURAXIS_AGENT_URL"
+scripts/regenerate_key.sh --type agent-api --node mac-agent --agent-url "$LLAMA_PACK_AGENT_URL"
 ```
 
-The startup and stop scripts source `.neuraxis.env` automatically:
+The startup and stop scripts source `.llama_pack.env` automatically:
 
 ```bash
 scripts/start_agent.sh
@@ -136,7 +136,7 @@ If `hf_models_dirs` is present, it is used instead of the legacy single-root fie
 Before creating admin keys or starting the service, apply migrations:
 
 ```bash
-export NEURAXIS_CONFIG=config.yaml
+export LLAMA_PACK_CONFIG=config.yaml
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
 alembic -x db=audit upgrade audit@head
@@ -146,7 +146,7 @@ alembic -x db=chat_sessions upgrade chat_sessions@head
 Before using the UI or protected API routes, create an admin key:
 
 ```bash
-uv run python -m llama_manager.auth --config config.yaml create-admin {user_name}
+uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 ```
 
 The command stores only a hash in `log_dir/auth_store.db` and prints the raw key once. Use that key in the UI login form or as the `X-Llama-Manager-Key` header for API requests. There is no `dev` fallback login.
@@ -157,14 +157,14 @@ steps for fresh controller setup.
 ## 5. Start An Agent
 
 ```bash
-NEURAXIS_CONFIG=config.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
+LLAMA_PACK_CONFIG=config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 ```
 
 On Windows PowerShell:
 
 ```powershell
-$env:NEURAXIS_CONFIG = "config.yaml"
-uvicorn llama_manager.main:app --host 127.0.0.1 --port 9000
+$env:LLAMA_PACK_CONFIG = "config.yaml"
+uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 ```
 
 Check health:
@@ -293,7 +293,7 @@ scripts/onboard_controller.sh
 scripts/start_controller.sh
 ```
 
-The script generates `.neuraxis.env`, runs migrations, creates the first
+The script generates `.llama_pack.env`, runs migrations, creates the first
 admin API key, and prints the registration key for agents. The manual config
 shape is:
 
@@ -303,7 +303,7 @@ log_dir: ./logs
 
 nodes:
   windows-2080ti:
-    url: ${NEURAXIS_WINDOWS_2080TI_AGENT_URL}
+    url: ${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
     api_key: windows-agent-key-if-enabled
     verify_tls: true
 
@@ -314,11 +314,11 @@ node_heartbeat_timeout_seconds: 90
 Run controller (different port from local agent):
 
 ```bash
-NEURAXIS_CONFIG=controller.yaml uvicorn llama_manager.main:app --host 127.0.0.1 --port 9100
+LLAMA_PACK_CONFIG=controller.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9100
 ```
 
-If `controller.yaml` is recorded in `.neuraxis.env` as
-`NEURAXIS_CONFIG`, you can also use:
+If `controller.yaml` is recorded in `.llama_pack.env` as
+`LLAMA_PACK_CONFIG`, you can also use:
 
 ```bash
 scripts/start_controller.sh
@@ -328,7 +328,7 @@ For local React UI development, start the controller and Vite dev server
 together:
 
 ```bash
-NEURAXIS_START_FRONTEND=1 scripts/start_controller.sh
+LLAMA_PACK_START_FRONTEND=1 scripts/start_controller.sh
 ```
 
 The React dev site runs at `http://127.0.0.1:5173/ui/react/`. See
@@ -357,21 +357,21 @@ Pi controller config essentials:
 ```yaml
 mode: controller
 log_dir: /home/{user_name}/llama-manager/logs
-controller_registration_key: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY}
+controller_registration_key: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
 nodes:
   mac-mini:
-    url: ${NEURAXIS_MAC_MINI_AGENT_URL}
-    api_key: ${NEURAXIS_MAC_MINI_AGENT_API_KEY}
+    url: ${LLAMA_PACK_MAC_MINI_AGENT_URL}
+    api_key: ${LLAMA_PACK_MAC_MINI_AGENT_API_KEY}
     verify_tls: true
   linux-2080ti:
-    url: ${NEURAXIS_LINUX_2080TI_AGENT_URL}
-    api_key: ${NEURAXIS_LINUX_2080TI_AGENT_API_KEY}
+    url: ${LLAMA_PACK_LINUX_2080TI_AGENT_URL}
+    api_key: ${LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY}
     verify_tls: true
 ```
 
-On each agent, run `scripts/onboard_agent.sh --controller-url "$NEURAXIS_CONTROLLER_URL" --agent-url "$NEURAXIS_AGENT_URL"`. If the agent worker is enabled, make sure the agent's generated `NEURAXIS_AGENT_API_KEY` matches the corresponding `nodes.<name>.api_key` value on the Pi controller.
+On each agent, run `scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"`. If the agent worker is enabled, make sure the agent's generated `LLAMA_PACK_AGENT_API_KEY` matches the corresponding `nodes.<name>.api_key` value on the Pi controller.
 
 ## 13. Enable Agent Worker Jobs
 
@@ -396,11 +396,11 @@ Agent config:
 
 ```yaml
 mode: agent
-controller_url: ${NEURAXIS_CONTROLLER_URL}
+controller_url: ${LLAMA_PACK_CONTROLLER_URL}
 node_name: mac-agent
-agent_url: ${NEURAXIS_AGENT_URL}
-agent_api_key: ${NEURAXIS_AGENT_API_KEY}
-controller_registration_key_outbound: ${NEURAXIS_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
+agent_url: ${LLAMA_PACK_AGENT_URL}
+agent_api_key: ${LLAMA_PACK_AGENT_API_KEY}
+controller_registration_key_outbound: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}
 agent_worker_enabled: true
 agent_worker_poll_interval_seconds: 2
 agent_worker_max_jobs: 1
@@ -411,9 +411,9 @@ agent_worker_capacity:
 ```
 
 For a new worker agent, `scripts/onboard_agent.sh` creates the base agent
-config and `.neuraxis.env`; then enable `agent_worker_enabled` and add the
+config and `.llama_pack.env`; then enable `agent_worker_enabled` and add the
 worker labels/capacity fields in the generated config. Keep concrete LAN URLs
-in `.neuraxis.env`, not in the tracked agent config.
+in `.llama_pack.env`, not in the tracked agent config.
 
 Create a typed generation job on the controller:
 
@@ -492,7 +492,7 @@ cd frontend
 npm run build
 ```
 
-The Vite build writes static assets to `llama_manager/ui/react`, which is
+The Vite build writes static assets to `llama_pack/ui/react`, which is
 included in Python package data for release builds.
 
 Frontend development workflow:
@@ -515,7 +515,7 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 ```
 2. Start the app normally, or use `scripts/start_controller.sh` if
-   `.neuraxis.env` points at the right config.
+   `.llama_pack.env` points at the right config.
 3. Run focused smoke checks for auth, audit, chat sessions, and jobs.
 
 Rollback procedure:

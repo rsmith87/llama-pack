@@ -2,7 +2,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-ENV_FILE="${NEURAXIS_ENV_FILE:-$ROOT_DIR/.neuraxis.env}"
+ENV_FILE="${LLAMA_PACK_ENV_FILE:-$ROOT_DIR/.llama_pack.env}"
 if [[ -f "$ENV_FILE" ]]; then
   set -a
   # shellcheck disable=SC1090
@@ -10,14 +10,14 @@ if [[ -f "$ENV_FILE" ]]; then
   set +a
 fi
 
-FRONTEND_HOST="${NEURAXIS_FRONTEND_HOST:-127.0.0.1}"
-FRONTEND_PORT="${NEURAXIS_FRONTEND_PORT:-5173}"
-FRONTEND_BASE_PATH="${NEURAXIS_FRONTEND_BASE_PATH:-/ui/}"
-BACKEND_HOST="${NEURAXIS_BACKEND_HOST:-127.0.0.1}"
-BACKEND_PORT="${NEURAXIS_BACKEND_PORT:-${NEURAXIS_PORT:-9137}}"
+FRONTEND_HOST="${LLAMA_PACK_FRONTEND_HOST:-127.0.0.1}"
+FRONTEND_PORT="${LLAMA_PACK_FRONTEND_PORT:-5173}"
+FRONTEND_BASE_PATH="${LLAMA_PACK_FRONTEND_BASE_PATH:-/ui/}"
+BACKEND_HOST="${LLAMA_PACK_BACKEND_HOST:-127.0.0.1}"
+BACKEND_PORT="${LLAMA_PACK_BACKEND_PORT:-${LLAMA_PACK_PORT:-9137}}"
 API_PROXY_TARGET="${VITE_API_PROXY_TARGET:-http://$BACKEND_HOST:$BACKEND_PORT}"
-PID_FILE="${NEURAXIS_FRONTEND_PID_FILE:-$ROOT_DIR/.neuraxis_frontend.pid}"
-LOG_FILE="${NEURAXIS_FRONTEND_LOG_FILE:-$ROOT_DIR/logs/neuraxis_frontend_vite.log}"
+PID_FILE="${LLAMA_PACK_FRONTEND_PID_FILE:-$ROOT_DIR/.llama_pack_frontend.pid}"
+LOG_FILE="${LLAMA_PACK_FRONTEND_LOG_FILE:-$ROOT_DIR/logs/llama_pack_frontend_vite.log}"
 
 cd "$ROOT_DIR"
 mkdir -p "$(dirname "$LOG_FILE")"
@@ -40,7 +40,7 @@ fi
 if [[ -f "$PID_FILE" ]]; then
   PID="$(cat "$PID_FILE")"
   if kill -0 "$PID" 2>/dev/null; then
-    echo "Neuraxis React frontend is already running on PID $PID."
+    echo "Llama Pack React frontend is already running on PID $PID."
     echo "URL: http://$FRONTEND_HOST:$FRONTEND_PORT$FRONTEND_BASE_PATH"
     echo "API proxy: $API_PROXY_TARGET"
     exit 0
@@ -60,7 +60,7 @@ echo "Building frontend..."
 
 PID="$(cat "$PID_FILE")"
 
-echo "Started Neuraxis React frontend on PID $PID."
+echo "Started Llama Pack React frontend on PID $PID."
 echo "URL: http://$FRONTEND_HOST:$FRONTEND_PORT$FRONTEND_BASE_PATH"
 echo "API proxy: $API_PROXY_TARGET"
 echo "Log: $LOG_FILE"

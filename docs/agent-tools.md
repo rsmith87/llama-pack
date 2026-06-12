@@ -75,7 +75,7 @@ configured root are rejected.
 read_project_file:
   type: file_read_dynamic
   description: Read a project or log file by relative path.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   max_file_bytes: 524288
 ```
 
@@ -179,7 +179,7 @@ List files and directories under a configured path without shelling out.
 list_project_files:
   type: directory_list
   description: List top-level project structure.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   recursive: true
   max_depth: 2
   max_entries: 200
@@ -207,7 +207,7 @@ Search file names under a configured root by glob pattern. Safe equivalent of
 find_python_files:
   type: file_search
   description: Find Python source files in the project.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   glob: "**/*.py"
   max_entries: 200
   include_hidden: false
@@ -234,7 +234,7 @@ The agent provides a `query` argument at call time (defined via `parameters`).
 search_project_code:
   type: text_search
   description: Search for text or symbols in project Python source files.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   glob: "**/*.py"
   case_sensitive: false
   max_matches: 50
@@ -272,7 +272,7 @@ changed files.
 repo_status:
   type: git_status
   description: Show current git branch and changed files.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
 ```
 
 **Fields**
@@ -294,7 +294,7 @@ by `max_lines`.
 repo_diff:
   type: git_diff
   description: Show unstaged changes in the project repo.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   max_lines: 300
 ```
 
@@ -316,7 +316,7 @@ Show recent commit metadata for a configured repository.
 repo_log:
   type: git_log
   description: Show recent commits in the project repo.
-  path: /Users/robertsmith/Apps/neuraxis
+  path: /Users/robertsmith/Apps/llama-pack
   max_commits: 20
 ```
 
@@ -362,7 +362,7 @@ Return the last N lines of a configured log file without shelling out.
 inference_log:
   type: log_tail
   description: Tail the most recent lines from the inference server log.
-  path: /Users/robertsmith/Apps/neuraxis/logs/neuraxis_agent_uvicorn.log
+  path: logs/llama_pack_agent_uvicorn.log
   max_lines: 100
 ```
 

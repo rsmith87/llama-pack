@@ -5,8 +5,8 @@ import json
 import httpx
 import pytest
 
-from llama_manager.core.agent_tools.live_evals import LiveToolLoopEvaluator, default_live_tool_loop_scenarios
-from llama_manager.core.config import load_config
+from llama_pack.core.agent_tools.live_evals import LiveToolLoopEvaluator, default_live_tool_loop_scenarios
+from llama_pack.core.config import load_config
 
 
 class ScriptedLiveProxy:
