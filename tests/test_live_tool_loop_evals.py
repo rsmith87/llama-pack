@@ -191,6 +191,8 @@ async def test_live_collaborative_notes_design_allows_distinct_repeated_tool_rea
 
     result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
 
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_tool_sequence"] is True
     assert result["checks"]["no_repeated_calls"] is True
 
 

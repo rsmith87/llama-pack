@@ -158,7 +158,7 @@ class LiveToolLoopEvaluator:
             artifact_checks = _artifact_checks(workspace, scenario)
             checks = {
                 "completed": completed,
-                "expected_tool_sequence": sorted(observed_tools) == sorted(scenario.expected_tool_sequence),
+                "expected_tool_sequence": _contains_required_tools(observed_tools, scenario.expected_tool_sequence),
                 "expected_final_substrings": _contains_all(final_answer, ["created", "notes"]),
                 "no_tool_errors": all(bool(result.get("ok")) for result in tool_results),
                 "no_repeated_calls": _max_repeated_call_signatures(tool_results) <= scenario.max_repeated_tool_calls,
@@ -434,6 +434,12 @@ def _message_content(message: dict[str, Any]) -> str:
 def _contains_all(text: str, expected_substrings: list[str]) -> bool:
     normalized = _normalize_match_text(text)
     return all(_normalize_match_text(substring) in normalized for substring in expected_substrings)
+
+
+def _contains_required_tools(observed: list[str], expected: list[str]) -> bool:
+    observed_counts = Counter(observed)
+    expected_counts = Counter(expected)
+    return all(observed_counts[name] >= count for name, count in expected_counts.items())
 
 
 def _tool_sequence_delta(observed: list[str], expected: list[str]) -> tuple[list[str], list[str]]:
