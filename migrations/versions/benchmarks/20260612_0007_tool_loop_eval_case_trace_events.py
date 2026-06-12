@@ -8,7 +8,7 @@ Create Date: 2026-06-12 00:00:00.000000
 from __future__ import annotations
 
 import sqlalchemy as sa
-from alembic import op
+from alembic import context, op
 
 
 revision = "20260612_0007"
@@ -18,7 +18,7 @@ depends_on = None
 
 
 def _target() -> str:
-    return op.get_context().get_x_argument(as_dictionary=True).get("db", "controller")
+    return context.get_x_argument(as_dictionary=True).get("db", "controller")
 
 
 def upgrade() -> None:
