@@ -391,6 +391,7 @@ class BenchmarkStoreOrm:
         generated_at: str,
         target_selector: str,
         target_node: str | None,
+        target_instance: str | None = None,
         suite: dict[str, Any],
     ) -> dict[str, Any]:
         now = datetime.now(UTC).isoformat()
@@ -401,6 +402,7 @@ class BenchmarkStoreOrm:
             model=str(suite.get("model") or ""),
             target_selector=target_selector,
             target_node=target_node,
+            target_instance=target_instance,
             status=str(suite.get("status") or "failed"),
             average_score=float(suite.get("average_score") or 0.0),
             case_count=int(suite.get("case_count") or len(suite.get("cases") or [])),
@@ -538,6 +540,7 @@ def _tool_loop_run_to_dict(row: ToolLoopEvalRunOrm) -> dict[str, Any]:
         "model": row.model,
         "target_selector": row.target_selector,
         "target_node": row.target_node,
+        "target_instance": row.target_instance,
         "status": row.status,
         "average_score": row.average_score,
         "case_count": row.case_count,

@@ -211,6 +211,7 @@ def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
             {
                 "mode": "agent",
                 "log_dir": str(tmp_path),
+                "node_name": "agent-a",
                 "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
                 "agent_tools": {
                     "enabled": True,
@@ -244,8 +245,44 @@ def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
     persisted_runs = app.state.benchmark_store.list_tool_loop_eval_runs()
     assert len(persisted_runs) == 1
     assert persisted_runs[0]["model"] == "qwen"
-    assert persisted_runs[0]["target_selector"] == "local"
+    assert persisted_runs[0]["target_selector"] == "local:agent-a"
     assert persisted_runs[0]["target_node"] is None
+    assert persisted_runs[0]["target_instance"] == "agent-a"
+
+
+def test_standalone_tool_loop_eval_run_persists_local_instance_scope(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_chat_request(url, payload):
+        return {"choices": [{"message": {"role": "assistant", "content": "tool loop ready"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True, "tools": {}},
+            }
+        ),
+        process_manager=type("PM", (), {"status": lambda self, name: {"running": True, "port": 8081}})(),
+        chat_request=fake_chat_request,
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/tool-loop-evals/run",
+        json={"model": "qwen", "case_ids": ["avoid-unneeded-tools"]},
+    )
+
+    assert response.status_code == 200
+    persisted_runs = app.state.benchmark_store.list_tool_loop_eval_runs()
+    assert len(persisted_runs) == 1
+    assert persisted_runs[0]["target_selector"] == "local:standalone"
+    assert persisted_runs[0]["target_node"] is None
+    assert persisted_runs[0]["target_instance"] == "standalone"
 
 
 def test_agent_tool_loop_eval_run_starts_or_adopts_model_before_eval(tmp_path):
@@ -309,7 +346,7 @@ def test_controller_tool_loop_eval_run_rejects_local_eval(tmp_path):
     )
 
     assert response.status_code == 400
-    assert response.json()["detail"] == "tool-loop eval run is only available in agent mode"
+    assert response.json()["detail"] == "tool-loop local eval run is only available outside controller mode"
 
 
 def test_agent_tool_loop_eval_node_run_rejects_controller_proxy(tmp_path):
@@ -474,6 +511,7 @@ def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_p
     assert persisted_runs[0]["model"] == "gpt-oss-20b"
     assert persisted_runs[0]["target_selector"] == "node:mac-mini"
     assert persisted_runs[0]["target_node"] == "mac-mini"
+    assert persisted_runs[0]["target_instance"] == "mac-mini"
     assert calls == [
         (
             "POST",

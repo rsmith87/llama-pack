@@ -152,8 +152,8 @@ async def tool_loop_eval_node_chat(body: ToolLoopNodeChatRequest, request: Reque
 @router.post("/tool-loop-evals/run")
 async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict[str, object]:
     config = request.app.state.config
-    if config.mode != "agent":
-        raise HTTPException(status_code=400, detail="tool-loop eval run is only available in agent mode")
+    if config.mode == "controller":
+        raise HTTPException(status_code=400, detail="tool-loop local eval run is only available outside controller mode")
     if not config.agent_tools.enabled:
         raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
     process_manager = getattr(request.app.state, "process_manager", None)
@@ -183,8 +183,9 @@ async def tool_loop_eval_run(body: ToolLoopRunRequest, request: Request) -> dict
     persisted = _persist_tool_loop_suite(
         request,
         suite,
-        target_selector="local",
+        target_selector=_local_target_selector(config),
         target_node=None,
+        target_instance=_local_target_instance(config),
     )
     if persisted is not None:
         suite = {**suite, "persisted_run_id": persisted["id"]}
@@ -225,6 +226,7 @@ async def tool_loop_eval_node_run(body: ToolLoopNodeRunRequest, request: Request
         suite,
         target_selector=f"node:{body.node}",
         target_node=body.node,
+        target_instance=body.node,
     )
     if persisted is not None and isinstance(suite, dict):
         suite = {**suite, "persisted_run_id": persisted["id"]}
@@ -237,6 +239,7 @@ def _persist_tool_loop_suite(
     *,
     target_selector: str,
     target_node: str | None,
+    target_instance: str | None,
 ) -> dict[str, Any] | None:
     if not isinstance(suite, dict):
         return None
@@ -247,6 +250,7 @@ def _persist_tool_loop_suite(
         generated_at=datetime.now(UTC).isoformat(),
         target_selector=target_selector,
         target_node=target_node,
+        target_instance=target_instance,
         suite=suite,
     )
 
@@ -263,6 +267,14 @@ def _node_error_detail(response: httpx.Response) -> str:
         if detail is not None:
             return json.dumps(detail)
     return response.text[:500] or response.reason_phrase
+
+
+def _local_target_instance(config: Any) -> str:
+    return str(getattr(config, "node_name", None) or "").strip() or "standalone"
+
+
+def _local_target_selector(config: Any) -> str:
+    return f"local:{_local_target_instance(config)}"
 
 
 def _benchmark_store(request: Request) -> Any:

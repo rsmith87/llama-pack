@@ -251,6 +251,26 @@ def test_validate_config_rejects_node_target_with_agent_mode(tmp_path):
         runner.validate_config(config, target="node:mac-mini")
 
 
+def test_local_target_selector_uses_agent_node_name_when_configured(tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "node_name": "mac-mini"})
+
+    assert runner.local_target_selector(config) == "local:mac-mini"
+    assert runner.local_target_instance(config) == "mac-mini"
+
+
+def test_local_target_selector_uses_standalone_without_node_name(tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path)})
+
+    assert runner.local_target_selector(config) == "local:standalone"
+    assert runner.local_target_instance(config) == "standalone"
+
+
 def test_cases_include_target_request_default():
     runner = _load_runner()
 
@@ -318,8 +338,51 @@ def test_persist_outputs_writes_tool_loop_runs_to_benchmarks_db(tmp_path):
     assert [run["id"] for run in runs] == [persisted[0]["id"]]
     assert runs[0]["target_selector"] == "node:linux-2080ti"
     assert runs[0]["target_node"] == "linux-2080ti"
+    assert runs[0]["target_instance"] == "linux-2080ti"
     fetched = store.get_tool_loop_eval_run(runs[0]["id"])
     assert fetched["cases"][0]["case_id"] == "avoid-unneeded-tools"
+
+
+def test_persist_outputs_records_standalone_local_scope(tmp_path):
+    runner = _load_runner()
+    from llama_manager.core.config import load_config
+    from llama_manager.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+    from tests.persistence_db_setup import prepare_benchmarks_db
+
+    db_path = tmp_path / "benchmarks.db"
+    prepare_benchmarks_db(db_path)
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path / "logs"),
+            "benchmarks_db_url": f"sqlite+pysqlite:///{db_path}",
+        }
+    )
+    latest = {
+        "generated_at": "2026-06-11T04:10:00+00:00",
+        "suite_count": 1,
+        "models": ["gpt-oss-20b"],
+        "suites": [
+            {
+                "model": "gpt-oss-20b",
+                "status": "passed",
+                "case_count": 0,
+                "passed_count": 0,
+                "failed_count": 0,
+                "average_score": 0.0,
+                "cases": [],
+            }
+        ],
+    }
+
+    persisted = runner.persist_outputs(config, latest, target="auto")
+
+    assert len(persisted) == 1
+    store = BenchmarkStoreOrm(db_url=f"sqlite+pysqlite:///{db_path}")
+    runs = store.list_tool_loop_eval_runs()
+    assert runs[0]["target_selector"] == "local:standalone"
+    assert runs[0]["target_node"] is None
+    assert runs[0]["target_instance"] == "standalone"
 
 
 def test_run_suites_records_model_routing_failure(monkeypatch, tmp_path):

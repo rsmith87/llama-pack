@@ -249,8 +249,9 @@ def write_outputs(suites: list[dict[str, Any]], *, output_jsonl: Path, latest_js
 def persist_outputs(config: Any, latest: dict[str, Any], *, target: str) -> list[dict[str, Any]]:
     store = BenchmarkStoreOrm(db_url=resolve_persistence_urls(config).benchmarks)
     generated_at = str(latest.get("generated_at") or datetime.now(UTC).isoformat())
-    target_selector = str(target or "auto").strip() or "auto"
+    target_selector = persisted_target_selector(config, target)
     target_node = _target_node_name(target_selector)
+    target_instance = target_node or local_target_instance(config)
     persisted = []
     for suite in latest.get("suites") or []:
         if isinstance(suite, dict):
@@ -259,10 +260,26 @@ def persist_outputs(config: Any, latest: dict[str, Any], *, target: str) -> list
                     generated_at=generated_at,
                     target_selector=target_selector,
                     target_node=target_node,
+                    target_instance=target_instance,
                     suite=suite,
                 )
             )
     return persisted
+
+
+def persisted_target_selector(config: Any, target: str) -> str:
+    target = str(target or "auto").strip() or "auto"
+    if target.startswith("node:"):
+        return target
+    return local_target_selector(config)
+
+
+def local_target_selector(config: Any) -> str:
+    return f"local:{local_target_instance(config)}"
+
+
+def local_target_instance(config: Any) -> str:
+    return str(getattr(config, "node_name", None) or "").strip() or "standalone"
 
 
 def _target_node_name(target: str) -> str | None:

@@ -44,7 +44,7 @@ jobs:
               'audit.db': {'audit_events','alembic_version'},
               'chat_sessions.db': {'chat_sessions','alembic_version'},
               'downloads.db': {'model_downloads','alembic_version'},
-              'benchmarks.db': {'benchmark_definitions','benchmark_run_samples','benchmark_runs','alembic_version'},
+              'benchmarks.db': {'benchmark_definitions','benchmark_run_samples','benchmark_runs','tool_loop_eval_cases','tool_loop_eval_runs','alembic_version'},
           }
 
           for name, expected in checks.items():
@@ -134,7 +134,7 @@ jobs:
               'audit.db': '20260513_0003',
               'chat_sessions.db': '20260523_0007',
               'downloads.db': '20260523_0001',
-              'benchmarks.db': '20260528_0003',
+              'benchmarks.db': '20260612_0005',
           }
           for name, expected in expected_revisions.items():
               conn = sqlite3.connect(base / name)

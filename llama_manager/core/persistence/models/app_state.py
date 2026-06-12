@@ -162,6 +162,7 @@ class ToolLoopEvalRunOrm(Base):
     model: Mapped[str] = mapped_column(Text, nullable=False)
     target_selector: Mapped[str] = mapped_column(Text, nullable=False, default="auto", server_default="auto")
     target_node: Mapped[str | None] = mapped_column(Text, nullable=True)
+    target_instance: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(Text, nullable=False)
     average_score: Mapped[float] = mapped_column(Float, nullable=False, default=0.0, server_default="0")
     case_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
@@ -174,6 +175,7 @@ class ToolLoopEvalRunOrm(Base):
         Index("idx_tool_loop_eval_runs_generated_at", "generated_at"),
         Index("idx_tool_loop_eval_runs_model", "model"),
         Index("idx_tool_loop_eval_runs_status", "status"),
+        Index("idx_tool_loop_eval_runs_target_instance", "target_instance"),
     )
 
 
