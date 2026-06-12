@@ -19,6 +19,8 @@ export type ToolLoopEvalCaseResult = {
   tool_call_count?: number;
   observed_tool_sequence?: string[];
   expected_tool_sequence?: string[];
+  missing_expected_tools?: string[];
+  unexpected_tools?: string[];
   scoring_mode?: string | null;
   tool_results?: Array<{
     tool_call_id?: string;
@@ -31,6 +33,7 @@ export type ToolLoopEvalCaseResult = {
     arguments?: Record<string, unknown>;
     result?: Record<string, unknown>;
   }>;
+  diagnostics?: Record<string, unknown>;
   final_answer?: string;
 };
 

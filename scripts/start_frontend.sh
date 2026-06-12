@@ -37,9 +37,6 @@ if [[ ! -d "$ROOT_DIR/frontend/node_modules" ]]; then
   exit 1
 fi
 
-echo "Building frontend..."
-(cd "$ROOT_DIR/frontend" && npm run build)
-
 if [[ -f "$PID_FILE" ]]; then
   PID="$(cat "$PID_FILE")"
   if kill -0 "$PID" 2>/dev/null; then
@@ -50,6 +47,9 @@ if [[ -f "$PID_FILE" ]]; then
   fi
   rm -f "$PID_FILE"
 fi
+
+echo "Building frontend..."
+(cd "$ROOT_DIR/frontend" && npm run build)
 
 (
   cd "$ROOT_DIR/frontend"

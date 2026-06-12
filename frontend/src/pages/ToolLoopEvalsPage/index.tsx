@@ -78,6 +78,14 @@ function jsonBlock(value: unknown): string {
   return JSON.stringify(value ?? {}, null, 2);
 }
 
+function hasDiagnostics(result: ToolLoopEvalCaseResult): boolean {
+  return Boolean(
+    result.missing_expected_tools?.length ||
+      result.unexpected_tools?.length ||
+      Object.keys(result.diagnostics || {}).length,
+  );
+}
+
 function timelineEntries(result: ToolLoopEvalCaseResult): Array<{
   index: number;
   toolName: string;
@@ -473,13 +481,14 @@ export function ToolLoopEvalsPage() {
                 </div>
                 <p className="muted">Observed</p>
                 <p className="tool-loop-sequence">{sequenceText(activeCase.observed_tool_sequence)}</p>
-                <p className="muted">Expected</p>
+                <p className="muted">Required tools</p>
                 <p className="tool-loop-sequence">{sequenceText(activeCase.expected_tool_sequence)}</p>
                 <div className="tool-loop-checks" aria-label="Case checks">
                   {checks(activeCase).map(([key, ok]) => (
                     <StatusBadge key={key} tone={ok ? "success" : "danger"}>{key}</StatusBadge>
                   ))}
                 </div>
+                {hasDiagnostics(activeCase) ? <ToolLoopDiagnostics result={activeCase} /> : null}
                 <ToolCallTimeline result={activeCase} />
                 {activeCase.error ? <ErrorBanner message={activeCase.error} /> : null}
                 <p className="muted">Final answer</p>
@@ -489,6 +498,31 @@ export function ToolLoopEvalsPage() {
               <p className="muted">No case selected.</p>
             )}
           </Panel>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function ToolLoopDiagnostics({ result }: { result: ToolLoopEvalCaseResult }) {
+  return (
+    <div className="tool-loop-diagnostics" aria-label="Case diagnostics">
+      {result.missing_expected_tools?.length ? (
+        <div>
+          <span className="muted">Missing required tools</span>
+          <pre className="tool-loop-json">{jsonBlock(result.missing_expected_tools)}</pre>
+        </div>
+      ) : null}
+      {result.unexpected_tools?.length ? (
+        <div>
+          <span className="muted">Extra observed tools</span>
+          <pre className="tool-loop-json">{jsonBlock(result.unexpected_tools)}</pre>
+        </div>
+      ) : null}
+      {Object.keys(result.diagnostics || {}).length ? (
+        <div>
+          <span className="muted">Artifact diagnostics</span>
+          <pre className="tool-loop-json">{jsonBlock(result.diagnostics)}</pre>
         </div>
       ) : null}
     </div>

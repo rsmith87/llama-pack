@@ -88,7 +88,12 @@ fi
 if [[ "$AGENT_RUNNING" == "1" ]]; then
   echo "Neuraxis agent is currently up."
 else
-  "$ROOT_DIR/scripts/start_agent.sh"
+  NEURAXIS_START_FRONTEND=0 "$ROOT_DIR/scripts/start_agent.sh"
+  if is_running "$FRONTEND_PID_FILE"; then
+    FRONTEND_RUNNING=1
+  else
+    FRONTEND_RUNNING=0
+  fi
 fi
 
 if [[ "$FRONTEND_RUNNING" == "1" ]]; then

@@ -69,6 +69,12 @@ def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     assert 'NEURAXIS_FRONTEND_BASE_PATH:-/ui/' in contents
 
 
+def test_start_frontend_checks_running_pid_before_building() -> None:
+    contents = read_script("start_frontend.sh")
+
+    assert contents.index('if [[ -f "$PID_FILE" ]]') < contents.index('echo "Building frontend..."')
+
+
 def test_start_controller_stack_script_starts_controller_and_frontend() -> None:
     contents = read_script("start_controller_stack.sh")
 
@@ -77,6 +83,7 @@ def test_start_controller_stack_script_starts_controller_and_frontend() -> None:
     assert "currently up" in contents
     assert 'scripts/start_controller.sh' in contents
     assert 'scripts/start_frontend.sh' in contents
+    assert 'NEURAXIS_START_FRONTEND=0 "$ROOT_DIR/scripts/start_controller.sh"' in contents
 
 
 def test_start_agent_stack_script_starts_agent_and_frontend() -> None:
@@ -87,6 +94,17 @@ def test_start_agent_stack_script_starts_agent_and_frontend() -> None:
     assert "currently up" in contents
     assert 'scripts/start_agent.sh' in contents
     assert 'scripts/start_frontend.sh' in contents
+    assert 'NEURAXIS_START_FRONTEND=0 "$ROOT_DIR/scripts/start_agent.sh"' in contents
+
+
+def test_stack_scripts_refresh_frontend_status_after_backend_start() -> None:
+    for script_name in ("start_agent_stack.sh", "start_controller_stack.sh"):
+        contents = read_script(script_name)
+
+        backend_start = contents.index('NEURAXIS_START_FRONTEND=0 "$ROOT_DIR/scripts/start_')
+        frontend_start = contents.index('"$ROOT_DIR/scripts/start_frontend.sh"')
+        assert backend_start < contents.index('if is_running "$FRONTEND_PID_FILE"; then', backend_start)
+        assert contents.index('if is_running "$FRONTEND_PID_FILE"; then', backend_start) < frontend_start
 
 
 def test_create_test_chat_key_script_updates_env_for_bootstrap() -> None:

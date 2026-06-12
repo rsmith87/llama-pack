@@ -310,6 +310,92 @@ it("renders expandable tool-call timeline details", async () => {
   expect(screen.getByText(/"problem": "durable eval history"/)).toBeInTheDocument();
 });
 
+it("renders required tool and artifact diagnostics for persisted run cases", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-diagnostics",
+            generated_at: "2026-06-11T12:10:00+00:00",
+            model: "gpt-oss-20b",
+            status: "failed",
+            average_score: 0.875,
+            case_count: 1,
+            passed_count: 0,
+            failed_count: 1,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-diagnostics") {
+      return Promise.resolve(okJson({
+        id: "run-diagnostics",
+        generated_at: "2026-06-11T12:10:00+00:00",
+        model: "gpt-oss-20b",
+        status: "failed",
+        average_score: 0.875,
+        case_count: 1,
+        passed_count: 0,
+        failed_count: 1,
+        cases: [
+          {
+            case_id: "live-collaborative-notes-design",
+            status: "failed",
+            score: 0.875,
+            iteration_count: 6,
+            tool_call_count: 5,
+            observed_tool_sequence: [
+              "list_workspace",
+              "read_workspace_file",
+              "read_workspace_file",
+              "search_workspace",
+              "write_notes_app_design",
+            ],
+            expected_tool_sequence: ["list_workspace", "read_workspace_file", "search_workspace", "write_notes_app_design"],
+            missing_expected_tools: [],
+            unexpected_tools: ["read_workspace_file"],
+            checks: {
+              completed: true,
+              expected_tool_sequence: true,
+              expected_final_substrings: false,
+              no_tool_errors: true,
+            },
+            diagnostics: {
+              missing_artifact_substrings: { "docs/notes-app-design.md": ["registration"] },
+            },
+            tool_results: [],
+            final_answer: "Done.",
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  await user.click(await screen.findByRole("button", { name: "View run gpt-oss-20b" }));
+
+  expect(await screen.findByText("Required tools")).toBeInTheDocument();
+  expect(screen.getByLabelText("Case diagnostics")).toBeInTheDocument();
+  expect(screen.getByText("Extra observed tools")).toBeInTheDocument();
+  expect(screen.getByText("Artifact diagnostics")).toBeInTheDocument();
+  expect(screen.getByText("expected_final_substrings")).toBeInTheDocument();
+  expect(screen.getByText(/"registration"/)).toBeInTheDocument();
+});
+
 it("submits a tool-loop eval run from the page", async () => {
   const user = userEvent.setup();
   const requests: Array<{ url: string; body?: string }> = [];

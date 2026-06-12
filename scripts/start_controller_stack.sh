@@ -88,7 +88,12 @@ fi
 if [[ "$CONTROLLER_RUNNING" == "1" ]]; then
   echo "Neuraxis controller is currently up."
 else
-  "$ROOT_DIR/scripts/start_controller.sh"
+  NEURAXIS_START_FRONTEND=0 "$ROOT_DIR/scripts/start_controller.sh"
+  if is_running "$FRONTEND_PID_FILE"; then
+    FRONTEND_RUNNING=1
+  else
+    FRONTEND_RUNNING=0
+  fi
 fi
 
 if [[ "$FRONTEND_RUNNING" == "1" ]]; then
