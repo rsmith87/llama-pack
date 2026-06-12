@@ -203,9 +203,15 @@ class TestToolLoopEvalRuns:
                         "tool_call_count": 2,
                         "observed_tool_sequence": ["read_status", "read_details"],
                         "expected_tool_sequence": ["read_status", "read_details"],
+                        "missing_expected_tools": [],
+                        "unexpected_tools": [],
                         "scoring_mode": "strict_sequence",
                         "tool_results": [{"tool_name": "read_status", "ok": True}],
                         "final_answer": "green calibration window",
+                        "diagnostics": {
+                            "missing_artifact_substrings": {"docs/notes-app-design.md": ["registration"]},
+                            "forbidden_artifact_substrings_found": {},
+                        },
                     },
                     {
                         "case_id": "avoid-unneeded-tools",
@@ -251,6 +257,12 @@ class TestToolLoopEvalRuns:
         ]
         assert fetched["cases"][0]["observed_tool_sequence"] == ["read_status", "read_details"]
         assert fetched["cases"][0]["tool_results"] == [{"tool_name": "read_status", "ok": True}]
+        assert fetched["cases"][0]["missing_expected_tools"] == []
+        assert fetched["cases"][0]["unexpected_tools"] == []
+        assert fetched["cases"][0]["diagnostics"] == {
+            "missing_artifact_substrings": {"docs/notes-app-design.md": ["registration"]},
+            "forbidden_artifact_substrings_found": {},
+        }
 
     def test_list_tool_loop_eval_runs_filters_model_and_status(self, store):
         def make_suite(model: str, status: str) -> dict:

@@ -527,8 +527,11 @@ def _tool_loop_case_row(run_id: str, case_index: int, case: dict[str, Any]) -> T
         tool_call_count=int(case.get("tool_call_count") or 0),
         observed_tool_sequence_json=json.dumps(case.get("observed_tool_sequence") or []),
         expected_tool_sequence_json=json.dumps(case.get("expected_tool_sequence") or []),
+        missing_expected_tools_json=json.dumps(case.get("missing_expected_tools") or []),
+        unexpected_tools_json=json.dumps(case.get("unexpected_tools") or []),
         scoring_mode=case.get("scoring_mode"),
         tool_results_json=json.dumps(case.get("tool_results") or []),
+        diagnostics_json=json.dumps(_tool_loop_case_diagnostics(case)),
         final_answer=str(case.get("final_answer") or ""),
     )
 
@@ -565,7 +568,18 @@ def _tool_loop_case_to_dict(row: ToolLoopEvalCaseOrm) -> dict[str, Any]:
         "tool_call_count": row.tool_call_count,
         "observed_tool_sequence": json.loads(row.observed_tool_sequence_json),
         "expected_tool_sequence": json.loads(row.expected_tool_sequence_json),
+        "missing_expected_tools": json.loads(row.missing_expected_tools_json),
+        "unexpected_tools": json.loads(row.unexpected_tools_json),
         "scoring_mode": row.scoring_mode,
         "tool_results": json.loads(row.tool_results_json),
+        "diagnostics": json.loads(row.diagnostics_json),
         "final_answer": row.final_answer,
     }
+
+
+def _tool_loop_case_diagnostics(case: dict[str, Any]) -> dict[str, Any]:
+    diagnostics = dict(case.get("diagnostics") or {})
+    for key in ("missing_artifact_substrings", "forbidden_artifact_substrings_found"):
+        if key in case:
+            diagnostics[key] = case.get(key) or {}
+    return diagnostics

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import json
 from dataclasses import dataclass, field
 from typing import Any
@@ -109,6 +110,7 @@ class ToolLoopEvaluator:
         if case.max_repeated_tool_calls is not None:
             checks["no_repeated_calls"] = _max_repeated_calls(observed_tools) <= case.max_repeated_tool_calls
         score = _score(checks)
+        missing_expected_tools, unexpected_tools = _tool_sequence_delta(observed_tools, case.expected_tool_sequence)
         return {
             "case_id": case.id,
             "case_category": case.category,
@@ -121,6 +123,8 @@ class ToolLoopEvaluator:
             "tool_call_count": len(observed_tools),
             "observed_tool_sequence": observed_tools,
             "expected_tool_sequence": list(case.expected_tool_sequence),
+            "missing_expected_tools": missing_expected_tools,
+            "unexpected_tools": unexpected_tools,
             "scoring_mode": case.scoring_mode,
             "tool_results": tool_results,
             "final_answer": final_answer,
@@ -747,6 +751,22 @@ def _sequence_matches(observed: list[str], expected: list[str], scoring_mode: st
     if scoring_mode == "set_membership":
         return sorted(observed) == sorted(expected)
     return observed == expected
+
+
+def _tool_sequence_delta(observed: list[str], expected: list[str]) -> tuple[list[str], list[str]]:
+    observed_counts = Counter(observed)
+    expected_counts = Counter(expected)
+    missing: list[str] = []
+    unexpected: list[str] = []
+    for name in expected:
+        if observed_counts[name] < expected_counts[name]:
+            missing.extend([name] * (expected_counts[name] - observed_counts[name]))
+            expected_counts[name] = observed_counts[name]
+    for name in observed:
+        if observed_counts[name] > expected_counts[name]:
+            unexpected.extend([name] * (observed_counts[name] - expected_counts[name]))
+            observed_counts[name] = expected_counts[name]
+    return missing, unexpected
 
 
 def _required_arguments_match(

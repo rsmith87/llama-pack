@@ -288,6 +288,8 @@ async def test_tool_loop_eval_penalizes_wrong_branch(tmp_path):
 
     assert result["status"] == "failed"
     assert result["checks"]["expected_tool_sequence"] is False
+    assert result["missing_expected_tools"] == ["inspect_infra"]
+    assert result["unexpected_tools"] == ["inspect_billing"]
 
 
 @pytest.mark.asyncio

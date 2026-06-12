@@ -44,6 +44,14 @@ def _config(tmp_path):
     return load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
 
 
+def test_live_collaborative_notes_design_instructs_required_workspace_search():
+    scenario = default_live_tool_loop_scenarios()[0]
+
+    assert "search_workspace" in scenario.prompt
+    assert "user_id" in scenario.prompt
+    assert "before writing" in scenario.prompt.lower()
+
+
 @pytest.mark.asyncio
 async def test_live_collaborative_notes_design_uses_real_workspace_tools(tmp_path):
     scenario = default_live_tool_loop_scenarios()[0]
@@ -107,6 +115,9 @@ async def test_live_collaborative_notes_design_penalizes_forbidden_auth_artifact
 
     assert result["status"] == "failed"
     assert result["checks"]["no_forbidden_artifact_substrings"] is False
+    assert result["forbidden_artifact_substrings_found"] == {
+        "docs/notes-app-design.md": ["password", "login form", "signup"]
+    }
 
 
 @pytest.mark.asyncio
@@ -135,6 +146,34 @@ async def test_live_collaborative_notes_design_allows_negated_password_language(
 
 
 @pytest.mark.asyncio
+async def test_live_collaborative_notes_design_reports_missing_artifact_substrings(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("read_workspace_file", {"path": "README.md"}),
+            ("search_workspace", {"query": "user_id"}),
+            (
+                "write_notes_app_design",
+                {
+                    "content": (
+                        "Overview Data model API Frontend Collaboration Risk notes collaborators "
+                        "user_id"
+                    )
+                },
+            ),
+        ]
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["expected_artifact_substrings"] is False
+    assert result["missing_artifact_substrings"] == {
+        "docs/notes-app-design.md": ["note_id", "registration"]
+    }
+
+
+@pytest.mark.asyncio
 async def test_live_collaborative_notes_design_allows_distinct_repeated_tool_reads(tmp_path):
     scenario = default_live_tool_loop_scenarios()[0]
     design = (
@@ -153,6 +192,32 @@ async def test_live_collaborative_notes_design_allows_distinct_repeated_tool_rea
     result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
 
     assert result["checks"]["no_repeated_calls"] is True
+
+
+@pytest.mark.asyncio
+async def test_live_collaborative_notes_design_reports_missing_expected_tools(tmp_path):
+    scenario = default_live_tool_loop_scenarios()[0]
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("read_workspace_file", {"path": "README.md"}),
+            (
+                "write_notes_app_design",
+                {
+                    "content": (
+                        "Overview Data model API Frontend Collaboration Risk notes collaborators "
+                        "user_id note_id registration"
+                    )
+                },
+            ),
+        ]
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["expected_tool_sequence"] is False
+    assert result["missing_expected_tools"] == ["search_workspace"]
+    assert result["unexpected_tools"] == []
 
 
 @pytest.mark.asyncio

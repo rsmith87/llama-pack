@@ -194,8 +194,11 @@ class ToolLoopEvalCaseOrm(Base):
     tool_call_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     observed_tool_sequence_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     expected_tool_sequence_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    missing_expected_tools_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    unexpected_tools_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
     scoring_mode: Mapped[str | None] = mapped_column(Text, nullable=True)
     tool_results_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]", server_default="[]")
+    diagnostics_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
     final_answer: Mapped[str] = mapped_column(Text, nullable=False, default="", server_default="")
 
     __table_args__ = (

@@ -31,7 +31,7 @@ TARGET_REVISIONS = {
     "audit": "20260513_0003",
     "chat_sessions": "20260523_0007",
     "downloads": "20260523_0001",
-    "benchmarks": "20260612_0005",
+    "benchmarks": "20260612_0006",
 }
 LATEST_REVISION = TARGET_REVISIONS["chat_sessions"]
 

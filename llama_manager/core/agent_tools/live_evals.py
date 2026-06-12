@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import Counter
 import json
 import tempfile
 from dataclasses import dataclass, field
@@ -146,6 +147,8 @@ class LiveToolLoopEvaluator:
                     "tool_call_count": 0,
                     "observed_tool_sequence": [],
                     "expected_tool_sequence": list(scenario.expected_tool_sequence),
+                    "missing_expected_tools": list(scenario.expected_tool_sequence),
+                    "unexpected_tools": [],
                     "scoring_mode": "set_membership",
                     "tool_results": [],
                     "final_answer": "",
@@ -162,6 +165,8 @@ class LiveToolLoopEvaluator:
                 **artifact_checks,
             }
             score = _score(checks)
+            missing_expected_tools, unexpected_tools = _tool_sequence_delta(observed_tools, scenario.expected_tool_sequence)
+            artifact_diagnostics = _artifact_diagnostics(workspace, scenario)
             return {
                 "case_id": scenario.id,
                 "case_category": "live_workspace",
@@ -174,6 +179,9 @@ class LiveToolLoopEvaluator:
                 "tool_call_count": len(observed_tools),
                 "observed_tool_sequence": observed_tools,
                 "expected_tool_sequence": list(scenario.expected_tool_sequence),
+                "missing_expected_tools": missing_expected_tools,
+                "unexpected_tools": unexpected_tools,
+                **artifact_diagnostics,
                 "scoring_mode": "set_membership",
                 "tool_results": tool_results,
                 "final_answer": final_answer,
@@ -202,6 +210,8 @@ def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:
             id="live-collaborative-notes-design",
             prompt=(
                 "Use the workspace tools to inspect the notes app brief and starter files. "
+                "Call search_workspace exactly once with query user_id before writing the design, "
+                "so relationship references from the markdown workspace are included. "
                 "Create docs/notes-app-design.md with a compact implementation design under 700 words. "
                 "The design must include sections named Overview, Data model, API, Frontend, Collaboration, and Risk. "
                 "Use 2-3 short bullets per section instead of long tables. "
@@ -275,7 +285,10 @@ def _live_notes_config(config: AppConfig, workspace: Path, max_iterations: int) 
         ),
         "search_workspace": AgentToolDefinitionConfig(
             type="text_search",
-            description="Search markdown files in the live scenario workspace.",
+            description=(
+                "Search markdown files in the live scenario workspace. "
+                "For the notes app design eval, call this once with query user_id before writing."
+            ),
             path=workspace,
             glob="*.md",
             parameters={
@@ -350,6 +363,33 @@ def _artifact_payloads(workspace: Path, artifact_paths: list[str]) -> list[dict[
     return payloads
 
 
+def _artifact_diagnostics(workspace: Path, scenario: LiveToolLoopScenario) -> dict[str, dict[str, list[str]]]:
+    return {
+        "missing_artifact_substrings": _missing_artifact_substrings(workspace, scenario),
+        "forbidden_artifact_substrings_found": _forbidden_artifact_substrings_found(workspace, scenario),
+    }
+
+
+def _missing_artifact_substrings(workspace: Path, scenario: LiveToolLoopScenario) -> dict[str, list[str]]:
+    missing: dict[str, list[str]] = {}
+    for path, substrings in scenario.expected_artifact_substrings.items():
+        content = (workspace / path).read_text(encoding="utf-8") if (workspace / path).exists() else ""
+        missing_for_path = [substring for substring in substrings if not _contains_all(content, [substring])]
+        if missing_for_path:
+            missing[path] = missing_for_path
+    return missing
+
+
+def _forbidden_artifact_substrings_found(workspace: Path, scenario: LiveToolLoopScenario) -> dict[str, list[str]]:
+    found: dict[str, list[str]] = {}
+    for path, substrings in scenario.forbidden_artifact_substrings.items():
+        content = (workspace / path).read_text(encoding="utf-8") if (workspace / path).exists() else ""
+        found_for_path = [substring for substring in substrings if _contains_any(content, [substring])]
+        if found_for_path:
+            found[path] = found_for_path
+    return found
+
+
 def _assistant_message(response: dict[str, Any]) -> dict[str, Any]:
     choices = response.get("choices") or []
     if not choices or not isinstance(choices[0], dict):
@@ -394,6 +434,22 @@ def _message_content(message: dict[str, Any]) -> str:
 def _contains_all(text: str, expected_substrings: list[str]) -> bool:
     normalized = _normalize_match_text(text)
     return all(_normalize_match_text(substring) in normalized for substring in expected_substrings)
+
+
+def _tool_sequence_delta(observed: list[str], expected: list[str]) -> tuple[list[str], list[str]]:
+    observed_counts = Counter(observed)
+    expected_counts = Counter(expected)
+    missing: list[str] = []
+    unexpected: list[str] = []
+    for name in expected:
+        if observed_counts[name] < expected_counts[name]:
+            missing.extend([name] * (expected_counts[name] - observed_counts[name]))
+            expected_counts[name] = observed_counts[name]
+    for name in observed:
+        if observed_counts[name] > expected_counts[name]:
+            unexpected.extend([name] * (observed_counts[name] - expected_counts[name]))
+            observed_counts[name] = expected_counts[name]
+    return missing, unexpected
 
 
 def _contains_any(text: str, substrings: list[str]) -> bool:
