@@ -1,0 +1,28 @@
+.hello-plugin {
+  display: grid;
+  gap: 1rem;
+}
+
+.hello-plugin__meta {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  margin: 0;
+}
+
+.hello-plugin__meta div {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.hello-plugin__meta dt {
+  color: var(--muted, #657083);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+}
+
+.hello-plugin__meta dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}

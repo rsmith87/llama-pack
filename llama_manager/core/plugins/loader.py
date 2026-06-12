@@ -52,6 +52,7 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         record.ui_routes.extend(manifest.ui_routes)
         if manifest.frontend:
             page_prefix = f"/ui/plugins/{plugin_id}"
+            _validate_static_dir(path, manifest)
             _plugin_asset_url(plugin_id, manifest.frontend.entry)
             _plugin_asset_url(plugin_id, manifest.frontend.style)
             for style_entry in manifest.frontend.style_entries:
@@ -88,6 +89,23 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         record.status = "enabled"
     except Exception as exc:
         registry.mark_failed(plugin_id, str(exc))
+
+
+def _validate_static_dir(plugin_root: Path, manifest: PluginManifest) -> None:
+    frontend = manifest.frontend
+    if frontend is None:
+        return
+    has_declared_assets = bool(frontend.entry or frontend.style or frontend.style_entries or frontend.pages)
+    if not has_declared_assets:
+        return
+    if not frontend.static_dir:
+        raise ValueError("frontend.static_dir is required when frontend assets are declared")
+    root = plugin_root.resolve()
+    static_dir = (plugin_root / frontend.static_dir).resolve()
+    try:
+        static_dir.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("frontend.static_dir must stay inside the plugin root") from exc
 
 
 def _import_entrypoint(plugin_path: Path, entrypoint: str) -> Any:

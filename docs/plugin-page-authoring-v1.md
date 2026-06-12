@@ -62,6 +62,8 @@ Rules:
   paths are resolved under `/plugin-assets/{plugin_id}/`.
 - Same-plugin `/plugin-assets/{plugin_id}/...` URLs are accepted.
 - Cross-plugin asset URLs and traversal segments are rejected.
+- `frontend.static_dir` is required when frontend assets are declared and must
+  resolve inside the plugin root.
 - `controller` is optional.
 - `title` is used for route labels and page headings.
 
@@ -146,6 +148,11 @@ export function mount(container, host) {
 A plugin can migrate one route at a time by adding `frontend.pages` while legacy
 plugins continue to use `frontend.entry`, `navigation`, `secondary_navigation`,
 and `ui_routes`.
+
+The checked-in `plugins/hello_plugin/` is the reference migrated sample: its
+manifest declares `frontend.pages` and `style_entries`, and its page structure,
+styles, and behavior live in `static/templates/hello.html`, `static/hello.css`,
+and `static/controllers/hello.js`.
 
 ## Migration Guide
 

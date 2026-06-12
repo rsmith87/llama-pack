@@ -111,20 +111,67 @@ it("loads a plugin frontend module and mounts it into the host container", async
   expect(cleanup).toHaveBeenCalled();
 });
 
-it("loads the checked-in hello_plugin frontend bundle through plugin metadata", async () => {
-  stubEnabledPlugin();
-  const helloEntrySource = readFileSync(
-    resolve(__dirname, "../../../../plugins/hello_plugin/hello_plugin/static/hello-entry.js"),
+it("loads the checked-in hello_plugin template, controller, and styles through plugin metadata", async () => {
+  const helloTemplate = readFileSync(
+    resolve(__dirname, "../../../../plugins/hello_plugin/hello_plugin/static/templates/hello.html"),
     "utf-8",
   );
-  const helloEntryUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(helloEntrySource)}`;
-  const loadModule = vi.fn((entry: string) => import(/* @vite-ignore */ helloEntryUrl));
+  const helloControllerSource = readFileSync(
+    resolve(__dirname, "../../../../plugins/hello_plugin/hello_plugin/static/controllers/hello.js"),
+    "utf-8",
+  );
+  const helloStyle = readFileSync(
+    resolve(__dirname, "../../../../plugins/hello_plugin/hello_plugin/static/hello.css"),
+    "utf-8",
+  );
+  expect(helloStyle).toContain(".hello-plugin");
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/plugins/enabled") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([{
+            id: "hello_plugin",
+            name: "Hello Plugin",
+            version: "1.0",
+            status: "enabled",
+            frontend: {
+              entry: null,
+              style: null,
+              style_entries: ["/plugin-assets/hello_plugin/hello.css"],
+              pages: [{
+                route: "/ui/plugins/hello_plugin",
+                template: "/plugin-assets/hello_plugin/templates/hello.html",
+                controller: "/plugin-assets/hello_plugin/controllers/hello.js",
+                title: "Hello Plugin",
+              }],
+            },
+            navigation: [],
+            ui_routes: [{ label: "Hello Plugin", path: "/ui/plugins/hello_plugin" }],
+          }]),
+        });
+      }
+      if (url === "/plugin-assets/hello_plugin/templates/hello.html") {
+        return Promise.resolve({
+          ok: true,
+          text: async () => helloTemplate,
+        });
+      }
+      return Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing" });
+    }),
+  );
+  const helloControllerUrl = `data:text/javascript;charset=utf-8,${encodeURIComponent(helloControllerSource)}`;
+  const loadModule = vi.fn((entry: string) => import(/* @vite-ignore */ helloControllerUrl));
 
   renderPluginHost(loadModule);
 
   expect(await screen.findByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
   expect(await screen.findByText("hello_plugin")).toBeInTheDocument();
-  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
+  expect(await screen.findByText("/lm-api/v1/plugins/hello_plugin")).toBeInTheDocument();
+  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/controllers/hello.js?v=1.0&r=0");
+  const link = document.head.querySelector("link[data-plugin-style='hello_plugin']");
+  expect(link).toHaveAttribute("href", "/plugin-assets/hello_plugin/hello.css?v=1.0&r=0");
 });
 
 it("loads a template-first plugin page and mounts its controller", async () => {

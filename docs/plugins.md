@@ -44,7 +44,11 @@ plugins/hello_plugin/
     |-- __init__.py
     |-- plugin.py
     `-- static/
-        `-- hello-entry.js
+        |-- hello.css
+        |-- controllers/
+        |   `-- hello.js
+        `-- templates/
+            `-- hello.html
 ```
 
 The manifest `entrypoint` points at an object with a `register(context)` method.

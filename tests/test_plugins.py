@@ -177,16 +177,23 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert client.get("/lm-api/v1/plugins/hello_plugin/hello").json() == {"message": "hello from plugin"}
     metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
     assert metadata["id"] == "hello_plugin"
+    assert metadata["frontend"]["entry"] is None
+    assert metadata["frontend"]["style_entries"] == ["/plugin-assets/hello_plugin/hello.css"]
     page = metadata["frontend"]["pages"][0]
     assert page["route"] == "/ui/plugins/hello_plugin"
     assert page["template"] == "/plugin-assets/hello_plugin/templates/hello.html"
     assert page["controller"] == "/plugin-assets/hello_plugin/controllers/hello.js"
+    assert metadata["ui_routes"] == [{"path": "/ui/plugins/hello_plugin", "label": "Hello Plugin"}]
     template_response = client.get(page["template"])
     assert template_response.status_code == 200
     assert "Hello Plugin" in template_response.text
     controller_response = client.get(page["controller"])
     assert controller_response.status_code == 200
     assert "export function mountPage" in controller_response.text
+    style_response = client.get("/plugin-assets/hello_plugin/hello.css")
+    assert style_response.status_code == 200
+    assert ".hello-plugin" in style_response.text
+    assert client.get("/plugin-assets/hello_plugin/hello-entry.js").status_code == 404
     migration_status = client.get("/lm-api/v1/plugins/hello_plugin/migrations/status").json()
     target = migration_status["targets"][0]
     assert target["id"] == "main"
@@ -282,6 +289,49 @@ def test_plugin_page_template_paths_reject_traversal(tmp_path: Path):
     status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
     assert status["status"] == "failed"
     assert "relative to frontend.static_dir" in status["errors"][0]
+
+
+def test_plugin_frontend_assets_require_static_dir(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          pages:
+            - route: /ui/plugins/page_plugin
+              template: templates/index.html
+              title: Bad
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "frontend.static_dir is required when frontend assets are declared" in status["errors"][0]
+
+
+def test_plugin_static_dir_must_stay_inside_plugin_root(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: ../shared_static
+          pages:
+            - route: /ui/plugins/page_plugin
+              template: templates/index.html
+              title: Bad
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "frontend.static_dir must stay inside the plugin root" in status["errors"][0]
 
 
 def test_plugin_frontend_asset_urls_must_stay_under_plugin_namespace(tmp_path: Path):
