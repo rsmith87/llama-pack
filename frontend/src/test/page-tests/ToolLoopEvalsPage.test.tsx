@@ -8,6 +8,43 @@ function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
 
+function presetCatalog(payload = {}) {
+  return {
+    preset_count: 2,
+    groups: [
+      {
+        id: "synthetic",
+        label: "Synthetic presets",
+        presets: [
+          {
+            id: "avoid-unneeded-tools",
+            label: "Backend direct answer",
+            category: "synthetic",
+            scoring_mode: "strict_sequence",
+            expected_tool_count: 0,
+            max_iterations: null,
+          },
+        ],
+      },
+      {
+        id: "real_world",
+        label: "Real-world scenarios",
+        presets: [
+          {
+            id: "technical-design-doc-draft",
+            label: "Backend technical design",
+            category: "real_world",
+            scoring_mode: "set_membership",
+            expected_tool_count: 5,
+            max_iterations: 8,
+          },
+        ],
+      },
+    ],
+    ...payload,
+  };
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -396,11 +433,204 @@ it("renders required tool and artifact diagnostics for persisted run cases", asy
   expect(screen.getByText(/"registration"/)).toBeInTheDocument();
 });
 
+it("summarizes failure buckets for the selected persisted run", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-failure-summary",
+            generated_at: "2026-06-11T12:10:00+00:00",
+            model: "gpt-oss-20b",
+            status: "failed",
+            average_score: 0.5,
+            case_count: 2,
+            passed_count: 0,
+            failed_count: 2,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-failure-summary") {
+      return Promise.resolve(okJson({
+        id: "run-failure-summary",
+        generated_at: "2026-06-11T12:10:00+00:00",
+        model: "gpt-oss-20b",
+        status: "failed",
+        average_score: 0.5,
+        case_count: 2,
+        passed_count: 0,
+        failed_count: 2,
+        cases: [
+          {
+            case_id: "argument-repair",
+            status: "failed",
+            score: 0.25,
+            checks: {
+              expected_tool_sequence: false,
+              expected_tool_arguments: false,
+              no_tool_errors: false,
+            },
+            missing_expected_tools: ["fetch_ticket"],
+            unexpected_tools: ["read_status"],
+            observed_tool_sequence: ["read_status", "read_status"],
+            tool_results: [{ tool_name: "read_status", ok: false, error: "wrong tool" }],
+            final_answer: "",
+          },
+          {
+            case_id: "live-collaborative-notes-design",
+            status: "failed",
+            score: 0.75,
+            error: "live tool loop reached max_iterations before final assistant response",
+            checks: {
+              completed: false,
+              expected_artifact_substrings: false,
+              no_repeated_calls: false,
+            },
+            diagnostics: {
+              missing_artifact_substrings: { "docs/notes-app-design.md": ["registration"] },
+            },
+            observed_tool_sequence: ["read_workspace_file", "read_workspace_file"],
+            final_answer: "",
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  await user.click(await screen.findByRole("button", { name: "View run gpt-oss-20b" }));
+
+  expect(await screen.findByText("Failure Summary")).toBeInTheDocument();
+  expect(screen.getByText("2 failed cases")).toBeInTheDocument();
+  expect(screen.getByText("Missing tools")).toBeInTheDocument();
+  expect(screen.getByText("Repeated tools")).toBeInTheDocument();
+  expect(screen.getByText("Max iterations")).toBeInTheDocument();
+  expect(screen.getByText("Argument mismatch")).toBeInTheDocument();
+  expect(screen.getByText("Tool selection: missing required tools or unrelated tool calls.")).toBeInTheDocument();
+  expect(screen.getByText("Loop control: repeated calls or max-iteration exits.")).toBeInTheDocument();
+});
+
+it("compares selected persisted runs", async () => {
+  const user = userEvent.setup();
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
+      return Promise.resolve(okJson({
+        runs: [
+          {
+            id: "run-a",
+            generated_at: "2026-06-11T12:10:00+00:00",
+            model: "model-a",
+            target_selector: "node:mac-mini",
+            status: "failed",
+            average_score: 0.5,
+            case_count: 2,
+            passed_count: 1,
+            failed_count: 1,
+          },
+          {
+            id: "run-b",
+            generated_at: "2026-06-11T12:12:00+00:00",
+            model: "model-b",
+            target_selector: "node:linux-2080ti",
+            status: "passed",
+            average_score: 1,
+            case_count: 2,
+            passed_count: 2,
+            failed_count: 0,
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-a") {
+      return Promise.resolve(okJson({
+        id: "run-a",
+        model: "model-a",
+        target_selector: "node:mac-mini",
+        status: "failed",
+        average_score: 0.5,
+        case_count: 2,
+        passed_count: 1,
+        failed_count: 1,
+        cases: [
+          { case_id: "avoid-unneeded-tools", status: "passed", score: 1, checks: { completed: true } },
+          {
+            case_id: "argument-repair",
+            status: "failed",
+            score: 0,
+            checks: { expected_tool_arguments: false, expected_tool_sequence: false },
+            missing_expected_tools: ["fetch_ticket"],
+            observed_tool_sequence: ["read_status"],
+          },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/runs/run-b") {
+      return Promise.resolve(okJson({
+        id: "run-b",
+        model: "model-b",
+        target_selector: "node:linux-2080ti",
+        status: "passed",
+        average_score: 1,
+        case_count: 2,
+        passed_count: 2,
+        failed_count: 0,
+        cases: [
+          { case_id: "avoid-unneeded-tools", status: "passed", score: 1, checks: { completed: true } },
+          { case_id: "argument-repair", status: "passed", score: 1, checks: { expected_tool_arguments: true, expected_tool_sequence: true } },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/latest") {
+      return Promise.resolve(okJson({
+        available: false,
+        path: "/tmp/tool_loop_eval_latest.json",
+        generated_at: null,
+        suite_count: 0,
+        models: [],
+        suites: [],
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+
+  render(<ToolLoopEvalsPage />);
+
+  await user.click(await screen.findByRole("checkbox", { name: "Compare model-a" }));
+  await user.click(screen.getByRole("checkbox", { name: "Compare model-b" }));
+  await user.click(screen.getByRole("button", { name: "Compare Selected" }));
+
+  expect(await screen.findByText("Run Comparison")).toBeInTheDocument();
+  expect(screen.getByText("Best run")).toBeInTheDocument();
+  expect(screen.getAllByText("model-b · node:linux-2080ti").length).toBeGreaterThan(0);
+  expect(screen.getByText("Score delta")).toBeInTheDocument();
+  expect(screen.getAllByText("50%").length).toBeGreaterThan(0);
+  expect(screen.getByText("argument-repair")).toBeInTheDocument();
+  expect(screen.getByText("expected_tool_arguments, expected_tool_sequence")).toBeInTheDocument();
+  expect(screen.getByText("Missing tools, Argument mismatch")).toBeInTheDocument();
+});
+
 it("submits a tool-loop eval run from the page", async () => {
   const user = userEvent.setup();
   const requests: Array<{ url: string; body?: string }> = [];
   vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
     requests.push({ url, body: String(options?.body || "") });
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/presets") {
+      return Promise.resolve(okJson(presetCatalog()));
+    }
     if (url === "/lm-api/v1/nodes/models") {
       return Promise.resolve(okJson({
         nodes: [
@@ -476,6 +706,9 @@ it("submits a local tool-loop eval run in agent mode", async () => {
   const requests: Array<{ url: string; body?: string }> = [];
   vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
     requests.push({ url, body: String(options?.body || "") });
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/presets") {
+      return Promise.resolve(okJson(presetCatalog()));
+    }
     if (url === "/lm-api/v1/models") {
       return Promise.resolve(okJson({
         models: [{ name: "qwen-local", status: "running" }],
@@ -615,6 +848,9 @@ it("renders local history targets", async () => {
 
 it("exposes real-world scenario presets in the run form", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/tool-loop-evals/presets") {
+      return Promise.resolve(okJson(presetCatalog()));
+    }
     if (url === "/lm-api/v1/nodes/models") {
       return Promise.resolve(okJson({
         nodes: [
@@ -645,9 +881,8 @@ it("exposes real-world scenario presets in the run form", async () => {
   const preset = await screen.findByLabelText("Preset");
   expect(within(preset).getByRole("group", { name: "Synthetic presets" })).toBeInTheDocument();
   expect(within(preset).getByRole("group", { name: "Real-world scenarios" })).toBeInTheDocument();
-  expect(within(preset).getByRole("option", { name: "Technical design doc draft" })).toHaveValue("technical-design-doc-draft");
-  expect(within(preset).getByRole("option", { name: "Collaborative notes app design" })).toHaveValue("collaborative-notes-app-design");
-  expect(within(preset).getByRole("option", { name: "Live collaborative notes design" })).toHaveValue("live-collaborative-notes-design");
+  expect(within(preset).getByRole("option", { name: "Backend direct answer" })).toHaveValue("avoid-unneeded-tools");
+  expect(within(preset).getByRole("option", { name: "Backend technical design" })).toHaveValue("technical-design-doc-draft");
 });
 
 it("updates the model field when the selected node changes", async () => {

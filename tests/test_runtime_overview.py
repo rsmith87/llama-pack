@@ -129,6 +129,37 @@ def test_tool_loop_eval_latest_returns_runner_summary(tmp_path):
     assert body["suites"][0]["average_score"] == 1.0
 
 
+def test_tool_loop_eval_presets_returns_backend_catalog(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/tool-loop-evals/presets")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["preset_count"] >= 13
+    groups = {group["id"]: group for group in body["groups"]}
+    assert groups["synthetic"]["label"] == "Synthetic presets"
+    assert groups["real_world"]["label"] == "Real-world scenarios"
+    assert groups["live_workspace"]["label"] == "Live workspace scenarios"
+    synthetic_ids = {preset["id"] for preset in groups["synthetic"]["presets"]}
+    real_world_ids = {preset["id"] for preset in groups["real_world"]["presets"]}
+    live_ids = {preset["id"] for preset in groups["live_workspace"]["presets"]}
+    assert "linear-8-step-synthesis" in synthetic_ids
+    assert "technical-design-doc-draft" in real_world_ids
+    assert "collaborative-notes-app-design" in real_world_ids
+    assert "live-collaborative-notes-design" in live_ids
+    argument_repair = next(
+        preset for preset in groups["synthetic"]["presets"]
+        if preset["id"] == "argument-repair"
+    )
+    assert argument_repair["scoring_mode"] == "strict_sequence"
+    assert argument_repair["expected_tool_count"] == 1
+
+
 def test_controller_tool_loop_eval_node_chat_forwards_to_agent_openai_tool_runtime(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     calls = []

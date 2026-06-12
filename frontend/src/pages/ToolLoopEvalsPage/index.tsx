@@ -4,6 +4,7 @@ import { listModels } from "../../api/models";
 import { getNodeModels } from "../../api/nodes";
 import {
   getToolLoopEvalLatest,
+  getToolLoopEvalPresets,
   getToolLoopEvalRun,
   listToolLoopEvalRuns,
   startToolLoopEvalNodeRun,
@@ -11,43 +12,20 @@ import {
 } from "../../api/toolLoopEvals";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
+import { compareToolLoopRuns, type ToolLoopComparison } from "../../features/toolLoopEvals/comparisonAnalysis";
+import { analyzeToolLoopFailures } from "../../features/toolLoopEvals/failureAnalysis";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import type {
   LocalModel,
   ToolLoopEvalCaseResult,
   ToolLoopEvalLatest,
+  ToolLoopEvalPresetGroup,
+  ToolLoopEvalPresetsResponse,
   ToolLoopEvalRunDetail,
   ToolLoopEvalRunSummary,
   ToolLoopEvalRunsResponse,
   ToolLoopEvalSuite,
 } from "../../types/index";
-
-const CASE_PRESET_GROUPS = [
-  {
-    label: "Synthetic presets",
-    presets: [
-      { id: "all", label: "All presets" },
-      { id: "two-step-tool-synthesis", label: "Two-step synthesis" },
-      { id: "avoid-unneeded-tools", label: "Avoid unneeded tools" },
-      { id: "linear-4-step-synthesis", label: "Linear 4-step synthesis" },
-      { id: "linear-8-step-synthesis", label: "Linear 8-step synthesis" },
-      { id: "tool-error-recovery", label: "Tool-error recovery" },
-      { id: "avoid-loop-trap", label: "Avoid loop trap" },
-      { id: "branching-decision", label: "Branching decision" },
-      { id: "argument-repair", label: "Argument repair" },
-      { id: "parallel-fact-gathering", label: "Parallel fact gathering" },
-      { id: "subagent-delegation-simulation", label: "Subagent delegation simulation" },
-    ],
-  },
-  {
-    label: "Real-world scenarios",
-    presets: [
-      { id: "technical-design-doc-draft", label: "Technical design doc draft" },
-      { id: "collaborative-notes-app-design", label: "Collaborative notes app design" },
-      { id: "live-collaborative-notes-design", label: "Live collaborative notes design" },
-    ],
-  },
-];
 
 function scorePercent(score?: number): string {
   return `${Math.round((score ?? 0) * 100)}%`;
@@ -151,6 +129,19 @@ function firstCase(suite: ToolLoopEvalSuite | null): ToolLoopEvalCaseResult | nu
   return suite?.cases?.[0] || null;
 }
 
+function presetGroupsWithAllOption(groups?: ToolLoopEvalPresetGroup[]): ToolLoopEvalPresetGroup[] {
+  const validGroups = (groups || []).filter((group) => group.label && group.presets?.length);
+  if (!validGroups.length) return [{ id: "all", label: "Presets", presets: [{ id: "all", label: "All presets" }] }];
+  const [first, ...rest] = validGroups;
+  return [
+    {
+      ...first,
+      presets: [{ id: "all", label: "All presets" }, ...first.presets],
+    },
+    ...rest,
+  ];
+}
+
 function runTargetLabel(suite: ToolLoopEvalSuite | ToolLoopEvalRunDetail | null): string {
   if (!suite) return "";
   const run = suite as ToolLoopEvalRunDetail;
@@ -199,6 +190,13 @@ export function ToolLoopEvalsPage() {
     { runs: [] },
   );
   const {
+    data: presetData,
+    error: presetError,
+  } = useAsyncResource<ToolLoopEvalPresetsResponse>(
+    () => getToolLoopEvalPresets(),
+    { groups: [] },
+  );
+  const {
     data: nodeModels,
     loading: nodesLoading,
     error: nodesError,
@@ -213,6 +211,7 @@ export function ToolLoopEvalsPage() {
   );
   const suites = data?.suites || [];
   const historyRuns = historyData.runs || [];
+  const presetGroups = useMemo(() => presetGroupsWithAllOption(presetData.groups), [presetData.groups]);
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [selectedRun, setSelectedRun] = useState<ToolLoopEvalRunDetail | null>(null);
@@ -222,6 +221,10 @@ export function ToolLoopEvalsPage() {
   const [runModel, setRunModel] = useState("");
   const [runPreset, setRunPreset] = useState("all");
   const [submitMessage, setSubmitMessage] = useState("");
+  const [comparisonRunIds, setComparisonRunIds] = useState<string[]>([]);
+  const [comparisonRuns, setComparisonRuns] = useState<ToolLoopEvalRunDetail[]>([]);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [comparisonError, setComparisonError] = useState("");
 
   const nodeOptions = useMemo(
     () => isControllerMode ? Array.from(new Set(nodeModels.map((model) => String(model.node || model.node_name || "")).filter(Boolean))) : [],
@@ -251,6 +254,8 @@ export function ToolLoopEvalsPage() {
     if (!activeSuite) return null;
     return activeSuite.cases?.find((item) => item.case_id === selectedCaseId) || firstCase(activeSuite);
   }, [activeSuite, selectedCaseId]);
+  const failureSummary = useMemo(() => analyzeToolLoopFailures(activeSuite as ToolLoopEvalRunDetail | null), [activeSuite]);
+  const comparison = useMemo(() => comparisonRuns.length >= 2 ? compareToolLoopRuns(comparisonRuns) : null, [comparisonRuns]);
 
   async function refreshAll() {
     setRunError("");
@@ -270,6 +275,35 @@ export function ToolLoopEvalsPage() {
       setRunError(err instanceof Error ? err.message : "Request failed");
     } finally {
       setRunLoading(false);
+    }
+  }
+
+  function toggleComparisonRun(row: ToolLoopEvalRunSummary, checked: boolean) {
+    const id = String(row.id || "");
+    if (!id) return;
+    setComparisonRuns([]);
+    setComparisonError("");
+    setComparisonRunIds((current) => {
+      if (!checked) return current.filter((item) => item !== id);
+      if (current.includes(id)) return current;
+      return [...current, id].slice(-3);
+    });
+  }
+
+  async function compareSelectedRuns() {
+    if (comparisonRunIds.length < 2) {
+      setComparisonError("Select at least two runs to compare.");
+      return;
+    }
+    setComparisonLoading(true);
+    setComparisonError("");
+    try {
+      const details = await Promise.all(comparisonRunIds.map((runId) => getToolLoopEvalRun(runId)));
+      setComparisonRuns(details);
+    } catch (err) {
+      setComparisonError(err instanceof Error ? err.message : "Request failed");
+    } finally {
+      setComparisonLoading(false);
     }
   }
 
@@ -325,11 +359,11 @@ export function ToolLoopEvalsPage() {
           <span className="eyebrow">Runtime</span>
           <h2>Tool Loop Evals</h2>
         </div>
-        <Button type="button" onClick={() => void refreshAll()} disabled={loading || historyLoading || runLoading}>
-          {loading || historyLoading || runLoading ? "Refreshing..." : "Refresh"}
+        <Button type="button" onClick={() => void refreshAll()} disabled={loading || historyLoading || runLoading || comparisonLoading}>
+          {loading || historyLoading || runLoading || comparisonLoading ? "Refreshing..." : "Refresh"}
         </Button>
       </div>
-      <ErrorBanner message={error || historyError || nodesError || runError || data?.error || ""} />
+      <ErrorBanner message={error || historyError || presetError || nodesError || runError || comparisonError || data?.error || ""} />
 
       <Panel title="Run Tool-Loop Eval" eyebrow={isLocalMode ? "Local instance run" : isControllerMode ? "Controller-triggered node run" : "Runtime mode loading"}>
         <form className="tool-loop-run-form stacked-controls" onSubmit={(event) => void submitRun(event)}>
@@ -357,8 +391,8 @@ export function ToolLoopEvalsPage() {
           </FormField>
           <FormField label="Preset">
             <select value={runPreset} onChange={(event) => setRunPreset(event.target.value)} disabled={runLoading}>
-              {CASE_PRESET_GROUPS.map((group) => (
-                <optgroup key={group.label} label={group.label}>
+              {presetGroups.map((group) => (
+                <optgroup key={group.id || group.label} label={group.label}>
                   {group.presets.map((preset) => <option key={preset.id} value={preset.id}>{preset.label}</option>)}
                 </optgroup>
               ))}
@@ -379,6 +413,22 @@ export function ToolLoopEvalsPage() {
           emptyMessage="No persisted tool-loop eval runs yet."
           getRowKey={(row, index) => String(row.id || index)}
           columns={[
+            {
+              key: "compare",
+              header: "Compare",
+              render: (row) => {
+                const id = String(row.id || "");
+                return (
+                  <input
+                    type="checkbox"
+                    aria-label={`Compare ${row.model || id || "run"}`}
+                    checked={Boolean(id && comparisonRunIds.includes(id))}
+                    disabled={!id || comparisonLoading}
+                    onChange={(event) => toggleComparisonRun(row, event.target.checked)}
+                  />
+                );
+              },
+            },
             { key: "generated", header: "Generated", render: (row) => formatDate(row.generated_at) },
             { key: "model", header: "Model", render: (row) => String(row.model || "-") },
             { key: "target", header: "Target", render: (row) => String(row.target_node || row.target_selector || "-") },
@@ -401,7 +451,19 @@ export function ToolLoopEvalsPage() {
             },
           ]}
         />
+        <div className="tool-loop-compare-actions">
+          <Button
+            type="button"
+            onClick={() => void compareSelectedRuns()}
+            disabled={comparisonLoading || comparisonRunIds.length < 2}
+          >
+            {comparisonLoading ? "Comparing..." : "Compare Selected"}
+          </Button>
+          <span className="muted">{comparisonRunIds.length} selected</span>
+        </div>
       </Panel>
+
+      {comparison ? <RunComparisonPanel comparison={comparison} /> : null}
 
       {!loading && !data?.available ? (
         <Panel title="No tool-loop eval results yet." eyebrow="Latest results">
@@ -446,6 +508,12 @@ export function ToolLoopEvalsPage() {
               ]}
             />
           </Panel>
+        </>
+      ) : null}
+
+      {activeSuite ? (
+        <>
+          {failureSummary.failedCaseCount > 0 ? <FailureSummaryPanel summary={failureSummary} /> : null}
         </>
       ) : null}
 
@@ -501,6 +569,115 @@ export function ToolLoopEvalsPage() {
         </div>
       ) : null}
     </div>
+  );
+}
+
+function RunComparisonPanel({ comparison }: { comparison: ToolLoopComparison }) {
+  const bestRun = comparison.runs.find((run) => run.runId === comparison.bestRunId);
+  return (
+    <Panel title="Run Comparison" eyebrow="Selected persisted runs">
+      <div className="tool-loop-summary">
+        <div><span className="muted">Best run</span><strong>{bestRun?.label || "-"}</strong></div>
+        <div><span className="muted">Score delta</span><strong>{scorePercent(comparison.scoreDelta)}</strong></div>
+        <div><span className="muted">Compared</span><strong>{comparison.runs.length}</strong></div>
+      </div>
+      <DataTable
+        rows={comparison.runs}
+        emptyMessage="No comparison runs selected."
+        getRowKey={(row) => row.runId}
+        columns={[
+          { key: "run", header: "Run", render: (row) => row.label },
+          { key: "status", header: "Status", render: (row) => <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge> },
+          { key: "score", header: "Score", render: (row) => scorePercent(row.averageScore) },
+          { key: "passRate", header: "Pass rate", render: (row) => scorePercent(row.passRate) },
+          { key: "failed", header: "Failed", render: (row) => String(row.failedCaseCount) },
+        ]}
+      />
+      <div className="tool-loop-comparison-section">
+        <div className="tool-loop-section-heading">
+          <strong>Case Comparison</strong>
+          <span className="muted">{comparison.caseRows.length} case{comparison.caseRows.length === 1 ? "" : "s"}</span>
+        </div>
+        <DataTable
+          rows={comparison.caseRows}
+          emptyMessage="No cases to compare."
+          getRowKey={(row) => row.caseId}
+          columns={[
+            { key: "case", header: "Case", render: (row) => row.caseId },
+            ...comparison.runs.map((run) => ({
+              key: run.runId,
+              header: run.model,
+              render: (row: ToolLoopComparison["caseRows"][number]) => {
+                const cell = row.cells[run.runId];
+                return (
+                  <div className="tool-loop-comparison-cell">
+                    <StatusBadge tone={statusTone(cell?.status)}>{cell?.status || "-"}</StatusBadge>
+                    <span>{scorePercent(cell?.score)}</span>
+                    {cell?.failedChecks.length ? <span className="muted">{cell.failedChecks.join(", ")}</span> : null}
+                  </div>
+                );
+              },
+            })),
+          ]}
+        />
+      </div>
+      <div className="tool-loop-comparison-section">
+        <div className="tool-loop-section-heading">
+          <strong>Failure Buckets</strong>
+          <span className="muted">By run</span>
+        </div>
+        <div className="tool-loop-failure-buckets">
+          {comparison.runs.map((run) => {
+            const buckets = comparison.failureBucketDeltas[run.runId] || [];
+            return (
+              <div key={run.runId} className="tool-loop-failure-bucket">
+                <span className="tool-loop-case-heading">
+                  <strong>{run.label}</strong>
+                  <StatusBadge tone={buckets.length ? "danger" : "success"}>{buckets.length}</StatusBadge>
+                </span>
+                {buckets.length ? (
+                  <span className="tool-loop-sequence">{buckets.map((bucket) => bucket.label).join(", ")}</span>
+                ) : (
+                  <span className="muted">No failure buckets</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function FailureSummaryPanel({ summary }: { summary: ReturnType<typeof analyzeToolLoopFailures> }) {
+  return (
+    <Panel title="Failure Summary" eyebrow="Frontend-derived analysis">
+      <div className="tool-loop-summary">
+        <div><span className="muted">Failed cases</span><strong>{summary.failedCaseCount} failed cases</strong></div>
+        <div><span className="muted">Total cases</span><strong>{summary.totalCaseCount}</strong></div>
+        <div><span className="muted">Failure buckets</span><strong>{summary.buckets.length}</strong></div>
+      </div>
+      <div className="tool-loop-failure-buckets" aria-label="Failure buckets">
+        {summary.buckets.map((bucket) => (
+          <div key={bucket.id} className="tool-loop-failure-bucket">
+            <span className="tool-loop-case-heading">
+              <strong>{bucket.label}</strong>
+              <StatusBadge tone="danger">{bucket.count}</StatusBadge>
+            </span>
+            <span className="muted">{bucket.description}</span>
+            <span className="tool-loop-sequence">{bucket.caseIds.join(", ")}</span>
+          </div>
+        ))}
+      </div>
+      {summary.likelyCauses.length ? (
+        <div className="tool-loop-likely-causes" aria-label="Likely causes">
+          <p className="muted">Likely causes</p>
+          <ul>
+            {summary.likelyCauses.map((cause) => <li key={cause}>{cause}</li>)}
+          </ul>
+        </div>
+      ) : null}
+    </Panel>
   );
 }
 

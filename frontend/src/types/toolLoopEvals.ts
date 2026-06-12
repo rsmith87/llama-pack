@@ -5,6 +5,9 @@ export type ToolLoopEvalCheckMap = {
   no_tool_errors?: boolean;
   expected_tool_arguments?: boolean;
   no_repeated_calls?: boolean;
+  expected_artifacts?: boolean;
+  expected_artifact_substrings?: boolean;
+  no_forbidden_artifact_substrings?: boolean;
 };
 
 export type ToolLoopEvalCaseResult = {
@@ -78,6 +81,26 @@ export type ToolLoopEvalRunDetail = ToolLoopEvalRunSummary & {
 
 export type ToolLoopEvalRunsResponse = {
   runs?: ToolLoopEvalRunSummary[];
+};
+
+export type ToolLoopEvalPreset = {
+  id: string;
+  label: string;
+  category?: string;
+  scoring_mode?: string | null;
+  expected_tool_count?: number;
+  max_iterations?: number | null;
+};
+
+export type ToolLoopEvalPresetGroup = {
+  id: string;
+  label: string;
+  presets: ToolLoopEvalPreset[];
+};
+
+export type ToolLoopEvalPresetsResponse = {
+  groups?: ToolLoopEvalPresetGroup[];
+  preset_count?: number;
 };
 
 export type ToolLoopEvalNodeRunRequest = {

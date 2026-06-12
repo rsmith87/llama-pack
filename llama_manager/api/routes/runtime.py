@@ -107,6 +107,27 @@ async def tool_loop_eval_latest(request: Request) -> dict[str, object]:
     }
 
 
+@router.get("/tool-loop-evals/presets")
+async def tool_loop_eval_presets() -> dict[str, object]:
+    groups = [
+        _tool_loop_preset_group(
+            group_id="synthetic",
+            label="Synthetic presets",
+            presets=[case for case in default_tool_loop_eval_cases() if case.category == "synthetic"],
+        ),
+        _tool_loop_preset_group(
+            group_id="real_world",
+            label="Real-world scenarios",
+            presets=[case for case in default_tool_loop_eval_cases() if case.category == "real_world"],
+        ),
+        _tool_loop_live_preset_group(default_live_tool_loop_scenarios()),
+    ]
+    return {
+        "groups": groups,
+        "preset_count": sum(len(group["presets"]) for group in groups),
+    }
+
+
 @router.get("/tool-loop-evals/runs")
 async def tool_loop_eval_runs(
     request: Request,
@@ -125,6 +146,46 @@ async def tool_loop_eval_run_detail(run_id: str, request: Request) -> dict[str, 
     if run is None:
         raise HTTPException(status_code=404, detail="Tool-loop eval run not found")
     return run
+
+
+def _tool_loop_preset_group(*, group_id: str, label: str, presets: list[Any]) -> dict[str, object]:
+    return {
+        "id": group_id,
+        "label": label,
+        "presets": [
+            {
+                "id": preset.id,
+                "label": _tool_loop_preset_label(preset.id),
+                "category": preset.category,
+                "scoring_mode": preset.scoring_mode,
+                "expected_tool_count": len(preset.expected_tool_sequence),
+                "max_iterations": preset.max_iterations,
+            }
+            for preset in presets
+        ],
+    }
+
+
+def _tool_loop_live_preset_group(presets: list[Any]) -> dict[str, object]:
+    return {
+        "id": "live_workspace",
+        "label": "Live workspace scenarios",
+        "presets": [
+            {
+                "id": preset.id,
+                "label": _tool_loop_preset_label(preset.id.removeprefix("live-")),
+                "category": "live_workspace",
+                "scoring_mode": "set_membership",
+                "expected_tool_count": len(preset.expected_tool_sequence),
+                "max_iterations": preset.max_iterations,
+            }
+            for preset in presets
+        ],
+    }
+
+
+def _tool_loop_preset_label(preset_id: str) -> str:
+    return preset_id.replace("-", " ").capitalize()
 
 
 @router.post("/tool-loop-evals/node-chat")

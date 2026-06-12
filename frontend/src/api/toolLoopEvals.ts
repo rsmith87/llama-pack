@@ -2,6 +2,7 @@ import { apiGet, apiPost } from "./client";
 import type {
   ToolLoopEvalLatest,
   ToolLoopEvalNodeRunRequest,
+  ToolLoopEvalPresetsResponse,
   ToolLoopEvalRunDetail,
   ToolLoopEvalRunRequest,
   ToolLoopEvalRunsResponse,
@@ -10,6 +11,10 @@ import type {
 
 export function getToolLoopEvalLatest() {
   return apiGet<ToolLoopEvalLatest>("/runtime/tool-loop-evals/latest");
+}
+
+export function getToolLoopEvalPresets() {
+  return apiGet<ToolLoopEvalPresetsResponse>("/runtime/tool-loop-evals/presets");
 }
 
 export function listToolLoopEvalRuns(limit = 50) {

@@ -594,8 +594,8 @@ Returns:
 Use `scripts/tool_loop_eval.py` to run deterministic tool-loop evaluations
 against one or more local tool-capable models. The runner uses the same
 agent-local tool execution path as `/v1/chat/completions` with
-`tool_runtime: "agent"`, then writes an append-only JSONL history and a latest
-summary JSON file for UI/API consumption.
+`tool_runtime: "agent"`, then writes an append-only JSONL history, a latest
+summary JSON file, and durable benchmark history for UI/API consumption.
 
 ```bash
 rtk uv run python scripts/tool_loop_eval.py --config /path/to/controller-config.yaml --model gpt-oss-20b --target node:mac-mini
@@ -607,14 +607,32 @@ Default output paths are:
 - `logs/tool_loop_eval_latest.json`
 
 The built-in cases use deterministic eval-only tools instead of the target
-agent's configured tools. This keeps runs comparable across nodes and models:
-the current baseline tools are `read_status` and `read_details`.
+agent's configured tools. This keeps runs comparable across nodes and models.
+Current synthetic presets cover:
+
+- short and long ordered tool sequences
+- avoiding unnecessary tool calls
+- recovery after a deterministic tool error
+- stopping after a tool reports that no more information is available
+- branch selection
+- exact tool argument preservation
+- order-insensitive fact gathering
+- helper/delegation-style synthesis
+
+Current real-world deterministic scenarios ask models to draft compact design
+documents from relevant project-like sources while avoiding unrelated scope.
+UI/API-triggered runs also include a live workspace scenario that uses actual
+workspace tools in a temporary seeded workspace and checks the generated
+artifact content.
 
 Run multiple models by repeating `--model`; route to a specific controller node
 with `--target node:<name>`; run a single built-in case with `--case <case-id>`.
 Node targets require a controller-mode config that defines the node. Running
 the command with an agent-mode config will resolve the model as local to that
-process instead of going through the controller.
+process instead of going through the controller. Runs started from the Tool
+Loop Evals UI call `/lm-api/v1/runtime/tool-loop-evals/run` in agent mode or
+`/lm-api/v1/runtime/tool-loop-evals/node-run` in controller mode, then persist
+summaries and case details in the benchmark database.
 
 See [Tool-Loop Eval Presets](tool-loop-eval-presets.md) for the preset roadmap
 and scoring model.

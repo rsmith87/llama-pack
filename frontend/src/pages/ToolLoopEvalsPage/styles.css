@@ -38,6 +38,13 @@
   min-height: 38px;
 }
 
+.tool-loop-compare-actions {
+  align-items: center;
+  display: flex;
+  gap: 0.75rem;
+  margin-top: var(--space-3, 1rem);
+}
+
 .tool-loop-summary strong,
 .tool-loop-path,
 .tool-loop-answer,
@@ -85,6 +92,44 @@
   display: grid;
   gap: 0.75rem;
   margin-top: var(--space-3, 1rem);
+}
+
+.tool-loop-failure-buckets {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tool-loop-failure-bucket {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 0.4rem;
+  min-width: 0;
+  padding: 0.75rem;
+}
+
+.tool-loop-likely-causes {
+  margin-top: var(--space-3, 1rem);
+}
+
+.tool-loop-likely-causes ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.tool-loop-comparison-section {
+  display: grid;
+  gap: 0.75rem;
+  margin-top: var(--space-3, 1rem);
+}
+
+.tool-loop-comparison-cell {
+  align-items: flex-start;
+  display: grid;
+  gap: 0.3rem;
+  min-width: 0;
 }
 
 .tool-loop-section-heading {
@@ -199,6 +244,7 @@
 
 @media (max-width: 900px) {
   .tool-loop-grid,
+  .tool-loop-failure-buckets,
   .tool-loop-summary,
   .tool-loop-run-form {
     grid-template-columns: 1fr;
