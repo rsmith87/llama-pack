@@ -17,6 +17,13 @@ export type PluginNavigationItem = {
   path?: string;
 };
 
+export type PluginFrontendPage = {
+  route: string;
+  template: string;
+  controller?: string | null;
+  title: string;
+};
+
 export type EnabledPlugin = {
   id: string;
   name: string;
@@ -25,6 +32,8 @@ export type EnabledPlugin = {
   frontend?: {
     entry?: string | null;
     style?: string | null;
+    style_entries?: string[];
+    pages?: PluginFrontendPage[];
   } | null;
   navigation?: PluginNavigationItem[];
   secondary_navigation?: PluginNavigationItem[];

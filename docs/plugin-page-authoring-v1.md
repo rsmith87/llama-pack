@@ -1,9 +1,8 @@
-# Plugin Page Authoring v1 (Draft)
+# Plugin Page Authoring v1
 
-This document proposes a plugin page model with a better authoring experience
-than large JavaScript render files. The target is a WordPress/Drupal-like
-workflow where plugin developers primarily edit templates, styles, and action
-handlers.
+This document defines the v1 template-first plugin page model. The goal is to
+make plugin UI authoring mostly HTML/CSS, with small JavaScript controllers for
+dynamic behavior.
 
 ## Why
 
@@ -13,28 +12,24 @@ Current plugin pages are difficult to maintain when they rely on:
 - `innerHTML` injection for most rendering
 - template HTML embedded as string literals
 
-This proposal replaces that model with template-first pages and small,
-predictable client controllers.
+Template-first pages keep page structure in HTML fragments, styles in CSS files,
+and dynamic behavior in focused controller modules.
 
-## Goals
+## v1 Decisions
 
-- Make plugin UI authoring mostly HTML/CSS, not string-based JS rendering.
-- Keep backend and frontend contracts stable and explicit.
-- Preserve dynamic actions (forms, search, delete, upload, etc.).
-- Keep plugins isolated from core internals.
-- Support gradual migration from existing `mount(container, host)` plugins.
+- `frontend_api_version` remains `"1.0"`.
+- `frontend.pages` is the preferred source of plugin UI routes.
+- `frontend.pages` replaces author-facing `ui_routes`; legacy `ui_routes`
+  remains supported for existing plugins.
+- Templates are HTML fragments, not full HTML documents.
+- Templates, controllers, and styles live under `frontend.static_dir` and are
+  served through `/plugin-assets/{plugin_id}/...`.
+- Page controllers export `mountPage(root, host)`.
+- Legacy `frontend.entry` modules exporting `mount(container, host)` remain
+  supported.
+- The stable host CSS class contract uses the `lp-plugin-*` prefix.
 
-## Non-Goals
-
-- Sandboxing plugin JavaScript.
-- Remote plugin bundles or third-party script origins.
-- Replacing all current plugin frontend APIs in one release.
-
-## v1 Authoring Model
-
-### 1) Plugin manifest declares pages, assets, and actions
-
-`plugin.yaml` adds a page contract (illustrative schema):
+## Manifest Schema
 
 ```yaml
 id: neuraxis_business
@@ -42,89 +37,87 @@ name: Neuraxis Business
 version: "1.0"
 requires_core: "1.0"
 backend_api_version: "1.0"
-frontend_api_version: "1.1"
+frontend_api_version: "1.0"
 entrypoint: neuraxis_business.plugin:plugin
 
 frontend:
   static_dir: neuraxis_business/static
   style_entries:
-    - /plugin-assets/neuraxis_business/business.css
+    - business.css
   pages:
     - route: /ui/plugins/neuraxis_business/overview
       template: templates/overview.html
-      controller: static/controllers/overview.js
+      controller: controllers/overview.js
       title: Business Overview
     - route: /ui/plugins/neuraxis_business/documents
       template: templates/documents.html
-      controller: static/controllers/documents.js
+      controller: controllers/documents.js
       title: Documents
 ```
 
 Rules:
 
-- `template` is a plugin-local file served as HTML fragment or full page shell.
-- `controller` is optional and should be small (actions + state wiring only).
-- CSS is external (`style_entries`), not embedded in runtime JS strings.
+- `route` must stay under `/ui/plugins/{plugin_id}`.
+- `template`, `controller`, and `style_entries` are plugin asset paths. Relative
+  paths are resolved under `/plugin-assets/{plugin_id}/`.
+- Same-plugin `/plugin-assets/{plugin_id}/...` URLs are accepted.
+- Cross-plugin asset URLs and traversal segments are rejected.
+- `controller` is optional.
+- `title` is used for route labels and page headings.
 
-### 2) Template-first rendering
+## Runtime Flow
 
-The plugin host renders page templates into the plugin container. The template
-is the source of structure; JavaScript only binds behavior.
-
-Preferred flow:
-
-1. Host resolves the current plugin route.
-2. Host loads the template.
-3. Host injects template content into container.
-4. Host loads optional page controller and calls:
+1. The React shell resolves the current plugin route.
+2. The shell matches it to `frontend.pages[].route`.
+3. The shell fetches the page HTML fragment from `template`.
+4. The shell inserts the fragment into the plugin container.
+5. If `controller` is present, the shell imports it as an ES module and calls:
 
 ```js
 export function mountPage(root, host) {
-  // bind events, call host.apiGet/apiPost, update specific nodes
   return () => {};
 }
 ```
 
-### 3) Action-oriented JavaScript
+Controllers should use event delegation on stable container nodes, submit forms
+through `host.api*` helpers, and update dynamic values with DOM APIs such as
+`textContent`, `replaceChildren`, and `createElement`.
 
-Controllers should:
+Controllers should avoid writing full page markup with `innerHTML`, injecting
+inline styles, or embedding large structural templates in JavaScript strings.
 
-- use event delegation on stable container nodes
-- submit forms through `host.api*` helpers
-- update targeted DOM nodes via `textContent`, `replaceChildren`, and
-  `createElement`
+## Host CSS Contract
 
-Controllers should avoid:
+Core exposes these stable classes for plugin pages:
 
-- writing full page markup with `innerHTML`
-- inline style injection
-- large template strings for structural UI
+- `lp-plugin-page`
+- `lp-plugin-panel`
+- `lp-plugin-header`
+- `lp-plugin-title`
+- `lp-plugin-muted`
+- `lp-plugin-actions`
+- `lp-plugin-button`
+- `lp-plugin-field`
+- `lp-plugin-input`
+- `lp-plugin-table`
 
-### 4) Reusable host UI primitives
+Plugin-specific CSS may add local classes, but shared layout and control styling
+should prefer the `lp-plugin-*` classes where they fit.
 
-Core should expose a small, stable set of primitives for plugin pages:
-
-- layout classes and design tokens
-- shared form/table/panel patterns
-- toast/inline error helpers
-- loading and empty-state helpers
-
-This reduces copy/paste CSS and keeps plugin UX consistent.
-
-## Recommended Plugin Layout
+## Recommended Layout
 
 ```text
 plugins/neuraxis_business_plugin/
 |-- plugin.yaml
 `-- neuraxis_business/
     |-- plugin.py
-    |-- templates/
-    |   |-- overview.html
-    |   |-- identity.html
-    |   |-- knowledge-bases.html
-    |   `-- documents.html
     `-- static/
         |-- business.css
+        |-- templates/
+        |   |-- overview.html
+        |   |-- identity.html
+        |   |-- knowledge-bases.html
+        |   `-- documents.html
         `-- controllers/
             |-- overview.js
             |-- identity.js
@@ -134,33 +127,31 @@ plugins/neuraxis_business_plugin/
 
 ## Backward Compatibility
 
-v1 keeps support for existing JS entry modules:
+Existing plugin frontend modules remain valid:
 
-- Existing `frontend.entry` with `mount(container, host)` remains valid.
-- New pages can opt into template-first rendering incrementally.
-- A plugin can mix both models during migration.
+```yaml
+frontend:
+  static_dir: hello_plugin/static
+  entry: hello-entry.js
+```
 
-## Migration Guide (from `business-entry.js`)
+Legacy modules still export:
 
-1. Move CSS from JS string to `static/business.css`.
-2. Split major sections (overview, identity, settings, KB, documents) into
-   `templates/*.html`.
-3. Replace full-page `content.innerHTML = ...` rendering with per-page
-   controllers.
-4. Keep API interactions in controllers; keep structure in templates.
-5. Remove inline template string rendering once each page has migrated.
+```js
+export function mount(container, host) {
+  return () => {};
+}
+```
 
-## Security And Reliability Notes
+A plugin can migrate one route at a time by adding `frontend.pages` while legacy
+plugins continue to use `frontend.entry`, `navigation`, `secondary_navigation`,
+and `ui_routes`.
 
-- Treat plugin templates and scripts as trusted extension code.
-- Prefer DOM APIs (`textContent`, `setAttribute`) for dynamic data insertion.
-- If HTML insertion is necessary, sanitize untrusted input first.
-- Keep route and asset loading constrained to plugin-owned paths.
+## Migration Guide
 
-## Open Questions
-
-- Should templates be served as full HTML documents or host-inserted fragments?
-- Should controller loading be static (manifest-only) or allow lazy imports?
-- Should we support optional server-side template rendering with plugin data?
-- What minimum host UI primitive set should be guaranteed in `frontend_api 1.1`?
-
+1. Move CSS from JavaScript strings to files under `static/`.
+2. Split major sections into `static/templates/*.html` fragments.
+3. Move dynamic behavior into `static/controllers/*.js`.
+4. Replace full-page `content.innerHTML = ...` rendering with `mountPage()`
+   controllers that update targeted nodes.
+5. Declare routes in `frontend.pages` instead of authoring `ui_routes`.

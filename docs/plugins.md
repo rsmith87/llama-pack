@@ -261,21 +261,22 @@ The backend exposes enabled plugin metadata at:
 GET /lm-api/v1/plugins/enabled
 ```
 
+For new plugin UI, prefer `frontend.pages`. Each page declares a core UI route,
+an HTML fragment template under `frontend.static_dir`, an optional controller
+module under `frontend.static_dir`, and a title.
+
 Manifest example:
 
 ```yaml
 frontend:
   static_dir: hello_plugin/static
-  entry: /plugin-assets/hello_plugin/hello-entry.js
-navigation:
-  - label: Hello
-    path: /ui/plugins/hello_plugin
-secondary_navigation:
-  - label: Settings
-    path: /ui/plugins/hello_plugin/settings
-ui_routes:
-  - path: /ui/plugins/hello_plugin
-    label: Hello Plugin
+  style_entries:
+    - hello.css
+  pages:
+    - route: /ui/plugins/hello_plugin
+      template: templates/hello.html
+      controller: controllers/hello.js
+      title: Hello Plugin
 ```
 
 Core serves static files from the declared static directory under:
@@ -285,8 +286,35 @@ Core serves static files from the declared static directory under:
 ```
 
 The React shell renders plugin navigation, scoped secondary navigation, and a
-generic plugin host page. For plugin routes, the host loads `frontend.entry` as
-an ES module and calls its exported `mount(container, host)` function.
+generic plugin host page from `frontend.pages`. The host fetches the declared
+HTML fragment, inserts it into the plugin container, then loads the optional
+controller module and calls `mountPage(root, host)`.
+
+Minimal page controller:
+
+```js
+export function mountPage(root, host) {
+  root.querySelector("[data-plugin-id]").textContent = host.pluginId;
+  return () => {};
+}
+```
+
+Legacy plugins may still use `frontend.entry`:
+
+```yaml
+frontend:
+  static_dir: hello_plugin/static
+  entry: hello-entry.js
+navigation:
+  - label: Hello
+    path: /ui/plugins/hello_plugin
+ui_routes:
+  - path: /ui/plugins/hello_plugin
+    label: Hello Plugin
+```
+
+For legacy plugin routes, the host loads `frontend.entry` as an ES module and
+calls its exported `mount(container, host)` function.
 
 Minimal plugin frontend module:
 
@@ -311,8 +339,22 @@ Plugin frontend modules run in the core UI origin. Treat plugin frontend code as
 trusted extension code and keep private/paid plugin UI in the private plugin
 repository.
 
+Core provides a small stable CSS class contract for plugin pages:
+
+- `lp-plugin-page`
+- `lp-plugin-panel`
+- `lp-plugin-header`
+- `lp-plugin-title`
+- `lp-plugin-muted`
+- `lp-plugin-actions`
+- `lp-plugin-button`
+- `lp-plugin-field`
+- `lp-plugin-input`
+- `lp-plugin-table`
+
 Plugin assets are served with `Cache-Control: no-store`, and the React plugin
-host appends a version/reload query string when importing `frontend.entry`.
+host appends a version/reload query string when importing plugin controllers,
+styles, and legacy `frontend.entry` modules.
 During development, plugin frontend asset changes should only require a browser
 reload or the plugin page's Reload button. Core frontend rebuilds are only
 needed when the public host contract changes.

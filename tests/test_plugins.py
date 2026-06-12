@@ -117,6 +117,58 @@ def test_enabled_plugin_loads_registers_route_and_frontend_metadata(tmp_path: Pa
     assert status["errors"] == []
 
 
+def test_plugin_manifest_accepts_template_first_frontend_pages(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: page_plugin/static
+          style_entries:
+            - /plugin-assets/page_plugin/plugin.css
+          pages:
+            - route: /ui/plugins/page_plugin
+              template: templates/index.html
+              controller: controllers/index.js
+              title: Page Plugin
+            - route: /ui/plugins/page_plugin/settings
+              template: templates/settings.html
+              title: Settings
+        """,
+    )
+    static_dir = plugin_dir / "page_plugin" / "static"
+    (static_dir / "plugin.css").write_text(".page-plugin { display: block; }", encoding="utf-8")
+    (static_dir / "templates").mkdir()
+    (static_dir / "templates" / "index.html").write_text("<section>Index</section>", encoding="utf-8")
+    (static_dir / "templates" / "settings.html").write_text("<section>Settings</section>", encoding="utf-8")
+    (static_dir / "controllers").mkdir()
+    (static_dir / "controllers" / "index.js").write_text("export function mountPage() {}\n", encoding="utf-8")
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
+
+    assert metadata["frontend"]["style_entries"] == ["/plugin-assets/page_plugin/plugin.css"]
+    assert metadata["frontend"]["pages"] == [
+        {
+            "route": "/ui/plugins/page_plugin",
+            "template": "/plugin-assets/page_plugin/templates/index.html",
+            "controller": "/plugin-assets/page_plugin/controllers/index.js",
+            "title": "Page Plugin",
+        },
+        {
+            "route": "/ui/plugins/page_plugin/settings",
+            "template": "/plugin-assets/page_plugin/templates/settings.html",
+            "controller": None,
+            "title": "Settings",
+        },
+    ]
+    assert metadata["ui_routes"] == [
+        {"path": "/ui/plugins/page_plugin", "label": "Page Plugin"},
+        {"path": "/ui/plugins/page_plugin/settings", "label": "Settings"},
+    ]
+
+
 def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     plugin_dir = REPO_ROOT / "plugins" / "hello_plugin"
     app = create_app(config=plugin_config(tmp_path, plugin_dir, mode="controller"))
@@ -125,12 +177,16 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert client.get("/lm-api/v1/plugins/hello_plugin/hello").json() == {"message": "hello from plugin"}
     metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
     assert metadata["id"] == "hello_plugin"
-    assert metadata["navigation"][0]["label"] == "Hello"
-    assert metadata["frontend"]["entry"] == "/plugin-assets/hello_plugin/hello-entry.js"
-    asset_response = client.get("/plugin-assets/hello_plugin/hello-entry.js")
-    assert asset_response.status_code == 200
-    assert "export function mount" in asset_response.text
-    assert "host.pluginId" in asset_response.text
+    page = metadata["frontend"]["pages"][0]
+    assert page["route"] == "/ui/plugins/hello_plugin"
+    assert page["template"] == "/plugin-assets/hello_plugin/templates/hello.html"
+    assert page["controller"] == "/plugin-assets/hello_plugin/controllers/hello.js"
+    template_response = client.get(page["template"])
+    assert template_response.status_code == 200
+    assert "Hello Plugin" in template_response.text
+    controller_response = client.get(page["controller"])
+    assert controller_response.status_code == 200
+    assert "export function mountPage" in controller_response.text
     migration_status = client.get("/lm-api/v1/plugins/hello_plugin/migrations/status").json()
     target = migration_status["targets"][0]
     assert target["id"] == "main"
@@ -182,6 +238,198 @@ def test_plugin_asset_path_traversal_is_rejected(tmp_path: Path):
     response = client.get("/plugin-assets/sample_plugin/../secret.txt")
 
     assert response.status_code in {400, 404}
+
+
+def test_plugin_page_routes_must_stay_under_plugin_namespace(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: page_plugin/static
+          pages:
+            - route: /ui/plugins/other_plugin
+              template: templates/index.html
+              title: Bad
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "must stay under /ui/plugins/page_plugin" in status["errors"][0]
+
+
+def test_plugin_page_template_paths_reject_traversal(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: page_plugin/static
+          pages:
+            - route: /ui/plugins/page_plugin
+              template: ../secret.html
+              title: Bad
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "relative to frontend.static_dir" in status["errors"][0]
+
+
+def test_plugin_frontend_asset_urls_must_stay_under_plugin_namespace(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: page_plugin/static
+          style_entries:
+            - /plugin-assets/other_plugin/plugin.css
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "must stay under /plugin-assets/page_plugin/" in status["errors"][0]
+
+
+@pytest.mark.parametrize("field", ["template", "controller"])
+def test_plugin_page_asset_urls_must_stay_under_plugin_namespace(tmp_path: Path, field: str):
+    template = "/plugin-assets/other_plugin/page.html" if field == "template" else "templates/index.html"
+    controller = "/plugin-assets/other_plugin/controller.js" if field == "controller" else None
+    controller_line = f"              controller: {controller}\n" if controller else ""
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra=f"""
+        frontend:
+          static_dir: page_plugin/static
+          pages:
+            - route: /ui/plugins/page_plugin
+              template: {template}
+{controller_line}              title: Bad
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "must stay under /plugin-assets/page_plugin/" in status["errors"][0]
+
+
+def test_plugin_same_namespace_page_asset_urls_remain_valid(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: page_plugin/static
+          pages:
+            - route: /ui/plugins/page_plugin
+              template: /plugin-assets/page_plugin/templates/index.html
+              controller: /plugin-assets/page_plugin/controllers/index.js
+              title: Page Plugin
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
+    assert status["status"] == "enabled"
+    assert metadata["frontend"]["pages"] == [
+        {
+            "route": "/ui/plugins/page_plugin",
+            "template": "/plugin-assets/page_plugin/templates/index.html",
+            "controller": "/plugin-assets/page_plugin/controllers/index.js",
+            "title": "Page Plugin",
+        }
+    ]
+
+
+@pytest.mark.parametrize("field", ["entry", "style"])
+def test_plugin_legacy_frontend_asset_urls_must_stay_under_plugin_namespace(tmp_path: Path, field: str):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra=f"""
+        frontend:
+          static_dir: page_plugin/static
+          {field}: /plugin-assets/other_plugin/plugin.css
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "must stay under /plugin-assets/page_plugin/" in status["errors"][0]
+
+
+@pytest.mark.parametrize("field", ["entry", "style", "style_entries"])
+def test_plugin_legacy_frontend_asset_paths_reject_traversal(tmp_path: Path, field: str):
+    if field == "style_entries":
+        field_yaml = """
+          style_entries:
+            - ../other_plugin/file.js
+        """
+    else:
+        field_yaml = f"""
+          {field}: ../other_plugin/file.js
+        """
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra=f"""
+        frontend:
+          static_dir: page_plugin/static
+{field_yaml}
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    assert status["status"] == "failed"
+    assert "must not contain traversal segments" in status["errors"][0]
+
+
+def test_plugin_same_namespace_legacy_frontend_asset_urls_remain_valid(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "page_plugin",
+        manifest_extra="""
+        frontend:
+          static_dir: page_plugin/static
+          entry: /plugin-assets/page_plugin/entry.js
+          style: /plugin-assets/page_plugin/plugin.css
+        """,
+    )
+
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
+    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
+    assert status["status"] == "enabled"
+    assert metadata["frontend"]["entry"] == "/plugin-assets/page_plugin/entry.js"
+    assert metadata["frontend"]["style"] == "/plugin-assets/page_plugin/plugin.css"
 
 
 def test_disabled_plugin_is_ignored_and_not_registered(tmp_path: Path):

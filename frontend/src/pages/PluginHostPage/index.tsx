@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { createPluginHostApi, type PluginHostApi } from "../../api/pluginHost";
 import { getEnabledPlugins } from "../../api/plugins";
 import { EnabledPlugin } from "../../types/plugins";
@@ -11,6 +11,7 @@ import "./styles.css";
 
 export type PluginFrontendModule = {
   mount?: (container: HTMLElement, host: PluginHostApi) => void | (() => void);
+  mountPage?: (root: HTMLElement, host: PluginHostApi) => void | (() => void);
 };
 
 type PluginModuleLoader = (entry: string) => Promise<PluginFrontendModule>;
@@ -33,25 +34,27 @@ export function PluginHostPage({
 } = {}) {
   const { pluginId: routePluginId } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   const { refreshKey } = useGlobalStatus();
   const { pluginPages } = usePluginNav();
 
   const page = useMemo(() => {
-    const match = pluginPages.find((p) => p.pluginId === routePluginId && p.path === window.location.pathname);
+    const match = pluginPages.find((p) => p.pluginId === routePluginId && p.path === location.pathname);
     if (match) return match;
     return {
-      key: `plugin:${routePluginId}:${window.location.pathname}`,
+      key: `plugin:${routePluginId}:${location.pathname}`,
       label: "Plugin",
-      path: window.location.pathname,
+      path: location.pathname,
       icon: "settings" as const,
       section: "plugins" as const,
       pluginId: routePluginId || "",
       pluginName: "Plugin",
     };
-  }, [routePluginId, pluginPages]);
+  }, [routePluginId, pluginPages, location.pathname]);
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const pendingCleanupErrorRef = useRef("");
+  const styleLinksRef = useRef<HTMLLinkElement[]>([]);
   const [reloadCount, setReloadCount] = useState(0);
 
   const fetcher = useCallback(async () => {
@@ -61,6 +64,11 @@ export function PluginHostPage({
   }, [page.pluginId]);
 
   const { data: plugin, loading, error, setError } = useAsyncResource<EnabledPlugin | null>(fetcher, null, [fetcher]);
+
+  const currentPluginPage = useMemo(() => {
+    const pages = plugin?.frontend?.pages || [];
+    return pages.find((item) => item.route === location.pathname) || null;
+  }, [plugin, location.pathname]);
 
   const hostApi = useMemo(() => createPluginHostApi({
     pluginId: page.pluginId || "",
@@ -80,15 +88,68 @@ export function PluginHostPage({
     }
   }
 
+  function cleanupStyles() {
+    for (const link of styleLinksRef.current) link.remove();
+    styleLinksRef.current = [];
+  }
+
+  function loadStyles(styleEntries: string[], version: string | undefined) {
+    cleanupStyles();
+    for (const href of styleEntries) {
+      const link = document.createElement("link");
+      link.rel = "stylesheet";
+      link.href = cacheBustedEntry(href, version, reloadCount);
+      link.dataset.pluginStyle = page.pluginId;
+      document.head.appendChild(link);
+      styleLinksRef.current.push(link);
+    }
+  }
+
   useEffect(() => {
     if (!page.pluginId || !plugin) return;
     const cleanupError = pendingCleanupErrorRef.current || cleanupPlugin();
     pendingCleanupErrorRef.current = "";
     if (containerRef.current) containerRef.current.innerHTML = "";
+    loadStyles(plugin.frontend?.style_entries || [], plugin.version);
+    const manifestPage = currentPluginPage;
+    if (manifestPage) {
+      setError(cleanupError);
+      let cancelled = false;
+      fetch(manifestPage.template)
+        .then(async (response) => {
+          if (!response.ok) throw new Error(`Plugin template unavailable: ${response.status} ${response.statusText}`);
+          return response.text();
+        })
+        .then(async (html) => {
+          if (cancelled || !containerRef.current) return;
+          containerRef.current.innerHTML = html;
+          if (!manifestPage.controller) return;
+          const module = await loadModule(cacheBustedEntry(manifestPage.controller, plugin.version, reloadCount));
+          if (cancelled || !containerRef.current) return;
+          if (typeof module.mountPage !== "function") {
+            setError(`Plugin ${page.pluginId} controller does not export mountPage()`);
+            return;
+          }
+          const mountedCleanup = module.mountPage(containerRef.current, hostApi);
+          cleanupRef.current = typeof mountedCleanup === "function" ? mountedCleanup : null;
+        })
+        .catch((err) => {
+          if (!cancelled) {
+            const loadError = errorMessage(err, "Plugin page unavailable");
+            setError(cleanupError ? `${cleanupError}; ${loadError}` : loadError);
+          }
+        });
+      return () => {
+        cancelled = true;
+        const cleanErr = cleanupPlugin();
+        if (cleanErr) pendingCleanupErrorRef.current = cleanErr;
+        cleanupStyles();
+      };
+    }
     const entry = plugin?.frontend?.entry;
     if (!entry) {
       setError(`Plugin ${page.pluginId} does not declare a frontend entry`);
-      return;
+      return () => cleanupStyles();
     }
     setError(cleanupError);
     let cancelled = false;
@@ -111,8 +172,9 @@ export function PluginHostPage({
       cancelled = true;
       const cleanErr = cleanupPlugin();
       if (cleanErr) pendingCleanupErrorRef.current = cleanErr;
+      cleanupStyles();
     };
-  }, [page.pluginId, refreshKey, reloadCount, plugin, hostApi, loadModule, setError]);
+  }, [page.pluginId, refreshKey, reloadCount, plugin, currentPluginPage, hostApi, loadModule, setError]);
 
   return (
     <div className="plugin-host-page">

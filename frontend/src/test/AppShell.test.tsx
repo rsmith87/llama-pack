@@ -197,6 +197,60 @@ it("renders enabled plugin navigation and a generic hosted route", async () => {
   expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("link", { name: "Settings" })).toBeInTheDocument();
 });
 
+it("renders plugin navigation from frontend pages", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/plugins/enabled") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([
+            {
+              id: "page_plugin",
+              name: "Page Plugin",
+              version: "1.0",
+              status: "enabled",
+              frontend: {
+                entry: null,
+                style: null,
+                style_entries: ["/plugin-assets/page_plugin/plugin.css"],
+                pages: [
+                  {
+                    route: "/ui/plugins/page_plugin",
+                    template: "/plugin-assets/page_plugin/templates/index.html",
+                    controller: "/plugin-assets/page_plugin/controllers/index.js",
+                    title: "Page Plugin",
+                  },
+                  {
+                    route: "/ui/plugins/page_plugin/settings",
+                    template: "/plugin-assets/page_plugin/templates/settings.html",
+                    controller: null,
+                    title: "Settings",
+                  },
+                ],
+              },
+              navigation: [],
+              secondary_navigation: [],
+              ui_routes: [],
+            },
+          ]),
+        });
+      }
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [] }) });
+    }),
+  );
+  const user = userEvent.setup();
+
+  render(<App />);
+
+  await user.click(await screen.findByRole("link", { name: "Page Plugin" }));
+
+  expect(within(screen.getByRole("navigation", { name: "Page Plugin navigation" })).getByRole("link", { name: "Settings" })).toBeInTheDocument();
+});
+
 it("keeps a refreshed plugin URL on the plugin page after metadata loads", async () => {
   window.history.pushState({}, "", "/ui/plugins/neuraxis_business");
   vi.stubGlobal(

@@ -8,7 +8,7 @@ from typing import Any
 from llama_manager.core.config import AppConfig
 from llama_manager.core.plugins.context import PluginContext
 from llama_manager.core.plugins.manifest import load_manifest
-from llama_manager.core.plugins.registry import PluginRecord, PluginRegistry
+from llama_manager.core.plugins.registry import PluginRecord, PluginRegistry, _plugin_asset_url
 
 CORE_PLUGIN_API_VERSION = "1.0"
 
@@ -50,6 +50,18 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         record.navigation.extend(manifest.navigation)
         record.secondary_navigation.extend(manifest.secondary_navigation)
         record.ui_routes.extend(manifest.ui_routes)
+        if manifest.frontend:
+            page_prefix = f"/ui/plugins/{plugin_id}"
+            _plugin_asset_url(plugin_id, manifest.frontend.entry)
+            _plugin_asset_url(plugin_id, manifest.frontend.style)
+            for style_entry in manifest.frontend.style_entries:
+                _plugin_asset_url(plugin_id, style_entry)
+            for page in manifest.frontend.pages:
+                if page.route != page_prefix and not page.route.startswith(f"{page_prefix}/"):
+                    raise ValueError(f"Plugin page route {page.route!r} must stay under {page_prefix}")
+                _plugin_asset_url(plugin_id, page.template)
+                _plugin_asset_url(plugin_id, page.controller)
+                record.ui_routes.append({"path": page.route, "label": page.title})
         if manifest.frontend and manifest.frontend.static_dir:
             record.static_dir = (path / manifest.frontend.static_dir).resolve()
         registry.add_record(record)

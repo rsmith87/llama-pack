@@ -11,10 +11,39 @@ PLUGIN_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 PluginMode = Literal["agent", "controller"]
 
 
+class PluginFrontendPage(BaseModel):
+    route: str
+    template: str
+    controller: str | None = None
+    title: str
+
+    @field_validator("route")
+    @classmethod
+    def validate_route(cls, value: str) -> str:
+        if not value.startswith("/ui/plugins/"):
+            raise ValueError("Plugin page routes must start with /ui/plugins/")
+        if ".." in value.split("/"):
+            raise ValueError("Plugin page routes must not contain traversal segments")
+        return value
+
+    @field_validator("template", "controller")
+    @classmethod
+    def validate_asset_path(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        if ".." in Path(value).parts:
+            raise ValueError("Plugin page asset paths must be relative to frontend.static_dir")
+        if value.startswith("/") and not value.startswith("/plugin-assets/"):
+            raise ValueError("Plugin page asset paths must be relative to frontend.static_dir")
+        return value
+
+
 class PluginFrontend(BaseModel):
     entry: str | None = None
     style: str | None = None
     static_dir: str | None = None
+    style_entries: list[str] = Field(default_factory=list)
+    pages: list[PluginFrontendPage] = Field(default_factory=list)
 
 
 ConfigFieldType = Literal["string", "integer", "number", "boolean"]

@@ -14,10 +14,8 @@ config_schema:
       type: boolean
 frontend:
   static_dir: hello_plugin/static
-  entry: /plugin-assets/hello_plugin/hello-entry.js
-navigation:
-  - label: Hello
-    path: /ui/plugins/hello_plugin
-ui_routes:
-  - path: /ui/plugins/hello_plugin
-    label: Hello Plugin
+  pages:
+    - route: /ui/plugins/hello_plugin
+      template: templates/hello.html
+      controller: controllers/hello.js
+      title: Hello Plugin

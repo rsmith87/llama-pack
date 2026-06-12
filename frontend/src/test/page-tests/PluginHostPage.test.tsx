@@ -54,6 +54,45 @@ function stubEnabledPlugin(entry = "/plugin-assets/hello_plugin/hello-entry.js")
   );
 }
 
+function stubTemplatePlugin({ controller, styleEntries = [] }: { controller: string | null; styleEntries?: string[] }) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/plugins/enabled") {
+        return Promise.resolve({
+          ok: true,
+          json: async () => ([{
+            id: "hello_plugin",
+            name: "Hello Plugin",
+            version: "1.0",
+            status: "enabled",
+            frontend: {
+              entry: null,
+              style: null,
+              style_entries: styleEntries,
+              pages: [{
+                route: "/ui/plugins/hello_plugin",
+                template: "/plugin-assets/hello_plugin/templates/hello.html",
+                controller,
+                title: "Hello Plugin",
+              }],
+            },
+            navigation: [],
+            ui_routes: [],
+          }]),
+        });
+      }
+      if (url === "/plugin-assets/hello_plugin/templates/hello.html") {
+        return Promise.resolve({
+          ok: true,
+          text: async () => "<section><h3>Hello Template</h3><span data-plugin-id></span></section>",
+        });
+      }
+      return Promise.resolve({ ok: false, status: 404, statusText: "Not Found", text: async () => "missing" });
+    }),
+  );
+}
+
 it("loads a plugin frontend module and mounts it into the host container", async () => {
   stubEnabledPlugin();
   const cleanup = vi.fn();
@@ -86,6 +125,49 @@ it("loads the checked-in hello_plugin frontend bundle through plugin metadata", 
   expect(await screen.findByRole("heading", { name: "Hello Plugin" })).toBeInTheDocument();
   expect(await screen.findByText("hello_plugin")).toBeInTheDocument();
   expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
+});
+
+it("loads a template-first plugin page and mounts its controller", async () => {
+  stubTemplatePlugin({ controller: "/plugin-assets/hello_plugin/controllers/hello.js" });
+  const cleanup = vi.fn();
+  const loadModule = vi.fn().mockResolvedValue({
+    mountPage(root: HTMLElement, host: { pluginId: string }) {
+      const target = root.querySelector("[data-plugin-id]");
+      if (target) target.textContent = host.pluginId;
+      return cleanup;
+    },
+  });
+  const { unmount } = renderPluginHost(loadModule);
+
+  expect(await screen.findByRole("heading", { name: "Hello Template" })).toBeInTheDocument();
+  expect(await screen.findByText("hello_plugin")).toBeInTheDocument();
+  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/controllers/hello.js?v=1.0&r=0");
+
+  unmount();
+  expect(cleanup).toHaveBeenCalled();
+});
+
+it("renders a template-first plugin page without a controller", async () => {
+  stubTemplatePlugin({ controller: null });
+  const loadModule = vi.fn();
+
+  renderPluginHost(loadModule);
+
+  expect(await screen.findByRole("heading", { name: "Hello Template" })).toBeInTheDocument();
+  expect(loadModule).not.toHaveBeenCalled();
+});
+
+it("loads and cleans up plugin style entries", async () => {
+  stubTemplatePlugin({ controller: null, styleEntries: ["/plugin-assets/hello_plugin/hello.css"] });
+
+  const { unmount } = renderPluginHost(vi.fn());
+
+  expect(await screen.findByRole("heading", { name: "Hello Template" })).toBeInTheDocument();
+  const link = document.head.querySelector("link[data-plugin-style='hello_plugin']");
+  expect(link).toHaveAttribute("href", "/plugin-assets/hello_plugin/hello.css?v=1.0&r=0");
+
+  unmount();
+  expect(document.head.querySelector("link[data-plugin-style='hello_plugin']")).toBeNull();
 });
 
 it("shows a clear error when the module does not export mount", async () => {

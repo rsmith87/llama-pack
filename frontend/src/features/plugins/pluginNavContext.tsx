@@ -95,15 +95,24 @@ function pluginStatusExplicitlyEmpty(status: PluginStatus | null): boolean {
 }
 
 function pluginPagesForPlugin(plugin: EnabledPlugin): PageDefinition[] {
-  const secondaryNavigation = (plugin.secondary_navigation || [])
-    .map((item) => normalizePluginNavItem(item))
-    .filter((item): item is { label: string; path: string } => item !== null);
-  const primary = (plugin.navigation || [])
-    .map((item, index) => normalizePluginNavItem(item, plugin.name, `/ui/plugins/${plugin.id}`, index))
-    .filter((item): item is { label: string; path: string } => item !== null);
-  const routeItems = (plugin.ui_routes || [])
-    .map((item, index) => normalizePluginNavItem(item, plugin.name, `/ui/plugins/${plugin.id}`, index))
-    .filter((item): item is { label: string; path: string } => item !== null);
+  const manifestPages = (plugin.frontend?.pages || [])
+    .filter((item) => typeof item.route === "string" && item.route.startsWith(`/ui/plugins/${plugin.id}`))
+    .map((item) => ({ label: item.title || plugin.name, path: item.route }));
+  const secondaryNavigation = manifestPages.length > 1
+    ? manifestPages.map((item) => ({ label: item.label, path: item.path }))
+    : (plugin.secondary_navigation || [])
+      .map((item) => normalizePluginNavItem(item))
+      .filter((item): item is { label: string; path: string } => item !== null);
+  const primary = manifestPages.length > 0
+    ? [manifestPages[0]]
+    : (plugin.navigation || [])
+      .map((item, index) => normalizePluginNavItem(item, plugin.name, `/ui/plugins/${plugin.id}`, index))
+      .filter((item): item is { label: string; path: string } => item !== null);
+  const routeItems = manifestPages.length > 0
+    ? manifestPages
+    : (plugin.ui_routes || [])
+      .map((item, index) => normalizePluginNavItem(item, plugin.name, `/ui/plugins/${plugin.id}`, index))
+      .filter((item): item is { label: string; path: string } => item !== null);
   const pages = new Map<string, PageDefinition>();
   for (const item of primary) {
     const route = routeItems.find((candidate) => candidate.path === item.path);

@@ -36,6 +36,19 @@ class PluginRecord:
     root: Path | None = None
 
 
+def _plugin_asset_url(plugin_id: str, path: str | None) -> str | None:
+    if path is None:
+        return None
+    if ".." in Path(path).parts:
+        raise ValueError(f"Plugin asset path {path!r} must not contain traversal segments")
+    plugin_asset_prefix = f"/plugin-assets/{plugin_id}/"
+    if path.startswith("/plugin-assets/"):
+        if not path.startswith(plugin_asset_prefix):
+            raise ValueError(f"Plugin asset URL {path!r} must stay under {plugin_asset_prefix}")
+        return path
+    return f"/plugin-assets/{plugin_id}/{path.lstrip('/')}"
+
+
 class PluginRegistry:
     def __init__(self) -> None:
         self.records: dict[str, PluginRecord] = {}
@@ -220,6 +233,19 @@ class PluginRegistry:
     def _frontend_payload(self, record: PluginRecord) -> dict[str, Any]:
         manifest = record.manifest
         frontend = manifest.frontend.model_dump(mode="json") if manifest and manifest.frontend else {"entry": None, "style": None}
+        if manifest and manifest.frontend:
+            frontend["entry"] = _plugin_asset_url(record.id, manifest.frontend.entry)
+            frontend["style"] = _plugin_asset_url(record.id, manifest.frontend.style)
+            frontend["style_entries"] = [_plugin_asset_url(record.id, item) for item in manifest.frontend.style_entries]
+            frontend["pages"] = [
+                {
+                    "route": page.route,
+                    "template": _plugin_asset_url(record.id, page.template),
+                    "controller": _plugin_asset_url(record.id, page.controller),
+                    "title": page.title,
+                }
+                for page in manifest.frontend.pages
+            ]
         frontend.pop("static_dir", None)
         return {
             "id": record.id,

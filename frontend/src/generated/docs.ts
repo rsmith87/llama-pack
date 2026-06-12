@@ -5703,14 +5703,13 @@ Plugin tests should cover:
   },
   {
     id: "plugin-page-authoring-v1",
-    title: "Plugin Page Authoring v1 (Draft)",
+    title: "Plugin Page Authoring v1",
     sourcePath: "docs/plugin-page-authoring-v1.md",
-    content: `# Plugin Page Authoring v1 (Draft)
+    content: `# Plugin Page Authoring v1
 
-This document proposes a plugin page model with a better authoring experience
-than large JavaScript render files. The target is a WordPress/Drupal-like
-workflow where plugin developers primarily edit templates, styles, and action
-handlers.
+This document defines the v1 template-first plugin page model. The goal is to
+make plugin UI authoring mostly HTML/CSS, with small JavaScript controllers for
+dynamic behavior.
 
 ## Why
 
@@ -5720,28 +5719,24 @@ Current plugin pages are difficult to maintain when they rely on:
 - \`innerHTML\` injection for most rendering
 - template HTML embedded as string literals
 
-This proposal replaces that model with template-first pages and small,
-predictable client controllers.
+Template-first pages keep page structure in HTML fragments, styles in CSS files,
+and dynamic behavior in focused controller modules.
 
-## Goals
+## v1 Decisions
 
-- Make plugin UI authoring mostly HTML/CSS, not string-based JS rendering.
-- Keep backend and frontend contracts stable and explicit.
-- Preserve dynamic actions (forms, search, delete, upload, etc.).
-- Keep plugins isolated from core internals.
-- Support gradual migration from existing \`mount(container, host)\` plugins.
+- \`frontend_api_version\` remains \`"1.0"\`.
+- \`frontend.pages\` is the preferred source of plugin UI routes.
+- \`frontend.pages\` replaces author-facing \`ui_routes\`; legacy \`ui_routes\`
+  remains supported for existing plugins.
+- Templates are HTML fragments, not full HTML documents.
+- Templates, controllers, and styles live under \`frontend.static_dir\` and are
+  served through \`/plugin-assets/{plugin_id}/...\`.
+- Page controllers export \`mountPage(root, host)\`.
+- Legacy \`frontend.entry\` modules exporting \`mount(container, host)\` remain
+  supported.
+- The stable host CSS class contract uses the \`lp-plugin-*\` prefix.
 
-## Non-Goals
-
-- Sandboxing plugin JavaScript.
-- Remote plugin bundles or third-party script origins.
-- Replacing all current plugin frontend APIs in one release.
-
-## v1 Authoring Model
-
-### 1) Plugin manifest declares pages, assets, and actions
-
-\`plugin.yaml\` adds a page contract (illustrative schema):
+## Manifest Schema
 
 \`\`\`yaml
 id: neuraxis_business
@@ -5749,89 +5744,87 @@ name: Neuraxis Business
 version: "1.0"
 requires_core: "1.0"
 backend_api_version: "1.0"
-frontend_api_version: "1.1"
+frontend_api_version: "1.0"
 entrypoint: neuraxis_business.plugin:plugin
 
 frontend:
   static_dir: neuraxis_business/static
   style_entries:
-    - /plugin-assets/neuraxis_business/business.css
+    - business.css
   pages:
     - route: /ui/plugins/neuraxis_business/overview
       template: templates/overview.html
-      controller: static/controllers/overview.js
+      controller: controllers/overview.js
       title: Business Overview
     - route: /ui/plugins/neuraxis_business/documents
       template: templates/documents.html
-      controller: static/controllers/documents.js
+      controller: controllers/documents.js
       title: Documents
 \`\`\`
 
 Rules:
 
-- \`template\` is a plugin-local file served as HTML fragment or full page shell.
-- \`controller\` is optional and should be small (actions + state wiring only).
-- CSS is external (\`style_entries\`), not embedded in runtime JS strings.
+- \`route\` must stay under \`/ui/plugins/{plugin_id}\`.
+- \`template\`, \`controller\`, and \`style_entries\` are plugin asset paths. Relative
+  paths are resolved under \`/plugin-assets/{plugin_id}/\`.
+- Same-plugin \`/plugin-assets/{plugin_id}/...\` URLs are accepted.
+- Cross-plugin asset URLs and traversal segments are rejected.
+- \`controller\` is optional.
+- \`title\` is used for route labels and page headings.
 
-### 2) Template-first rendering
+## Runtime Flow
 
-The plugin host renders page templates into the plugin container. The template
-is the source of structure; JavaScript only binds behavior.
-
-Preferred flow:
-
-1. Host resolves the current plugin route.
-2. Host loads the template.
-3. Host injects template content into container.
-4. Host loads optional page controller and calls:
+1. The React shell resolves the current plugin route.
+2. The shell matches it to \`frontend.pages[].route\`.
+3. The shell fetches the page HTML fragment from \`template\`.
+4. The shell inserts the fragment into the plugin container.
+5. If \`controller\` is present, the shell imports it as an ES module and calls:
 
 \`\`\`js
 export function mountPage(root, host) {
-  // bind events, call host.apiGet/apiPost, update specific nodes
   return () => {};
 }
 \`\`\`
 
-### 3) Action-oriented JavaScript
+Controllers should use event delegation on stable container nodes, submit forms
+through \`host.api*\` helpers, and update dynamic values with DOM APIs such as
+\`textContent\`, \`replaceChildren\`, and \`createElement\`.
 
-Controllers should:
+Controllers should avoid writing full page markup with \`innerHTML\`, injecting
+inline styles, or embedding large structural templates in JavaScript strings.
 
-- use event delegation on stable container nodes
-- submit forms through \`host.api*\` helpers
-- update targeted DOM nodes via \`textContent\`, \`replaceChildren\`, and
-  \`createElement\`
+## Host CSS Contract
 
-Controllers should avoid:
+Core exposes these stable classes for plugin pages:
 
-- writing full page markup with \`innerHTML\`
-- inline style injection
-- large template strings for structural UI
+- \`lp-plugin-page\`
+- \`lp-plugin-panel\`
+- \`lp-plugin-header\`
+- \`lp-plugin-title\`
+- \`lp-plugin-muted\`
+- \`lp-plugin-actions\`
+- \`lp-plugin-button\`
+- \`lp-plugin-field\`
+- \`lp-plugin-input\`
+- \`lp-plugin-table\`
 
-### 4) Reusable host UI primitives
+Plugin-specific CSS may add local classes, but shared layout and control styling
+should prefer the \`lp-plugin-*\` classes where they fit.
 
-Core should expose a small, stable set of primitives for plugin pages:
-
-- layout classes and design tokens
-- shared form/table/panel patterns
-- toast/inline error helpers
-- loading and empty-state helpers
-
-This reduces copy/paste CSS and keeps plugin UX consistent.
-
-## Recommended Plugin Layout
+## Recommended Layout
 
 \`\`\`text
 plugins/neuraxis_business_plugin/
 |-- plugin.yaml
 \`-- neuraxis_business/
     |-- plugin.py
-    |-- templates/
-    |   |-- overview.html
-    |   |-- identity.html
-    |   |-- knowledge-bases.html
-    |   \`-- documents.html
     \`-- static/
         |-- business.css
+        |-- templates/
+        |   |-- overview.html
+        |   |-- identity.html
+        |   |-- knowledge-bases.html
+        |   \`-- documents.html
         \`-- controllers/
             |-- overview.js
             |-- identity.js
@@ -5841,42 +5834,40 @@ plugins/neuraxis_business_plugin/
 
 ## Backward Compatibility
 
-v1 keeps support for existing JS entry modules:
+Existing plugin frontend modules remain valid:
 
-- Existing \`frontend.entry\` with \`mount(container, host)\` remains valid.
-- New pages can opt into template-first rendering incrementally.
-- A plugin can mix both models during migration.
+\`\`\`yaml
+frontend:
+  static_dir: hello_plugin/static
+  entry: hello-entry.js
+\`\`\`
 
-## Migration Guide (from \`business-entry.js\`)
+Legacy modules still export:
 
-1. Move CSS from JS string to \`static/business.css\`.
-2. Split major sections (overview, identity, settings, KB, documents) into
-   \`templates/*.html\`.
-3. Replace full-page \`content.innerHTML = ...\` rendering with per-page
-   controllers.
-4. Keep API interactions in controllers; keep structure in templates.
-5. Remove inline template string rendering once each page has migrated.
+\`\`\`js
+export function mount(container, host) {
+  return () => {};
+}
+\`\`\`
 
-## Security And Reliability Notes
+A plugin can migrate one route at a time by adding \`frontend.pages\` while legacy
+plugins continue to use \`frontend.entry\`, \`navigation\`, \`secondary_navigation\`,
+and \`ui_routes\`.
 
-- Treat plugin templates and scripts as trusted extension code.
-- Prefer DOM APIs (\`textContent\`, \`setAttribute\`) for dynamic data insertion.
-- If HTML insertion is necessary, sanitize untrusted input first.
-- Keep route and asset loading constrained to plugin-owned paths.
+## Migration Guide
 
-## Open Questions
-
-- Should templates be served as full HTML documents or host-inserted fragments?
-- Should controller loading be static (manifest-only) or allow lazy imports?
-- Should we support optional server-side template rendering with plugin data?
-- What minimum host UI primitive set should be guaranteed in \`frontend_api 1.1\`?
-
+1. Move CSS from JavaScript strings to files under \`static/\`.
+2. Split major sections into \`static/templates/*.html\` fragments.
+3. Move dynamic behavior into \`static/controllers/*.js\`.
+4. Replace full-page \`content.innerHTML = ...\` rendering with \`mountPage()\`
+   controllers that update targeted nodes.
+5. Declare routes in \`frontend.pages\` instead of authoring \`ui_routes\`.
 `,
     headings: [
       {
         "level": 1,
-        "text": "Plugin Page Authoring v1 (Draft)",
-        "anchor": "plugin-page-authoring-v1-draft"
+        "text": "Plugin Page Authoring v1",
+        "anchor": "plugin-page-authoring-v1"
       },
       {
         "level": 2,
@@ -5885,43 +5876,28 @@ v1 keeps support for existing JS entry modules:
       },
       {
         "level": 2,
-        "text": "Goals",
-        "anchor": "goals"
+        "text": "v1 Decisions",
+        "anchor": "v1-decisions"
       },
       {
         "level": 2,
-        "text": "Non-Goals",
-        "anchor": "non-goals"
+        "text": "Manifest Schema",
+        "anchor": "manifest-schema"
       },
       {
         "level": 2,
-        "text": "v1 Authoring Model",
-        "anchor": "v1-authoring-model"
-      },
-      {
-        "level": 3,
-        "text": "1) Plugin manifest declares pages, assets, and actions",
-        "anchor": "1-plugin-manifest-declares-pages-assets-and-actions"
-      },
-      {
-        "level": 3,
-        "text": "2) Template-first rendering",
-        "anchor": "2-template-first-rendering"
-      },
-      {
-        "level": 3,
-        "text": "3) Action-oriented JavaScript",
-        "anchor": "3-action-oriented-javascript"
-      },
-      {
-        "level": 3,
-        "text": "4) Reusable host UI primitives",
-        "anchor": "4-reusable-host-ui-primitives"
+        "text": "Runtime Flow",
+        "anchor": "runtime-flow"
       },
       {
         "level": 2,
-        "text": "Recommended Plugin Layout",
-        "anchor": "recommended-plugin-layout"
+        "text": "Host CSS Contract",
+        "anchor": "host-css-contract"
+      },
+      {
+        "level": 2,
+        "text": "Recommended Layout",
+        "anchor": "recommended-layout"
       },
       {
         "level": 2,
@@ -5930,21 +5906,11 @@ v1 keeps support for existing JS entry modules:
       },
       {
         "level": 2,
-        "text": "Migration Guide (from `business-entry.js`)",
-        "anchor": "migration-guide-from-business-entryjs"
-      },
-      {
-        "level": 2,
-        "text": "Security And Reliability Notes",
-        "anchor": "security-and-reliability-notes"
-      },
-      {
-        "level": 2,
-        "text": "Open Questions",
-        "anchor": "open-questions"
+        "text": "Migration Guide",
+        "anchor": "migration-guide"
       }
     ],
-    searchBody: "Plugin Page Authoring v1 (Draft) This document proposes a plugin page model with a better authoring experience than large JavaScript render files. The target is a WordPress/Drupal-like workflow where plugin developers primarily edit templates, styles, and action handlers. Why Current plugin pages are difficult to maintain when they rely on: - large inline blocks in JavaScript - injection for most rendering - template HTML embedded as string literals This proposal replaces that model with template-first pages and small, predictable client controllers. Goals - Make plugin UI authoring mostly HTML/CSS, not string-based JS rendering. - Keep backend and frontend contracts stable and explicit. - Preserve dynamic actions (forms, search, delete, upload, etc.). - Keep plugins isolated from core internals. - Support gradual migration from existing plugins. Non-Goals - Sandboxing plugin JavaScript. - Remote plugin bundles or third-party script origins. - Replacing all current plugin frontend APIs in one release. v1 Authoring Model 1) Plugin manifest declares pages, assets, and actions adds a page contract (illustrative schema): Rules: - is a plugin-local file served as HTML fragment or full page shell. - is optional and should be small (actions + state wiring only). - CSS is external ( ), not embedded in runtime JS strings. 2) Template-first rendering The plugin host renders page templates into the plugin container. The template is the source of structure; JavaScript only binds behavior. Preferred flow: 1. Host resolves the current plugin route. 2. Host loads the template. 3. Host injects template content into container. 4. Host loads optional page controller and calls: 3) Action-oriented JavaScript Controllers should: - use event delegation on stable container nodes - submit forms through helpers - update targeted DOM nodes via , , and Controllers should avoid: - writing full page markup with - inline style injection - large template strings for structural UI 4) Reusable host UI primitives Core should expose a small, stable set of primitives for plugin pages: - layout classes and design tokens - shared form/table/panel patterns - toast/inline error helpers - loading and empty-state helpers This reduces copy/paste CSS and keeps plugin UX consistent. Recommended Plugin Layout Backward Compatibility v1 keeps support for existing JS entry modules: - Existing with remains valid. - New pages can opt into template-first rendering incrementally. - A plugin can mix both models during migration. Migration Guide (from ) 1. Move CSS from JS string to . 2. Split major sections (overview, identity, settings, KB, documents) into . 3. Replace full-page rendering with per-page controllers. 4. Keep API interactions in controllers; keep structure in templates. 5. Remove inline template string rendering once each page has migrated. Security And Reliability Notes - Treat plugin templates and scripts as trusted extension code. - Prefer DOM APIs ( , ) for dynamic data insertion. - If HTML insertion is necessary, sanitize untrusted input first. - Keep route and asset loading constrained to plugin-owned paths. Open Questions - Should templates be served as full HTML documents or host-inserted fragments? - Should controller loading be static (manifest-only) or allow lazy imports? - Should we support optional server-side template rendering with plugin data? - What minimum host UI primitive set should be guaranteed in ?",
+    searchBody: "Plugin Page Authoring v1 This document defines the v1 template-first plugin page model. The goal is to make plugin UI authoring mostly HTML/CSS, with small JavaScript controllers for dynamic behavior. Why Current plugin pages are difficult to maintain when they rely on: - large inline blocks in JavaScript - injection for most rendering - template HTML embedded as string literals Template-first pages keep page structure in HTML fragments, styles in CSS files, and dynamic behavior in focused controller modules. v1 Decisions - remains . - is the preferred source of plugin UI routes. - replaces author-facing ; legacy remains supported for existing plugins. - Templates are HTML fragments, not full HTML documents. - Templates, controllers, and styles live under and are served through . - Page controllers export . - Legacy modules exporting remain supported. - The stable host CSS class contract uses the prefix. Manifest Schema Rules: - must stay under . - , , and are plugin asset paths. Relative paths are resolved under . - Same-plugin URLs are accepted. - Cross-plugin asset URLs and traversal segments are rejected. - is optional. - is used for route labels and page headings. Runtime Flow 1. The React shell resolves the current plugin route. 2. The shell matches it to . 3. The shell fetches the page HTML fragment from . 4. The shell inserts the fragment into the plugin container. 5. If is present, the shell imports it as an ES module and calls: Controllers should use event delegation on stable container nodes, submit forms through helpers, and update dynamic values with DOM APIs such as , , and . Controllers should avoid writing full page markup with , injecting inline styles, or embedding large structural templates in JavaScript strings. Host CSS Contract Core exposes these stable classes for plugin pages: - - - - - - - - - - Plugin-specific CSS may add local classes, but shared layout and control styling should prefer the classes where they fit. Recommended Layout Backward Compatibility Existing plugin frontend modules remain valid: Legacy modules still export: A plugin can migrate one route at a time by adding while legacy plugins continue to use , , , and . Migration Guide 1. Move CSS from JavaScript strings to files under . 2. Split major sections into fragments. 3. Move dynamic behavior into . 4. Replace full-page rendering with controllers that update targeted nodes. 5. Declare routes in instead of authoring .",
   },
   {
     id: "plugins",
@@ -6213,21 +6179,22 @@ The backend exposes enabled plugin metadata at:
 GET /lm-api/v1/plugins/enabled
 \`\`\`
 
+For new plugin UI, prefer \`frontend.pages\`. Each page declares a core UI route,
+an HTML fragment template under \`frontend.static_dir\`, an optional controller
+module under \`frontend.static_dir\`, and a title.
+
 Manifest example:
 
 \`\`\`yaml
 frontend:
   static_dir: hello_plugin/static
-  entry: /plugin-assets/hello_plugin/hello-entry.js
-navigation:
-  - label: Hello
-    path: /ui/plugins/hello_plugin
-secondary_navigation:
-  - label: Settings
-    path: /ui/plugins/hello_plugin/settings
-ui_routes:
-  - path: /ui/plugins/hello_plugin
-    label: Hello Plugin
+  style_entries:
+    - hello.css
+  pages:
+    - route: /ui/plugins/hello_plugin
+      template: templates/hello.html
+      controller: controllers/hello.js
+      title: Hello Plugin
 \`\`\`
 
 Core serves static files from the declared static directory under:
@@ -6237,8 +6204,35 @@ Core serves static files from the declared static directory under:
 \`\`\`
 
 The React shell renders plugin navigation, scoped secondary navigation, and a
-generic plugin host page. For plugin routes, the host loads \`frontend.entry\` as
-an ES module and calls its exported \`mount(container, host)\` function.
+generic plugin host page from \`frontend.pages\`. The host fetches the declared
+HTML fragment, inserts it into the plugin container, then loads the optional
+controller module and calls \`mountPage(root, host)\`.
+
+Minimal page controller:
+
+\`\`\`js
+export function mountPage(root, host) {
+  root.querySelector("[data-plugin-id]").textContent = host.pluginId;
+  return () => {};
+}
+\`\`\`
+
+Legacy plugins may still use \`frontend.entry\`:
+
+\`\`\`yaml
+frontend:
+  static_dir: hello_plugin/static
+  entry: hello-entry.js
+navigation:
+  - label: Hello
+    path: /ui/plugins/hello_plugin
+ui_routes:
+  - path: /ui/plugins/hello_plugin
+    label: Hello Plugin
+\`\`\`
+
+For legacy plugin routes, the host loads \`frontend.entry\` as an ES module and
+calls its exported \`mount(container, host)\` function.
 
 Minimal plugin frontend module:
 
@@ -6263,8 +6257,22 @@ Plugin frontend modules run in the core UI origin. Treat plugin frontend code as
 trusted extension code and keep private/paid plugin UI in the private plugin
 repository.
 
+Core provides a small stable CSS class contract for plugin pages:
+
+- \`lp-plugin-page\`
+- \`lp-plugin-panel\`
+- \`lp-plugin-header\`
+- \`lp-plugin-title\`
+- \`lp-plugin-muted\`
+- \`lp-plugin-actions\`
+- \`lp-plugin-button\`
+- \`lp-plugin-field\`
+- \`lp-plugin-input\`
+- \`lp-plugin-table\`
+
 Plugin assets are served with \`Cache-Control: no-store\`, and the React plugin
-host appends a version/reload query string when importing \`frontend.entry\`.
+host appends a version/reload query string when importing plugin controllers,
+styles, and legacy \`frontend.entry\` modules.
 During development, plugin frontend asset changes should only require a browser
 reload or the plugin page's Reload button. Core frontend rebuilds are only
 needed when the public host contract changes.
@@ -6462,7 +6470,7 @@ These are not part of the current plugin foundation:
         "anchor": "deferred-work"
       }
     ],
-    searchBody: "Plugin Author Guide Neuraxis plugins are trusted local Python packages loaded from configured filesystem paths. The initial plugin runtime is intentionally local-path only: there is no Python package entrypoint discovery, sandboxed execution, or remote frontend JavaScript. Use the checked-in as the reference sample. Paid or private plugins, including the private add-on, live outside this repository and are loaded from configured local paths. For a draft of the next plugin-page developer experience (template-first pages, external styles, and action-focused controllers), see Plugin Page Authoring v1 (Draft). Enable A Plugin Add the plugin id to and provide a matching entry: Plugins whose id is not enabled, whose configured entry is disabled, or whose runtime mode is incompatible are not registered. Failed and incompatible plugins are reported through . Layout Recommended local layout: The manifest points at an object with a method. Manifest Reference Required fields: Field rules: - : lowercase safe identifier matching . - : display name. - : plugin version string. - , , : currently use . - : import path relative to the plugin root. - : optional list of and/or ; defaults to both. - : optional text. - : optional static asset metadata. - , , : optional frontend route metadata. - : optional validation schema for plugin config. Example controller-only plugin: Config Schema Plugins can declare a small config schema. Core validates config before plugin registration; invalid config leaves the plugin disabled with a warning. Supported field types: - - - - Example: Secret values are passed to plugin code through , but are redacted as in status metadata. Do not log secrets from plugin code. Backend Extension API Minimal plugin object: Available methods: - : registers backend routes under . The default prefix is . Custom prefixes must stay inside the plugin namespace and must not collide with another plugin route prefix. - : appends primary frontend navigation metadata. - : appends scoped secondary navigation metadata for plugin pages. - : appends placeholder frontend route metadata. - : subscribes to in-process best-effort events. - : registers a policy hook. - : registers a dynamic health check for . - : returns a plugin-owned SQLite database handle rooted under . - : registers plugin migration metadata and optional explicit migration execution for a plugin-owned database. - : returns the plugin's configured config values. - : returns a for the plugin's private persistent state directory ( ). The directory is not created automatically; the plugin must call before writing to it (or delegate that to a store class). Use this path to locate plugin-owned SQLite databases or other data files. The directory is scoped to the runtime , keeping plugin data alongside other app state. Events Event subscribers receive an event envelope with stable metadata: Subscriber failures and timeouts are isolated: they do not stop other subscribers, but they are recorded in plugin health/status metadata. Current built-in event names include: - - - - - - Hooks Policy hooks run in deterministic registration order. Safety-sensitive hook failures reject the action. The initial hook is . It runs through the shared admission path before scheduler capacity is consumed, so it applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and threaded chat surfaces that route through the scheduler. Example: Health Checks Health checks can be sync or async. They may return one dict, a list of dicts, or . Use or for operator-visible issues. Exceptions are caught and reported as health errors. Migration Metadata Plugins can register migration targets for visibility: Core reports those targets at: Pending or missing migrations are also surfaced as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugins that need durable data should use plugin-owned databases under their private state directory, with plugin-owned schemas and migrations. Core provides the storage location and migration lifecycle contract, but does not import plugin models or place plugin tables in core databases. See Plugin Database Contract. Frontend Metadata The backend exposes enabled plugin metadata at: Manifest example: Core serves static files from the declared static directory under: The React shell renders plugin navigation, scoped secondary navigation, and a generic plugin host page. For plugin routes, the host loads as an ES module and calls its exported function. Minimal plugin frontend module: The object exposes: - : current plugin id. - , , , and : scoped helpers for . - : navigate inside the core UI. - : request a plugin status refresh. Plugin frontend modules run in the core UI origin. Treat plugin frontend code as trusted extension code and keep private/paid plugin UI in the private plugin repository. Plugin assets are served with , and the React plugin host appends a version/reload query string when importing . During development, plugin frontend asset changes should only require a browser reload or the plugin page's Reload button. Core frontend rebuilds are only needed when the public host contract changes. The shell also reads and shows administrator-facing alerts for failed, incompatible, warning, or error plugin states. Administrators can inspect configured plugins at . That page shows plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. Testing Plugins Backend plugin behavior should have focused tests in . Use isolated fixture plugins for failure, collision, config, hook, event, and migration edge cases. Use as the checked-in integration target for the happy path. Recommended coverage: - Core starts with no plugins. - Enabled plugin registers metadata and routes. - Disabled, failed, and incompatible plugins do not register routes. - Route namespace and collision failures are reported. - Static assets are served only from the declared static directory. - Path traversal is rejected. - Config schema validation disables invalid plugins. - Secret config values are redacted from status metadata. - Event and hook failures are isolated and reported. - Health checks appear in . - Migration metadata appears in . - Pending or missing migrations produce health warnings. - Plugin registration does not auto-run migrations. Frontend plugin shell behavior is covered in . Hello Plugin Walkthrough 1. Enable in controller config: 2. Start the controller. 3. Confirm backend route: 4. Confirm metadata: 5. Open the React UI on the controller. The nav item should appear in the section and route to a placeholder page. 6. Set to exercise the hook. Chat requests that route through should be rejected before scheduler capacity is consumed. Private Plugin Repositories Paid or private plugins should be tracked in separate private repositories. Keep this repository focused on the core runtime, public extension contracts, and the minimal sample. The add-on is a paid private plugin and should not become a core runtime dependency. Recommended local development setup: That private plugin uses the same manifest schema, backend extension API, frontend metadata contract, health checks, and migration metadata described above. It should carry its own implementation tests and CI, while this repository keeps fixture-based coverage for the generic plugin runtime and the public sample. Private plugins that provide end-user auth or chat policy, such as , should expose their client-facing availability through core client discovery rather than requiring clients to scrape plugin status or know private route details. Core discovery should advertise plugin auth endpoints only when the plugin is enabled and not reporting errors that make the advertised feature unusable. Deferred Work These are not part of the current plugin foundation: - Dynamic React of plugin frontend bundles. - Frontend bundle failure isolation beyond backend status alerts. - Remote plugin JavaScript or third-party asset origins. - Sandboxed plugin Python or JavaScript execution. - Auto-running plugin migrations on startup. - Plugin install/update/uninstall lifecycle commands. - Python package entrypoint discovery.",
+    searchBody: "Plugin Author Guide Neuraxis plugins are trusted local Python packages loaded from configured filesystem paths. The initial plugin runtime is intentionally local-path only: there is no Python package entrypoint discovery, sandboxed execution, or remote frontend JavaScript. Use the checked-in as the reference sample. Paid or private plugins, including the private add-on, live outside this repository and are loaded from configured local paths. For a draft of the next plugin-page developer experience (template-first pages, external styles, and action-focused controllers), see Plugin Page Authoring v1 (Draft). Enable A Plugin Add the plugin id to and provide a matching entry: Plugins whose id is not enabled, whose configured entry is disabled, or whose runtime mode is incompatible are not registered. Failed and incompatible plugins are reported through . Layout Recommended local layout: The manifest points at an object with a method. Manifest Reference Required fields: Field rules: - : lowercase safe identifier matching . - : display name. - : plugin version string. - , , : currently use . - : import path relative to the plugin root. - : optional list of and/or ; defaults to both. - : optional text. - : optional static asset metadata. - , , : optional frontend route metadata. - : optional validation schema for plugin config. Example controller-only plugin: Config Schema Plugins can declare a small config schema. Core validates config before plugin registration; invalid config leaves the plugin disabled with a warning. Supported field types: - - - - Example: Secret values are passed to plugin code through , but are redacted as in status metadata. Do not log secrets from plugin code. Backend Extension API Minimal plugin object: Available methods: - : registers backend routes under . The default prefix is . Custom prefixes must stay inside the plugin namespace and must not collide with another plugin route prefix. - : appends primary frontend navigation metadata. - : appends scoped secondary navigation metadata for plugin pages. - : appends placeholder frontend route metadata. - : subscribes to in-process best-effort events. - : registers a policy hook. - : registers a dynamic health check for . - : returns a plugin-owned SQLite database handle rooted under . - : registers plugin migration metadata and optional explicit migration execution for a plugin-owned database. - : returns the plugin's configured config values. - : returns a for the plugin's private persistent state directory ( ). The directory is not created automatically; the plugin must call before writing to it (or delegate that to a store class). Use this path to locate plugin-owned SQLite databases or other data files. The directory is scoped to the runtime , keeping plugin data alongside other app state. Events Event subscribers receive an event envelope with stable metadata: Subscriber failures and timeouts are isolated: they do not stop other subscribers, but they are recorded in plugin health/status metadata. Current built-in event names include: - - - - - - Hooks Policy hooks run in deterministic registration order. Safety-sensitive hook failures reject the action. The initial hook is . It runs through the shared admission path before scheduler capacity is consumed, so it applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and threaded chat surfaces that route through the scheduler. Example: Health Checks Health checks can be sync or async. They may return one dict, a list of dicts, or . Use or for operator-visible issues. Exceptions are caught and reported as health errors. Migration Metadata Plugins can register migration targets for visibility: Core reports those targets at: Pending or missing migrations are also surfaced as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugins that need durable data should use plugin-owned databases under their private state directory, with plugin-owned schemas and migrations. Core provides the storage location and migration lifecycle contract, but does not import plugin models or place plugin tables in core databases. See Plugin Database Contract. Frontend Metadata The backend exposes enabled plugin metadata at: For new plugin UI, prefer . Each page declares a core UI route, an HTML fragment template under , an optional controller module under , and a title. Manifest example: Core serves static files from the declared static directory under: The React shell renders plugin navigation, scoped secondary navigation, and a generic plugin host page from . The host fetches the declared HTML fragment, inserts it into the plugin container, then loads the optional controller module and calls . Minimal page controller: Legacy plugins may still use : For legacy plugin routes, the host loads as an ES module and calls its exported function. Minimal plugin frontend module: The object exposes: - : current plugin id. - , , , and : scoped helpers for . - : navigate inside the core UI. - : request a plugin status refresh. Plugin frontend modules run in the core UI origin. Treat plugin frontend code as trusted extension code and keep private/paid plugin UI in the private plugin repository. Core provides a small stable CSS class contract for plugin pages: - - - - - - - - - - Plugin assets are served with , and the React plugin host appends a version/reload query string when importing plugin controllers, styles, and legacy modules. During development, plugin frontend asset changes should only require a browser reload or the plugin page's Reload button. Core frontend rebuilds are only needed when the public host contract changes. The shell also reads and shows administrator-facing alerts for failed, incompatible, warning, or error plugin states. Administrators can inspect configured plugins at . That page shows plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. Testing Plugins Backend plugin behavior should have focused tests in . Use isolated fixture plugins for failure, collision, config, hook, event, and migration edge cases. Use as the checked-in integration target for the happy path. Recommended coverage: - Core starts with no plugins. - Enabled plugin registers metadata and routes. - Disabled, failed, and incompatible plugins do not register routes. - Route namespace and collision failures are reported. - Static assets are served only from the declared static directory. - Path traversal is rejected. - Config schema validation disables invalid plugins. - Secret config values are redacted from status metadata. - Event and hook failures are isolated and reported. - Health checks appear in . - Migration metadata appears in . - Pending or missing migrations produce health warnings. - Plugin registration does not auto-run migrations. Frontend plugin shell behavior is covered in . Hello Plugin Walkthrough 1. Enable in controller config: 2. Start the controller. 3. Confirm backend route: 4. Confirm metadata: 5. Open the React UI on the controller. The nav item should appear in the section and route to a placeholder page. 6. Set to exercise the hook. Chat requests that route through should be rejected before scheduler capacity is consumed. Private Plugin Repositories Paid or private plugins should be tracked in separate private repositories. Keep this repository focused on the core runtime, public extension contracts, and the minimal sample. The add-on is a paid private plugin and should not become a core runtime dependency. Recommended local development setup: That private plugin uses the same manifest schema, backend extension API, frontend metadata contract, health checks, and migration metadata described above. It should carry its own implementation tests and CI, while this repository keeps fixture-based coverage for the generic plugin runtime and the public sample. Private plugins that provide end-user auth or chat policy, such as , should expose their client-facing availability through core client discovery rather than requiring clients to scrape plugin status or know private route details. Core discovery should advertise plugin auth endpoints only when the plugin is enabled and not reporting errors that make the advertised feature unusable. Deferred Work These are not part of the current plugin foundation: - Dynamic React of plugin frontend bundles. - Frontend bundle failure isolation beyond backend status alerts. - Remote plugin JavaScript or third-party asset origins. - Sandboxed plugin Python or JavaScript execution. - Auto-running plugin migrations on startup. - Plugin install/update/uninstall lifecycle commands. - Python package entrypoint discovery.",
   },
   {
     id: "setup",

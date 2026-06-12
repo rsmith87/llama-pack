@@ -14,9 +14,11 @@ function mergePluginRows(enabled: EnabledPlugin[], status: PluginStatus | null, 
       version: statusItem?.version || metadata?.version || "",
       status: statusItem?.status || metadata?.status || "unknown",
       frontendEntry: metadata?.frontend?.entry || null,
-      routes: [...(metadata?.navigation || []), ...(metadata?.ui_routes || [])]
-        .map((item) => item.path)
-        .filter((path): path is string => typeof path === "string" && path.length > 0),
+      routes: metadata?.frontend?.pages?.length
+        ? metadata.frontend.pages.map((item) => item.route)
+        : [...(metadata?.navigation || []), ...(metadata?.ui_routes || [])]
+          .map((item) => item.path)
+          .filter((path): path is string => typeof path === "string" && path.length > 0),
       warnings: statusItem?.warnings || [],
       errors: statusItem?.errors || [],
       health: statusItem?.health || [],
