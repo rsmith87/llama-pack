@@ -261,6 +261,7 @@ def _configure_app_state(
         app.state.model_asset_inventory_service = ModelAssetInventoryService(
             app_config,
             app.state.model_asset_store,
+            download_store=app.state.model_download_store,
         )
     except RuntimeError:
         app.state.model_asset_store = None

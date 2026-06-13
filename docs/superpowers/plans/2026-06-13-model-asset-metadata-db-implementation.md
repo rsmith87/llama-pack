@@ -138,7 +138,7 @@
 - [x] **Step 3: Replace local-only line override state with backend-backed reclassification updates and refreshes**
 - [x] **Step 4: Keep navigator selection behavior unchanged: only explicit `Add` opens the modal**
 - [x] **Step 5: Run focused frontend tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 8: Add Download Linkage To Models DB Assets
 
@@ -149,11 +149,11 @@
 - Modify: `tests/test_downloads.py`
 - Modify: `tests/test_models_db_integration.py`
 
-- [ ] **Step 1: Write failing tests for linking completed downloads to asset rows through stored provenance**
-- [ ] **Step 2: Run the focused tests and verify download linkage is absent**
-- [ ] **Step 3: Persist enough provenance to reconcile download records with assets: `download_id`, repo id, revision, source filename, and local path**
-- [ ] **Step 4: Update asset upsert logic to attach download linkage when available**
-- [ ] **Step 5: Run focused tests and verify they pass**
+- [x] **Step 1: Write failing tests for linking completed downloads to asset rows through stored provenance**
+- [x] **Step 2: Run the focused tests and verify download linkage is absent**
+- [x] **Step 3: Persist enough provenance to reconcile download records with assets: `download_id`, repo id, revision, source filename, and local path**
+- [x] **Step 4: Update asset upsert logic to attach download linkage when available**
+- [x] **Step 5: Run focused tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 9: Verification And Migration Safety Pass

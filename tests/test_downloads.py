@@ -278,6 +278,29 @@ def test_download_manager_records_selected_file_total_size(tmp_path):
     assert started["bytes_total"] == 2048
 
 
+def test_download_manager_records_provenance_for_selected_include_files(tmp_path):
+    manager, store, _api = make_manager(
+        tmp_path,
+        files=[
+            FakeRepoFile("nested/model-Q5_K_M.gguf", 2048),
+        ],
+    )
+
+    manager.start(
+        "owner/model",
+        revision="main",
+        include_file="nested/model-Q5_K_M.gguf",
+        mmproj_file="mmproj-F16.gguf",
+        triggered_by="tester",
+    )
+
+    assert store.created[0]["repo_id"] == "owner/model"
+    assert store.created[0]["revision"] == "main"
+    assert store.created[0]["local_path"] == str(tmp_path / "models" / "owner__model")
+    assert "--include nested/model-Q5_K_M.gguf" in store.created[0]["command"]
+    assert "--include mmproj-F16.gguf" in store.created[0]["command"]
+
+
 def test_download_manager_reports_running_progress_from_selected_quant_file(tmp_path):
     process = FakeProcess()
     manager, _store, _api = make_manager(

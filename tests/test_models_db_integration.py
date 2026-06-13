@@ -73,3 +73,51 @@ def test_model_asset_inventory_service_marks_missing_rows(tmp_path: Path):
     assert persisted[str(first_path.resolve())]["missing"] is False
     assert persisted[str(second_path.resolve())]["missing"] is True
     assert [asset["canonical_path"] for asset in assets] == [str(first_path.resolve())]
+
+
+class FakeDownloadStore:
+    def __init__(self, records: list[dict[str, object]]):
+        self.records = records
+
+    def list_downloads(self, *, status: str | None = None, limit: int = 100) -> list[dict[str, object]]:
+        items = self.records
+        if status is not None:
+            items = [item for item in items if item.get("status") == status]
+        return items[:limit]
+
+
+def test_model_asset_inventory_service_links_scanned_asset_to_download_provenance(tmp_path: Path):
+    models_root = tmp_path / "HFModels"
+    download_root = models_root / "owner__model"
+    gguf_path = download_root / "nested" / "model-Q5_K_M.gguf"
+    gguf_path.parent.mkdir(parents=True)
+    gguf_path.write_bytes(b"hello")
+
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+    download_store = FakeDownloadStore(
+        [
+            {
+                "id": "download-1",
+                "repo_id": "owner/model",
+                "revision": "main",
+                "local_path": str(download_root),
+                "status": "succeeded",
+                "command": "python -m huggingface_hub.cli.hf download owner/model --local-dir "
+                f"{download_root} --revision main --include nested/model-Q5_K_M.gguf",
+            }
+        ]
+    )
+    service = ModelAssetInventoryService(
+        load_config({"hf_models_dir": str(models_root)}),
+        store,
+        download_store=download_store,
+    )
+
+    assets = service.reconcile_scan([gguf_path])
+
+    assert assets[0]["download_id"] == "download-1"
+    assert assets[0]["source_repo_id"] == "owner/model"
+    assert assets[0]["source_revision"] == "main"
+    assert assets[0]["source_filename"] == "nested/model-Q5_K_M.gguf"
