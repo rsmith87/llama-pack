@@ -7,6 +7,7 @@ from typing import Literal
 from llama_pack.core.config import AppConfig, ModelConfig, save_config
 from llama_pack.core.config.models import ModelProfileConfig, SpeculativeConfig
 from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 
 
 ReasoningMode = Literal["on", "off", "auto"]
@@ -77,6 +78,7 @@ class GgufLibrary:
             vision=vision,
             mmproj=mmproj,
             supports_mtp=supports_mtp or None,
+            model_line=self._asset_for_path(path).get("model_line") if self._asset_for_path(path) else None,
             speculative=SpeculativeConfig(mode="mtp", draft_model_path=draft_model_path) if supports_mtp else None,
             profiles={
                 "default": ModelProfileConfig(
@@ -88,6 +90,7 @@ class GgufLibrary:
         )
         if self.config.config_source not in {"(defaults)", "(in-memory)"}:
             save_config(self.config)
+        self._sync_model_record(model_name)
         return self._model_payload(model_name)
 
     def update_model(
@@ -145,6 +148,7 @@ class GgufLibrary:
             )
         if self.config.config_source not in {"(defaults)", "(in-memory)"}:
             save_config(self.config)
+        self._sync_model_record(model_name)
         return self._model_payload(model_name)
 
     def _model_payload(self, name: str) -> dict[str, object]:
@@ -183,6 +187,7 @@ class GgufLibrary:
         removed = self.config.models.pop(model_name)
         if self.config.config_source not in {"(defaults)", "(in-memory)"}:
             save_config(self.config)
+        self._delete_model_record(model_name)
         return {"removed": True, "name": model_name, "path": removed.path}
 
     def delete_file(self, file_id: str) -> dict[str, object]:
@@ -192,6 +197,7 @@ class GgufLibrary:
         path.unlink()
         for name in registered_names:
             self.config.models.pop(name, None)
+            self._delete_model_record(name)
         if registered_names and self.config.config_source not in {"(defaults)", "(in-memory)"}:
             save_config(self.config)
 
@@ -270,6 +276,42 @@ class GgufLibrary:
             return {}
         assets = self.inventory_service.reconcile_scan(paths)
         return {str(Path(str(asset["canonical_path"])).resolve()): asset for asset in assets}
+
+    def _asset_store(self) -> ModelAssetStoreOrm | None:
+        if self.inventory_service is None:
+            return None
+        return self.inventory_service.store
+
+    def _asset_for_path(self, path: Path) -> dict[str, object] | None:
+        if self.inventory_service is not None:
+            self.inventory_service.reconcile_scan(self._gguf_paths())
+        store = self._asset_store()
+        if store is None:
+            return None
+        return store.get_asset_by_path(str(path.resolve()))
+
+    def _sync_model_record(self, model_name: str) -> None:
+        store = self._asset_store()
+        if store is None or model_name not in self.config.models:
+            return
+        model = self.config.models[model_name]
+        asset = self._asset_for_path(Path(model.path))
+        model.model_line = model.model_line or (asset.get("model_line") if asset else None)
+        store.upsert_model(
+            model_name=model_name,
+            asset_id=asset["asset_id"] if asset else None,
+            config_source="yaml",
+            model_line=model.model_line,
+        )
+
+    def _delete_model_record(self, model_name: str) -> None:
+        store = self._asset_store()
+        if store is None:
+            return
+        try:
+            store.delete_model_by_name(model_name)
+        except KeyError:
+            return
 
     def _mmproj_by_dir(self) -> dict[Path, Path]:
         result: dict[Path, Path] = {}

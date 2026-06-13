@@ -2722,6 +2722,42 @@ def test_gguf_library_route_passes_running_model_status():
     assert gguf["pid"] == 123
 
 
+def test_gguf_library_add_model_route_persists_model_asset_link(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_text("", encoding="utf-8")
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "hf_models_dir": str(hf_dir),
+                "log_dir": str(tmp_path / "logs"),
+            }
+        )
+    )
+    client = TestClient(app)
+
+    gguf = client.get("/lm-api/v1/library/ggufs").json()[0]
+    response = client.post(
+        f"/lm-api/v1/library/ggufs/{gguf['id']}/add-model",
+        json={
+            "name": "gemma-local",
+            "port": 8088,
+            "ctx": 8192,
+            "gpu_layers": 999,
+            "host": "0.0.0.0",
+        },
+    )
+
+    assert response.status_code == 200
+    models = app.state.model_asset_store.list_models()
+    assert models[0]["model_name"] == "gemma-local"
+    assert models[0]["asset_id"] == gguf["asset_id"]
+
+
 def test_model_favorite_toggle_sorts_models_first(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

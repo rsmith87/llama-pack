@@ -109,6 +109,15 @@ class ModelAssetStoreOrm:
             raise KeyError(f"Unknown asset id: {asset_id}")
         return self._asset_to_dict(row)
 
+    def get_asset_by_path(self, canonical_path: str) -> dict[str, object] | None:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(ModelAssetOrm).where(ModelAssetOrm.canonical_path == canonical_path)
+            ).scalar_one_or_none()
+        if row is None:
+            return None
+        return self._asset_to_dict(row)
+
     def mark_missing_assets(self, *, missing_asset_ids: set[str]) -> int:
         if not missing_asset_ids:
             return 0
@@ -162,6 +171,13 @@ class ModelAssetStoreOrm:
         if row is None:
             raise KeyError(f"Unknown model id: {model_id}")
         return self._model_to_dict(row)
+
+    def delete_model_by_name(self, model_name: str) -> None:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(select(ModelOrm).where(ModelOrm.model_name == model_name)).scalar_one_or_none()
+            if row is None:
+                raise KeyError(f"Unknown model name: {model_name}")
+            session.delete(row)
 
     def _asset_to_dict(self, row: ModelAssetOrm) -> dict[str, object]:
         return {

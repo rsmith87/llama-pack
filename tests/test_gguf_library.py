@@ -142,6 +142,86 @@ def test_gguf_library_adds_file_as_runtime_model(tmp_path):
     assert config.effective_model_config("gemma-local:default").ctx == 8192
 
 
+def test_gguf_library_add_model_persists_model_asset_link(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_text("", encoding="utf-8")
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config({"hf_models_dir": str(hf_dir)})
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inventory = ModelAssetInventoryService(config, store)
+    library = GgufLibrary(config, inventory_service=inventory)
+
+    files = library.list_files()
+    asset_id = files[0]["asset_id"]
+
+    library.add_model(
+        library.file_id(gguf_path),
+        name="gemma-local",
+        port=8088,
+        ctx=8192,
+        gpu_layers=999,
+        host="0.0.0.0",
+    )
+
+    models = store.list_models()
+    assert models == [
+        {
+            "model_id": models[0]["model_id"],
+            "model_name": "gemma-local",
+            "asset_id": asset_id,
+            "config_source": "yaml",
+            "model_line": None,
+            "created_at": models[0]["created_at"],
+            "updated_at": models[0]["updated_at"],
+        }
+    ]
+
+
+def test_gguf_library_remove_and_delete_clear_model_asset_links(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_text("", encoding="utf-8")
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config({"hf_models_dir": str(hf_dir)})
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inventory = ModelAssetInventoryService(config, store)
+    library = GgufLibrary(config, inventory_service=inventory)
+
+    library.list_files()
+    library.add_model(
+        library.file_id(gguf_path),
+        name="gemma-local",
+        port=8088,
+        ctx=8192,
+        gpu_layers=999,
+        host="0.0.0.0",
+    )
+    assert len(store.list_models()) == 1
+
+    library.remove_model("gemma-local")
+    assert store.list_models() == []
+
+    library.add_model(
+        library.file_id(gguf_path),
+        name="gemma-local",
+        port=8088,
+        ctx=8192,
+        gpu_layers=999,
+        host="0.0.0.0",
+    )
+    assert len(store.list_models()) == 1
+
+    library.delete_file(library.file_id(gguf_path))
+    assert store.list_models() == []
+
+
 def test_gguf_library_added_model_appears_in_profile_catalog(tmp_path):
     hf_dir = tmp_path / "HFModels"
     model_dir = hf_dir / "gemma"

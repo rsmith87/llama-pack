@@ -61,6 +61,7 @@ class ModelConfig(BaseModel):
     supports_grammar: bool | None = None
     supports_mtp: bool | None = None
     speculative: SpeculativeConfig | None = None
+    model_line: str | None = None
     favorite: bool = False
     prompt_template: str | None = None
     strengths: list[str] = Field(default_factory=list)

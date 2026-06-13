@@ -95,7 +95,7 @@
 - [x] **Step 3: Refactor `GgufLibrary` to upsert scanned GGUF files into the `model_assets` store before building payloads**
 - [x] **Step 4: Prefer persisted asset metadata such as `model_line` while still enriching responses with live runtime/config status**
 - [x] **Step 5: Run the focused GGUF library and API tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 5: Persist Model-To-Asset Links During Add/Update/Delete Flows
 
@@ -105,11 +105,11 @@
 - Modify: `tests/test_gguf_library.py`
 - Modify: `tests/test_api.py`
 
-- [ ] **Step 1: Write failing tests for add-model linking an asset to a configured model record**
-- [ ] **Step 2: Run the focused tests and verify no model record link is created today**
-- [ ] **Step 3: Extend add/update/remove/delete GGUF workflows to maintain `models` rows and asset links while keeping YAML launch config behavior intact**
-- [ ] **Step 4: Add an optional `model_line` field to `ModelConfig` for future parity, without switching launch reads to DB**
-- [ ] **Step 5: Run focused backend tests and verify they pass**
+- [x] **Step 1: Write failing tests for add-model linking an asset to a configured model record**
+- [x] **Step 2: Run the focused tests and verify no model record link is created today**
+- [x] **Step 3: Extend add/update/remove/delete GGUF workflows to maintain `models` rows and asset links while keeping YAML launch config behavior intact**
+- [x] **Step 4: Add an optional `model_line` field to `ModelConfig` for future parity, without switching launch reads to DB**
+- [x] **Step 5: Run focused backend tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 6: Add Backend API For GGUF Asset Reclassification
