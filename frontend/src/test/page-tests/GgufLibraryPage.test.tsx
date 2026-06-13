@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
@@ -18,19 +18,21 @@ function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
 
-it("groups registered and available GGUF files", async () => {
+it("groups local GGUF files in the model navigator by specific generation", async () => {
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
-    { id: "added", filename: "added.gguf", name: "added", registered: true, registered_as: "added-model", size_bytes: 1000 },
-    { id: "available", filename: "available.gguf", name: "available", registered: false, size_bytes: 2000 },
+    { id: "added", filename: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf", name: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M", registered: true, registered_as: "qwen-coder", size_bytes: 1000 },
+    { id: "available", filename: "Meta-Llama-3.3-70B-Instruct-Q4_K_M.gguf", name: "Meta-Llama-3.3-70B-Instruct-Q4_K_M", registered: false, size_bytes: 2000 },
   ])));
 
   renderPage();
 
-  expect(await screen.findByRole("heading", { name: "Added Models" })).toBeInTheDocument();
-  // Model name appears in card title and in the detail grid; use getAllByText to confirm presence
-  expect(screen.getAllByText("added").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("available").length).toBeGreaterThan(0);
-  expect(screen.getAllByText("File ID").length).toBeGreaterThan(0);
+  expect(await screen.findByRole("heading", { name: "Local Model Navigator" })).toBeInTheDocument();
+  const modelLines = screen.getByRole("complementary", { name: "Model lines" });
+  const selectedDetails = screen.getByRole("region", { name: "Selected model details" });
+  expect(within(modelLines).getByRole("button", { name: /Qwen3/ })).toBeInTheDocument();
+  expect(within(modelLines).getByRole("button", { name: /Llama 3.3/ })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /Coder 30B A3B Instruct/ })).toBeInTheDocument();
+  expect(within(selectedDetails).getAllByText("Q4_K_M").length).toBeGreaterThan(0);
 });
 
 it("adds an available GGUF as a configured model", async () => {
@@ -93,6 +95,50 @@ it("shows compact mmproj paths in the add model picker labels", async () => {
   expect(screen.getByRole("option", { name: /vision\/qwen\/mmproj-F16\.gguf/ })).toBeInTheDocument();
   expect(screen.getByRole("option", { name: /vision\/llava\/mmproj-F16\.gguf/ })).toBeInTheDocument();
   expect(picker).toHaveValue("/Users/robertsmith/Apps/llama-pack/models/vision/qwen/mmproj-F16.gguf");
+});
+
+it("allows Other records to be reclassified in the local navigator", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
+    { id: "custom-1", filename: "custom-local-model-Q4_K_M.gguf", name: "custom-local-model-Q4_K_M", registered: false },
+  ])));
+  const user = userEvent.setup();
+
+  renderPage();
+
+  await user.click(await screen.findByRole("button", { name: /Other/ }));
+  await user.click(screen.getByRole("button", { name: /custom local model/ }));
+  await user.type(screen.getByLabelText("New model line"), "Custom Local");
+  await user.click(screen.getByRole("button", { name: "Reclassify" }));
+
+  expect(screen.getByRole("button", { name: /Custom Local/ })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Other/ })).not.toBeInTheDocument();
+});
+
+it("does not open the model modal when switching lines, models, or quants in the navigator", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
+    { id: "qwen-q4", filename: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf", name: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M", registered: true, registered_as: "qwen-coder" },
+    { id: "llama-q4", filename: "Meta-Llama-3.3-70B-Instruct-Q4_K_M.gguf", name: "Meta-Llama-3.3-70B-Instruct-Q4_K_M", registered: false },
+  ])));
+  const user = userEvent.setup();
+
+  renderPage();
+
+  const modelLines = await screen.findByRole("complementary", { name: "Model lines" });
+  const selectedDetails = screen.getByRole("region", { name: "Selected model details" });
+  await user.click(within(modelLines).getByRole("button", { name: /Llama 3.3/ }));
+
+  expect(screen.queryByRole("dialog", { name: /Model Detail/i })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("GPU layers slider")).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: /70B Instruct/ }));
+
+  expect(screen.queryByRole("dialog", { name: /Model Detail/i })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("GPU layers slider")).not.toBeInTheDocument();
+
+  await user.click(within(selectedDetails).getAllByText("Q4_K_M")[0]);
+
+  expect(screen.queryByRole("dialog", { name: /Model Detail/i })).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("GPU layers slider")).not.toBeInTheDocument();
 });
 
 it("offers gpu layers shortcuts in the add model modal", async () => {

@@ -6,9 +6,9 @@ import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
-import { ModelCarousel } from "../../components/ModelCarousel";
-import { ModelCarouselWithSearch } from "../../components/ModelCarousel/with-search";
+import { ModelNavigator } from "../../components/ModelNavigator";
 import { isActiveModel } from "../../features/models/modelStatus";
+import { buildModelNavigatorLines, type ModelLineOverride, type ModelNavigatorQuant } from "../../features/models/modelNavigator";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
 import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
 import { useNavigate } from "react-router-dom";
@@ -115,14 +115,16 @@ export function GgufLibraryPage() {
   const [draftModelPath, setDraftModelPath] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
+  const [lineOverrides, setLineOverrides] = useState<ModelLineOverride[]>([]);
+  const [selectedQuantId, setSelectedQuantId] = useState("");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [sourceNode, setSourceNode] = useState("");
   const [destinationNode, setDestinationNode] = useState("");
   const [includeMode, setIncludeMode] = useState("selected_with_sidecars");
   const [transferStatus, setTransferStatus] = useState("");
 
-  const added = useMemo(() => files.filter((file) => Boolean(file.registered) && !isMmproj(file)), [files]);
-  const available = useMemo(() => files.filter((file) => !file.registered && !isMmproj(file)), [files]);
+  const localFiles = useMemo(() => files.filter((file) => !isMmproj(file)), [files]);
+  const navigatorLines = useMemo(() => buildModelNavigatorLines(localFiles, lineOverrides), [localFiles, lineOverrides]);
 
   function openDetail(file: GgufFile) {
     setSelected(file);
@@ -255,6 +257,17 @@ export function GgufLibraryPage() {
     await refresh();
   }
 
+  function reclassifyLine(override: ModelLineOverride) {
+    setLineOverrides((current) => {
+      const withoutRecord = current.filter((item) => item.recordId !== override.recordId);
+      return [...withoutRecord, override];
+    });
+  }
+
+  function selectNavigatorQuant(quant: ModelNavigatorQuant<GgufFile>) {
+    setSelectedQuantId(quant.id);
+  }
+
   function renderCard(file: GgufFile) {
     const name = fileName(file);
     const badge = receivedBadgeText(file);
@@ -292,30 +305,29 @@ export function GgufLibraryPage() {
       </div>
       <ErrorBanner message={error} />
       <div className="library-sections">
-        {appMode !== "controller" && added.length ? (
-          <Panel title="Added Models" eyebrow="Configured">
-            <ModelCarousel
-              items={added}
-              slidesPerView={3}
-              renderItem={(item) => renderCard(item as GgufFile)}
-            />
-          </Panel>
-        ) : null}
         {appMode !== "controller" ? (
-          <Panel title="Available GGUF Files" eyebrow="Discovered">
-            {available.length ? (
-              <ModelCarouselWithSearch
-                items={available}
-                slidesPerView={3}
-                placeholder="Search GGUF files…"
-                searchFields={(item) => {
-                  const f = item as GgufFile;
-                  return [fileName(f), f.path ?? "", f.model_dir ?? ""];
+          <Panel title="Local Model Navigator" eyebrow="Downloaded GGUFs">
+            {localFiles.length ? (
+              <ModelNavigator
+                lines={navigatorLines}
+                selectedQuantId={selectedQuantId}
+                onSelectQuant={selectNavigatorQuant}
+                onReclassify={reclassifyLine}
+                renderDetail={({ selectedLine, selectedModel, selectedQuant }) => {
+                  if (!selectedQuant) return <EmptyState message="Select a model to see its quants." />;
+                  return (
+                    <div className="library-detail">
+                      <div>
+                        <span className="eyebrow">{selectedLine?.label || "Model"}</span>
+                        <h3>{selectedModel?.label || fileName(selectedQuant.file)}</h3>
+                      </div>
+                      {renderCard(selectedQuant.file)}
+                    </div>
+                  );
                 }}
-                renderItem={(item) => renderCard(item as GgufFile)}
               />
             ) : (
-              <EmptyState message={loading ? "Loading GGUF files..." : "All discovered files are already added."} />
+              <EmptyState message={loading ? "Loading GGUF files..." : "No local GGUF files found."} />
             )}
           </Panel>
         ) : null}
