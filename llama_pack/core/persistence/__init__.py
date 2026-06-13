@@ -10,6 +10,7 @@ from llama_pack.core.persistence.alembic_config import (
 )
 from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
 from llama_pack.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
 from llama_pack.core.persistence.dto.commands import (
     AddArtifactCommand,
@@ -47,11 +48,13 @@ from llama_pack.core.persistence.models import (
     AuditEventOrm,
     ChatSessionOrm,
     ModelDownloadOrm,
+    ModelAssetOrm,
     ControllerLeaseOrm,
     JobAttemptOrm,
     JobEventOrm,
     JobOrm,
     NodeLeaseOrm,
+    ModelOrm,
     SchemaMetaOrm,
 )
 from llama_pack.core.persistence.db_infra import (
@@ -68,6 +71,7 @@ __all__ = [
     "AuditStoreOrm",
     "AuthStoreOrm",
     "ChatSessionStoreOrm",
+    "ModelAssetStoreOrm",
     "ModelDownloadStoreOrm",
     "Base",
     "ApiKeyOrm",
@@ -76,12 +80,14 @@ __all__ = [
     "ChatSessionOrm",
     "ControllerLeaseOrm",
     "ModelDownloadOrm",
+    "ModelAssetOrm",
     "DB_TARGETS",
     "JobAttemptOrm",
     "JobEventOrm",
     "JobOrm",
     "NAMING_CONVENTION",
     "NodeLeaseOrm",
+    "ModelOrm",
     "PersistenceUrls",
     "SchemaMetaOrm",
     "create_persistence_engine",

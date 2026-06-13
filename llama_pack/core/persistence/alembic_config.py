@@ -23,7 +23,7 @@ class Base(DeclarativeBase):
     metadata = MetaData(naming_convention=NAMING_CONVENTION)
 
 
-DB_TARGETS: tuple[str, ...] = ("controller", "auth", "audit", "chat_sessions", "downloads", "benchmarks")
+DB_TARGETS: tuple[str, ...] = ("controller", "auth", "audit", "chat_sessions", "downloads", "benchmarks", "models")
 
 TARGET_TABLES: dict[str, tuple[str, ...]] = {
     "controller": (
@@ -46,6 +46,7 @@ TARGET_TABLES: dict[str, tuple[str, ...]] = {
         "tool_loop_eval_cases",
         "tool_loop_eval_runs",
     ),
+    "models": ("model_assets", "models"),
 }
 
 
@@ -73,6 +74,8 @@ def resolve_target_url(target: str, urls: PersistenceUrls) -> str:
         return urls.downloads
     if target == "benchmarks":
         return urls.benchmarks
+    if target == "models":
+        return urls.models
     expected = ", ".join(DB_TARGETS)
     raise ValueError(f"Unknown Alembic target '{target}'. Expected one of: {expected}")
 
@@ -108,4 +111,5 @@ def version_locations(project_root: Path) -> list[Path]:
         project_root / "migrations" / "versions" / "chat_sessions",
         project_root / "migrations" / "versions" / "downloads",
         project_root / "migrations" / "versions" / "benchmarks",
+        project_root / "migrations" / "versions" / "models",
     ]

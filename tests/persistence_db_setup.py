@@ -14,6 +14,7 @@ from llama_pack.core.persistence.db_infra import (
     sqlite_url_for_path,
 )
 from llama_pack.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
+from llama_pack.core.persistence.models.model_asset import ModelAssetOrm, ModelOrm
 from llama_pack.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
@@ -32,6 +33,7 @@ TARGET_REVISIONS = {
     "chat_sessions": "20260523_0007",
     "downloads": "20260523_0001",
     "benchmarks": "20260612_0006",
+    "models": "20260613_0001",
 }
 LATEST_REVISION = TARGET_REVISIONS["chat_sessions"]
 
@@ -96,6 +98,17 @@ def prepare_benchmarks_db(db_path: Path, revision: str = TARGET_REVISIONS["bench
     )
 
 
+def prepare_models_db(db_path: Path, revision: str = TARGET_REVISIONS["models"]) -> None:
+    _write_schema(
+        db_path,
+        [
+            ModelAssetOrm.__table__,
+            ModelOrm.__table__,
+        ],
+        revision,
+    )
+
+
 def prepare_controller_db(db_path: Path, revision: str = TARGET_REVISIONS["controller"]) -> None:
     _write_schema(
         db_path,
@@ -120,3 +133,4 @@ def prepare_all_persistence_dbs(log_dir: Path, revision: str | None = None) -> N
     prepare_chat_sessions_db(state_dir / "chat_sessions.db", revision=revision or TARGET_REVISIONS["chat_sessions"])
     prepare_downloads_db(state_dir / "downloads.db", revision=revision or TARGET_REVISIONS["downloads"])
     prepare_benchmarks_db(state_dir / "benchmarks.db", revision=revision or TARGET_REVISIONS["benchmarks"])
+    prepare_models_db(state_dir / "models.db", revision=revision or TARGET_REVISIONS["models"])
