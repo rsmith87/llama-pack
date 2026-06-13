@@ -2,8 +2,11 @@ from pathlib import Path
 
 from llama_pack.core.config import load_config
 from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.core.runtime.profile_catalog import build_profile_catalog
+from tests.persistence_db_setup import prepare_models_db
 
 
 def test_gguf_library_lists_files_with_stable_ids(tmp_path):
@@ -13,12 +16,18 @@ def test_gguf_library_lists_files_with_stable_ids(tmp_path):
     gguf_path = model_dir / "model.gguf"
     gguf_path.write_bytes(b"x" * 1536)
 
-    library = GgufLibrary(load_config({"hf_models_dir": str(hf_dir)}))
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config({"hf_models_dir": str(hf_dir)})
+    inventory = ModelAssetInventoryService(config, ModelAssetStoreOrm(db_path=db_path))
+    library = GgufLibrary(config, inventory_service=inventory)
 
     files = library.list_files()
 
+    assert files[0]["asset_id"]
     assert files == [
         {
+            "asset_id": files[0]["asset_id"],
             "id": library.file_id(gguf_path),
             "name": "model",
             "filename": "model.gguf",
@@ -46,6 +55,27 @@ def test_gguf_library_lists_files_with_stable_ids(tmp_path):
             "model_reasoning_budget": None,
         }
     ]
+
+
+def test_gguf_library_preserves_asset_id_across_repeated_scans(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_bytes(b"x" * 1536)
+
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config({"hf_models_dir": str(hf_dir)})
+    inventory = ModelAssetInventoryService(config, ModelAssetStoreOrm(db_path=db_path))
+    library = GgufLibrary(config, inventory_service=inventory)
+
+    first_files = library.list_files()
+    gguf_path.write_bytes(b"x" * 2048)
+    second_files = library.list_files()
+
+    assert first_files[0]["asset_id"] == second_files[0]["asset_id"]
+    assert second_files[0]["size_bytes"] == 2048
 
 
 def test_gguf_library_adds_file_as_runtime_model(tmp_path):

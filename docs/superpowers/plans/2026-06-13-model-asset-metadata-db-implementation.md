@@ -81,7 +81,7 @@
 - [x] **Step 3: Implement a domain service that reconciles GGUF scan results into asset rows using canonical path first, with future-ready fields for content hash and download provenance**
 - [x] **Step 4: Register the models DB store/service in app state and dependency wiring**
 - [x] **Step 5: Run the focused integration tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 4: Refactor GGUF Library To Use Models DB Inventory
 
@@ -90,11 +90,11 @@
 - Modify: `tests/test_gguf_library.py`
 - Modify: `tests/test_api.py`
 
-- [ ] **Step 1: Write failing tests showing `list_files()` returns stable `asset_id`-backed metadata and preserves rows across repeated scans**
-- [ ] **Step 2: Run the focused GGUF library tests and verify current filesystem-only behavior fails**
-- [ ] **Step 3: Refactor `GgufLibrary` to upsert scanned GGUF files into the `model_assets` store before building payloads**
-- [ ] **Step 4: Prefer persisted asset metadata such as `model_line` while still enriching responses with live runtime/config status**
-- [ ] **Step 5: Run the focused GGUF library and API tests and verify they pass**
+- [x] **Step 1: Write failing tests showing `list_files()` returns stable `asset_id`-backed metadata and preserves rows across repeated scans**
+- [x] **Step 2: Run the focused GGUF library tests and verify current filesystem-only behavior fails**
+- [x] **Step 3: Refactor `GgufLibrary` to upsert scanned GGUF files into the `model_assets` store before building payloads**
+- [x] **Step 4: Prefer persisted asset metadata such as `model_line` while still enriching responses with live runtime/config status**
+- [x] **Step 5: Run the focused GGUF library and API tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 5: Persist Model-To-Asset Links During Add/Update/Delete Flows

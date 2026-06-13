@@ -243,6 +243,8 @@ class StubGgufLibrary:
         prompt_template=None,
         vision=False,
         mmproj=None,
+        supports_mtp=False,
+        draft_model_path=None,
     ):
         return {
             "name": name,
@@ -256,6 +258,11 @@ class StubGgufLibrary:
             "prompt_template": prompt_template,
             "vision": vision,
             "mmproj": mmproj,
+            "supports_mtp": supports_mtp,
+            "speculative": {
+                "mode": "mtp",
+                "draft_model_path": draft_model_path,
+            } if supports_mtp else None,
         }
 
     def update_model(self, name, **kwargs):

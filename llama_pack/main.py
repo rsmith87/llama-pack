@@ -217,8 +217,6 @@ def _configure_app_state(
     app.state.process_manager = process_manager or ProcessManager(app_config)
     app.state.conversion_manager = conversion_manager or ConversionManager(app_config)
     app.state.quantization_manager = quantization_manager or QuantizationManager(app_config)
-    app.state.gguf_library = gguf_library or GgufLibrary(app_config)
-    app.state.transfer_manager = TransferManager(app_config)
     persistent_config = app_config.config_source not in {"(defaults)", "(in-memory)"}
     store = (
         JsonFileStore(app_config.log_dir / "controller_nodes_state.json")
@@ -267,6 +265,11 @@ def _configure_app_state(
     except RuntimeError:
         app.state.model_asset_store = None
         app.state.model_asset_inventory_service = None
+    app.state.gguf_library = gguf_library or GgufLibrary(
+        app_config,
+        inventory_service=app.state.model_asset_inventory_service,
+    )
+    app.state.transfer_manager = TransferManager(app_config)
     app.state.download_manager = DownloadManager(app_config, app.state.model_download_store)
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     if app_config.mode == "controller":

@@ -6,14 +6,16 @@ from typing import Literal
 
 from llama_pack.core.config import AppConfig, ModelConfig, save_config
 from llama_pack.core.config.models import ModelProfileConfig, SpeculativeConfig
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 
 
 ReasoningMode = Literal["on", "off", "auto"]
 
 
 class GgufLibrary:
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, inventory_service: ModelAssetInventoryService | None = None):
         self.config = config
+        self.inventory_service = inventory_service
 
     def list_files(
         self,
@@ -23,9 +25,19 @@ class GgufLibrary:
         received_by_path = self._received_by_path(recent_transfers or [])
         status_by_name = self._status_by_name(model_statuses or [])
         mmproj_by_dir = self._mmproj_by_dir()
+        paths = self._gguf_paths()
+        persisted_assets = self._assets_by_path(paths)
         files = []
-        for path in self._gguf_paths():
-            files.append(self._file_payload(path, received_by_path.get(str(path)), status_by_name, mmproj_by_dir=mmproj_by_dir))
+        for path in paths:
+            files.append(
+                self._file_payload(
+                    path,
+                    received_by_path.get(str(path)),
+                    status_by_name,
+                    mmproj_by_dir=mmproj_by_dir,
+                    persisted_asset=persisted_assets.get(str(path.resolve())),
+                )
+            )
         return files
 
     def add_model(
@@ -214,6 +226,7 @@ class GgufLibrary:
         received: dict[str, object] | None = None,
         status_by_name: dict[str, dict[str, object]] | None = None,
         mmproj_by_dir: dict[Path, Path] | None = None,
+        persisted_asset: dict[str, object] | None = None,
     ) -> dict[str, object]:
         registered_as = self._registered_name(path)
         size_bytes = path.stat().st_size
@@ -221,7 +234,7 @@ class GgufLibrary:
         status = (status_by_name or {}).get(registered_as or "", {})
         inferred_mmproj = None if self._is_mmproj(path) else (mmproj_by_dir or {}).get(path.parent)
         registered_model = self.config.models[registered_as] if registered_as and registered_as in self.config.models else None
-        return {
+        payload = {
             "id": self.file_id(path),
             "name": path.stem,
             "filename": path.name,
@@ -248,6 +261,15 @@ class GgufLibrary:
             "model_reasoning": registered_model.reasoning if registered_model else None,
             "model_reasoning_budget": registered_model.reasoning_budget if registered_model else None,
         }
+        if persisted_asset is not None:
+            payload["asset_id"] = persisted_asset["asset_id"]
+        return payload
+
+    def _assets_by_path(self, paths: list[Path]) -> dict[str, dict[str, object]]:
+        if self.inventory_service is None:
+            return {}
+        assets = self.inventory_service.reconcile_scan(paths)
+        return {str(Path(str(asset["canonical_path"])).resolve()): asset for asset in assets}
 
     def _mmproj_by_dir(self) -> dict[Path, Path]:
         result: dict[Path, Path] = {}
