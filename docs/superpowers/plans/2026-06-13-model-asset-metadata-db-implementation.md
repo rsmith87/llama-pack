@@ -124,7 +124,7 @@
 - [x] **Step 3: Add a typed backend route to update GGUF asset metadata by `asset_id` or file id**
 - [x] **Step 4: Make GGUF list responses include persisted `model_line` and stable `asset_id` fields**
 - [x] **Step 5: Run focused API tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 7: Wire The GGUF Library Frontend To Persist Reclassification
 
@@ -133,11 +133,11 @@
 - Modify: `frontend/src/pages/GgufLibraryPage/index.tsx`
 - Modify: `frontend/src/test/page-tests/GgufLibraryPage.test.tsx`
 
-- [ ] **Step 1: Write failing frontend tests showing `Reclassify` performs a backend call and survives refresh**
-- [ ] **Step 2: Run the focused page test and verify current frontend-only override behavior fails**
-- [ ] **Step 3: Replace local-only line override state with backend-backed reclassification updates and refreshes**
-- [ ] **Step 4: Keep navigator selection behavior unchanged: only explicit `Add` opens the modal**
-- [ ] **Step 5: Run focused frontend tests and verify they pass**
+- [x] **Step 1: Write failing frontend tests showing `Reclassify` performs a backend call and survives refresh**
+- [x] **Step 2: Run the focused page test and verify current frontend-only override behavior fails**
+- [x] **Step 3: Replace local-only line override state with backend-backed reclassification updates and refreshes**
+- [x] **Step 4: Keep navigator selection behavior unchanged: only explicit `Add` opens the modal**
+- [x] **Step 5: Run focused frontend tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 8: Add Download Linkage To Models DB Assets

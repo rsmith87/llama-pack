@@ -1,14 +1,14 @@
 import "./styles.css";
 import { useMemo, useState } from "react";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
-import { createGgufTransfer, addGgufModel, deleteConfiguredModel, deleteGguf, listGgufs, updateGgufModel } from "../../api/library";
+import { createGgufTransfer, addGgufModel, deleteConfiguredModel, deleteGguf, listGgufs, updateGgufAsset, updateGgufModel } from "../../api/library";
 import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
 import { ModelNavigator } from "../../components/ModelNavigator";
 import { isActiveModel } from "../../features/models/modelStatus";
-import { buildModelNavigatorLines, type ModelLineOverride, type ModelNavigatorQuant } from "../../features/models/modelNavigator";
+import { buildModelNavigatorLines, type ModelNavigatorQuant } from "../../features/models/modelNavigator";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
 import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
 import { useNavigate } from "react-router-dom";
@@ -115,7 +115,6 @@ export function GgufLibraryPage() {
   const [draftModelPath, setDraftModelPath] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
-  const [lineOverrides, setLineOverrides] = useState<ModelLineOverride[]>([]);
   const [selectedQuantId, setSelectedQuantId] = useState("");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [sourceNode, setSourceNode] = useState("");
@@ -124,7 +123,7 @@ export function GgufLibraryPage() {
   const [transferStatus, setTransferStatus] = useState("");
 
   const localFiles = useMemo(() => files.filter((file) => !isMmproj(file)), [files]);
-  const navigatorLines = useMemo(() => buildModelNavigatorLines(localFiles, lineOverrides), [localFiles, lineOverrides]);
+  const navigatorLines = useMemo(() => buildModelNavigatorLines(localFiles), [localFiles]);
 
   function openDetail(file: GgufFile) {
     setSelected(file);
@@ -257,11 +256,11 @@ export function GgufLibraryPage() {
     await refresh();
   }
 
-  function reclassifyLine(override: ModelLineOverride) {
-    setLineOverrides((current) => {
-      const withoutRecord = current.filter((item) => item.recordId !== override.recordId);
-      return [...withoutRecord, override];
-    });
+  async function reclassifyLine(recordId: string, lineLabel: string) {
+    const target = localFiles.find((file) => String(file.asset_id || file.id || file.path) === recordId);
+    const assetRef = String(target?.asset_id || recordId);
+    await updateGgufAsset(assetRef, { model_line: lineLabel });
+    await refresh();
   }
 
   function selectNavigatorQuant(quant: ModelNavigatorQuant<GgufFile>) {
@@ -312,7 +311,7 @@ export function GgufLibraryPage() {
                 lines={navigatorLines}
                 selectedQuantId={selectedQuantId}
                 onSelectQuant={selectNavigatorQuant}
-                onReclassify={reclassifyLine}
+                onReclassify={(override) => void reclassifyLine(override.recordId, override.lineLabel)}
                 renderDetail={({ selectedLine, selectedModel, selectedQuant }) => {
                   if (!selectedQuant) return <EmptyState message="Select a model to see its quants." />;
                   return (

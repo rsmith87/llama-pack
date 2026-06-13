@@ -98,9 +98,30 @@ it("shows compact mmproj paths in the add model picker labels", async () => {
 });
 
 it("allows Other records to be reclassified in the local navigator", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
-    { id: "custom-1", filename: "custom-local-model-Q4_K_M.gguf", name: "custom-local-model-Q4_K_M", registered: false },
-  ])));
+  let modelLine: string | null = null;
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/library/ggufs" && (!init?.method || init.method === "GET")) {
+      return Promise.resolve(okJson([
+        {
+          asset_id: "asset-1",
+          id: "custom-1",
+          filename: "custom-local-model-Q4_K_M.gguf",
+          name: "custom-local-model-Q4_K_M",
+          registered: false,
+          model_line: modelLine,
+        },
+      ]));
+    }
+    if (url === "/lm-api/v1/library/ggufs/asset-1" && init?.method === "PATCH") {
+      modelLine = "Custom Local";
+      return Promise.resolve(okJson({ asset_id: "asset-1", model_line: "Custom Local" }));
+    }
+    if (url === "/lm-api/v1/nodes/models") {
+      return Promise.resolve(okJson({ nodes: [] }));
+    }
+    return Promise.resolve(okJson({ nodes: [] }));
+  }));
   const user = userEvent.setup();
 
   renderPage();
@@ -110,6 +131,10 @@ it("allows Other records to be reclassified in the local navigator", async () =>
   await user.type(screen.getByLabelText("New model line"), "Custom Local");
   await user.click(screen.getByRole("button", { name: "Reclassify" }));
 
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/ggufs/asset-1", expect.objectContaining({
+    method: "PATCH",
+    body: JSON.stringify({ model_line: "Custom Local" }),
+  })));
   expect(screen.getByRole("button", { name: /Custom Local/ })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: /Other/ })).not.toBeInTheDocument();
 });

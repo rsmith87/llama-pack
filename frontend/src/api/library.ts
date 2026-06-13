@@ -29,8 +29,13 @@ export type UpdateModelPayload = {
   draft_model_path?: string | null;
 };
 
+export type UpdateGgufAssetPayload = {
+  model_line?: string | null;
+};
+
 export function listGgufs() { return apiGet<GgufLibraryResponse>("/library/ggufs"); }
 export function addGgufModel(fileId: string, payload: AddModelPayload) { return apiPost<Record<string, unknown>>(`/library/ggufs/${encodeURIComponent(fileId)}/add-model`, payload); }
+export function updateGgufAsset(assetRef: string, payload: UpdateGgufAssetPayload) { return apiPatch<Record<string, unknown>>(`/library/ggufs/${encodeURIComponent(assetRef)}`, payload); }
 export function updateGgufModel(name: string, payload: UpdateModelPayload) { return apiPatch<Record<string, unknown>>(`/library/models/${encodeURIComponent(name)}`, payload); }
 export function deleteGguf(fileId: string) { return apiDelete<Record<string, unknown>>(`/library/ggufs/${encodeURIComponent(fileId)}`); }
 export function deleteConfiguredModel(name: string) { return apiDelete<Record<string, unknown>>(`/library/models/${encodeURIComponent(name)}`); }

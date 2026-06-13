@@ -1,6 +1,7 @@
 import { NodeRecord } from "../types/nodes";
 
 export type GgufFile = Record<string, unknown> & {
+  asset_id?: string;
   id?: string;
   name?: string;
   filename?: string;
@@ -22,6 +23,7 @@ export type GgufFile = Record<string, unknown> & {
   model_prompt_template?: string | null;
   model_reasoning?: string | null;
   model_reasoning_budget?: number | null;
+  model_line?: string | null;
 };
 
 export type GgufLibraryResponse = { files?: GgufFile[]; ggufs?: GgufFile[] };

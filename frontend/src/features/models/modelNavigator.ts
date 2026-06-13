@@ -1,4 +1,5 @@
 export type ModelNavigatorRecord = Record<string, unknown> & {
+  asset_id?: string;
   id?: string;
   file_id?: string;
   filename?: string;
@@ -12,6 +13,7 @@ export type ModelNavigatorRecord = Record<string, unknown> & {
   size_bytes?: number;
   size_gb?: number;
   running?: boolean;
+  model_line?: string | null;
 };
 
 export type ModelLineOverride = {
@@ -76,7 +78,7 @@ function sourceCandidates(record: ModelNavigatorRecord): string[] {
 }
 
 export function modelNavigatorRecordId(record: ModelNavigatorRecord): string {
-  return String(record.id || record.file_id || record.path || record.filename || record.name || "unknown");
+  return String(record.asset_id || record.id || record.file_id || record.path || record.filename || record.name || "unknown");
 }
 
 export function detectQuantType(value: string): string | null {
@@ -85,6 +87,10 @@ export function detectQuantType(value: string): string | null {
 }
 
 export function detectModelLine(record: ModelNavigatorRecord): string {
+  const persistedLine = text(record.model_line).trim();
+  if (persistedLine) {
+    return persistedLine;
+  }
   for (const candidate of sourceCandidates(record)) {
     const normalized = normalizeWhitespace(candidate);
     for (const [pattern, label] of LINE_PATTERNS) {
