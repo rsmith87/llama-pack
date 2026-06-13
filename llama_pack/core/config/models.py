@@ -9,6 +9,7 @@ from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_valid
 
 Mode = Literal["agent", "controller"]
 ReasoningMode = Literal["on", "off", "auto"]
+SpeculativeMode = Literal["mtp"]
 AgentToolType = Literal["shell", "file_read", "file_read_dynamic", "file_write", "http", "directory_list", "file_search", "text_search", "git_status", "git_diff", "git_log", "process_status", "http_json", "log_tail", "web_fetch", "sqlite_query", "memory_write", "memory_search"]
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -32,6 +33,19 @@ class ModelProfileConfig(BaseModel):
         return self.label or key[:1].upper() + key[1:]
 
 
+class SpeculativeConfig(BaseModel):
+    mode: SpeculativeMode
+    draft_model_path: str | None = None
+    draft_max: int | None = Field(default=None, ge=0)
+    draft_min: int | None = Field(default=None, ge=0)
+
+    @model_validator(mode="after")
+    def validate_draft_range(self) -> "SpeculativeConfig":
+        if self.draft_min is not None and self.draft_max is not None and self.draft_min > self.draft_max:
+            raise ValueError("draft_min must be less than or equal to draft_max")
+        return self
+
+
 class ModelConfig(BaseModel):
     path: str
     port: int
@@ -45,11 +59,21 @@ class ModelConfig(BaseModel):
     extra_args: list[str] = Field(default_factory=list)
     supports_json_schema: bool | None = None
     supports_grammar: bool | None = None
+    supports_mtp: bool | None = None
+    speculative: SpeculativeConfig | None = None
     favorite: bool = False
     prompt_template: str | None = None
     strengths: list[str] = Field(default_factory=list)
     cost_tier: Literal["low", "medium", "high"] | None = None
     profiles: dict[str, ModelProfileConfig] = Field(default_factory=dict)
+
+    @model_validator(mode="after")
+    def validate_speculative_settings(self) -> "ModelConfig":
+        if self.speculative is None:
+            return self
+        if self.speculative.mode == "mtp" and self.supports_mtp is not True:
+            raise ValueError("supports_mtp must be true before speculative.mode 'mtp' can be configured")
+        return self
 
 
 class NodeRequestTypeConfig(BaseModel):

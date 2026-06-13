@@ -13,3 +13,4 @@ def test_package_data_includes_react_build_assets():
 
     assert "ui/*" in package_data
     assert "ui/assets/*" in package_data
+    assert "core/model_assets/*.json" in package_data

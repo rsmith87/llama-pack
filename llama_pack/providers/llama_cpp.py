@@ -23,5 +23,13 @@ def build_llama_server_command(binary: str, model: ModelConfig) -> list[str]:
         command.extend(["--reasoning-budget", str(model.reasoning_budget)])
     if model.mmproj:
         command.extend(["--mmproj", model.mmproj])
+    if model.speculative and model.speculative.mode == "mtp":
+        command.extend(["--spec-type", "draft-mtp"])
+        if model.speculative.draft_model_path:
+            command.extend(["--model-draft", model.speculative.draft_model_path])
+        if model.speculative.draft_max is not None:
+            command.extend(["--spec-draft-n-max", str(model.speculative.draft_max)])
+        if model.speculative.draft_min is not None:
+            command.extend(["--spec-draft-n-min", str(model.speculative.draft_min)])
     command.extend(model.extra_args)
     return command

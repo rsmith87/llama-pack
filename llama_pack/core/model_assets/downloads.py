@@ -10,15 +10,12 @@ from typing import Any, Callable, IO
 
 from llama_pack.core.config import AppConfig
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
+from llama_pack.core.model_assets.recommendations import _quant_from_path as recommendation_quant_from_path
 from llama_pack.core.model_assets.recommendations import recommend_downloads
 
 
 PopenFactory = Callable[..., subprocess.Popen]
 REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
-GGUF_QUANT_PATTERN = re.compile(
-    r"(?:^|[-_.])(MXFP[0-9](?:_[A-Z0-9]+)*|IQ[0-9](?:_[A-Z0-9]+)+|Q[0-9](?:_[A-Z0-9]+)+|F16|BF16|F32)(?:[-_.]|$)",
-    re.IGNORECASE,
-)
 HF_AUTH_REQUIRED_MESSAGE = (
     "This repo requires a Hugging Face login or accepted license before download. "
     "Sign in with `hf auth login` and accept the repo terms on Hugging Face, then try again."
@@ -260,13 +257,7 @@ class DownloadManager:
         return normalized
 
     def _quant_from_path(self, path: str) -> str | None:
-        parts = [part for part in Path(path).parts if part]
-        candidates = parts[:-1] + [Path(path).stem]
-        for candidate in candidates:
-            match = GGUF_QUANT_PATTERN.search(candidate)
-            if match:
-                return match.group(1).upper()
-        return None
+        return recommendation_quant_from_path(path)
 
     def _is_mmproj_path(self, path: str) -> bool:
         return "mmproj" in Path(path).name.lower()

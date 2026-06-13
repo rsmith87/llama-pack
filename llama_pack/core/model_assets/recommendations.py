@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from functools import lru_cache
+import json
+from importlib import resources
 from pathlib import Path
 import re
 from typing import Any
@@ -8,15 +11,18 @@ from typing import Any
 
 BYTES_PER_GB = 1024**3
 GGUF_QUANT_PATTERN = re.compile(
-    r"(?:^|[-_.])(MXFP[0-9](?:_[A-Z0-9]+)*|IQ[0-9](?:_[A-Z0-9]+)+|Q[0-9](?:_[A-Z0-9]+)+|F16|BF16|F32)(?:[-_.]|$)",
+    r"(?:^|[-_.])((?:UD[-_.])?(?:MXFP[0-9](?:_[A-Z0-9]+)*|IQ[0-9](?:_[A-Z0-9]+)+|Q[0-9](?:_[A-Z0-9]+)+|F16|BF16|F32))(?:[-_.]|$)",
     re.IGNORECASE,
 )
-QUANT_PRIORITY = {
+PORTABLE_QUANT_PRIORITY = {
     "Q4_K_M": 0,
     "Q5_K_M": 1,
     "Q4_K_S": 2,
     "IQ4_XS": 3,
     "Q3_K_L": 4,
+    "IQ4_NL": 5,
+    "Q6_K": 6,
+    "Q8_0": 7,
 }
 
 DISALLOWED_FILE_TOKENS = (
@@ -43,6 +49,8 @@ def _is_supported_gguf_candidate(path: str) -> bool:
         return False
     if any(token in Path(path).name.lower() for token in DISALLOWED_FILE_TOKENS):
         return False
+    if _is_mtp_artifact(path):
+        return False
     return _quant_from_path(path) is not None
 
 
@@ -62,50 +70,84 @@ class RecommendationCatalogItem:
     mmproj_file: str | None = None
 
 
-CATALOG: tuple[RecommendationCatalogItem, ...] = (
+FALLBACK_CATALOG: tuple[RecommendationCatalogItem, ...] = (
     RecommendationCatalogItem(
-        repo_id="bartowski/Qwen3-4B-Instruct-GGUF",
-        title="Qwen3 4B Instruct",
-        include_file="Qwen3-4B-Instruct-Q4_K_M.gguf",
-        quant="Q4_K_M",
-        min_ram_gb=8,
-        min_vram_gb=4,
-        estimated_size_gb=3,
-        fit_label="Small GPU pick",
-        use_case="Fast local chat/coding with modest GPU offload headroom.",
-    ),
-    RecommendationCatalogItem(
-        repo_id="bartowski/Qwen3-8B-Instruct-GGUF",
-        title="Qwen3 8B Instruct",
-        include_file="Qwen3-8B-Instruct-Q4_K_M.gguf",
-        quant="Q4_K_M",
-        min_ram_gb=12,
-        min_vram_gb=6,
-        estimated_size_gb=5,
-        fit_label="Balanced GPU chat",
-        use_case="General local assistant workloads with practical GPU acceleration.",
-    ),
-    RecommendationCatalogItem(
-        repo_id="bartowski/gemma-4-E2B-it-GGUF",
+        repo_id="unsloth/gemma-4-E2B-it-GGUF",
         title="Gemma 4 E2B IT",
         include_file="gemma-4-E2B-it-Q4_K_M.gguf",
         quant="Q4_K_M",
-        min_ram_gb=12,
-        min_vram_gb=6,
-        estimated_size_gb=5,
-        fit_label="Instruction-tuned alternative",
-        use_case="Useful GPU-friendly second opinion for text-only assistant tasks.",
+        min_ram_gb=8,
+        min_vram_gb=4,
+        estimated_size_gb=2.9,
+        fit_label="Compact multimodal",
+        use_case="Small Gemma 4 vision/audio-capable model for laptops and light local assistants.",
+        vision=True,
+        mmproj_file="mmproj-F16.gguf",
     ),
     RecommendationCatalogItem(
-        repo_id="bartowski/Qwen3-14B-Instruct-GGUF",
-        title="Qwen3 14B Instruct",
-        include_file="Qwen3-14B-Instruct-Q4_K_M.gguf",
+        repo_id="unsloth/Qwen3.5-4B-GGUF",
+        title="Qwen3.5 4B",
+        include_file="Qwen3.5-4B-Q4_K_M.gguf",
+        quant="Q4_K_M",
+        min_ram_gb=8,
+        min_vram_gb=4,
+        estimated_size_gb=2.6,
+        fit_label="Portable Qwen pick",
+        use_case="Compact multimodal Qwen release with broad GGUF compatibility and low memory cost.",
+        vision=True,
+        mmproj_file="mmproj-F16.gguf",
+    ),
+    RecommendationCatalogItem(
+        repo_id="unsloth/gemma-4-E4B-it-GGUF",
+        title="Gemma 4 E4B IT",
+        include_file="gemma-4-E4B-it-Q4_K_M.gguf",
+        quant="Q4_K_M",
+        min_ram_gb=12,
+        min_vram_gb=6,
+        estimated_size_gb=4.6,
+        fit_label="Balanced multimodal",
+        use_case="General-purpose Gemma 4 release with better headroom for image and audio tasks.",
+        vision=True,
+        mmproj_file="mmproj-F16.gguf",
+    ),
+    RecommendationCatalogItem(
+        repo_id="unsloth/Qwen3.5-9B-GGUF",
+        title="Qwen3.5 9B",
+        include_file="Qwen3.5-9B-Q4_K_M.gguf",
+        quant="Q4_K_M",
+        min_ram_gb=16,
+        min_vram_gb=8,
+        estimated_size_gb=5.3,
+        fit_label="Higher-context Qwen",
+        use_case="Stronger multimodal Qwen option for desktops that can hold a 9B-class model comfortably.",
+        vision=True,
+        mmproj_file="mmproj-F16.gguf",
+    ),
+    RecommendationCatalogItem(
+        repo_id="unsloth/gemma-4-12b-it-GGUF",
+        title="Gemma 4 12B IT",
+        include_file="gemma-4-12b-it-Q4_K_M.gguf",
         quant="Q4_K_M",
         min_ram_gb=24,
-        min_vram_gb=12,
-        estimated_size_gb=9,
-        fit_label="Larger local model",
-        use_case="Higher quality local chat on larger desktops and controllers.",
+        min_vram_gb=10,
+        estimated_size_gb=6.6,
+        fit_label="Desktop-class Gemma",
+        use_case="Larger Gemma 4 multimodal model for workstation-class local inference.",
+        vision=True,
+        mmproj_file="mmproj-F16.gguf",
+    ),
+    RecommendationCatalogItem(
+        repo_id="unsloth/Qwen3.6-35B-A3B-GGUF",
+        title="Qwen3.6 35B A3B",
+        include_file="Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+        quant="UD-Q4_K_M",
+        min_ram_gb=48,
+        min_vram_gb=24,
+        estimated_size_gb=20.6,
+        fit_label="Large MoE workstation",
+        use_case="Current large Qwen 3.6 MoE release for high-end Apple Silicon or workstation GPUs.",
+        vision=True,
+        mmproj_file="mmproj-F16.gguf",
     ),
 )
 
@@ -142,9 +184,62 @@ def recommend_downloads(system: dict[str, Any] | None, *, hf_api: Any | None = N
 
 
 def _catalog_with_hugging_face_discoveries(hf_api: Any | None) -> list[RecommendationCatalogItem]:
-    catalog = list(CATALOG)
+    catalog = list(_load_curated_catalog())
     catalog.extend(_hugging_face_catalog_items(hf_api, known_repo_ids={item.repo_id for item in catalog}))
     return catalog
+
+
+def _catalog_item_from_dict(raw: dict[str, Any]) -> RecommendationCatalogItem:
+    quant = re.sub(r"^UD[._]", "UD-", str(raw["quant"]).upper())
+    min_vram_gb = raw.get("min_vram_gb")
+    return RecommendationCatalogItem(
+        repo_id=str(raw["repo_id"]),
+        title=str(raw["title"]),
+        include_file=str(raw["include_file"]),
+        quant=quant,
+        min_ram_gb=float(raw["min_ram_gb"]),
+        min_vram_gb=float(min_vram_gb) if min_vram_gb is not None else None,
+        estimated_size_gb=float(raw["estimated_size_gb"]),
+        fit_label=str(raw["fit_label"]),
+        use_case=str(raw["use_case"]),
+        source=str(raw.get("source") or "curated"),
+        vision=bool(raw.get("vision", False)),
+        mmproj_file=str(raw["mmproj_file"]) if raw.get("mmproj_file") else None,
+    )
+
+
+def _catalog_item_to_dict(item: RecommendationCatalogItem) -> dict[str, object]:
+    payload: dict[str, object] = {
+        "repo_id": item.repo_id,
+        "title": item.title,
+        "include_file": item.include_file,
+        "quant": item.quant,
+        "min_ram_gb": item.min_ram_gb,
+        "min_vram_gb": item.min_vram_gb,
+        "estimated_size_gb": item.estimated_size_gb,
+        "fit_label": item.fit_label,
+        "use_case": item.use_case,
+        "source": item.source,
+        "vision": item.vision,
+    }
+    if item.mmproj_file:
+        payload["mmproj_file"] = item.mmproj_file
+    return payload
+
+
+def _read_curated_catalog_text() -> str:
+    return resources.files("llama_pack.core.model_assets").joinpath("curated_catalog.json").read_text(encoding="utf-8")
+
+
+@lru_cache(maxsize=1)
+def _load_curated_catalog() -> tuple[RecommendationCatalogItem, ...]:
+    try:
+        payload = json.loads(_read_curated_catalog_text())
+        if not isinstance(payload, list) or not payload:
+            raise ValueError("catalog payload must be a non-empty list")
+        return tuple(_catalog_item_from_dict(item) for item in payload if isinstance(item, dict))
+    except Exception:
+        return FALLBACK_CATALOG
 
 
 def _hugging_face_catalog_items(hf_api: Any | None, *, known_repo_ids: set[str]) -> list[RecommendationCatalogItem]:
@@ -212,8 +307,8 @@ def _best_gguf_file(files: Any) -> Any | None:
         path = str(getattr(item, "path", ""))
         if not _is_supported_gguf_candidate(path):
             continue
-        quant = _quant_from_path(path)
-        priority = QUANT_PRIORITY.get(quant, 100)
+        quant = _quant_from_path(path) or ""
+        priority = _quant_priority(quant, path)
         size = _number(getattr(item, "size", None))
         candidates.append((priority, abs(size - 5 * BYTES_PER_GB), item))
     if not candidates:
@@ -242,8 +337,39 @@ def _quant_from_path(path: str) -> str | None:
     for candidate in candidates:
         match = GGUF_QUANT_PATTERN.search(candidate)
         if match:
-            return match.group(1).upper()
+            quant = match.group(1).upper()
+            return re.sub(r"^UD[._]", "UD-", quant)
     return None
+
+
+def _is_mtp_artifact(path: str) -> bool:
+    parts = [part.lower() for part in Path(path).parts]
+    name = Path(path).name.lower()
+    stem = Path(path).stem.lower()
+    return "mtp" in parts or name.endswith("-mtp.gguf") or stem.startswith("mtp-")
+
+
+def _is_sharded_gguf(path: str) -> bool:
+    name = Path(path).name
+    return bool(re.search(r"-\d{5}-of-\d{5}\.gguf$", name, re.IGNORECASE))
+
+
+def _quant_priority(quant: str, path: str) -> int:
+    normalized = quant.upper()
+    is_ud = normalized.startswith("UD-")
+    base_quant = normalized[3:] if is_ud else normalized
+    portable = PORTABLE_QUANT_PRIORITY.get(base_quant)
+    if portable is not None:
+        return portable + (20 if is_ud else 0)
+    if normalized.startswith("MXFP"):
+        return 60
+    if base_quant == "BF16":
+        return 80 if not _is_sharded_gguf(path) else 90
+    if base_quant == "F16":
+        return 81 if not _is_sharded_gguf(path) else 91
+    if base_quant == "F32":
+        return 92
+    return 100
 
 
 def _model_id(model: Any) -> str:

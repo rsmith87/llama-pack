@@ -40,7 +40,7 @@ dev = [
 include = ["llama_pack*"]
 
 [tool.setuptools.package-data]
-llama_pack = ["ui/*", "ui/assets/*"]
+llama_pack = ["ui/*", "ui/assets/*", "core/model_assets/*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

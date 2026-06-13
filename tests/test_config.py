@@ -503,6 +503,154 @@ def test_build_llama_server_command_includes_mmproj_sidecar_when_configured():
     assert command[command.index("--mmproj") + 1] == "/models/mmproj-gemma.gguf"
 
 
+def test_model_config_allows_speculative_mtp_when_model_is_marked_capable():
+    config = load_config(
+        {
+            "mode": "agent",
+            "models": {
+                "deepseek": {
+                    "path": "/models/deepseek.gguf",
+                    "port": 8080,
+                    "supports_mtp": True,
+                    "speculative": {
+                        "mode": "mtp",
+                        "draft_max": 4,
+                        "draft_min": 1,
+                    },
+                }
+            },
+        }
+    )
+
+    assert config.models["deepseek"].supports_mtp is True
+    assert config.models["deepseek"].speculative is not None
+    assert config.models["deepseek"].speculative.mode == "mtp"
+    assert config.models["deepseek"].speculative.draft_max == 4
+    assert config.models["deepseek"].speculative.draft_min == 1
+
+
+def test_model_config_rejects_speculative_mtp_when_mtp_capability_is_unknown():
+    with pytest.raises(ValueError, match="supports_mtp"):
+        load_config(
+            {
+                "mode": "agent",
+                "models": {
+                    "deepseek": {
+                        "path": "/models/deepseek.gguf",
+                        "port": 8080,
+                        "speculative": {"mode": "mtp"},
+                    }
+                },
+            }
+        )
+
+
+def test_model_config_rejects_speculative_mtp_for_non_mtp_model():
+    with pytest.raises(ValueError, match="supports_mtp"):
+        load_config(
+            {
+                "mode": "agent",
+                "models": {
+                    "gemma": {
+                        "path": "/models/gemma.gguf",
+                        "port": 8080,
+                        "supports_mtp": False,
+                        "speculative": {"mode": "mtp"},
+                    }
+                },
+            }
+        )
+
+
+def test_model_config_rejects_speculative_draft_range_when_min_exceeds_max():
+    with pytest.raises(ValueError, match="draft_min"):
+        load_config(
+            {
+                "mode": "agent",
+                "models": {
+                    "deepseek": {
+                        "path": "/models/deepseek.gguf",
+                        "port": 8080,
+                        "supports_mtp": True,
+                        "speculative": {
+                            "mode": "mtp",
+                            "draft_min": 4,
+                            "draft_max": 2,
+                        },
+                    }
+                },
+            }
+        )
+
+
+def test_build_llama_server_command_enables_speculative_mtp_when_requested():
+    config = load_config(
+        {
+            "mode": "agent",
+            "llama_server_bin": "llama-server",
+            "models": {
+                "deepseek": {
+                    "path": "/models/deepseek.gguf",
+                    "port": 8080,
+                    "supports_mtp": True,
+                    "speculative": {
+                        "mode": "mtp",
+                        "draft_model_path": "/models/mtp-deepseek.gguf",
+                        "draft_max": 4,
+                        "draft_min": 1,
+                    },
+                }
+            },
+        }
+    )
+
+    command = build_llama_server_command(config.llama_server_bin, config.models["deepseek"])
+
+    assert "--spec-type" in command
+    assert command[command.index("--spec-type") + 1] == "draft-mtp"
+    assert "--model-draft" in command
+    assert command[command.index("--model-draft") + 1] == "/models/mtp-deepseek.gguf"
+    assert "--spec-draft-n-max" in command
+    assert command[command.index("--spec-draft-n-max") + 1] == "4"
+    assert "--spec-draft-n-min" in command
+    assert command[command.index("--spec-draft-n-min") + 1] == "1"
+
+
+def test_build_llama_server_command_omits_speculative_flags_when_unset():
+    config = load_config(
+        {
+            "mode": "agent",
+            "llama_server_bin": "llama-server",
+            "models": {
+                "gemma": {
+                    "path": "/models/gemma.gguf",
+                    "port": 8080,
+                    "supports_mtp": False,
+                }
+            },
+        }
+    )
+
+    command = build_llama_server_command(config.llama_server_bin, config.models["gemma"])
+
+    assert "--spec-type" not in command
+    assert "--spec-draft-n-max" not in command
+    assert "--spec-draft-n-min" not in command
+
+
+def test_configuration_docs_mention_speculative_fields_and_advanced_note():
+    root = Path(__file__).resolve().parents[1]
+    text = (root / "docs" / "configuration.md").read_text(encoding="utf-8")
+
+    assert "supports_mtp" in text
+    assert "speculative" in text
+    assert "draft_model_path" in text
+    assert "draft_max" in text
+    assert "draft_min" in text
+    assert "advanced speculative" in text.lower()
+    assert "hf_repo" in text.lower()
+
+
 def test_load_config_accepts_legacy_hf_models_dir_list():
     config = load_config(
         {

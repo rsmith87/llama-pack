@@ -160,6 +160,7 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/install_caddy_fullchain.sh",
         "scripts/renew_caddy_step_cert.sh",
         "scripts/install_llama_cpp.sh",
+        "scripts/refresh_curated_catalog.py",
         "scripts/setup_llama_pack.py",
         "scripts/setup_llama_pack.sh",
     ]:

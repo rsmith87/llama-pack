@@ -3763,8 +3763,8 @@ def test_download_recommendations_route_returns_machine_fit_models(tmp_path):
 
     assert payload["machine"] == {"ram_gb": 16.0, "vram_gb": 8.0, "platform": "Darwin", "architecture": "arm64"}
     titles = [item["title"] for item in payload["recommendations"]]
-    assert "Qwen3 8B Instruct" in titles
-    assert "Qwen3 14B Instruct" not in titles
+    assert "Qwen3.5 9B" in titles
+    assert "Qwen3.6 35B A3B" not in titles
     assert payload["recommendations"][0]["repo_id"]
     assert payload["recommendations"][0]["include_file"].endswith(".gguf")
     assert "fit_reason" in payload["recommendations"][0]
@@ -3788,7 +3788,7 @@ def test_download_recommendations_route_works_for_controller(tmp_path):
         payload = client.get("/lm-api/v1/downloads/recommendations").json()
 
     assert payload["machine"]["platform"] == "Linux"
-    assert "Qwen3 14B Instruct" in [item["title"] for item in payload["recommendations"]]
+    assert "Gemma 4 12B IT" in [item["title"] for item in payload["recommendations"]]
 
 
 class _FakeHfModel:

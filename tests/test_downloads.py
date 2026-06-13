@@ -188,7 +188,7 @@ def test_download_manager_prefers_quant_directory_over_model_name(tmp_path):
         "Q4_K_M/Qwen3.6-35B-A3B-Q4_K_M.gguf": "Q4_K_M",
         "Qwen3.6-35B-A3B-MXFP4_MOE.gguf": "MXFP4_MOE",
         "Qwen3.6-35B-A3B-Q8_0.gguf": "Q8_0",
-        "Qwen3.6-35B-A3B-UD-IQ1_M.gguf": "IQ1_M",
+        "Qwen3.6-35B-A3B-UD-IQ1_M.gguf": "UD-IQ1_M",
     }
 
 
@@ -358,11 +358,14 @@ def test_download_recommendations_fit_16gb_ram_and_8gb_vram():
     )
 
     titles = [item["title"] for item in payload["recommendations"]]
-    assert "Qwen3 4B Instruct" in titles
-    assert "Qwen3 8B Instruct" in titles
+    assert "Qwen3.5 4B" in titles
     assert "Gemma 4 E2B IT" in titles
-    assert "Qwen3 14B Instruct" not in titles
-    assert [item["title"] for item in payload["excluded"]] == ["Qwen3 14B Instruct"]
+    assert "Gemma 4 E4B IT" in titles
+    assert "Qwen3.5 9B" in titles
+    assert [item["title"] for item in payload["excluded"]] == [
+        "Gemma 4 12B IT",
+        "Qwen3.6 35B A3B",
+    ]
     assert payload["machine"] == {"ram_gb": 16.0, "vram_gb": 8.0, "platform": "Darwin", "architecture": "arm64"}
 
 
@@ -376,8 +379,8 @@ def test_download_recommendations_include_14b_for_large_machine():
         }
     )
 
-    assert "Qwen3 14B Instruct" in [item["title"] for item in payload["recommendations"]]
-    assert payload["excluded"] == []
+    assert "Qwen3.5 9B" in [item["title"] for item in payload["recommendations"]]
+    assert [item["title"] for item in payload["excluded"]] == ["Qwen3.6 35B A3B"]
 
 
 def test_download_recommendations_prefer_vram_fit_reason_when_gpu_memory_is_detected():
@@ -390,7 +393,7 @@ def test_download_recommendations_prefer_vram_fit_reason_when_gpu_memory_is_dete
         }
     )
 
-    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3.6 35B A3B")
     assert qwen["fit_reason"] == "Fits 24 GB VRAM with conservative GPU headroom."
 
 
@@ -404,7 +407,7 @@ def test_download_recommendations_report_apple_unified_memory_for_gpu_offload():
         }
     )
 
-    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3.6 35B A3B")
     assert qwen["fit_reason"] == "Fits 64 GB Apple unified memory for GPU offload."
 
 
@@ -418,7 +421,7 @@ def test_download_recommendations_do_not_treat_intel_macos_ram_as_gpu_memory():
         }
     )
 
-    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3.6 35B A3B")
     assert qwen["fit_reason"] == "Fits 64 GB RAM, but GPU memory was not detected."
 
 
@@ -433,8 +436,8 @@ def test_download_recommendations_demote_large_models_without_gpu_memory():
     )
 
     titles = [item["title"] for item in payload["recommendations"]]
-    assert titles.index("Qwen3 4B Instruct") < titles.index("Qwen3 14B Instruct")
-    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3 14B Instruct")
+    assert titles.index("Gemma 4 E2B IT") < titles.index("Qwen3.6 35B A3B")
+    qwen = next(item for item in payload["recommendations"] if item["title"] == "Qwen3.6 35B A3B")
     assert qwen["fit_reason"] == "Fits 64 GB RAM, but GPU memory was not detected."
 
 
@@ -442,9 +445,9 @@ def test_download_recommendations_use_conservative_defaults_without_metrics():
     payload = recommend_downloads({"platform": "Unknown", "ram": None, "vram": None})
 
     assert [item["title"] for item in payload["recommendations"]] == [
-        "Qwen3 4B Instruct",   # score 62
-        "Qwen3 8B Instruct",   # score 58, title > "Gemma 4 E2B IT" descending
-        "Gemma 4 E2B IT",      # score 58
+        "Qwen3.5 4B",
+        "Gemma 4 E2B IT",
+        "Gemma 4 E4B IT",
     ]
     assert payload["machine"] == {"ram_gb": 0.0, "vram_gb": 0.0, "platform": "Unknown", "architecture": "unknown"}
 
@@ -553,7 +556,7 @@ def test_download_recommendations_fall_back_when_hugging_face_discovery_fails():
 
     payload = recommend_downloads({"platform": "Darwin", "architecture": "arm64", "ram": {"total": 16 * 1024**3}}, hf_api=FailingHfApi())
 
-    assert "Qwen3 8B Instruct" in [item["title"] for item in payload["recommendations"]]
+    assert "Gemma 4 E4B IT" in [item["title"] for item in payload["recommendations"]]
 
 def test_download_recommendations_include_multimodal_hugging_face_repos_with_mmproj():
     api = FakeMultimodalRecommendationHfApi()
@@ -575,6 +578,36 @@ def test_download_recommendations_include_multimodal_hugging_face_repos_with_mmp
     assert vision["mmproj_file"] == "mmproj-F16.gguf"
     assert vision["use_case"] == "Vision-language GGUF model discovered from Hugging Face."
     assert "bad/llava-1.6-7b-GGUF" in repo_ids
+
+
+def test_download_recommendations_ignore_mtp_and_prefer_ud_bitclass_over_mixed_precision():
+    class MixedPrecisionRecommendationHfApi:
+        def list_models(self, **kwargs):
+            return [FakeHfModel("unsloth/Qwen3.6-35B-A3B-GGUF")]
+
+        def list_repo_tree(self, repo_id, *, recursive=False, expand=False, revision=None, repo_type=None):
+            assert repo_id == "unsloth/Qwen3.6-35B-A3B-GGUF"
+            return [
+                FakeRepoFile("BF16/Qwen3.6-35B-A3B-BF16-00001-of-00002.gguf", 50 * 1024**3),
+                FakeRepoFile("MTP/Qwen3.6-35B-A3B-Q8_0-MTP.gguf", 98 * 1024**2),
+                FakeRepoFile("Qwen3.6-35B-A3B-MXFP4_MOE.gguf", 21 * 1024**3),
+                FakeRepoFile("Qwen3.6-35B-A3B-UD-Q4_K_M.gguf", 22 * 1024**3),
+                FakeRepoFile("mmproj-F16.gguf", 900 * 1024**2),
+            ]
+
+    payload = recommend_downloads(
+        {
+            "platform": "Darwin",
+            "architecture": "arm64",
+            "ram": {"total": 64 * 1024**3},
+            "vram": None,
+        },
+        hf_api=MixedPrecisionRecommendationHfApi(),
+    )
+
+    qwen = next(item for item in payload["recommendations"] if item["repo_id"] == "unsloth/Qwen3.6-35B-A3B-GGUF")
+    assert qwen["include_file"] == "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
+    assert qwen["quant"] == "UD-Q4_K_M"
 
 def test_download_manager_caches_hugging_face_recommendations(tmp_path):
     api = FakeRecommendationHfApi()

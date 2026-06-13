@@ -247,6 +247,12 @@ models:
     extra_args: []
     supports_json_schema: false
     supports_grammar: false
+    supports_mtp: true
+    speculative:
+      mode: mtp
+      draft_model_path: ./models/mtp-qwen-coder.gguf
+      draft_max: 3
+      draft_min: 0
     vision: false
     mmproj: null
     strengths:
@@ -534,6 +540,12 @@ Optional chat capability hint fields per model:
 
 - `supports_json_schema`: override capability introspection for JSON Schema structured output.
 - `supports_grammar`: override capability introspection for grammar structured output.
+- `supports_mtp`: mark whether the configured model/runtime combination is known to support MTP speculative decoding.
+- `speculative`: optional model-level speculative decoding block. The first supported mode is `mtp`.
+  `draft_model_path` maps to `--model-draft`. `draft_max` maps to `--spec-draft-n-max` and `draft_min` maps to `--spec-draft-n-min`.
+  For `speculative.mode: mtp`, `supports_mtp` must be `true`.
+- Advanced speculative controls such as probability thresholds and backend-sampling are intentionally deferred to a future advanced speculative configuration pass.
+- A future model source enhancement should allow storing Hugging Face repository metadata such as `hf_repo` so Llama Pack can support repo-aware launch behavior and later check for model updates.
 - `extra_args`: capability fallback infers structured output support when args include tokens like `json-schema` or `grammar`.
 - `reasoning` and `reasoning_budget`: configure llama.cpp reasoning mode and budget for supported models.
 - `vision` and `mmproj`: mark multimodal models and point to the matching projector file.
