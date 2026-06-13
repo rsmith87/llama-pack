@@ -2,7 +2,7 @@ import "./styles.css";
 import type { ReactNode } from "react";
 import type { LocalModel } from "../../types/models";
 import { Button, StatusBadge } from "../ui";
-import { isActiveModel } from "../../features/models/modelStatus";
+import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
 import { modelName, statusTone } from "../../features/models";
 import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
 
@@ -92,6 +92,7 @@ export function ModelCard({
   const raw = model as Record<string, unknown>;
   const name = modelName(model as Parameters<typeof modelName>[0]);
   const active = isActiveModel(model as Parameters<typeof isActiveModel>[0]);
+  const loading = isLoadingModel(model as Parameters<typeof isLoadingModel>[0]);
   const status = str(raw, "status", "status") || "available";
   const port = num(raw, "port", "model_port");
   const pid = num(raw, "pid", "pid");
@@ -184,8 +185,10 @@ export function ModelCard({
     );
   }
 
+  const stateClass = loading ? "loading" : active ? "active" : "";
+
   return (
-    <article className={`library-card ${active ? "active" : ""}`.trim()}>
+    <article className={`library-card ${stateClass}`.trim()}>
       {onOpen ? (
         <button type="button" className="library-card-button" onClick={onOpen} aria-label={`Open ${name}`}>
           <strong>{name}</strong>

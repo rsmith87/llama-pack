@@ -176,8 +176,65 @@ def test_gguf_library_add_model_persists_model_asset_link(tmp_path):
             "asset_id": asset_id,
             "config_source": "yaml",
             "model_line": None,
+            "ctx": 8192,
+            "gpu_layers": 999,
+            "vision": False,
+            "mmproj": None,
+            "supports_json_schema": None,
+            "supports_grammar": None,
+            "supports_mtp": None,
+            "reasoning": None,
+            "reasoning_budget": None,
+            "prompt_template": None,
+            "favorite": False,
+            "strengths": [],
+            "cost_tier": None,
+            "extra_args": [],
             "created_at": models[0]["created_at"],
             "updated_at": models[0]["updated_at"],
+        }
+    ]
+
+    profiles = store.list_model_profiles(models[0]["model_id"])
+    assert profiles == [
+        {
+            "profile_id": profiles[0]["profile_id"],
+            "model_id": models[0]["model_id"],
+            "profile_key": "default",
+            "label": "Default",
+            "order": 0,
+            "kind": "default",
+            "ctx": None,
+            "gpu_layers": None,
+            "host": None,
+            "extra_args": [],
+            "intended_ctx": None,
+            "kv_cache_policy": None,
+            "resource_tier": None,
+            "strengths": [],
+            "cost_tier": None,
+            "created_at": profiles[0]["created_at"],
+            "updated_at": profiles[0]["updated_at"],
+        }
+    ]
+
+    deployments = store.list_model_deployments(models[0]["model_id"])
+    assert deployments == [
+        {
+            "deployment_id": deployments[0]["deployment_id"],
+            "model_id": models[0]["model_id"],
+            "deployment_name": "default",
+            "node_name": None,
+            "host": "0.0.0.0",
+            "port": 8088,
+            "ctx_override": None,
+            "gpu_layers_override": None,
+            "mmproj_override": None,
+            "extra_args_override": [],
+            "profile_key": "default",
+            "enabled": True,
+            "created_at": deployments[0]["created_at"],
+            "updated_at": deployments[0]["updated_at"],
         }
     ]
 

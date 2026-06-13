@@ -41,7 +41,12 @@ def test_version_locations_include_models_target(tmp_path: Path):
 
 
 def test_target_metadata_for_models_returns_only_models_tables():
-    assert set(target_metadata_for("models").tables) == {"model_assets", "models"}
+    assert set(target_metadata_for("models").tables) == {
+        "model_assets",
+        "model_deployments",
+        "model_profiles",
+        "models",
+    }
 
 
 def test_head_revision_for_models_returns_branch_head():
@@ -95,25 +100,121 @@ def test_model_asset_store_crud_and_model_linking(tmp_path: Path):
         asset_id=created["asset_id"],
         config_source="yaml",
         model_line="Coding",
+        ctx=32768,
+        gpu_layers=48,
+        vision=False,
+        mmproj=None,
+        supports_json_schema=True,
+        supports_grammar=True,
+        supports_mtp=False,
+        reasoning="auto",
+        reasoning_budget=4096,
+        prompt_template="chatml",
+        favorite=True,
+        strengths=["coding", "tool-use"],
+        cost_tier="medium",
+        extra_args=["--flash-attn"],
     )
 
     assert model["model_id"]
     assert model["asset_id"] == created["asset_id"]
     assert model["model_name"] == "qwen-coder"
+    assert model["ctx"] == 32768
+    assert model["gpu_layers"] == 48
+    assert model["supports_json_schema"] is True
+    assert model["prompt_template"] == "chatml"
+    assert model["favorite"] is True
+    assert model["strengths"] == ["coding", "tool-use"]
+    assert model["extra_args"] == ["--flash-attn"]
 
     relinked = store.upsert_model(
         model_name="qwen-coder",
         asset_id=created["asset_id"],
         config_source="mixed",
         model_line="General",
+        ctx=65536,
+        gpu_layers=60,
+        vision=True,
+        mmproj="/models/mmproj.gguf",
+        supports_json_schema=True,
+        supports_grammar=False,
+        supports_mtp=True,
+        reasoning="on",
+        reasoning_budget=8192,
+        prompt_template="llama3",
+        favorite=False,
+        strengths=["reasoning"],
+        cost_tier="high",
+        extra_args=["--cont-batching"],
     )
 
     assert relinked["model_id"] == model["model_id"]
     assert relinked["config_source"] == "mixed"
     assert relinked["model_line"] == "General"
+    assert relinked["ctx"] == 65536
+    assert relinked["gpu_layers"] == 60
+    assert relinked["vision"] is True
+    assert relinked["mmproj"] == "/models/mmproj.gguf"
+    assert relinked["supports_grammar"] is False
+    assert relinked["supports_mtp"] is True
+    assert relinked["reasoning"] == "on"
+    assert relinked["reasoning_budget"] == 8192
+    assert relinked["prompt_template"] == "llama3"
+    assert relinked["favorite"] is False
+    assert relinked["strengths"] == ["reasoning"]
+    assert relinked["cost_tier"] == "high"
+    assert relinked["extra_args"] == ["--cont-batching"]
+
+    profile = store.upsert_model_profile(
+        model_id=model["model_id"],
+        profile_key="chat",
+        label="Chat",
+        order=10,
+        kind="interactive",
+        ctx=32768,
+        gpu_layers=48,
+        host="127.0.0.1",
+        extra_args=["--flash-attn"],
+        intended_ctx=24576,
+        kv_cache_policy="dynamic",
+        resource_tier="workstation",
+        strengths=["coding"],
+        cost_tier="medium",
+    )
+
+    assert profile["profile_id"]
+    assert profile["model_id"] == model["model_id"]
+    assert profile["profile_key"] == "chat"
+    assert profile["host"] == "127.0.0.1"
+    assert profile["strengths"] == ["coding"]
+
+    deployment = store.upsert_model_deployment(
+        model_id=model["model_id"],
+        deployment_name="local-default",
+        node_name="mac-studio",
+        host="127.0.0.1",
+        port=8080,
+        ctx_override=40960,
+        gpu_layers_override=50,
+        mmproj_override="/models/mmproj.gguf",
+        extra_args_override=["--threads", "12"],
+        profile_key="chat",
+        enabled=True,
+    )
+
+    assert deployment["deployment_id"]
+    assert deployment["deployment_name"] == "local-default"
+    assert deployment["node_name"] == "mac-studio"
+    assert deployment["port"] == 8080
+    assert deployment["profile_key"] == "chat"
+    assert deployment["enabled"] is True
 
     listed_models = store.list_models()
     assert [entry["model_name"] for entry in listed_models] == ["qwen-coder"]
+    listed_profiles = store.list_model_profiles(model["model_id"])
+    assert [entry["profile_key"] for entry in listed_profiles] == ["chat"]
+    listed_deployments = store.list_model_deployments(model["model_id"])
+    assert [entry["deployment_name"] for entry in listed_deployments] == ["local-default"]
 
     marked_missing = store.mark_missing_assets(missing_asset_ids={created["asset_id"]})
     assert marked_missing == 1

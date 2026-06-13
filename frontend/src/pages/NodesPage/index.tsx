@@ -5,7 +5,7 @@ import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel, stopNodeModel, updateNode } from "../../api/nodes";
 import { EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import { useLogModal } from "../../features/logs/logModalContext";
-import { isActiveModel } from "../../features/models/modelStatus";
+import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
 import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
@@ -164,8 +164,9 @@ export function NodesPage() {
               <div className="model-cards">
                 {node.models?.length ? sortModelsForDisplay(node.models).map((model) => {
                   const name = modelName(model);
+                  const stateClass = isLoadingModel(model) ? "loading" : isActiveModel(model) ? "active" : "";
                   return (
-                    <article className={`model-card ${isActiveModel(model) ? "active" : ""}`.trim()} key={name}>
+                    <article className={`model-card ${stateClass}`.trim()} key={name}>
                       <strong>{name}</strong>
                       <span>{String(model.status || "available")}</span>
                       <div className="model-actions">

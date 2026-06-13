@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.library import GgufLibrary
 from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from tests.persistence_db_setup import prepare_models_db
@@ -121,3 +122,120 @@ def test_model_asset_inventory_service_links_scanned_asset_to_download_provenanc
     assert assets[0]["source_repo_id"] == "owner/model"
     assert assets[0]["source_revision"] == "main"
     assert assets[0]["source_filename"] == "nested/model-Q5_K_M.gguf"
+
+
+def test_yaml_model_sync_populates_model_catalog_profiles_and_default_deployment(tmp_path: Path):
+    models_root = tmp_path / "HFModels"
+    gguf_path = models_root / "Qwen" / "qwen.gguf"
+    gguf_path.parent.mkdir(parents=True)
+    gguf_path.write_bytes(b"hello")
+
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config(
+        {
+            "hf_models_dir": str(models_root),
+            "models": {
+                "qwen-coder": {
+                    "path": str(gguf_path),
+                    "port": 8091,
+                    "ctx": 32768,
+                    "gpu_layers": 55,
+                    "host": "127.0.0.1",
+                    "vision": True,
+                    "mmproj": "/models/mmproj.gguf",
+                    "supports_json_schema": True,
+                    "supports_grammar": True,
+                    "supports_mtp": True,
+                    "reasoning": "auto",
+                    "reasoning_budget": 2048,
+                    "prompt_template": "llama3",
+                    "favorite": True,
+                    "model_line": "Coding",
+                    "strengths": ["coding", "tool-use"],
+                    "cost_tier": "high",
+                    "extra_args": ["--flash-attn"],
+                    "profiles": {
+                        "default": {
+                            "label": "Default",
+                            "order": 0,
+                            "kind": "default",
+                        },
+                        "chat": {
+                            "label": "Chat",
+                            "order": 10,
+                            "kind": "interactive",
+                            "ctx": 24576,
+                            "gpu_layers": 48,
+                            "host": "0.0.0.0",
+                            "extra_args": ["--cont-batching"],
+                            "intended_ctx": 16384,
+                            "kv_cache_policy": "dynamic",
+                            "resource_tier": "workstation",
+                            "strengths": ["chat"],
+                            "cost_tier": "medium",
+                        },
+                    },
+                }
+            },
+        }
+    )
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inventory = ModelAssetInventoryService(config, store)
+    library = GgufLibrary(config, inventory_service=inventory)
+
+    library.list_files()
+
+    models = store.list_models()
+    assert len(models) == 1
+    model = models[0]
+    assert model["model_name"] == "qwen-coder"
+    assert model["ctx"] == 32768
+    assert model["gpu_layers"] == 55
+    assert model["vision"] is True
+    assert model["mmproj"] == "/models/mmproj.gguf"
+    assert model["supports_json_schema"] is True
+    assert model["supports_grammar"] is True
+    assert model["supports_mtp"] is True
+    assert model["reasoning"] == "auto"
+    assert model["reasoning_budget"] == 2048
+    assert model["prompt_template"] == "llama3"
+    assert model["favorite"] is True
+    assert model["model_line"] == "Coding"
+    assert model["strengths"] == ["coding", "tool-use"]
+    assert model["cost_tier"] == "high"
+    assert model["extra_args"] == ["--flash-attn"]
+
+    profiles = store.list_model_profiles(model["model_id"])
+    assert [profile["profile_key"] for profile in profiles] == ["default", "chat"]
+    chat_profile = next(profile for profile in profiles if profile["profile_key"] == "chat")
+    assert chat_profile["label"] == "Chat"
+    assert chat_profile["ctx"] == 24576
+    assert chat_profile["gpu_layers"] == 48
+    assert chat_profile["host"] == "0.0.0.0"
+    assert chat_profile["extra_args"] == ["--cont-batching"]
+    assert chat_profile["intended_ctx"] == 16384
+    assert chat_profile["kv_cache_policy"] == "dynamic"
+    assert chat_profile["resource_tier"] == "workstation"
+    assert chat_profile["strengths"] == ["chat"]
+    assert chat_profile["cost_tier"] == "medium"
+
+    deployments = store.list_model_deployments(model["model_id"])
+    assert deployments == [
+        {
+            "deployment_id": deployments[0]["deployment_id"],
+            "model_id": model["model_id"],
+            "deployment_name": "default",
+            "node_name": None,
+            "host": "127.0.0.1",
+            "port": 8091,
+            "ctx_override": None,
+            "gpu_layers_override": None,
+            "mmproj_override": None,
+            "extra_args_override": [],
+            "profile_key": "default",
+            "enabled": True,
+            "created_at": deployments[0]["created_at"],
+            "updated_at": deployments[0]["updated_at"],
+        }
+    ]

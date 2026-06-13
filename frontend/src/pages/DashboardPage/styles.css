@@ -49,9 +49,21 @@
   box-shadow: inset 3px 0 0 var(--success), 0 0 0 1px color-mix(in srgb, var(--success) 16%, transparent);
 }
 
+.model-card.loading,
+.library-card.loading {
+  border-color: color-mix(in srgb, var(--warning) 70%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--warning) 14%, var(--card-strong)), var(--card));
+  box-shadow: inset 3px 0 0 var(--warning), 0 0 0 1px color-mix(in srgb, var(--warning) 16%, transparent);
+}
+
 .model-card.active strong,
 .library-card.active .library-card-button strong {
   color: var(--success);
+}
+
+.model-card.loading strong,
+.library-card.loading .library-card-button strong {
+  color: var(--warning);
 }
 
 @media (max-width: 720px) {

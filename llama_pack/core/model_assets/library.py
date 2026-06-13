@@ -28,6 +28,7 @@ class GgufLibrary:
         mmproj_by_dir = self._mmproj_by_dir()
         paths = self._gguf_paths()
         persisted_assets = self._assets_by_path(paths)
+        self._sync_all_model_records()
         files = []
         for path in paths:
             files.append(
@@ -331,12 +332,65 @@ class GgufLibrary:
         model = self.config.models[model_name]
         asset = self._asset_for_path(Path(model.path))
         model.model_line = model.model_line or (asset.get("model_line") if asset else None)
-        store.upsert_model(
+        persisted_model = store.upsert_model(
             model_name=model_name,
             asset_id=asset["asset_id"] if asset else None,
             config_source="yaml",
             model_line=model.model_line,
+            ctx=model.ctx,
+            gpu_layers=model.gpu_layers,
+            vision=model.vision,
+            mmproj=model.mmproj,
+            supports_json_schema=model.supports_json_schema,
+            supports_grammar=model.supports_grammar,
+            supports_mtp=model.supports_mtp,
+            reasoning=model.reasoning,
+            reasoning_budget=model.reasoning_budget,
+            prompt_template=model.prompt_template,
+            favorite=model.favorite,
+            strengths=list(model.strengths),
+            cost_tier=model.cost_tier,
+            extra_args=list(model.extra_args),
         )
+        model_id = str(persisted_model["model_id"])
+        for profile_key, profile in model.profiles.items():
+            store.upsert_model_profile(
+                model_id=model_id,
+                profile_key=profile_key,
+                label=profile.label_or_default(profile_key),
+                order=profile.order,
+                kind=profile.kind,
+                ctx=profile.ctx,
+                gpu_layers=profile.gpu_layers,
+                host=profile.host,
+                extra_args=list(profile.extra_args or []),
+                intended_ctx=profile.intended_ctx,
+                kv_cache_policy=profile.kv_cache_policy,
+                resource_tier=profile.resource_tier,
+                strengths=list(profile.strengths),
+                cost_tier=profile.cost_tier,
+            )
+        default_profile_key = "default" if "default" in model.profiles else None
+        store.upsert_model_deployment(
+            model_id=model_id,
+            deployment_name="default",
+            node_name=None,
+            host=model.host,
+            port=model.port,
+            ctx_override=None,
+            gpu_layers_override=None,
+            mmproj_override=None,
+            extra_args_override=[],
+            profile_key=default_profile_key,
+            enabled=True,
+        )
+
+    def _sync_all_model_records(self) -> None:
+        store = self._asset_store()
+        if store is None:
+            return
+        for model_name in sorted(self.config.models):
+            self._sync_model_record(model_name)
 
     def _delete_model_record(self, model_name: str) -> None:
         store = self._asset_store()
