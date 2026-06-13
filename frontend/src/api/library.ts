@@ -12,6 +12,8 @@ export type AddModelPayload = {
   prompt_template?: string | null;
   vision?: boolean;
   mmproj?: string | null;
+  supports_mtp?: boolean;
+  draft_model_path?: string | null;
 };
 
 export type UpdateModelPayload = {
@@ -23,6 +25,8 @@ export type UpdateModelPayload = {
   prompt_template?: string | null;
   reasoning?: string | null;
   reasoning_budget?: number | null;
+  supports_mtp?: boolean | null;
+  draft_model_path?: string | null;
 };
 
 export function listGgufs() { return apiGet<GgufLibraryResponse>("/library/ggufs"); }

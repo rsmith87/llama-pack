@@ -130,6 +130,32 @@ it("offers gpu layers shortcuts in the add model modal", async () => {
   })));
 });
 
+it("sends mtp settings from the add model modal when enabled", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson([{ id: "file-1", filename: "gemma-qat.gguf", name: "gemma-qat", registered: false }]))
+      .mockResolvedValueOnce(okJson({ ok: true }))
+      .mockResolvedValueOnce(okJson([{ id: "file-1", filename: "gemma-qat.gguf", name: "gemma-qat", registered: true, registered_as: "gemma-qat" }])),
+  );
+  const user = userEvent.setup();
+
+  renderPage();
+  await user.click(await screen.findByRole("button", { name: "Open gemma-qat" }));
+  await user.click(screen.getByLabelText("Enable MTP"));
+  await user.type(screen.getByLabelText("Draft model path"), "/models/mtp-gemma-qat.gguf");
+  await user.click(screen.getByRole("button", { name: "Add Model" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/ggufs/file-1/add-model", expect.objectContaining({
+    method: "POST",
+    body: expect.stringContaining('"supports_mtp":true'),
+  })));
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/ggufs/file-1/add-model", expect.objectContaining({
+    method: "POST",
+    body: expect.stringContaining('"draft_model_path":"/models/mtp-gemma-qat.gguf"'),
+  })));
+});
+
 it("removes configured models and deletes GGUF files", async () => {
   let removed = false;
   let deleted = false;

@@ -2798,6 +2798,59 @@ def test_library_patch_model_updates_mmproj_and_vision():
     assert data["mmproj"] == "/models/llava-mmproj.gguf"
 
 
+def test_library_add_model_accepts_mtp_settings():
+    app = create_app(
+        config=load_config({"mode": "agent", "hf_models_dir": "/models"}),
+        gguf_library=StubGgufLibrary(),
+    )
+    captured = {}
+
+    def add_model(file_id, **kwargs):
+        captured["file_id"] = file_id
+        captured.update(kwargs)
+        return {"name": kwargs["name"], "supports_mtp": kwargs["supports_mtp"], "speculative": {"mode": "mtp", "draft_model_path": kwargs["draft_model_path"]}}
+
+    app.state.gguf_library.add_model = add_model
+    client = TestClient(app)
+
+    resp = client.post(
+        "/lm-api/v1/library/ggufs/abc/add-model",
+        json={
+            "name": "gemma-qat",
+            "port": 8080,
+            "ctx": 8192,
+            "gpu_layers": 999,
+            "host": "127.0.0.1",
+            "supports_mtp": True,
+            "draft_model_path": "/models/mtp-gemma-qat.gguf",
+        },
+    )
+
+    assert resp.status_code == 200
+    assert captured["file_id"] == "abc"
+    assert captured["supports_mtp"] is True
+    assert captured["draft_model_path"] == "/models/mtp-gemma-qat.gguf"
+
+
+def test_library_patch_model_updates_mtp_settings():
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "models": {"gemma": {"path": "/models/gemma.gguf", "port": 8082}},
+            }
+        )
+    )
+    client = TestClient(app)
+
+    resp = client.patch("/lm-api/v1/library/models/gemma", json={"supports_mtp": True, "draft_model_path": "/models/mtp-gemma.gguf"})
+    assert resp.status_code == 200
+    data = resp.json()
+    assert data["supports_mtp"] is True
+    assert data["speculative"]["mode"] == "mtp"
+    assert data["speculative"]["draft_model_path"] == "/models/mtp-gemma.gguf"
+
+
 def test_library_patch_model_returns_404_for_unknown():
     app = create_app(
         config=load_config({"mode": "agent"})

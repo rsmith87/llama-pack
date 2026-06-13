@@ -36,6 +36,8 @@ def test_gguf_library_lists_files_with_stable_ids(tmp_path):
             "received_at": None,
             "vision": False,
             "mmproj": None,
+            "model_supports_mtp": None,
+            "model_draft_model_path": None,
             "model_ctx": None,
             "model_gpu_layers": None,
             "model_port": None,
@@ -66,6 +68,8 @@ def test_gguf_library_adds_file_as_runtime_model(tmp_path):
         reasoning_budget=2048,
         prompt_template="gemma",
         favorite=False,
+        supports_mtp=True,
+        draft_model_path="/models/mtp-gemma-local.gguf",
     )
 
     assert model == {
@@ -81,6 +85,13 @@ def test_gguf_library_adds_file_as_runtime_model(tmp_path):
         "favorite": False,
         "vision": False,
         "mmproj": None,
+        "supports_mtp": True,
+        "speculative": {
+            "mode": "mtp",
+            "draft_model_path": "/models/mtp-gemma-local.gguf",
+            "draft_max": None,
+            "draft_min": None,
+        },
         "profiles": {
             "default": {
                 "label": "Default",
@@ -93,6 +104,9 @@ def test_gguf_library_adds_file_as_runtime_model(tmp_path):
     assert config.models["gemma-local"].reasoning == "auto"
     assert config.models["gemma-local"].reasoning_budget == 2048
     assert config.models["gemma-local"].prompt_template == "gemma"
+    assert config.models["gemma-local"].supports_mtp is True
+    assert config.models["gemma-local"].speculative is not None
+    assert config.models["gemma-local"].speculative.draft_model_path == "/models/mtp-gemma-local.gguf"
     assert config.models["gemma-local"].profiles["default"].label == "Default"
     assert config.effective_model_config("gemma-local:default").port == 8088
     assert config.effective_model_config("gemma-local:default").ctx == 8192
@@ -234,6 +248,8 @@ def test_gguf_library_marks_nested_transferred_copy_as_recent(tmp_path):
             "received_at": "2026-05-19T12:00:00Z",
             "vision": False,
             "mmproj": None,
+            "model_supports_mtp": None,
+            "model_draft_model_path": None,
             "model_ctx": None,
             "model_gpu_layers": None,
             "model_port": None,

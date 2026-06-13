@@ -14,6 +14,8 @@ export type GgufFile = Record<string, unknown> & {
   pid?: number | null;
   vision?: boolean;
   mmproj?: string | null;
+  model_supports_mtp?: boolean | null;
+  model_draft_model_path?: string | null;
   model_ctx?: number | null;
   model_gpu_layers?: number | null;
   model_port?: number | null;

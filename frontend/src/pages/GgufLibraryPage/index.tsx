@@ -109,6 +109,8 @@ export function GgufLibraryPage() {
   const [reasoningBudget, setReasoningBudget] = useState(2048);
   const [vision, setVision] = useState(false);
   const [mmproj, setMmproj] = useState("");
+  const [mtpEnabled, setMtpEnabled] = useState(false);
+  const [draftModelPath, setDraftModelPath] = useState("");
   const [editOpen, setEditOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
@@ -126,6 +128,8 @@ export function GgufLibraryPage() {
     setPromptTemplate(typeof file.model_prompt_template === "string" ? file.model_prompt_template : suggestedPromptTemplate(file));
     setVision(Boolean(file.vision));
     setMmproj(typeof file.mmproj === "string" ? file.mmproj : "");
+    setMtpEnabled(Boolean(file.model_supports_mtp));
+    setDraftModelPath(typeof file.model_draft_model_path === "string" ? file.model_draft_model_path : "");
     if (file.registered) {
       if (typeof file.model_port === "number") setPort(file.model_port);
       if (typeof file.model_ctx === "number") setCtx(file.model_ctx);
@@ -152,6 +156,8 @@ export function GgufLibraryPage() {
     setReasoningBudget(typeof file.model_reasoning_budget === "number" ? file.model_reasoning_budget : 2048);
     setVision(Boolean(file.vision));
     setMmproj(typeof file.mmproj === "string" ? file.mmproj : "");
+    setMtpEnabled(Boolean(file.model_supports_mtp));
+    setDraftModelPath(typeof file.model_draft_model_path === "string" ? file.model_draft_model_path : "");
     setEditOpen(true);
   }
 
@@ -168,6 +174,8 @@ export function GgufLibraryPage() {
       prompt_template: promptTemplate || null,
       vision,
       mmproj: mmproj || null,
+      supports_mtp: mtpEnabled,
+      draft_model_path: mtpEnabled ? (draftModelPath || null) : null,
     });
     setSelected(null);
     setPort(port + 1);
@@ -185,6 +193,8 @@ export function GgufLibraryPage() {
       prompt_template: promptTemplate || null,
       reasoning,
       reasoning_budget: reasoningBudget,
+      supports_mtp: mtpEnabled,
+      draft_model_path: mtpEnabled ? (draftModelPath || null) : null,
     });
     setEditOpen(false);
     setSelected(null);
@@ -426,6 +436,22 @@ export function GgufLibraryPage() {
                   <MmprojPicker files={files} value={mmproj} onChange={setMmproj} />
                 </FormField>
               ) : null}
+              <FormField label="MTP" hint="Enable multi-token prediction for models that have a draft sidecar.">
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <input
+                    aria-label="Enable MTP"
+                    type="checkbox"
+                    checked={mtpEnabled}
+                    onChange={(e) => setMtpEnabled(e.target.checked)}
+                  />
+                  Enable MTP
+                </label>
+              </FormField>
+              {mtpEnabled ? (
+                <FormField label="Draft model path" hint="Optional draft GGUF path for explicit --model-draft wiring.">
+                  <input aria-label="Draft model path" value={draftModelPath} onChange={(event) => setDraftModelPath(event.target.value)} />
+                </FormField>
+              ) : null}
             </div>
             <div className="modal-actions">
               {canManageLocalLibrary ? <Button type="button" onClick={() => void addSelected()} disabled={Boolean(selected.registered)}>Add Model</Button> : null}
@@ -509,6 +535,22 @@ export function GgufLibraryPage() {
               {vision ? (
                 <FormField label="mmproj file" hint="Multimodal projector sidecar (.gguf). Pick a discovered file or type a path.">
                   <MmprojPicker files={files} value={mmproj} onChange={setMmproj} />
+                </FormField>
+              ) : null}
+              <FormField label="MTP" hint="Enable multi-token prediction for models that have a draft sidecar.">
+                <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                  <input
+                    aria-label="Enable MTP"
+                    type="checkbox"
+                    checked={mtpEnabled}
+                    onChange={(e) => setMtpEnabled(e.target.checked)}
+                  />
+                  Enable MTP
+                </label>
+              </FormField>
+              {mtpEnabled ? (
+                <FormField label="Draft model path" hint="Optional draft GGUF path for explicit --model-draft wiring.">
+                  <input aria-label="Draft model path" value={draftModelPath} onChange={(e) => setDraftModelPath(e.target.value)} />
                 </FormField>
               ) : null}
             </div>

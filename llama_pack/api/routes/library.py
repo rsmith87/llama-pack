@@ -21,6 +21,8 @@ class AddModelRequest(BaseModel):
     prompt_template: str | None = None
     vision: bool = False
     mmproj: str | None = None
+    supports_mtp: bool = False
+    draft_model_path: str | None = None
 
 
 class UpdateModelRequest(BaseModel):
@@ -32,6 +34,8 @@ class UpdateModelRequest(BaseModel):
     prompt_template: str | None = None
     reasoning: Literal["on", "off", "auto"] | None = None
     reasoning_budget: int | None = None
+    supports_mtp: bool | None = None
+    draft_model_path: str | None = None
 
 
 router = APIRouter(prefix="/library")
@@ -64,6 +68,8 @@ def add_gguf_model(
             prompt_template=body.prompt_template,
             vision=body.vision,
             mmproj=body.mmproj,
+            supports_mtp=body.supports_mtp,
+            draft_model_path=body.draft_model_path,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -114,6 +120,8 @@ def update_model(
             prompt_template=body.prompt_template,
             reasoning=body.reasoning,
             reasoning_budget=body.reasoning_budget,
+            supports_mtp=body.supports_mtp,
+            draft_model_path=body.draft_model_path,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

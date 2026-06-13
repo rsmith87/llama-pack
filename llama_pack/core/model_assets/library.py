@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Literal
 
 from llama_pack.core.config import AppConfig, ModelConfig, save_config
-from llama_pack.core.config.models import ModelProfileConfig
+from llama_pack.core.config.models import ModelProfileConfig, SpeculativeConfig
 
 
 ReasoningMode = Literal["on", "off", "auto"]
@@ -42,6 +42,8 @@ class GgufLibrary:
         favorite: bool | None = False,
         vision: bool = False,
         mmproj: str | None = None,
+        supports_mtp: bool = False,
+        draft_model_path: str | None = None,
     ) -> dict[str, object]:
         path = self._path_for_id(file_id)
         model_name = name.strip()
@@ -62,6 +64,8 @@ class GgufLibrary:
             favorite=favorite,
             vision=vision,
             mmproj=mmproj,
+            supports_mtp=supports_mtp or None,
+            speculative=SpeculativeConfig(mode="mtp", draft_model_path=draft_model_path) if supports_mtp else None,
             profiles={
                 "default": ModelProfileConfig(
                     label="Default",
@@ -86,6 +90,8 @@ class GgufLibrary:
         prompt_template: str | None = None,
         reasoning: ReasoningMode | None = None,
         reasoning_budget: int | None = None,
+        supports_mtp: bool | None = None,
+        draft_model_path: str | None = None,
     ) -> dict[str, object]:
         model_name = name.strip()
         if model_name not in self.config.models:
@@ -107,6 +113,24 @@ class GgufLibrary:
             model.reasoning = reasoning
         if reasoning_budget is not None:
             model.reasoning_budget = reasoning_budget
+        if supports_mtp is not None:
+            model.supports_mtp = supports_mtp or None
+            if not supports_mtp:
+                model.speculative = None
+            else:
+                model.speculative = SpeculativeConfig(
+                    mode="mtp",
+                    draft_model_path=draft_model_path or (model.speculative.draft_model_path if model.speculative else None),
+                    draft_max=model.speculative.draft_max if model.speculative else None,
+                    draft_min=model.speculative.draft_min if model.speculative else None,
+                )
+        elif draft_model_path is not None and model.supports_mtp:
+            model.speculative = SpeculativeConfig(
+                mode="mtp",
+                draft_model_path=draft_model_path,
+                draft_max=model.speculative.draft_max if model.speculative else None,
+                draft_min=model.speculative.draft_min if model.speculative else None,
+            )
         if self.config.config_source not in {"(defaults)", "(in-memory)"}:
             save_config(self.config)
         return self._model_payload(model_name)
@@ -126,6 +150,8 @@ class GgufLibrary:
             "favorite": model.favorite,
             "vision": model.vision,
             "mmproj": model.mmproj,
+            "supports_mtp": model.supports_mtp,
+            "speculative": model.speculative.model_dump() if model.speculative else None,
             "profiles": {
                 profile_name: {
                     "label": profile.label_or_default(profile_name),
@@ -213,6 +239,8 @@ class GgufLibrary:
             "received_at": received_payload.get("completed_at"),
             "vision": registered_model.vision if registered_model else inferred_mmproj is not None,
             "mmproj": registered_model.mmproj if registered_model else str(inferred_mmproj) if inferred_mmproj else None,
+            "model_supports_mtp": registered_model.supports_mtp if registered_model else None,
+            "model_draft_model_path": registered_model.speculative.draft_model_path if registered_model and registered_model.speculative else None,
             "model_ctx": registered_model.ctx if registered_model else None,
             "model_gpu_layers": registered_model.gpu_layers if registered_model else None,
             "model_port": registered_model.port if registered_model else None,
