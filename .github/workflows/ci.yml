@@ -70,14 +70,14 @@ jobs:
               prepare_controller_db,
           )
           from tests.persistence_db_setup import TARGET_REVISIONS
-          from llama_manager.core.persistence.db_infra import create_persistence_engine, sqlite_url_for_path
-          from llama_manager.core.persistence.alembic_config import Base
-          from llama_manager.core.persistence.models.app_state import (
+          from llama_pack.core.persistence.db_infra import create_persistence_engine, sqlite_url_for_path
+          from llama_pack.core.persistence.alembic_config import Base
+          from llama_pack.core.persistence.models.app_state import (
               ApiKeyOrm, AuditEventOrm, ChatSessionOrm,
               ModelDownloadOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm,
           )
           from sqlalchemy import Column, MetaData, String, Table, delete
-          from llama_manager.core.persistence.db_infra import create_session_factory, session_scope
+          from llama_pack.core.persistence.db_infra import create_session_factory, session_scope
 
           ALEMBIC_VERSION = Table(
               "alembic_version",
