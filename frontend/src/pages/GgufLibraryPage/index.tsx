@@ -294,7 +294,11 @@ export function GgufLibraryPage() {
       <div className="library-sections">
         {appMode !== "controller" && added.length ? (
           <Panel title="Added Models" eyebrow="Configured">
-            <div className="library-cards">{added.map(renderCard)}</div>
+            <ModelCarousel
+              items={added}
+              slidesPerView={3}
+              renderItem={(item) => renderCard(item as GgufFile)}
+            />
           </Panel>
         ) : null}
         {appMode !== "controller" ? (

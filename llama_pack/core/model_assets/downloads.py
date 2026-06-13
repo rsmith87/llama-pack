@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 import signal
+import shlex
 import subprocess
 import time
 from importlib import import_module
@@ -207,7 +208,7 @@ class DownloadManager:
         return None
 
     def _with_progress(self, record: dict[str, object]) -> dict[str, object]:
-        bytes_downloaded = self._downloaded_size(Path(str(record["local_path"])))
+        bytes_downloaded = self._downloaded_size(self._progress_path(record))
         bytes_total = record.get("bytes_total")
         enriched = {**record, "bytes_downloaded": bytes_downloaded}
         if isinstance(bytes_total, int) and bytes_total > 0:
@@ -215,6 +216,33 @@ class DownloadManager:
         else:
             enriched["progress_percent"] = None
         return enriched
+
+    def _progress_path(self, record: dict[str, object]) -> Path:
+        local_path = Path(str(record["local_path"]))
+        include_files = self._included_files_from_command(str(record.get("command") or ""))
+        if include_files:
+            return local_path / include_files[0]
+        return local_path
+
+    def _included_files_from_command(self, command: str) -> list[str]:
+        try:
+            parts = shlex.split(command)
+        except ValueError:
+            return []
+        includes = []
+        index = 0
+        while index < len(parts):
+            if parts[index] == "--include" and index + 1 < len(parts):
+                try:
+                    include_file = self._normalize_include_file(parts[index + 1])
+                except ValueError:
+                    include_file = None
+                if include_file is not None:
+                    includes.append(include_file)
+                index += 2
+                continue
+            index += 1
+        return includes
 
     def _downloaded_size(self, path: Path) -> int:
         if not path.exists():

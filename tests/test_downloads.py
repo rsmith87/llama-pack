@@ -278,7 +278,7 @@ def test_download_manager_records_selected_file_total_size(tmp_path):
     assert started["bytes_total"] == 2048
 
 
-def test_download_manager_reports_running_progress_from_destination_size(tmp_path):
+def test_download_manager_reports_running_progress_from_selected_quant_file(tmp_path):
     process = FakeProcess()
     manager, _store, _api = make_manager(
         tmp_path,
@@ -287,8 +287,9 @@ def test_download_manager_reports_running_progress_from_destination_size(tmp_pat
     )
     started = manager.start("owner/model", include_file="nested/model-Q5_K_M.gguf", triggered_by="tester")
     destination = Path(str(started["local_path"]))
-    destination.mkdir(parents=True)
-    (destination / "partial.gguf").write_bytes(b"x" * 512)
+    (destination / "nested").mkdir(parents=True)
+    (destination / "model-Q8_0.gguf").write_bytes(b"x" * 13_312)
+    (destination / "nested" / "model-Q5_K_M.gguf").write_bytes(b"x" * 512)
 
     status = manager.status(str(started["id"]))
 

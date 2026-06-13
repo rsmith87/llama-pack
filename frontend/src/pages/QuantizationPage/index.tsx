@@ -127,7 +127,7 @@ export function QuantizationPage() {
         <Button type="button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh"}</Button>
       </div>
       <ErrorBanner message={error} />
-      <div className="flex">
+      <div className="flex quantization-page-layout">
         <Panel title="Advisor" eyebrow="Heuristic" className="side-panel">
           <div className="stacked-controls">
             <div className="recommendation-form">

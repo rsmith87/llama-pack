@@ -8,6 +8,7 @@ import { startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
 import { ModelCard } from "../../components/ModelCard";
+import { ModelCarousel } from "../../components/ModelCarousel";
 import { useLogModal } from "../../features/logs/logModalContext";
 import type { DashboardData, LocalModel } from "../../types/index";
 import { useNavigateToPage } from "../../hooks/useNavigateToPage";
@@ -247,10 +248,17 @@ export function DashboardPage() {
           title="Local Models"
           actions={<Button type="button" onClick={() => navigateToPage("gguf-library")}>Add Model</Button>}
         >
-          <div className="library-cards">
-            {data.localModels.length === 0 ? <EmptyState message="No local models reported." /> : null}
-            {data.localModels.map((model, index) => renderModelCard(model, `${modelName(model)}-${index}`))}
-          </div>
+          {data.localModels.length === 0 ? (
+            <EmptyState message="No local models reported." />
+          ) : (
+            <ModelCarousel
+              items={data.localModels}
+              slidesPerView={3}
+              renderItem={(item, index) =>
+                renderModelCard(item as LocalModel, `${modelName(item as LocalModel)}-${index}`)
+              }
+            />
+          )}
         </Panel>
       )}
 

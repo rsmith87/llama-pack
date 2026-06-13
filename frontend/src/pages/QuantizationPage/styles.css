@@ -11,11 +11,16 @@
     margin-bottom: 0;
 }
 
+.quantization-page-react .quantization-page-layout {
+    gap: 8px;
+    flex-wrap: nowrap;
+}
+
 .quantization-page-react .recommendation-form {
-    display: flex;
+    display: grid;
     justify-content: space-between;
     width: 100%;
-    align-items: flex-end;
+    grid-template-columns: repeat(1, 1fr);
 }
 
 .quantization-page-react .recommendation-form .form-field {
@@ -26,8 +31,17 @@
 .quantization-page-react .side-panel {
     position: relative;
     top: 0;
+    flex-basis: 20%;
 }
 
 @media (max-width: 700px) {
-    
+    .quantization-page-react section.side-panel,
+    .quantization-page-react section.panel {
+        flex-basis: 100%;
+    }
+
+    .quantization-page-react .quantization-page-layout {
+        gap: 0;
+        flex-wrap: wrap;
+    }
 }
