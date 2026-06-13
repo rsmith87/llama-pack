@@ -15,6 +15,7 @@ if TYPE_CHECKING:
     from llama_pack.core.memory.store import ChromaMemoryStore
     from llama_pack.core.model_assets.conversions import ConversionManager
     from llama_pack.core.model_assets.library import GgufLibrary
+    from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
     from llama_pack.core.model_assets.downloads import DownloadManager
     from llama_pack.core.model_assets.quantizations import QuantizationManager
     from llama_pack.core.model_assets.transfers import TransferManager
@@ -69,6 +70,13 @@ def get_gguf_library(request: Request) -> GgufLibrary:
 
 def get_download_manager(request: Request) -> DownloadManager:
     return request.app.state.download_manager
+
+
+def get_model_asset_inventory_service(request: Request) -> ModelAssetInventoryService:
+    service = getattr(request.app.state, "model_asset_inventory_service", None)
+    if service is None:
+        raise RuntimeError("Model asset inventory service is unavailable")
+    return service
 
 
 def get_transfer_manager(request: Request) -> TransferManager:

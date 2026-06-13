@@ -66,7 +66,7 @@
 - [x] **Step 3: Add `models_db_url` to `AppConfig` and wire it into grouped persistence config loading/saving**
 - [x] **Step 4: Document the new DB URL in the example config and configuration docs**
 - [x] **Step 5: Run focused config tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 3: Build Models DB Domain Service
 
@@ -76,11 +76,11 @@
 - Modify: `llama_pack/api/dependencies.py`
 - Test: `tests/test_models_db_integration.py`
 
-- [ ] **Step 1: Write failing integration tests for scan-time asset creation, repeated scan upsert, and missing-file marking**
-- [ ] **Step 2: Run the focused test and verify the models DB service is missing**
-- [ ] **Step 3: Implement a domain service that reconciles GGUF scan results into asset rows using canonical path first, with future-ready fields for content hash and download provenance**
-- [ ] **Step 4: Register the models DB store/service in app state and dependency wiring**
-- [ ] **Step 5: Run the focused integration tests and verify they pass**
+- [x] **Step 1: Write failing integration tests for scan-time asset creation, repeated scan upsert, and missing-file marking**
+- [x] **Step 2: Run the focused test and verify the models DB service is missing**
+- [x] **Step 3: Implement a domain service that reconciles GGUF scan results into asset rows using canonical path first, with future-ready fields for content hash and download provenance**
+- [x] **Step 4: Register the models DB store/service in app state and dependency wiring**
+- [x] **Step 5: Run the focused integration tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 4: Refactor GGUF Library To Use Models DB Inventory

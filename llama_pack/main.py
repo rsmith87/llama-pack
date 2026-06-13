@@ -46,6 +46,7 @@ from llama_pack.core.memory.store import ChromaMemoryStore
 from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
 from llama_pack.core.model_assets.conversions import ConversionManager
 from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.downloads import DownloadManager
 from llama_pack.core.model_assets.transfers import TransferManager
 from llama_pack.core.nodes.registry import NodeRegistry
@@ -64,6 +65,7 @@ from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
 from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
 from llama_pack.core.persistence.db_infra import default_state_dir, resolve_persistence_urls, sqlite_path_from_url
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.benchmarks.runner import BenchmarkRunner
 from llama_pack.core.app.auth_policy import (
     is_external_key_forbidden,
@@ -256,6 +258,15 @@ def _configure_app_state(
     auth_urls = resolve_persistence_urls(app_config)
     app.state.chat_session_store = ChatSessionStoreOrm(db_url=auth_urls.chat_sessions)
     app.state.model_download_store = ModelDownloadStoreOrm(db_url=auth_urls.downloads)
+    try:
+        app.state.model_asset_store = ModelAssetStoreOrm(db_url=auth_urls.models)
+        app.state.model_asset_inventory_service = ModelAssetInventoryService(
+            app_config,
+            app.state.model_asset_store,
+        )
+    except RuntimeError:
+        app.state.model_asset_store = None
+        app.state.model_asset_inventory_service = None
     app.state.download_manager = DownloadManager(app_config, app.state.model_download_store)
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     if app_config.mode == "controller":
