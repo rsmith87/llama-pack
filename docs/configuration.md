@@ -128,6 +128,7 @@ audit_db_url: sqlite+pysqlite:///./logs/audit_events.db
 chat_sessions_db_url: sqlite+pysqlite:///./logs/chat_sessions.db
 downloads_db_url: sqlite+pysqlite:///./logs/downloads.db
 benchmarks_db_url: sqlite+pysqlite:///./logs/benchmarks.db
+models_db_url: sqlite+pysqlite:///./logs/models.db
 controller_retention_days: 30
 controller_archive_retention_days: 90
 controller_archive_dir: ./logs/archive
@@ -443,6 +444,7 @@ For the current Raspberry Pi controller topology and smoke checks, see
 ## Optional Controller Persistence And Retention Fields
 
 - `controller_db_url`: optional SQLite URL/path override for controller orchestration state.
+- `models_db_url`: optional SQLite URL/path override for model asset and model catalog state.
 - `controller_instance_id`: identifier used for controller leader leases.
 - `controller_leader_lease_seconds`: lease duration for the controller sweeper.
 - `controller_retention_days`: active job/event retention window.

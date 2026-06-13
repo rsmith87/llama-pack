@@ -50,7 +50,7 @@
 - [x] **Step 4: Define ORM tables for GGUF assets and model records with indexes on path, asset id, model name, and download linkage**
 - [x] **Step 5: Implement a focused ORM store with create/upsert/list/update methods for assets and model links**
 - [x] **Step 6: Add the Alembic migration for the new target and verify the ORM store test passes**
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ### Task 2: Add Config Surface For The Models DB
 
@@ -61,11 +61,11 @@
 - Modify: `docs/configuration.md`
 - Test: `tests/test_config.py`
 
-- [ ] **Step 1: Write failing config tests for a new `models_db_url` field and split-config persistence behavior**
-- [ ] **Step 2: Run the focused config tests and verify the field is missing**
-- [ ] **Step 3: Add `models_db_url` to `AppConfig` and wire it into grouped persistence config loading/saving**
-- [ ] **Step 4: Document the new DB URL in the example config and configuration docs**
-- [ ] **Step 5: Run focused config tests and verify they pass**
+- [x] **Step 1: Write failing config tests for a new `models_db_url` field and split-config persistence behavior**
+- [x] **Step 2: Run the focused config tests and verify the field is missing**
+- [x] **Step 3: Add `models_db_url` to `AppConfig` and wire it into grouped persistence config loading/saving**
+- [x] **Step 4: Document the new DB URL in the example config and configuration docs**
+- [x] **Step 5: Run focused config tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 3: Build Models DB Domain Service
