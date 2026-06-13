@@ -134,7 +134,7 @@ jobs:
               'audit.db': '20260513_0003',
               'chat_sessions.db': '20260523_0007',
               'downloads.db': '20260523_0001',
-              'benchmarks.db': '20260612_0006',
+              'benchmarks.db': '20260612_0007',
           }
           for name, expected in expected_revisions.items():
               conn = sqlite3.connect(base / name)
