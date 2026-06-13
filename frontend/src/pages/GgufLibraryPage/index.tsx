@@ -28,7 +28,7 @@ function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: st
   const candidates = files.filter((f) => fileName(f).toLowerCase().includes("mmproj"));
   const inList = candidates.some((f) => f.path === value);
   return (
-    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem" }}>
+    <div style={{ display: "flex", flexDirection: "column", gap: "0.25rem", flexFlow: "column"}}>
       {candidates.length > 0 ? (
         <select
           value={inList ? value : ""}
@@ -393,7 +393,6 @@ export function GgufLibraryPage() {
           <div className="library-detail">
             <dl className="detail-list">
               <div><dt>Path</dt><dd>{String(selected.path || "-")}</dd></div>
-              <div><dt>Directory</dt><dd>{String(selected.model_dir || "-")}</dd></div>
               <div><dt>Size</dt><dd>{sizeLabel(selected.size_bytes)}</dd></div>
               <div><dt>Status</dt><dd>{selected.registered ? `Added as ${selected.registered_as || modelName}` : "Available"}</dd></div>
               {selected.vision ? (
@@ -409,9 +408,6 @@ export function GgufLibraryPage() {
               </FormField>
               <FormField label="Context">
                 <input value={ctx} onChange={(event) => setCtx(Number(event.target.value || 4096))} type="number" />
-              </FormField>
-              <FormField label="GPU layers">
-                <GpuLayersControl value={gpuLayers} onChange={setGpuLayers} />
               </FormField>
               <FormField label="Prompt template">
                 <select value={promptTemplate} onChange={(event) => setPromptTemplate(event.target.value)}>{PROMPT_TEMPLATE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
@@ -436,6 +432,9 @@ export function GgufLibraryPage() {
                   <MmprojPicker files={files} value={mmproj} onChange={setMmproj} />
                 </FormField>
               ) : null}
+              <FormField label="GPU layers">
+                <GpuLayersControl value={gpuLayers} onChange={setGpuLayers} />
+              </FormField>
               <FormField label="MTP" hint="Enable multi-token prediction for models that have a draft sidecar.">
                 <label style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
                   <input

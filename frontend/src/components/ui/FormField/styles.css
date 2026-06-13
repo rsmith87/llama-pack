@@ -10,3 +10,9 @@
   color: var(--ink);
   width: 100%;
 }
+
+label.form-field.mmproj-file {
+  display: flex;
+  flex-wrap: wrap;
+  flex-flow: column;
+}
