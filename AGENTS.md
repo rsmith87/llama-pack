@@ -80,6 +80,7 @@ Focused Python tests:
 ```bash
 rtk uv run pytest tests/test_api.py -v
 rtk uv run pytest tests/test_persistence_db_infra.py tests/test_alembic_config.py -v
+rtk uv run pytest tests/test_models_backfill.py -v
 ```
 
 Frontend install, test, and build:
@@ -99,6 +100,7 @@ rtk scripts/start_agent.sh
 rtk scripts/start_controller_stack.sh
 rtk scripts/start_agent_stack.sh
 rtk scripts/dev_fullstack.sh
+rtk python scripts/backfill_models_db.py --config config.yaml
 ```
 
 ## Filesystem Map
