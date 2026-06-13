@@ -1,3 +1,4 @@
+![Llama Pack Banner](llama-pack-readme-img.png)
 # Llama Pack
 
 Llama Pack is a secure local/private LLM gateway with an operations console.

@@ -12,6 +12,7 @@ import { LogModal } from "../components/LogModal";
 import { Button, Panel } from "../components/ui";
 import { MenuIcon } from "../components/MenuIcon";
 import { BrandLogo } from "../components/BrandLogo";
+import headerLogoUrl from "../images/llama-pack-logo.png";
 import { IoRefreshSharp } from "react-icons/io5";
 import { NavSidebar } from "./NavSidebar";
 
@@ -68,7 +69,7 @@ export function AppLayout() {
               <MenuIcon icon={navOpen ? "close" : "menu"} />
             </button>
             <div className="command-center">
-              <span className="command-icon" aria-hidden="true"><BrandLogo /></span>
+              <span className="command-icon" aria-hidden="true"><img src={headerLogoUrl} className="brand-logo" /></span>
               <span className="command-copy">{activePage.label}</span>
             </div>
             <div className="global-status">

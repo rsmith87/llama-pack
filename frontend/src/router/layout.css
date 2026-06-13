@@ -68,28 +68,6 @@
   display: block;
 }
 
-.logo-chip,
-.logo-neck {
-  fill: #1b241d;
-}
-
-.logo-face {
-  fill: #fff6e6;
-}
-
-.logo-eye {
-  fill: #1b241d;
-}
-
-.logo-ear,
-.logo-line {
-  fill: none;
-  stroke: #fff6e6;
-  stroke-width: 3.2;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
 .brand-lockup h1,
 .panel h2,
 .page-heading h2 {
@@ -355,8 +333,8 @@
   border-radius: 10px;
   display: grid;
   place-items: center;
-  background: var(--ink);
   color: #fff9ee;
+  background-color: transparent;
 }
 
 .command-icon .brand-logo {
