@@ -166,6 +166,56 @@ it("does not open the model modal when switching lines, models, or quants in the
   expect(screen.queryByLabelText("GPU layers slider")).not.toBeInTheDocument();
 });
 
+it("shows db-backed catalog, profiles, and deployment details in the model modal", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/library/ggufs") {
+      return Promise.resolve(okJson([
+        {
+          asset_id: "asset-1",
+          id: "file-1",
+          filename: "qwen-Q4.gguf",
+          name: "qwen-Q4",
+          path: "/models/qwen-Q4.gguf",
+          registered: true,
+          registered_as: "qwen-local",
+          model_catalog: {
+            model_name: "qwen-local",
+            ctx: 32768,
+            gpu_layers: 48,
+            reasoning: "auto",
+            prompt_template: "llama3",
+            strengths: ["coding", "tool-use"],
+            cost_tier: "medium",
+          },
+          model_profiles: [
+            { profile_key: "default", label: "Default", order: 0, kind: "default" },
+            { profile_key: "chat", label: "Chat", order: 10, kind: "interactive", ctx: 24576 },
+          ],
+          model_deployments: [
+            { deployment_name: "default", host: "127.0.0.1", port: 8088, profile_key: "default", enabled: true },
+          ],
+        },
+      ]));
+    }
+    if (url === "/lm-api/v1/nodes/models") return Promise.resolve(okJson({ nodes: [] }));
+    return Promise.resolve(okJson({ nodes: [] }));
+  }));
+  const user = userEvent.setup();
+
+  renderPage();
+  await user.click(await screen.findByRole("button", { name: "Open qwen-Q4" }));
+
+  expect(screen.getByText("Deployment")).toBeInTheDocument();
+  expect(screen.getByText("127.0.0.1:8088 (default)")).toBeInTheDocument();
+  expect(screen.getByText("Profiles")).toBeInTheDocument();
+  expect(screen.getByText("Default, Chat")).toBeInTheDocument();
+  expect(screen.getByText("Catalog")).toBeInTheDocument();
+  expect(screen.getByText(/ctx 32768/)).toBeInTheDocument();
+  expect(screen.getByText(/48 GPU layers/)).toBeInTheDocument();
+  expect(screen.getByText(/coding, tool-use/)).toBeInTheDocument();
+});
+
 it("offers gpu layers shortcuts in the add model modal", async () => {
   vi.stubGlobal(
     "fetch",

@@ -402,6 +402,13 @@ class ModelAssetStoreOrm:
             raise KeyError(f"Unknown model id: {model_id}")
         return self._model_to_dict(row)
 
+    def get_model_by_name(self, model_name: str) -> dict[str, object] | None:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(select(ModelOrm).where(ModelOrm.model_name == model_name)).scalar_one_or_none()
+        if row is None:
+            return None
+        return self._model_to_dict(row)
+
     def delete_model_by_name(self, model_name: str) -> None:
         with session_scope(self.session_factory) as session:
             row = session.execute(select(ModelOrm).where(ModelOrm.model_name == model_name)).scalar_one_or_none()

@@ -26,6 +26,43 @@ import {
   isTransferReachableNode
 } from "../../features/ggufLibrary";
 
+function asStringArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
+function catalogSummary(file: GgufFile): string | null {
+  const catalog = typeof file.model_catalog === "object" && file.model_catalog ? file.model_catalog : null;
+  if (!catalog) return null;
+  const parts: string[] = [];
+  if (typeof catalog.ctx === "number") parts.push(`ctx ${catalog.ctx}`);
+  if (typeof catalog.gpu_layers === "number") parts.push(`${catalog.gpu_layers} GPU layers`);
+  if (typeof catalog.reasoning === "string" && catalog.reasoning) parts.push(`reasoning ${catalog.reasoning}`);
+  if (typeof catalog.prompt_template === "string" && catalog.prompt_template) parts.push(`template ${catalog.prompt_template}`);
+  const strengths = asStringArray(catalog.strengths);
+  if (strengths.length) parts.push(strengths.join(", "));
+  if (typeof catalog.cost_tier === "string" && catalog.cost_tier) parts.push(`tier ${catalog.cost_tier}`);
+  return parts.length ? parts.join(" · ") : null;
+}
+
+function profileSummary(file: GgufFile): string | null {
+  const profiles = Array.isArray(file.model_profiles) ? file.model_profiles : [];
+  const labels = profiles
+    .map((profile) => (typeof profile.label === "string" && profile.label ? profile.label : typeof profile.profile_key === "string" ? profile.profile_key : ""))
+    .filter((label) => label.length > 0);
+  return labels.length ? labels.join(", ") : null;
+}
+
+function deploymentSummary(file: GgufFile): string | null {
+  const deployments = Array.isArray(file.model_deployments) ? file.model_deployments : [];
+  const deployment = deployments[0];
+  if (!deployment) return null;
+  const host = typeof deployment.host === "string" ? deployment.host : "";
+  const port = typeof deployment.port === "number" ? deployment.port : null;
+  const profileKey = typeof deployment.profile_key === "string" && deployment.profile_key ? deployment.profile_key : null;
+  if (!host || port === null) return null;
+  return `${host}:${port}${profileKey ? ` (${profileKey})` : ""}`;
+}
+
 function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: string; onChange: (v: string) => void }) {
   const candidates = files.filter((f) => fileName(f).toLowerCase().includes("mmproj"));
   const inList = candidates.some((f) => f.path === value);
@@ -425,6 +462,15 @@ export function GgufLibraryPage() {
               <div><dt>Path</dt><dd>{String(selected.path || "-")}</dd></div>
               <div><dt>Size</dt><dd>{sizeLabel(selected.size_bytes)}</dd></div>
               <div><dt>Status</dt><dd>{selected.registered ? `Added as ${selected.registered_as || modelName}` : "Available"}</dd></div>
+              {deploymentSummary(selected) ? (
+                <div><dt>Deployment</dt><dd>{deploymentSummary(selected)}</dd></div>
+              ) : null}
+              {profileSummary(selected) ? (
+                <div><dt>Profiles</dt><dd>{profileSummary(selected)}</dd></div>
+              ) : null}
+              {catalogSummary(selected) ? (
+                <div><dt>Catalog</dt><dd>{catalogSummary(selected)}</dd></div>
+              ) : null}
               {selected.vision ? (
                 <div><dt>Vision</dt><dd>{selected.mmproj ? compactPath(selected.mmproj) : "enabled (no mmproj set)"}</dd></div>
               ) : null}

@@ -288,9 +288,18 @@ class GgufLibrary:
                 if registered_model and registered_model.model_line is not None
                 else persisted_asset.get("model_line") if persisted_asset else None
             ),
+            "model_catalog": None,
+            "model_profiles": [],
+            "model_deployments": [],
         }
         if persisted_asset is not None:
             payload["asset_id"] = persisted_asset["asset_id"]
+        if registered_as:
+            persisted_model = self._persisted_model_for_name(registered_as)
+            if persisted_model is not None:
+                payload["model_catalog"] = persisted_model
+                payload["model_profiles"] = self._persisted_profiles_for_model_id(str(persisted_model["model_id"]))
+                payload["model_deployments"] = self._persisted_deployments_for_model_id(str(persisted_model["model_id"]))
         return payload
 
     def _assets_by_path(self, paths: list[Path]) -> dict[str, dict[str, object]]:
@@ -303,6 +312,24 @@ class GgufLibrary:
         if self.inventory_service is None:
             return None
         return self.inventory_service.store
+
+    def _persisted_model_for_name(self, model_name: str) -> dict[str, object] | None:
+        store = self._asset_store()
+        if store is None:
+            return None
+        return store.get_model_by_name(model_name)
+
+    def _persisted_profiles_for_model_id(self, model_id: str) -> list[dict[str, object]]:
+        store = self._asset_store()
+        if store is None:
+            return []
+        return store.list_model_profiles(model_id)
+
+    def _persisted_deployments_for_model_id(self, model_id: str) -> list[dict[str, object]]:
+        store = self._asset_store()
+        if store is None:
+            return []
+        return store.list_model_deployments(model_id)
 
     def _asset_for_path(self, path: Path) -> dict[str, object] | None:
         if self.inventory_service is not None:
