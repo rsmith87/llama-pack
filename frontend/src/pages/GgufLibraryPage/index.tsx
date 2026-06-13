@@ -6,6 +6,8 @@ import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
+import { ModelCarousel } from "../../components/ModelCarousel";
+import { ModelCarouselWithSearch } from "../../components/ModelCarousel/with-search";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
 import { PROMPT_TEMPLATE_OPTIONS } from "../../constants";
@@ -297,7 +299,20 @@ export function GgufLibraryPage() {
         ) : null}
         {appMode !== "controller" ? (
           <Panel title="Available GGUF Files" eyebrow="Discovered">
-            <div className="library-cards">{available.length ? available.map(renderCard) : <EmptyState message={loading ? "Loading GGUF files..." : "All discovered files are already added."} />}</div>
+            {available.length ? (
+              <ModelCarouselWithSearch
+                items={available}
+                slidesPerView={3}
+                placeholder="Search GGUF files…"
+                searchFields={(item) => {
+                  const f = item as GgufFile;
+                  return [fileName(f), f.path ?? "", f.model_dir ?? ""];
+                }}
+                renderItem={(item) => renderCard(item as GgufFile)}
+              />
+            ) : (
+              <EmptyState message={loading ? "Loading GGUF files..." : "All discovered files are already added."} />
+            )}
           </Panel>
         ) : null}
         {appMode !== "agent" ? (

@@ -356,7 +356,7 @@ Pi controller config essentials:
 
 ```yaml
 mode: controller
-log_dir: /home/{user_name}/llama-manager/logs
+log_dir: /home/{user_name}/llama-pack/logs
 controller_registration_key: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 

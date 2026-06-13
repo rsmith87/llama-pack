@@ -187,7 +187,7 @@ if [[ -f "$CONFIG" && "$FORCE" != "true" ]]; then
 else
   mkdir -p "$(dirname "$CONFIG")"
   sed \
-    -e "s|{user_name}|${USER:-llama-manager}|g" \
+    -e "s|{user_name}|${USER:-llama-pack}|g" \
     -e "s|node_name: .*|node_name: $NODE_NAME|g" \
     -e "s|^llama_server_bin: .*|llama_server_bin: $LLAMA_SERVER_BIN|g" \
     -e "s|^llama_cpp_dir: .*|llama_cpp_dir: $LLAMA_CPP_DIR|g" \

@@ -167,7 +167,7 @@ if [[ -f "$CONFIG" && "$FORCE" != "true" ]]; then
 else
   mkdir -p "$(dirname "$CONFIG")"
   if [[ -n "$TEMPLATE" ]]; then
-    sed "s|{user_name}|${USER:-llama-manager}|g" "$TEMPLATE" > "$CONFIG"
+    sed "s|{user_name}|${USER:-llama-pack}|g" "$TEMPLATE" > "$CONFIG"
   else
     cat > "$CONFIG" <<'YAML'
 mode: controller

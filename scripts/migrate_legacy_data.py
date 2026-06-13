@@ -15,7 +15,7 @@ Prerequisites:
 Invocation:
   python scripts/migrate_legacy_data.py [--config PATH]
 
-  --config PATH   Path to llama-manager YAML config. Defaults to the value of
+  --config PATH   Path to llama-pack YAML config. Defaults to the value of
                   LLAMA_PACK_CONFIG env var, then ./config.yaml.
 
 The utility is safe to re-run: rows that already exist (by primary key) in the
@@ -104,7 +104,7 @@ def _copy_table(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Migrate legacy data from chat_sessions.db")
-    parser.add_argument("--config", default=None, help="Path to llama-manager config YAML")
+    parser.add_argument("--config", default=None, help="Path to llama-pack config YAML")
     args = parser.parse_args()
 
     config = load_config(args.config)

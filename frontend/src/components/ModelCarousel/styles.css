@@ -1,0 +1,102 @@
+.model-carousel {
+  position: relative;
+  display: grid;
+  gap: 12px;
+}
+
+.model-carousel-viewport {
+  overflow: hidden;
+  position: relative;
+}
+
+.model-carousel-track {
+  display: flex;
+  transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: transform;
+}
+
+/* Each pane is a CSS grid — columns set inline via style prop */
+.model-carousel-pane {
+  display: grid;
+  gap: 14px;
+  flex-shrink: 0;
+  min-width: 0;
+}
+
+.model-carousel-pane-item {
+  min-width: 0;
+}
+
+/* Navigation arrows */
+.model-carousel-controls {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+}
+
+.model-carousel-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: var(--button);
+  color: var(--ink);
+  cursor: pointer;
+  font-size: 16px;
+  transition: background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+  flex-shrink: 0;
+}
+
+.model-carousel-arrow:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+  box-shadow: 0 1px 4px var(--shadow-strong);
+}
+
+.model-carousel-arrow:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.model-carousel-arrow svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* Pagination dots */
+.model-carousel-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.model-carousel-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  cursor: pointer;
+  padding: 0;
+  transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
+}
+
+.model-carousel-dot:hover {
+  border-color: var(--accent);
+  transform: scale(1.2);
+}
+
+.model-carousel-dot.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.2);
+}

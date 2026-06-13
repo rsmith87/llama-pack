@@ -564,3 +564,9 @@ def test_onboard_agent_can_reuse_local_controller_registration_key() -> None:
 
     assert "LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=\"$LLAMA_PACK_CONTROLLER_REGISTRATION_KEY\"" in contents
     assert "Using local LLAMA_PACK_CONTROLLER_REGISTRATION_KEY as outbound registration key." in contents
+
+
+def test_runtime_scripts_do_not_reference_legacy_llama_manager_name() -> None:
+    for script_name in ("onboard_agent.sh", "onboard_controller.sh", "migrate_legacy_data.py"):
+        contents = read_script(script_name)
+        assert "llama-manager" not in contents

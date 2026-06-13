@@ -3489,15 +3489,15 @@ scripts/start_controller.sh
 
 \`\`\`yaml
 mode: controller
-log_dir: /home/{user_name}/llama-manager/logs
+log_dir: /home/{user_name}/llama-pack/logs
 
 controller_registration_key: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
-controller_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/controller_state.db
-auth_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/auth_store.db
-audit_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/audit_events.db
-chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/llama-manager/logs/chat_sessions.db
+controller_db_url: sqlite+pysqlite:////home/{user_name}/llama-pack/logs/controller_state.db
+auth_db_url: sqlite+pysqlite:////home/{user_name}/llama-pack/logs/auth_store.db
+audit_db_url: sqlite+pysqlite:////home/{user_name}/llama-pack/logs/audit_events.db
+chat_sessions_db_url: sqlite+pysqlite:////home/{user_name}/llama-pack/logs/chat_sessions.db
 
 nodes:
   mac-mini:
@@ -4576,7 +4576,7 @@ Pi controller config essentials:
 
 \`\`\`yaml
 mode: controller
-log_dir: /home/{user_name}/llama-manager/logs
+log_dir: /home/{user_name}/llama-pack/logs
 controller_registration_key: \${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}
 node_heartbeat_timeout_seconds: 90
 
