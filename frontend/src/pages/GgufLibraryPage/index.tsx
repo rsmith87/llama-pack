@@ -36,7 +36,9 @@ function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: st
         >
           <option value="">— pick from library —</option>
           {candidates.map((f) => (
-            <option key={f.path} value={f.path}>{fileName(f)}</option>
+            <option key={f.path} value={f.path}>
+              {`${fileName(f)} - ${compactPath(f.path)}`}
+            </option>
           ))}
         </select>
       ) : null}
@@ -45,6 +47,32 @@ function MmprojPicker({ files, value, onChange }: { files: GgufFile[]; value: st
         value={inList ? "" : value}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function GpuLayersControl({ value, onChange }: { value: number; onChange: (v: number) => void }) {
+  return (
+    <div style={{ display: "grid", gap: "0.5rem" }}>
+      <input
+        aria-label="GPU layers slider"
+        type="range"
+        min={0}
+        max={999}
+        step={1}
+        value={value}
+        onChange={(event) => onChange(Number(event.target.value || 0))}
+      />
+      <div style={{ display: "flex", gap: "0.5rem", alignItems: "center", flexWrap: "wrap" }}>
+        <input
+          aria-label="GPU layers input"
+          value={value}
+          onChange={(event) => onChange(Number(event.target.value || 0))}
+          type="number"
+        />
+        <Button type="button" variant="ghost" onClick={() => onChange(999)}>Max GPU layers</Button>
+        <Button type="button" variant="ghost" onClick={() => onChange(0)}>CPU only</Button>
+      </div>
     </div>
   );
 }
@@ -373,7 +401,7 @@ export function GgufLibraryPage() {
                 <input value={ctx} onChange={(event) => setCtx(Number(event.target.value || 4096))} type="number" />
               </FormField>
               <FormField label="GPU layers">
-                <input value={gpuLayers} onChange={(event) => setGpuLayers(Number(event.target.value || 0))} type="number" />
+                <GpuLayersControl value={gpuLayers} onChange={setGpuLayers} />
               </FormField>
               <FormField label="Prompt template">
                 <select value={promptTemplate} onChange={(event) => setPromptTemplate(event.target.value)}>{PROMPT_TEMPLATE_OPTIONS.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}</select>
@@ -457,7 +485,7 @@ export function GgufLibraryPage() {
                 <input value={ctx} onChange={(e) => setCtx(Number(e.target.value || 4096))} type="number" />
               </FormField>
               <FormField label="GPU layers">
-                <input value={gpuLayers} onChange={(e) => setGpuLayers(Number(e.target.value || 0))} type="number" />
+                <GpuLayersControl value={gpuLayers} onChange={setGpuLayers} />
               </FormField>
               <FormField label="Prompt template">
                 <select value={promptTemplate} onChange={(e) => setPromptTemplate(e.target.value)}>{PROMPT_TEMPLATE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}</select>

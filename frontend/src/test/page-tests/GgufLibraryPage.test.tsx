@@ -54,6 +54,82 @@ it("adds an available GGUF as a configured model", async () => {
   })));
 });
 
+it("shows compact mmproj paths in the add model picker labels", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(okJson([
+      {
+        id: "file-1",
+        filename: "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+        name: "Qwen2.5-VL-7B-Instruct-Q4_K_M",
+        path: "/models/Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf",
+        registered: false,
+        vision: true,
+        mmproj: "/Users/robertsmith/Apps/llama-pack/models/vision/qwen/mmproj-F16.gguf",
+      },
+      {
+        id: "mmproj-1",
+        filename: "mmproj-F16.gguf",
+        name: "mmproj-F16",
+        path: "/Users/robertsmith/Apps/llama-pack/models/vision/qwen/mmproj-F16.gguf",
+        registered: false,
+      },
+      {
+        id: "mmproj-2",
+        filename: "mmproj-F16.gguf",
+        name: "mmproj-F16",
+        path: "/Users/robertsmith/Apps/llama-pack/models/vision/llava/mmproj-F16.gguf",
+        registered: false,
+      },
+    ])),
+  );
+  const user = userEvent.setup();
+
+  renderPage();
+  await user.click(await screen.findByRole("button", { name: "Open Qwen2.5-VL-7B-Instruct-Q4_K_M" }));
+
+  const picker = screen.getAllByRole("combobox").at(-1);
+  expect(picker).toBeDefined();
+  expect(screen.getByRole("option", { name: /vision\/qwen\/mmproj-F16\.gguf/ })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: /vision\/llava\/mmproj-F16\.gguf/ })).toBeInTheDocument();
+  expect(picker).toHaveValue("/Users/robertsmith/Apps/llama-pack/models/vision/qwen/mmproj-F16.gguf");
+});
+
+it("offers gpu layers shortcuts in the add model modal", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson([{ id: "file-1", filename: "qwen-Q4.gguf", name: "qwen-Q4", registered: false }]))
+      .mockResolvedValueOnce(okJson({ ok: true }))
+      .mockResolvedValueOnce(okJson([{ id: "file-1", filename: "qwen-Q4.gguf", name: "qwen-Q4", registered: true, registered_as: "qwen-Q4" }])),
+  );
+  const user = userEvent.setup();
+
+  renderPage();
+  await user.click(await screen.findByRole("button", { name: "Open qwen-Q4" }));
+
+  const slider = screen.getByLabelText("GPU layers slider");
+  const numeric = screen.getByLabelText("GPU layers input");
+  expect(slider).toHaveValue("0");
+  expect(numeric).toHaveValue(0);
+
+  await user.click(screen.getByRole("button", { name: "Max GPU layers" }));
+  expect(slider).toHaveValue("999");
+  expect(numeric).toHaveValue(999);
+
+  await user.click(screen.getByRole("button", { name: "CPU only" }));
+  expect(slider).toHaveValue("0");
+  expect(numeric).toHaveValue(0);
+
+  await user.click(screen.getByRole("button", { name: "Max GPU layers" }));
+  await user.click(screen.getByRole("button", { name: "Add Model" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/library/ggufs/file-1/add-model", expect.objectContaining({
+    method: "POST",
+    body: expect.stringContaining('"gpu_layers":999'),
+  })));
+});
+
 it("removes configured models and deletes GGUF files", async () => {
   let removed = false;
   let deleted = false;
