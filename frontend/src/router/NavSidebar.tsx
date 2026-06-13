@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { NavLink } from "react-router-dom";
 import { pagesBySectionForMode, type PageDefinition } from "../routes/pages";
 import { useGlobalStatus } from "../features/globalStatus/globalStatusContext";
@@ -11,11 +12,40 @@ type NavSidebarProps = {
   onClose?: () => void;
 };
 
+function loadCollapsed(mode: string | undefined): Set<string> {
+  try {
+    const raw = localStorage.getItem(`nav-collapsed-${mode || "default"}`);
+    if (raw) return new Set(JSON.parse(raw) as string[]);
+  } catch { /* ignore */ }
+  return new Set();
+}
+
 export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
   const { appMode, controllerUrl, controllerReachable, agentNodes } = useGlobalStatus();
   const { pluginPages } = usePluginNav();
   const { openLogs } = useLogModal();
   const visibleSections = pagesBySectionForMode(appMode, pluginPages);
+
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => loadCollapsed(appMode));
+
+  useEffect(() => {
+    setCollapsed(loadCollapsed(appMode));
+  }, [appMode]);
+
+  function toggleSection(key: string) {
+    setCollapsed((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      try {
+        localStorage.setItem(`nav-collapsed-${appMode || "default"}`, JSON.stringify([...next]));
+      } catch { /* ignore */ }
+      return next;
+    });
+  }
 
   return (
     <aside className="app-sidebar" aria-label="Primary">
@@ -27,38 +57,49 @@ export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
         </div>
       </div>
       <nav className="app-nav" aria-label="Primary navigation">
-        {visibleSections.map((section) => (
-          <div className="nav-section" key={section.key}>
-            <div className="nav-section-label">{section.label}</div>
-            {section.pages.map((item) => (
-              <NavLink
-                key={item.key}
-                to={item.path}
-                className={({ isActive }) =>
-                  `nav-button cursor-pointer ${isActive ? "active" : ""}`
-                }
-                onClick={onClose}
-                end={item.path === "/"}
-              >
-                <MenuIcon icon={item.icon} />
-                <span>{item.navLabel || item.label}</span>
-              </NavLink>
-            ))}
-            {section.key === "operations" ? (
+        {visibleSections.map((section) => {
+          const isCollapsed = collapsed.has(section.key);
+          return (
+            <div className={`nav-section ${isCollapsed ? "collapsed" : ""}`} key={section.key}>
               <button
-                className="nav-button modal-nav-button"
+                className="nav-section-toggle"
                 type="button"
-                onClick={() => {
-                  openLogs();
-                  onClose?.();
-                }}
+                onClick={() => toggleSection(section.key)}
+                aria-expanded={!isCollapsed}
               >
-                <MenuIcon icon="logs" />
-                <span>Logs</span>
+                <span className="nav-section-label">{section.label}</span>
+                <span className={`collapse-chevron ${isCollapsed ? "collapsed" : ""}`} aria-hidden="true" />
               </button>
-            ) : null}
-          </div>
-        ))}
+              {section.pages.map((item) => (
+                <NavLink
+                  key={item.key}
+                  to={item.path}
+                  className={({ isActive }) =>
+                    `nav-button cursor-pointer ${isActive ? "active" : ""}`
+                  }
+                  onClick={onClose}
+                  end={item.path === "/"}
+                >
+                  <MenuIcon icon={item.icon} />
+                  <span>{item.navLabel || item.label}</span>
+                </NavLink>
+              ))}
+              {section.key === "operations" ? (
+                <button
+                  className="nav-button modal-nav-button"
+                  type="button"
+                  onClick={() => {
+                    openLogs();
+                    onClose?.();
+                  }}
+                >
+                  <MenuIcon icon="logs" />
+                  <span>Logs</span>
+                </button>
+              ) : null}
+            </div>
+          );
+        })}
       </nav>
       <div className="sidebar-footer">
         {appMode === "agent" && controllerUrl ? (
