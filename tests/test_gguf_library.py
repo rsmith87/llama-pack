@@ -54,6 +54,9 @@ def test_gguf_library_lists_files_with_stable_ids(tmp_path):
             "model_reasoning": None,
             "model_reasoning_budget": None,
             "model_line": None,
+            "model_catalog": None,
+            "model_profiles": [],
+            "model_deployments": [],
         }
     ]
 
@@ -425,6 +428,9 @@ def test_gguf_library_marks_nested_transferred_copy_as_recent(tmp_path):
             "model_reasoning": None,
             "model_reasoning_budget": None,
             "model_line": None,
+            "model_catalog": None,
+            "model_profiles": [],
+            "model_deployments": [],
         }
     ]
 
