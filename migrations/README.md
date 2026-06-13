@@ -9,6 +9,7 @@ Targets:
 - `chat_sessions`
 - `downloads`
 - `benchmarks`
+- `models`
 
 Baseline branches:
 - `controller@head` -> `20260513_0001` controller baseline
@@ -17,6 +18,7 @@ Baseline branches:
 - `chat_sessions@head` -> `20260513_0004` chat sessions baseline
 - `downloads@head` -> `20260523_0001` downloads baseline
 - `benchmarks@head` -> `20260611_0004` benchmark runs plus tool-loop eval history
+- `models@head` -> `20260613_0001` model asset and model catalog baseline
 
 Choose a target with `-x db=<target>`.
 
@@ -35,6 +37,7 @@ alembic -x db=audit upgrade audit@head
 # Upgrade downloads and benchmarks stores
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
+alembic -x db=models upgrade models@head
 
 # Downgrade one step for chat sessions target
 alembic -x db=chat_sessions downgrade -1
@@ -65,6 +68,7 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
+alembic -x db=models upgrade models@head
 ```
 
 ## Existing install workflow
@@ -78,6 +82,7 @@ alembic -x db=audit stamp audit@head
 alembic -x db=chat_sessions stamp chat_sessions@head
 alembic -x db=downloads stamp downloads@head
 alembic -x db=benchmarks stamp benchmarks@head
+alembic -x db=models stamp models@head
 
 alembic -x db=controller upgrade controller@head
 alembic -x db=auth upgrade auth@head
@@ -85,4 +90,5 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
+alembic -x db=models upgrade models@head
 ```

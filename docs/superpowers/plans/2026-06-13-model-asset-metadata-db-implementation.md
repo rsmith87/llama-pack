@@ -154,20 +154,20 @@
 - [x] **Step 3: Persist enough provenance to reconcile download records with assets: `download_id`, repo id, revision, source filename, and local path**
 - [x] **Step 4: Update asset upsert logic to attach download linkage when available**
 - [x] **Step 5: Run focused tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 9: Verification And Migration Safety Pass
 
 **Files:**
 - Modify only if verification exposes a concrete issue.
 
-- [ ] **Step 1: Run focused backend tests for config, GGUF library, downloads, and models DB store**
-- [ ] **Step 2: Run the full Python test suite**
-- [ ] **Step 3: Run focused frontend tests for GGUF Library**
-- [ ] **Step 4: Run the full frontend test suite**
-- [ ] **Step 5: Verify Alembic upgrades for the new `models` target alongside existing targets**
-- [ ] **Step 6: Build the frontend**
-- [ ] **Step 7: Commit only if verification required fixes**
+- [x] **Step 1: Run focused backend tests for config, GGUF library, downloads, and models DB store**
+- [x] **Step 2: Run the full Python test suite**
+- [x] **Step 3: Run focused frontend tests for GGUF Library**
+- [x] **Step 4: Run the full frontend test suite**
+- [x] **Step 5: Verify Alembic upgrades for the new `models` target alongside existing targets**
+- [x] **Step 6: Build the frontend**
+- [x] **Step 7: Commit only if verification required fixes**
 
 ## Self-Review
 

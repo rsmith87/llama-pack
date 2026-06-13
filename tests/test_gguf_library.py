@@ -53,6 +53,7 @@ def test_gguf_library_lists_files_with_stable_ids(tmp_path):
             "model_prompt_template": None,
             "model_reasoning": None,
             "model_reasoning_budget": None,
+            "model_line": None,
         }
     ]
 
@@ -366,6 +367,7 @@ def test_gguf_library_marks_nested_transferred_copy_as_recent(tmp_path):
             "model_prompt_template": None,
             "model_reasoning": None,
             "model_reasoning_budget": None,
+            "model_line": None,
         }
     ]
 

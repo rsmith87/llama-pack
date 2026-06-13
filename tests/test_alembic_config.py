@@ -1,4 +1,5 @@
 from pathlib import Path
+import configparser
 
 import pytest
 
@@ -65,6 +66,15 @@ def test_version_locations_include_all_targets(tmp_path):
     assert str(Path(tmp_path) / "migrations" / "versions" / "chat_sessions") in rendered
     assert str(Path(tmp_path) / "migrations" / "versions" / "downloads") in rendered
     assert str(Path(tmp_path) / "migrations" / "versions" / "benchmarks") in rendered
+    assert str(Path(tmp_path) / "migrations" / "versions" / "models") in rendered
+
+
+def test_alembic_ini_lists_models_version_location():
+    parser = configparser.ConfigParser()
+    parser.read("alembic.ini")
+    version_locations = parser.get("alembic", "version_locations", raw=True)
+
+    assert "%(here)s/migrations/versions/models" in version_locations
 
 
 def test_target_metadata_for_returns_only_selected_target_tables():
