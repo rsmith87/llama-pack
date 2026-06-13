@@ -59,6 +59,7 @@ if [[ "$RUN_MIGRATIONS" != "0" ]]; then
   LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=chat_sessions upgrade chat_sessions@head
   LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=downloads upgrade downloads@head
   LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=benchmarks upgrade benchmarks@head
+  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=models upgrade models@head
 fi
 
 LLAMA_PACK_CONFIG="$CONFIG" LLAMA_PACK_MODE=controller nohup "$PYTHON" -m uvicorn llama_pack.main:app \

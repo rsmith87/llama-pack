@@ -5,12 +5,14 @@ rows from a legacy chat_sessions.db into the new downloads.db and benchmarks.db.
 
 Prerequisites:
   1. Back up all .db files before running.
-  2. Run all six Alembic migrations so that downloads.db and benchmarks.db
-     already have their schema in place:
+  2. Run all current Alembic migrations so that downloads.db, benchmarks.db,
+     and the rest of the split persistence targets already have their schema in
+     place:
 
      alembic -x db=chat_sessions upgrade chat_sessions@head
      alembic -x db=downloads upgrade downloads@head
      alembic -x db=benchmarks upgrade benchmarks@head
+     alembic -x db=models upgrade models@head
 
 Invocation:
   python scripts/migrate_legacy_data.py [--config PATH]

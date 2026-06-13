@@ -257,6 +257,7 @@ Configured database URLs:
 | `chat_sessions_db_url` | `logs/chat_sessions.db` | `chat_sessions` | durable chat sessions |
 | `downloads_db_url` | `logs/downloads.db` | `downloads` | model download records |
 | `benchmarks_db_url` | `logs/benchmarks.db` | `benchmarks` | benchmark definitions, runs, and samples |
+| `models_db_url` | `logs/models.db` | `models` | model asset inventory, GGUF classification, and model catalog links |
 
 Migration branches live in `migrations/versions/<target>/`. Always target the
 branch explicitly:
@@ -268,6 +269,7 @@ rtk uv run alembic -x db=audit upgrade audit@head
 rtk uv run alembic -x db=chat_sessions upgrade chat_sessions@head
 rtk uv run alembic -x db=downloads upgrade downloads@head
 rtk uv run alembic -x db=benchmarks upgrade benchmarks@head
+rtk uv run alembic -x db=models upgrade models@head
 ```
 
 If `-x db=` is omitted, Alembic defaults to `controller`. Avoid unqualified
