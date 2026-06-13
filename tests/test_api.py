@@ -2758,6 +2758,39 @@ def test_gguf_library_add_model_route_persists_model_asset_link(tmp_path):
     assert models[0]["asset_id"] == gguf["asset_id"]
 
 
+def test_gguf_library_reclassification_persists_and_reads_back(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_text("", encoding="utf-8")
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "hf_models_dir": str(hf_dir),
+                "log_dir": str(tmp_path / "logs"),
+            }
+        )
+    )
+    client = TestClient(app)
+
+    gguf = client.get("/lm-api/v1/library/ggufs").json()[0]
+    response = client.patch(
+        f"/lm-api/v1/library/ggufs/{gguf['asset_id']}",
+        json={"model_line": "Reasoning"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["asset_id"] == gguf["asset_id"]
+    assert response.json()["model_line"] == "Reasoning"
+
+    reread = client.get("/lm-api/v1/library/ggufs").json()[0]
+    assert reread["asset_id"] == gguf["asset_id"]
+    assert reread["model_line"] == "Reasoning"
+
+
 def test_model_favorite_toggle_sorts_models_first(tmp_path):
     config_path = tmp_path / "config.yaml"
     config_path.write_text(

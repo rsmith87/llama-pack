@@ -38,6 +38,10 @@ class UpdateModelRequest(BaseModel):
     draft_model_path: str | None = None
 
 
+class UpdateGgufAssetRequest(BaseModel):
+    model_line: str | None = None
+
+
 router = APIRouter(prefix="/library")
 
 
@@ -74,6 +78,23 @@ def add_gguf_model(
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.patch("/ggufs/{asset_ref}")
+def update_gguf_asset(
+    asset_ref: str,
+    body: UpdateGgufAssetRequest,
+    library: GgufLibrary = Depends(get_gguf_library),
+):
+    try:
+        return library.update_asset_metadata(
+            asset_ref,
+            model_line=body.model_line,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except RuntimeError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 

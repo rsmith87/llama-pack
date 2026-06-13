@@ -209,6 +209,22 @@ class GgufLibrary:
             "unregistered_models": registered_names,
         }
 
+    def update_asset_metadata(
+        self,
+        asset_ref: str,
+        *,
+        model_line: str | None = None,
+    ) -> dict[str, object]:
+        store = self._asset_store()
+        if store is None:
+            raise RuntimeError("Model asset inventory service is unavailable")
+        asset = self._find_asset(asset_ref)
+        updated = store.update_asset_metadata(asset["asset_id"], model_line=model_line)
+        for model_name, model in self.config.models.items():
+            if Path(model.path).resolve() == Path(str(updated["canonical_path"])).resolve():
+                model.model_line = model_line
+        return updated
+
     def file_id(self, path: Path) -> str:
         resolved = str(path)
         return hashlib.sha256(resolved.encode("utf-8")).hexdigest()[:16]
@@ -266,6 +282,11 @@ class GgufLibrary:
             "model_prompt_template": registered_model.prompt_template if registered_model else None,
             "model_reasoning": registered_model.reasoning if registered_model else None,
             "model_reasoning_budget": registered_model.reasoning_budget if registered_model else None,
+            "model_line": (
+                registered_model.model_line
+                if registered_model and registered_model.model_line is not None
+                else persisted_asset.get("model_line") if persisted_asset else None
+            ),
         }
         if persisted_asset is not None:
             payload["asset_id"] = persisted_asset["asset_id"]
@@ -289,6 +310,19 @@ class GgufLibrary:
         if store is None:
             return None
         return store.get_asset_by_path(str(path.resolve()))
+
+    def _find_asset(self, asset_ref: str) -> dict[str, object]:
+        store = self._asset_store()
+        if store is None:
+            raise RuntimeError("Model asset inventory service is unavailable")
+        try:
+            return store.get_asset(asset_ref)
+        except KeyError:
+            path = self._path_for_id(asset_ref)
+            asset = self._asset_for_path(path)
+            if asset is None:
+                raise KeyError(f"Unknown GGUF asset: {asset_ref}")
+            return asset
 
     def _sync_model_record(self, model_name: str) -> None:
         store = self._asset_store()

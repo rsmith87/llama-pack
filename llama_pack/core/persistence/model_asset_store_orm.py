@@ -89,7 +89,8 @@ class ModelAssetStoreOrm:
                 row.source_revision = source_revision
                 row.source_filename = source_filename
                 row.download_id = download_id
-                row.model_line = model_line
+                if model_line is not None:
+                    row.model_line = model_line
                 row.last_seen_at = now
                 row.last_scanned_at = now
                 row.missing = 0
@@ -117,6 +118,22 @@ class ModelAssetStoreOrm:
         if row is None:
             return None
         return self._asset_to_dict(row)
+
+    def update_asset_metadata(
+        self,
+        asset_id: str,
+        *,
+        model_line: str | None = None,
+    ) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(ModelAssetOrm).where(ModelAssetOrm.asset_id == asset_id)
+            ).scalar_one_or_none()
+            if row is None:
+                raise KeyError(f"Unknown asset id: {asset_id}")
+            row.model_line = model_line
+            session.flush()
+        return self.get_asset(asset_id)
 
     def mark_missing_assets(self, *, missing_asset_ids: set[str]) -> int:
         if not missing_asset_ids:

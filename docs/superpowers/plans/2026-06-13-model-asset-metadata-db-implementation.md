@@ -110,7 +110,7 @@
 - [x] **Step 3: Extend add/update/remove/delete GGUF workflows to maintain `models` rows and asset links while keeping YAML launch config behavior intact**
 - [x] **Step 4: Add an optional `model_line` field to `ModelConfig` for future parity, without switching launch reads to DB**
 - [x] **Step 5: Run focused backend tests and verify they pass**
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ### Task 6: Add Backend API For GGUF Asset Reclassification
 
@@ -119,11 +119,11 @@
 - Modify: `llama_pack/api/dependencies.py`
 - Modify: `tests/test_api.py`
 
-- [ ] **Step 1: Write failing API tests for updating an asset `model_line` and re-reading it through `/library/ggufs`**
-- [ ] **Step 2: Run the focused API tests and verify the reclassification route is missing**
-- [ ] **Step 3: Add a typed backend route to update GGUF asset metadata by `asset_id` or file id**
-- [ ] **Step 4: Make GGUF list responses include persisted `model_line` and stable `asset_id` fields**
-- [ ] **Step 5: Run focused API tests and verify they pass**
+- [x] **Step 1: Write failing API tests for updating an asset `model_line` and re-reading it through `/library/ggufs`**
+- [x] **Step 2: Run the focused API tests and verify the reclassification route is missing**
+- [x] **Step 3: Add a typed backend route to update GGUF asset metadata by `asset_id` or file id**
+- [x] **Step 4: Make GGUF list responses include persisted `model_line` and stable `asset_id` fields**
+- [x] **Step 5: Run focused API tests and verify they pass**
 - [ ] **Step 6: Commit**
 
 ### Task 7: Wire The GGUF Library Frontend To Persist Reclassification
