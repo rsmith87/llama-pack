@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from llama_pack.core.chat.proxy import ChatProxy
     from llama_pack.core.chat.scheduler import ChatScheduler
     from llama_pack.core.memory.store import ChromaMemoryStore
+    from llama_pack.core.model_assets.catalog_service import ModelCatalogService
     from llama_pack.core.model_assets.conversions import ConversionManager
     from llama_pack.core.model_assets.library import GgufLibrary
     from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
@@ -32,6 +33,10 @@ def get_config(request: Request) -> AppConfig:
 
 def get_process_manager(request: Request) -> ProcessManager:
     return request.app.state.process_manager
+
+
+def get_model_catalog_service(request: Request) -> ModelCatalogService:
+    return request.app.state.model_catalog_service
 
 
 def get_conversion_manager(request: Request) -> ConversionManager:

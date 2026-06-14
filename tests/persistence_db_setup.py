@@ -14,7 +14,13 @@ from llama_pack.core.persistence.db_infra import (
     sqlite_url_for_path,
 )
 from llama_pack.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm, ChatSessionOrm, ModelDownloadOrm, ToolLoopEvalCaseOrm, ToolLoopEvalRunOrm
-from llama_pack.core.persistence.models.model_asset import ModelAssetOrm, ModelDeploymentOrm, ModelOrm, ModelProfileOrm
+from llama_pack.core.persistence.models.model_asset import (
+    ModelAssetOrm,
+    ModelAssetProvenanceOrm,
+    ModelDeploymentOrm,
+    ModelOrm,
+    ModelProfileOrm,
+)
 from llama_pack.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
@@ -33,7 +39,7 @@ TARGET_REVISIONS = {
     "chat_sessions": "20260523_0007",
     "downloads": "20260523_0001",
     "benchmarks": "20260612_0006",
-    "models": "20260613_0002",
+    "models": "20260614_0002",
 }
 LATEST_REVISION = TARGET_REVISIONS["chat_sessions"]
 
@@ -104,6 +110,7 @@ def prepare_models_db(db_path: Path, revision: str = TARGET_REVISIONS["models"])
         [
             ModelAssetOrm.__table__,
             ModelOrm.__table__,
+            ModelAssetProvenanceOrm.__table__,
             ModelProfileOrm.__table__,
             ModelDeploymentOrm.__table__,
         ],

@@ -128,7 +128,11 @@ class ChatProxy:
             "stream": stream,
             "chat_template_kwargs": {"enable_thinking": bool(payload.get("reasoning", False))},
         }
-        model_template = self.config.models.get(model_name).prompt_template if model_name in self.config.models else None
+        model_template = None
+        try:
+            model_template = self.process_manager.catalog_service.runtime_model(model_name).prompt_template
+        except Exception:
+            model_template = None
         request_payload = self._prompt_templates.apply(model_name, model_template, request_payload, payload)
         for key in ("top_p", "top_k", "min_p", "repeat_penalty", "seed", "stop", "json_schema", "grammar", "tools", "tool_choice"):
             if payload.get(key) is not None:

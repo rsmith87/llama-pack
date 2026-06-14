@@ -70,6 +70,7 @@ async def route_preview(body: RoutePreviewRequest, request: Request) -> dict[str
     service = RoutePreviewService(
         config=request.app.state.config,
         node_registry=getattr(request.app.state, "node_registry", None),
+        catalog_service=getattr(request.app.state, "model_catalog_service", None),
     )
     return await service.preview(body)
 

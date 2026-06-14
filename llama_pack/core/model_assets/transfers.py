@@ -6,13 +6,15 @@ from pathlib import Path
 from typing import Any, BinaryIO
 
 from llama_pack.core.config import AppConfig
-from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.model_assets.library import GgufLibrary, compute_file_id
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 
 
 class TransferManager:
-    def __init__(self, config: AppConfig):
+    def __init__(self, config: AppConfig, inventory_service: ModelAssetInventoryService | None = None):
         self.config = config
-        self.library = GgufLibrary(config)
+        self.library = GgufLibrary(config, inventory_service) if inventory_service else None
+        self._inventory_service = inventory_service
         self._grants: dict[str, dict[str, str]] = {}
 
     def build_manifest(self, file_id: str) -> dict[str, Any]:
@@ -41,11 +43,18 @@ class TransferManager:
             mmproj = inferred_mmproj
             if mmproj.exists() and self._is_under_model_roots(mmproj):
                 paths.add(mmproj)
-        for model in self.config.models.values():
-            if Path(model.path) == source and model.mmproj:
-                mmproj = Path(model.mmproj)
-                if mmproj.exists() and self._is_under_model_roots(mmproj):
-                    paths.add(mmproj)
+        if self._inventory_service is not None:
+            store = self._inventory_service.store
+            source_asset = store.get_asset_by_path(str(source.resolve()))
+            if source_asset is not None:
+                for model in store.list_models():
+                    if model.get("asset_id") == source_asset["asset_id"]:
+                        mmproj_path = model.get("mmproj")
+                        if mmproj_path:
+                            mmproj = Path(mmproj_path)
+                            if mmproj.exists() and self._is_under_model_roots(mmproj):
+                                paths.add(mmproj)
+                        break
         return sorted(paths, key=lambda item: str(item.relative_to(self._root_for_path(item))).lower())
 
     def _manifest_file(self, path: Path, root: Path) -> dict[str, Any]:
@@ -67,9 +76,12 @@ class TransferManager:
         return path.name != ".DS_Store"
 
     def _path_for_id(self, file_id: str) -> Path:
-        for path in self.library._gguf_paths():
-            if self.library.file_id(path) == file_id:
-                return path
+        for root in self.config.model_roots:
+            if not root.exists():
+                continue
+            for path in root.rglob("*.gguf"):
+                if path.is_file() and compute_file_id(path) == file_id:
+                    return path
         raise KeyError(f"Unknown GGUF file id: {file_id}")
 
     def file_for_token(self, token: str) -> Path:

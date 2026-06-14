@@ -25,7 +25,7 @@ class CapabilityInspector:
             model_known = self.config.mode == "controller"
             if not model_known:
                 raise
-        model_cfg = self.config.models.get(model_name)
+        model_cfg = self._runtime_model_config(model_name)
         model_cfg_payload = model_cfg.model_dump(mode="json") if model_cfg is not None else {"model": model_name}
         model_config_hash = hashlib.sha256(json.dumps(model_cfg_payload, sort_keys=True, separators=(",", ":")).encode("utf-8")).hexdigest()
         supports_json_schema = False
@@ -54,7 +54,7 @@ class CapabilityInspector:
                 "stream": True,
                 "reasoning": True,
                 "embeddings": True,
-                "vision": bool(getattr(self.config.models.get(model_name), "vision", False)),
+                "vision": bool(getattr(model_cfg, "vision", False)),
                 "sampling": {
                     "temperature": True,
                     "max_tokens": True,
@@ -76,3 +76,9 @@ class CapabilityInspector:
                 "port": getattr(model_cfg, "port", None) if model_cfg is not None else None,
             },
         }
+
+    def _runtime_model_config(self, model_name: str) -> Any | None:
+        try:
+            return self.process_manager.catalog_service.runtime_model(model_name)
+        except Exception:
+            return None

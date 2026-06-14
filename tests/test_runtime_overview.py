@@ -1085,20 +1085,6 @@ def test_route_preview_prefers_model_strength_match_over_lower_priority(tmp_path
             {
                 "mode": "controller",
                 "log_dir": str(tmp_path),
-                "models": {
-                    "tiny": {
-                        "path": "/models/tiny.gguf",
-                        "port": 8101,
-                        "strengths": ["general"],
-                        "cost_tier": "low",
-                    },
-                    "qwen-coder": {
-                        "path": "/models/qwen-coder.gguf",
-                        "port": 8102,
-                        "strengths": ["coding", "structured"],
-                        "cost_tier": "medium",
-                    },
-                },
                 "nodes": {
                     "fast": {
                         "url": "http://fast",
@@ -1112,6 +1098,52 @@ def test_route_preview_prefers_model_strength_match_over_lower_priority(tmp_path
             }
         ),
         controller_request=fake_request,
+    )
+    tiny_asset = app.state.model_asset_store.upsert_asset(
+        canonical_path="/models/tiny.gguf",
+        filename="tiny.gguf",
+        display_name="tiny",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    tiny = app.state.model_asset_store.upsert_model(
+        model_name="tiny",
+        asset_id=tiny_asset["asset_id"],
+        config_source="db",
+        ctx=8192,
+        strengths=["general"],
+        cost_tier="low",
+    )
+    app.state.model_asset_store.upsert_model_deployment(
+        model_id=str(tiny["model_id"]),
+        deployment_name="default",
+        node_name=None,
+        host="127.0.0.1",
+        port=8101,
+    )
+    coder_asset = app.state.model_asset_store.upsert_asset(
+        canonical_path="/models/qwen-coder.gguf",
+        filename="qwen-coder.gguf",
+        display_name="qwen-coder",
+        size_bytes=20,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    coder = app.state.model_asset_store.upsert_model(
+        model_name="qwen-coder",
+        asset_id=coder_asset["asset_id"],
+        config_source="db",
+        ctx=8192,
+        strengths=["coding", "structured"],
+        cost_tier="medium",
+    )
+    app.state.model_asset_store.upsert_model_deployment(
+        model_id=str(coder["model_id"]),
+        deployment_name="default",
+        node_name=None,
+        host="127.0.0.1",
+        port=8102,
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
@@ -1143,20 +1175,6 @@ def test_route_preview_applies_profile_metadata_over_base_model(tmp_path):
             {
                 "mode": "controller",
                 "log_dir": str(tmp_path),
-                "models": {
-                    "qwen": {
-                        "path": "/models/qwen.gguf",
-                        "port": 8101,
-                        "strengths": ["coding"],
-                        "cost_tier": "high",
-                        "profiles": {
-                            "cheap": {
-                                "strengths": ["summarization"],
-                                "cost_tier": "low",
-                            }
-                        },
-                    },
-                },
                 "nodes": {
                     "mac": {
                         "url": "http://mac",
@@ -1166,6 +1184,38 @@ def test_route_preview_applies_profile_metadata_over_base_model(tmp_path):
             }
         ),
         controller_request=fake_request,
+    )
+    asset = app.state.model_asset_store.upsert_asset(
+        canonical_path="/models/qwen.gguf",
+        filename="qwen.gguf",
+        display_name="qwen",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    model = app.state.model_asset_store.upsert_model(
+        model_name="qwen",
+        asset_id=asset["asset_id"],
+        config_source="db",
+        ctx=8192,
+        strengths=["coding"],
+        cost_tier="high",
+    )
+    app.state.model_asset_store.upsert_model_deployment(
+        model_id=str(model["model_id"]),
+        deployment_name="default",
+        node_name=None,
+        host="127.0.0.1",
+        port=8101,
+    )
+    app.state.model_asset_store.upsert_model_profile(
+        model_id=str(model["model_id"]),
+        profile_key="cheap",
+        label="Cheap",
+        order=10,
+        kind=None,
+        strengths=["summarization"],
+        cost_tier="low",
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)

@@ -23,7 +23,7 @@ class ProfileActivationService:
         if target not in {"", "auto", "local"}:
             raise ProfileActivationError("Only local profile activation is supported in this endpoint")
         identity = f"{family}:{profile}"
-        self.config.effective_model_config(identity)
+        self.process_manager._get_model(identity)
         statuses = self.process_manager.list_statuses()
         desired = self._status_for_identity(statuses, identity)
         if desired and desired.get("running") is True:

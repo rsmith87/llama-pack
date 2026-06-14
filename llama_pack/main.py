@@ -45,6 +45,7 @@ from llama_pack.core.chat.scheduler import ChatScheduler
 from llama_pack.core.memory.store import ChromaMemoryStore
 from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
 from llama_pack.core.model_assets.conversions import ConversionManager
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
 from llama_pack.core.model_assets.library import GgufLibrary
 from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.downloads import DownloadManager
@@ -214,9 +215,6 @@ def _configure_app_state(
 ) -> None:
     app.state.config = app_config
     app.state.plugin_registry = load_plugins(app_config)
-    app.state.process_manager = process_manager or ProcessManager(app_config)
-    app.state.conversion_manager = conversion_manager or ConversionManager(app_config)
-    app.state.quantization_manager = quantization_manager or QuantizationManager(app_config)
     persistent_config = app_config.config_source not in {"(defaults)", "(in-memory)"}
     store = (
         JsonFileStore(app_config.log_dir / "controller_nodes_state.json")
@@ -227,6 +225,24 @@ def _configure_app_state(
     )
     app.state.node_registry = NodeRegistry(app_config, request=controller_request, store=store)
     app.state.orchestrator = _build_orchestrator(app_config)
+    auth_urls = resolve_persistence_urls(app_config)
+    app.state.chat_session_store = ChatSessionStoreOrm(db_url=auth_urls.chat_sessions)
+    app.state.model_download_store = ModelDownloadStoreOrm(db_url=auth_urls.downloads)
+    try:
+        app.state.model_asset_store = ModelAssetStoreOrm(db_url=auth_urls.models)
+        app.state.model_catalog_service = ModelCatalogService(app.state.model_asset_store)
+        app.state.model_catalog_service.validate_ready()
+    except Exception as exc:
+        raise RuntimeError(
+            "DB-authoritative model persistence requires a working database and migrated schema. "
+            "Run migrations first: alembic -x db=models upgrade models@head"
+        ) from exc
+    app.state.process_manager = process_manager or ProcessManager(
+        app_config,
+        catalog_service=app.state.model_catalog_service,
+    )
+    app.state.conversion_manager = conversion_manager or ConversionManager(app_config)
+    app.state.quantization_manager = quantization_manager or QuantizationManager(app_config)
     app.state.chat_proxy = ChatProxy(
         app.state.process_manager,
         app_config,
@@ -253,24 +269,19 @@ def _configure_app_state(
         model_artifact_presence=lambda node, model: _thread_model_artifact_presence(app.state.node_registry, node, model),
         node_startup_allowed=lambda node, model: _thread_node_startup_allowed(app.state.node_registry, node, model),
     )
-    auth_urls = resolve_persistence_urls(app_config)
-    app.state.chat_session_store = ChatSessionStoreOrm(db_url=auth_urls.chat_sessions)
-    app.state.model_download_store = ModelDownloadStoreOrm(db_url=auth_urls.downloads)
-    try:
-        app.state.model_asset_store = ModelAssetStoreOrm(db_url=auth_urls.models)
-        app.state.model_asset_inventory_service = ModelAssetInventoryService(
-            app_config,
-            app.state.model_asset_store,
-            download_store=app.state.model_download_store,
-        )
-    except RuntimeError:
-        app.state.model_asset_store = None
-        app.state.model_asset_inventory_service = None
+    app.state.model_asset_inventory_service = ModelAssetInventoryService(
+        app_config,
+        app.state.model_asset_store,
+        download_store=app.state.model_download_store,
+    )
     app.state.gguf_library = gguf_library or GgufLibrary(
         app_config,
         inventory_service=app.state.model_asset_inventory_service,
     )
-    app.state.transfer_manager = TransferManager(app_config)
+    app.state.transfer_manager = TransferManager(
+        app_config,
+        inventory_service=app.state.model_asset_inventory_service,
+    )
     app.state.download_manager = DownloadManager(app_config, app.state.model_download_store)
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     if app_config.mode == "controller":
@@ -288,6 +299,7 @@ def _configure_app_state(
         download_manager=app.state.download_manager,
         gguf_library=app.state.gguf_library,
         process_manager=app.state.process_manager,
+        transfer_manager=app.state.transfer_manager,
     )
     app.state.controller_sweeper_task = None
     app.state.controller_sweeper_stop_event = asyncio.Event()

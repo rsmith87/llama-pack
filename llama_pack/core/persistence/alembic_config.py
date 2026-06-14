@@ -46,7 +46,7 @@ TARGET_TABLES: dict[str, tuple[str, ...]] = {
         "tool_loop_eval_cases",
         "tool_loop_eval_runs",
     ),
-    "models": ("model_assets", "models", "model_profiles", "model_deployments"),
+    "models": ("model_assets", "models", "model_asset_provenance", "model_profiles", "model_deployments"),
 }
 
 

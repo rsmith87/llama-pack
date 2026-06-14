@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from sqlalchemy import create_engine, inspect
 
 from llama_pack.core.persistence.alembic_config import (
     head_revision_for,
@@ -43,6 +44,7 @@ def test_version_locations_include_models_target(tmp_path: Path):
 def test_target_metadata_for_models_returns_only_models_tables():
     assert set(target_metadata_for("models").tables) == {
         "model_assets",
+        "model_asset_provenance",
         "model_deployments",
         "model_profiles",
         "models",
@@ -226,3 +228,219 @@ def test_model_asset_store_crud_and_model_linking(tmp_path: Path):
 def test_model_asset_store_requires_models_schema(tmp_path: Path):
     with pytest.raises(RuntimeError, match="Run migrations first: alembic -x db=models upgrade models@head"):
         ModelAssetStoreOrm(db_path=tmp_path / "models.db")
+
+
+def test_upsert_model_persists_mmproj_and_mtp_links(tmp_path: Path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+
+    base = store.upsert_asset(
+        canonical_path="/models/base.gguf",
+        filename="base.gguf",
+        display_name="Base",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    mmproj = store.upsert_asset(
+        canonical_path="/models/base-mmproj.gguf",
+        filename="base-mmproj.gguf",
+        display_name="Base mmproj",
+        size_bytes=5,
+        asset_kind="mmproj",
+        source_type="download",
+    )
+    draft_asset = store.upsert_asset(
+        canonical_path="/models/base-draft.gguf",
+        filename="base-draft.gguf",
+        display_name="Base Draft",
+        size_bytes=8,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    draft_model = store.upsert_model(
+        model_name="base-draft",
+        asset_id=draft_asset["asset_id"],
+        config_source="db",
+        supports_mtp=False,
+    )
+
+    model = store.upsert_model(
+        model_name="base",
+        asset_id=base["asset_id"],
+        config_source="db",
+        mmproj_asset_id=mmproj["asset_id"],
+        mtp_draft_asset_id=draft_asset["asset_id"],
+        mtp_draft_model_id=draft_model["model_id"],
+        supports_mtp=True,
+    )
+
+    assert model["mmproj_asset_id"] == mmproj["asset_id"]
+    assert model["mtp_draft_asset_id"] == draft_asset["asset_id"]
+    assert model["mtp_draft_model_id"] == draft_model["model_id"]
+
+    linked = store.get_model_companion_links(model["model_id"])
+    assert linked == {
+        "model_id": model["model_id"],
+        "mmproj_asset_id": mmproj["asset_id"],
+        "mtp_draft_asset_id": draft_asset["asset_id"],
+        "mtp_draft_model_id": draft_model["model_id"],
+    }
+
+
+def test_record_asset_provenance_persists_and_lists_rows(tmp_path: Path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+
+    source = store.upsert_asset(
+        canonical_path="/models/source.gguf",
+        filename="source.gguf",
+        display_name="Source",
+        size_bytes=12,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    output = store.upsert_asset(
+        canonical_path="/models/output-q4.gguf",
+        filename="output-q4.gguf",
+        display_name="Output Q4",
+        size_bytes=9,
+        asset_kind="gguf",
+        source_type="quantization",
+    )
+    source_model = store.upsert_model(
+        model_name="source-model",
+        asset_id=source["asset_id"],
+        config_source="db",
+    )
+
+    recorded = store.record_asset_provenance(
+        output_asset_id=output["asset_id"],
+        source_asset_id=source["asset_id"],
+        source_model_id=source_model["model_id"],
+        job_kind="quantization",
+        job_ref="job-123",
+        detail={"preset": "q4_k_m"},
+    )
+
+    assert recorded["output_asset_id"] == output["asset_id"]
+    assert recorded["source_asset_id"] == source["asset_id"]
+    assert recorded["source_model_id"] == source_model["model_id"]
+    assert recorded["job_kind"] == "quantization"
+    assert recorded["job_ref"] == "job-123"
+    assert recorded["detail"] == {"preset": "q4_k_m"}
+
+    rows = store.list_asset_provenance(output["asset_id"])
+    assert rows == [recorded]
+
+
+def test_update_model_companion_links_is_patch_safe(tmp_path: Path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+
+    base = store.upsert_asset(
+        canonical_path="/models/base.gguf",
+        filename="base.gguf",
+        display_name="Base",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    mmproj = store.upsert_asset(
+        canonical_path="/models/base-mmproj.gguf",
+        filename="base-mmproj.gguf",
+        display_name="Base mmproj",
+        size_bytes=5,
+        asset_kind="mmproj",
+        source_type="download",
+    )
+    draft_asset = store.upsert_asset(
+        canonical_path="/models/base-draft.gguf",
+        filename="base-draft.gguf",
+        display_name="Base Draft",
+        size_bytes=8,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    model = store.upsert_model(
+        model_name="base",
+        asset_id=base["asset_id"],
+        config_source="db",
+        mmproj_asset_id=mmproj["asset_id"],
+    )
+
+    updated = store.update_model_companion_links(
+        model["model_id"],
+        mtp_draft_asset_id=draft_asset["asset_id"],
+    )
+
+    assert updated["mmproj_asset_id"] == mmproj["asset_id"]
+    assert updated["mtp_draft_asset_id"] == draft_asset["asset_id"]
+
+
+def test_companion_and_provenance_links_reject_unknown_ids(tmp_path: Path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+
+    base = store.upsert_asset(
+        canonical_path="/models/base.gguf",
+        filename="base.gguf",
+        display_name="Base",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    model = store.upsert_model(
+        model_name="base",
+        asset_id=base["asset_id"],
+        config_source="db",
+    )
+
+    with pytest.raises(KeyError, match="Unknown asset id for mmproj_asset_id"):
+        store.update_model_companion_links(model["model_id"], mmproj_asset_id="missing-asset")
+
+    with pytest.raises(KeyError, match="Unknown asset id for output_asset_id"):
+        store.record_asset_provenance(
+            output_asset_id="missing-output",
+            source_asset_id=None,
+            source_model_id=None,
+            job_kind="download",
+            job_ref="job-1",
+            detail={},
+        )
+
+
+def test_models_alembic_upgrade_creates_catalog_expansion_schema(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    from argparse import Namespace
+    from alembic import command
+    from alembic.config import Config
+
+    config_path = tmp_path / "config.yaml"
+    db_path = tmp_path / "models.db"
+    config_path.write_text(
+        "\n".join(
+            [
+                f"log_dir: {tmp_path / 'logs'}",
+                f"models_db_url: sqlite+pysqlite:///{db_path}",
+            ]
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("LLAMA_PACK_CONFIG", str(config_path))
+
+    alembic_cfg = Config("alembic.ini")
+    alembic_cfg.cmd_opts = Namespace(x=["db=models"])
+    command.upgrade(alembic_cfg, "models@head")
+
+    engine = create_engine(f"sqlite+pysqlite:///{db_path}")
+    inspector = inspect(engine)
+    try:
+        assert "model_asset_provenance" in inspector.get_table_names()
+        model_columns = {column["name"] for column in inspector.get_columns("models")}
+        assert {"mmproj_asset_id", "mtp_draft_asset_id", "mtp_draft_model_id"} <= model_columns
+    finally:
+        engine.dispose()

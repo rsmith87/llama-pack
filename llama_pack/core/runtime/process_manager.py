@@ -10,8 +10,9 @@ from pathlib import Path
 from typing import Callable, IO, Iterator
 from urllib.parse import quote
 
-from llama_pack.core.config import AppConfig, ModelConfig, save_config
-from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.config import AppConfig, ModelConfig
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
+from llama_pack.core.model_assets.library import compute_file_id
 from llama_pack.providers.llama_cpp import build_llama_server_command
 
 
@@ -94,8 +95,14 @@ class _ProfileMetadata:
 
 
 class ProcessManager:
-    def __init__(self, config: AppConfig, popen: PopenFactory = subprocess.Popen):
+    def __init__(
+        self,
+        config: AppConfig,
+        catalog_service: ModelCatalogService,
+        popen: PopenFactory = subprocess.Popen,
+    ):
         self.config = config
+        self.catalog_service = catalog_service
         self._popen = popen
         self._processes: dict[str, subprocess.Popen] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
@@ -103,23 +110,7 @@ class ProcessManager:
         self.config.log_dir.mkdir(parents=True, exist_ok=True)
 
     def list_statuses(self) -> list[dict[str, object]]:
-        identities: list[str] = []
-        for family in sorted(
-            self.config.models,
-            key=lambda item: (not self.config.models[item].favorite, item.lower()),
-        ):
-            model = self.config.models[family]
-            if model.profiles:
-                identities.extend(
-                    f"{family}:{profile_key}"
-                    for profile_key, _profile in sorted(
-                        model.profiles.items(),
-                        key=lambda item: (item[1].order, item[0].lower()),
-                    )
-                )
-            else:
-                identities.append(family)
-        return [self.status(name).to_dict() for name in identities]
+        return [self.status(name).to_dict() for name in self.catalog_service.list_model_identities()]
 
     def status(self, name: str) -> ModelStatus:
         model = self._get_model(name)
@@ -147,21 +138,14 @@ class ProcessManager:
             kv_cache_policy=profile_metadata.kv_cache_policy,
             resource_tier=profile_metadata.resource_tier,
             favorite=model.favorite,
-            file_id=GgufLibrary(self.config).file_id(Path(model.path)),
+            file_id=compute_file_id(Path(model.path)),
             vision=model.vision,
             mmproj=model.mmproj,
         )
 
     def set_favorite(self, name: str, favorite: bool) -> ModelStatus:
         self._get_model(name)
-        family = name.split(":", 1)[0]
-        try:
-            model = self.config.models[family]
-        except KeyError as exc:
-            raise KeyError(f"Unknown model: {name}") from exc
-        model.favorite = favorite
-        if self.config.config_source not in {"(defaults)", "(in-memory)"}:
-            save_config(self.config)
+        self.catalog_service.set_favorite(name, favorite)
         return self.status(name)
 
     def start(self, name: str) -> ModelStatus:
@@ -235,7 +219,7 @@ class ProcessManager:
 
     def _get_model(self, name: str) -> ModelConfig:
         try:
-            return self.config.effective_model_config(name)
+            return self.catalog_service.runtime_model(name)
         except KeyError as exc:
             raise KeyError(f"Unknown model: {name}") from exc
 
@@ -262,7 +246,7 @@ class ProcessManager:
 
         family, profile_key = name.split(":", 1)
         try:
-            profile = self.config.models[family].profiles[profile_key]
+            profile = self.catalog_service.runtime_model(family).profiles[profile_key]
         except KeyError as exc:
             raise KeyError(f"Unknown model: {name}") from exc
         return _ProfileMetadata(

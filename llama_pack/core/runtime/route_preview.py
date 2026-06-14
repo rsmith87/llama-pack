@@ -5,6 +5,7 @@ from typing import Any
 from pydantic import BaseModel, Field
 
 from llama_pack.core.config.models import AppConfig
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
 
 
 class RoutePreviewRequirements(BaseModel):
@@ -23,9 +24,10 @@ class RoutePreviewRequest(BaseModel):
 
 
 class RoutePreviewService:
-    def __init__(self, config: AppConfig, node_registry: Any) -> None:
+    def __init__(self, config: AppConfig, node_registry: Any, catalog_service: ModelCatalogService | None = None) -> None:
         self.config = config
         self.node_registry = node_registry
+        self.catalog_service = catalog_service
 
     async def preview(self, request: RoutePreviewRequest) -> dict[str, Any]:
         candidates = []
@@ -163,22 +165,12 @@ class RoutePreviewService:
         return "start_now" if running_count < max_running else "defer"
 
     def _model_metadata(self, model_name: str, model_info: dict[str, Any] | None) -> dict[str, Any]:
-        base_name, _, profile_name = model_name.partition(":")
-        model_cfg = self.config.models.get(base_name) or self.config.models.get(model_name)
-        profile_cfg = model_cfg.profiles.get(profile_name) if model_cfg is not None and profile_name else None
+        model_cfg = self._runtime_model(model_name)
 
         strengths = list(model_cfg.strengths) if model_cfg is not None else []
         cost_tier = model_cfg.cost_tier if model_cfg is not None else None
         ctx = model_cfg.ctx if model_cfg is not None else None
         supports_json_schema = model_cfg.supports_json_schema if model_cfg is not None else None
-
-        if profile_cfg is not None:
-            if profile_cfg.strengths:
-                strengths = list(profile_cfg.strengths)
-            if profile_cfg.cost_tier is not None:
-                cost_tier = profile_cfg.cost_tier
-            if profile_cfg.ctx is not None:
-                ctx = profile_cfg.ctx
 
         if model_info is not None:
             if isinstance(model_info.get("strengths"), list):
@@ -201,6 +193,14 @@ class RoutePreviewService:
         if not isinstance(models, list):
             return []
         return [item for item in models if isinstance(item, dict)]
+
+    def _runtime_model(self, model_name: str) -> Any | None:
+        if self.catalog_service is None:
+            return None
+        try:
+            return self.catalog_service.runtime_model(model_name)
+        except Exception:
+            return None
 
 
 def _selected_payload(candidate: dict[str, Any] | None) -> dict[str, Any] | None:

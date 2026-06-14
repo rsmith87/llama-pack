@@ -43,16 +43,17 @@ class AgentWorker:
         download_manager: WorkerDownloadManager | None = None,
         gguf_library: Any | None = None,
         process_manager: Any | None = None,
+        transfer_manager: Any | None = None,
     ):
         self.config = config
         self._request = request or self._default_request
         self._chat = chat
         self._embeddings = embeddings
         self._transfer_stream = transfer_stream or self._default_transfer_stream
-        self._transfer_manager = TransferManager(config)
+        self._transfer_manager = transfer_manager or TransferManager(config)
         self._download_manager = download_manager
-        self._gguf_library = gguf_library or GgufLibrary(config)
-        self._process_manager = process_manager or ProcessManager(config)
+        self._gguf_library = gguf_library
+        self._process_manager = process_manager
         self._task: asyncio.Task | None = None
         self._stop_event: asyncio.Event | None = None
 

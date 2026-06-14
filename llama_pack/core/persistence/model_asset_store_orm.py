@@ -7,7 +7,6 @@ from pathlib import Path
 
 from sqlalchemy import select, update
 
-from llama_pack.core.persistence.alembic_config import Base
 from llama_pack.core.persistence.db_infra import (
     create_persistence_engine,
     create_session_factory,
@@ -18,6 +17,7 @@ from llama_pack.core.persistence.db_infra import (
 )
 from llama_pack.core.persistence.models.model_asset import (
     ModelAssetOrm,
+    ModelAssetProvenanceOrm,
     ModelDeploymentOrm,
     ModelOrm,
     ModelProfileOrm,
@@ -33,19 +33,17 @@ class ModelAssetStoreOrm:
             db_url = sqlite_url_for_path(db_path)
         sqlite_path = sqlite_path_from_url(db_url)
         self.engine = create_persistence_engine(db_url)
-        Base.metadata.create_all(
-            self.engine,
-            tables=[
-                ModelAssetOrm.__table__,
-                ModelOrm.__table__,
-                ModelProfileOrm.__table__,
-                ModelDeploymentOrm.__table__,
-            ],
-        )
         if sqlite_path is not None:
             require_sqlite_tables(
                 db_path=sqlite_path,
-                required_tables={"model_assets", "models", "model_profiles", "model_deployments", "alembic_version"},
+                required_tables={
+                    "model_assets",
+                    "models",
+                    "model_asset_provenance",
+                    "model_profiles",
+                    "model_deployments",
+                    "alembic_version",
+                },
                 target_name="models",
             )
         self.session_factory = create_session_factory(self.engine)
@@ -171,6 +169,9 @@ class ModelAssetStoreOrm:
         gpu_layers: int | None = None,
         vision: bool = False,
         mmproj: str | None = None,
+        mmproj_asset_id: str | None = None,
+        mtp_draft_asset_id: str | None = None,
+        mtp_draft_model_id: str | None = None,
         supports_json_schema: bool | None = None,
         supports_grammar: bool | None = None,
         supports_mtp: bool | None = None,
@@ -196,6 +197,9 @@ class ModelAssetStoreOrm:
                     gpu_layers=gpu_layers,
                     vision=1 if vision else 0,
                     mmproj=mmproj,
+                    mmproj_asset_id=mmproj_asset_id,
+                    mtp_draft_asset_id=mtp_draft_asset_id,
+                    mtp_draft_model_id=mtp_draft_model_id,
                     supports_json_schema=self._bool_to_db(supports_json_schema),
                     supports_grammar=self._bool_to_db(supports_grammar),
                     supports_mtp=self._bool_to_db(supports_mtp),
@@ -218,6 +222,9 @@ class ModelAssetStoreOrm:
                 row.gpu_layers = gpu_layers
                 row.vision = 1 if vision else 0
                 row.mmproj = mmproj
+                row.mmproj_asset_id = mmproj_asset_id
+                row.mtp_draft_asset_id = mtp_draft_asset_id
+                row.mtp_draft_model_id = mtp_draft_model_id
                 row.supports_json_schema = self._bool_to_db(supports_json_schema)
                 row.supports_grammar = self._bool_to_db(supports_grammar)
                 row.supports_mtp = self._bool_to_db(supports_mtp)
@@ -409,6 +416,91 @@ class ModelAssetStoreOrm:
             return None
         return self._model_to_dict(row)
 
+    def get_model_companion_links(self, model_id: str) -> dict[str, object]:
+        model = self.get_model(model_id)
+        return {
+            "model_id": model["model_id"],
+            "mmproj_asset_id": model["mmproj_asset_id"],
+            "mtp_draft_asset_id": model["mtp_draft_asset_id"],
+            "mtp_draft_model_id": model["mtp_draft_model_id"],
+        }
+
+    def update_model_companion_links(
+        self,
+        model_id: str,
+        *,
+        mmproj_asset_id: str | None = None,
+        mtp_draft_asset_id: str | None = None,
+        mtp_draft_model_id: str | None = None,
+        clear_mmproj_asset_id: bool = False,
+        clear_mtp_draft_asset_id: bool = False,
+        clear_mtp_draft_model_id: bool = False,
+    ) -> dict[str, object]:
+        self._require_asset_id(mmproj_asset_id, label="mmproj_asset_id")
+        self._require_asset_id(mtp_draft_asset_id, label="mtp_draft_asset_id")
+        self._require_model_id(mtp_draft_model_id, label="mtp_draft_model_id")
+        with session_scope(self.session_factory) as session:
+            row = session.execute(select(ModelOrm).where(ModelOrm.model_id == model_id)).scalar_one_or_none()
+            if row is None:
+                raise KeyError(f"Unknown model id: {model_id}")
+            if mmproj_asset_id is not None or clear_mmproj_asset_id:
+                row.mmproj_asset_id = mmproj_asset_id
+            if mtp_draft_asset_id is not None or clear_mtp_draft_asset_id:
+                row.mtp_draft_asset_id = mtp_draft_asset_id
+            if mtp_draft_model_id is not None or clear_mtp_draft_model_id:
+                row.mtp_draft_model_id = mtp_draft_model_id
+            row.updated_at = datetime.now(UTC).isoformat()
+            session.flush()
+        return self.get_model(model_id)
+
+    def record_asset_provenance(
+        self,
+        *,
+        output_asset_id: str,
+        source_asset_id: str | None,
+        source_model_id: str | None,
+        job_kind: str,
+        job_ref: str,
+        detail: dict[str, object] | None,
+    ) -> dict[str, object]:
+        now = datetime.now(UTC).isoformat()
+        self._require_asset_id(output_asset_id, label="output_asset_id")
+        self._require_asset_id(source_asset_id, label="source_asset_id")
+        self._require_model_id(source_model_id, label="source_model_id")
+        with session_scope(self.session_factory) as session:
+            row = ModelAssetProvenanceOrm(
+                provenance_id=str(uuid.uuid4()),
+                output_asset_id=output_asset_id,
+                source_asset_id=source_asset_id,
+                source_model_id=source_model_id,
+                job_kind=job_kind,
+                job_ref=job_ref,
+                detail_json=self._json_object(detail),
+                created_at=now,
+            )
+            session.add(row)
+            session.flush()
+            provenance_id = row.provenance_id
+        return self.get_asset_provenance(provenance_id)
+
+    def list_asset_provenance(self, output_asset_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(
+                select(ModelAssetProvenanceOrm)
+                .where(ModelAssetProvenanceOrm.output_asset_id == output_asset_id)
+                .order_by(ModelAssetProvenanceOrm.created_at.asc(), ModelAssetProvenanceOrm.provenance_id.asc())
+            ).scalars().all()
+        return [self._provenance_to_dict(row) for row in rows]
+
+    def get_asset_provenance(self, provenance_id: str) -> dict[str, object]:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(ModelAssetProvenanceOrm).where(ModelAssetProvenanceOrm.provenance_id == provenance_id)
+            ).scalar_one_or_none()
+        if row is None:
+            raise KeyError(f"Unknown model asset provenance id: {provenance_id}")
+        return self._provenance_to_dict(row)
+
     def delete_model_by_name(self, model_name: str) -> None:
         with session_scope(self.session_factory) as session:
             row = session.execute(select(ModelOrm).where(ModelOrm.model_name == model_name)).scalar_one_or_none()
@@ -448,6 +540,9 @@ class ModelAssetStoreOrm:
             "gpu_layers": row.gpu_layers,
             "vision": bool(row.vision),
             "mmproj": row.mmproj,
+            "mmproj_asset_id": row.mmproj_asset_id,
+            "mtp_draft_asset_id": row.mtp_draft_asset_id,
+            "mtp_draft_model_id": row.mtp_draft_model_id,
             "supports_json_schema": self._db_to_bool(row.supports_json_schema),
             "supports_grammar": self._db_to_bool(row.supports_grammar),
             "supports_mtp": self._db_to_bool(row.supports_mtp),
@@ -460,6 +555,18 @@ class ModelAssetStoreOrm:
             "extra_args": self._parse_json_list(row.extra_args_json),
             "created_at": row.created_at,
             "updated_at": row.updated_at,
+        }
+
+    def _provenance_to_dict(self, row: ModelAssetProvenanceOrm) -> dict[str, object]:
+        return {
+            "provenance_id": row.provenance_id,
+            "output_asset_id": row.output_asset_id,
+            "source_asset_id": row.source_asset_id,
+            "source_model_id": row.source_model_id,
+            "job_kind": row.job_kind,
+            "job_ref": row.job_ref,
+            "detail": self._parse_json_object(row.detail_json),
+            "created_at": row.created_at,
         }
 
     def _profile_to_dict(self, row: ModelProfileOrm) -> dict[str, object]:
@@ -511,6 +618,33 @@ class ModelAssetStoreOrm:
             return []
         parsed = json.loads(value)
         return parsed if isinstance(parsed, list) else []
+
+    @staticmethod
+    def _json_object(value: dict[str, object] | None) -> str:
+        return json.dumps(value or {})
+
+    @staticmethod
+    def _parse_json_object(value: str | None) -> dict[str, object]:
+        if not value:
+            return {}
+        parsed = json.loads(value)
+        return parsed if isinstance(parsed, dict) else {}
+
+    def _require_asset_id(self, asset_id: str | None, *, label: str) -> None:
+        if asset_id is None:
+            return
+        with session_scope(self.session_factory) as session:
+            row = session.execute(select(ModelAssetOrm.asset_id).where(ModelAssetOrm.asset_id == asset_id)).first()
+        if row is None:
+            raise KeyError(f"Unknown asset id for {label}: {asset_id}")
+
+    def _require_model_id(self, model_id: str | None, *, label: str) -> None:
+        if model_id is None:
+            return
+        with session_scope(self.session_factory) as session:
+            row = session.execute(select(ModelOrm.model_id).where(ModelOrm.model_id == model_id)).first()
+        if row is None:
+            raise KeyError(f"Unknown model id for {label}: {model_id}")
 
     @staticmethod
     def _bool_to_db(value: bool | None) -> int | None:

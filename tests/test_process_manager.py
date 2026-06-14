@@ -2,7 +2,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.runtime.process_manager import ProcessManager, _AdoptedProcess
+from tests.persistence_db_setup import prepare_models_db
 
 
 class FakeProcess:
@@ -27,6 +30,117 @@ class FakeProcess:
         self._returncode = -9
 
 
+def _catalog_config(tmp_path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config(
+        {
+            "mode": "agent",
+            "llama_server_bin": "llama-server",
+            "log_dir": str(tmp_path / "logs"),
+            "models_db_url": f"sqlite+pysqlite:///{db_path}",
+        }
+    )
+    store = ModelAssetStoreOrm(db_path=db_path)
+    catalog = ModelCatalogService(store)
+    return config, store, catalog
+
+
+def _register_model(
+    store: ModelAssetStoreOrm,
+    *,
+    model_name: str,
+    path: str,
+    port: int,
+    ctx: int = 4096,
+    gpu_layers: int = 0,
+    host: str = "127.0.0.1",
+    favorite: bool = False,
+    vision: bool = False,
+    mmproj_path: str | None = None,
+    supports_mtp: bool = False,
+    mtp_path: str | None = None,
+    prompt_template: str | None = None,
+    profiles: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    asset = store.upsert_asset(
+        canonical_path=path,
+        filename=Path(path).name,
+        display_name=model_name,
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    mmproj_asset_id = None
+    if mmproj_path is not None:
+        mmproj_asset_id = store.upsert_asset(
+            canonical_path=mmproj_path,
+            filename=Path(mmproj_path).name,
+            display_name=f"{model_name}-mmproj",
+            size_bytes=4,
+            asset_kind="mmproj",
+            source_type="download",
+        )["asset_id"]
+    mtp_asset_id = None
+    if mtp_path is not None:
+        mtp_asset_id = store.upsert_asset(
+            canonical_path=mtp_path,
+            filename=Path(mtp_path).name,
+            display_name=f"{model_name}-mtp",
+            size_bytes=6,
+            asset_kind="gguf",
+            source_type="download",
+        )["asset_id"]
+
+    row = store.upsert_model(
+        model_name=model_name,
+        asset_id=asset["asset_id"],
+        config_source="db",
+        ctx=ctx,
+        gpu_layers=gpu_layers,
+        vision=vision,
+        favorite=favorite,
+        supports_mtp=supports_mtp,
+        mmproj_asset_id=mmproj_asset_id,
+        mtp_draft_asset_id=mtp_asset_id,
+        prompt_template=prompt_template,
+    )
+    store.upsert_model_deployment(
+        model_id=str(row["model_id"]),
+        deployment_name="default",
+        node_name=None,
+        host=host,
+        port=port,
+    )
+    for profile in profiles or []:
+        store.upsert_model_profile(
+            model_id=str(row["model_id"]),
+            profile_key=str(profile["profile_key"]),
+            label=profile.get("label"),
+            order=int(profile.get("order", 100)),
+            kind=profile.get("kind"),
+            ctx=profile.get("ctx"),
+            gpu_layers=profile.get("gpu_layers"),
+            host=profile.get("host"),
+            extra_args=profile.get("extra_args"),
+            intended_ctx=profile.get("intended_ctx"),
+            kv_cache_policy=profile.get("kv_cache_policy"),
+            resource_tier=profile.get("resource_tier"),
+            strengths=profile.get("strengths"),
+            cost_tier=profile.get("cost_tier"),
+        )
+        if profile.get("port") is not None:
+            store.upsert_model_deployment(
+                model_id=str(row["model_id"]),
+                deployment_name=f"profile:{profile['profile_key']}",
+                node_name=None,
+                host=str(profile.get("host") or host),
+                port=int(profile["port"]),
+                profile_key=str(profile["profile_key"]),
+            )
+    return row
+
+
 def test_process_manager_start_stop_status_and_log_tail(tmp_path):
     spawned = []
 
@@ -34,22 +148,9 @@ def test_process_manager_start_stop_status_and_log_tail(tmp_path):
         spawned.append((command, stdout, stderr, cwd))
         return FakeProcess()
 
-    config = load_config(
-        {
-            "mode": "agent",
-            "llama_server_bin": "llama-server",
-            "log_dir": str(tmp_path / "logs"),
-            "models": {
-                "qwen": {
-                    "path": "/models/qwen.gguf",
-                    "port": 8081,
-                    "ctx": 4096,
-                    "gpu_layers": 99,
-                }
-            },
-        }
-    )
-    manager = ProcessManager(config, popen=fake_popen)
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081, ctx=4096, gpu_layers=99)
+    manager = ProcessManager(config, catalog_service=catalog, popen=fake_popen)
 
     with patch.object(manager, "_find_pid_on_port", return_value=None):
         started = manager.start("qwen")
@@ -70,28 +171,22 @@ def test_process_manager_start_stop_status_and_log_tail(tmp_path):
 
 def test_process_manager_starts_profile_with_effective_config(tmp_path):
     spawned = []
-    config = load_config(
-        {
-            "mode": "agent",
-            "llama_server_bin": "llama-server",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "ctx": 8192,
-                    "gpu_layers": 10,
-                    "profiles": {"long": {"ctx": 131072, "gpu_layers": 20, "port": 8083}},
-                }
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        ctx=8192,
+        gpu_layers=10,
+        profiles=[{"profile_key": "long", "ctx": 131072, "gpu_layers": 20, "order": 30, "port": 8083}],
     )
 
     def popen(command, **kwargs):
         spawned.append(command)
         return FakeProcess(pid=321)
 
-    manager = ProcessManager(config, popen=popen)
+    manager = ProcessManager(config, catalog_service=catalog, popen=popen)
     with patch.object(manager, "_find_pid_on_port", return_value=None):
         status = manager.start("gemma:long")
 
@@ -114,33 +209,29 @@ def test_process_manager_starts_profile_with_effective_config(tmp_path):
 
 
 def test_process_manager_profile_status_includes_profile_metadata(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "ctx": 8192,
-                    "gpu_layers": 10,
-                    "profiles": {
-                        "long": {
-                            "ctx": 131072,
-                            "gpu_layers": 20,
-                            "port": 8083,
-                            "label": "Long Context",
-                            "order": 30,
-                            "kind": "long-context",
-                            "kv_cache_policy": "cpu-ok",
-                            "resource_tier": "high",
-                        }
-                    },
-                }
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        ctx=8192,
+        gpu_layers=10,
+        profiles=[
+            {
+                "profile_key": "long",
+                "ctx": 131072,
+                "gpu_layers": 20,
+                "label": "Long Context",
+                "order": 30,
+                "port": 8083,
+                "kind": "long-context",
+                "kv_cache_policy": "cpu-ok",
+                "resource_tier": "high",
+            }
+        ],
     )
-    manager = ProcessManager(config)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     status = manager.status("gemma:long")
 
@@ -159,14 +250,9 @@ def test_process_manager_profile_status_includes_profile_metadata(tmp_path):
 
 
 def test_process_manager_tracks_active_profile_requests(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {"gemma": {"path": "/m.gguf", "port": 8081}},
-        }
-    )
-    manager = ProcessManager(config)
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(store, model_name="gemma", path="/m.gguf", port=8081)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     assert manager.active_count("gemma") == 0
     with manager.track_active("gemma"):
@@ -175,14 +261,9 @@ def test_process_manager_tracks_active_profile_requests(tmp_path):
 
 
 def test_process_manager_track_active_decrements_after_exception(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {"gemma": {"path": "/m.gguf", "port": 8081}},
-        }
-    )
-    manager = ProcessManager(config)
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(store, model_name="gemma", path="/m.gguf", port=8081)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     try:
         with manager.track_active("gemma:long"):
@@ -195,31 +276,21 @@ def test_process_manager_track_active_decrements_after_exception(tmp_path):
 
 
 def test_list_statuses_includes_profile_identities_and_standalone_models(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "ctx": 8192,
-                    "gpu_layers": 10,
-                    "profiles": {
-                        "fast": {"ctx": 8192, "port": 8082, "order": 10},
-                        "long": {"ctx": 131072, "port": 8083, "order": 30},
-                    },
-                },
-                "qwen": {
-                    "path": "/models/qwen.gguf",
-                    "port": 8091,
-                    "ctx": 4096,
-                    "gpu_layers": 99,
-                },
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        ctx=8192,
+        gpu_layers=10,
+        profiles=[
+            {"profile_key": "fast", "ctx": 8192, "order": 10},
+            {"profile_key": "long", "ctx": 131072, "order": 30, "port": 8083},
+        ],
     )
-    manager = ProcessManager(config)
+    _register_model(store, model_name="qwen", path="/models/qwen.gguf", port=8091, ctx=4096, gpu_layers=99)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     statuses = manager.list_statuses()
     names = [status["name"] for status in statuses]
@@ -232,66 +303,48 @@ def test_list_statuses_includes_profile_identities_and_standalone_models(tmp_pat
 
 
 def test_profile_log_path_does_not_collide_with_standalone_model_name(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "profiles": {"long": {"port": 8083}},
-                },
-                "gemma__long": {
-                    "path": "/models/gemma-standalone.gguf",
-                    "port": 8091,
-                },
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "order": 30}],
     )
-    manager = ProcessManager(config)
+    _register_model(store, model_name="gemma__long", path="/models/gemma-standalone.gguf", port=8091)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     assert Path(manager.log_path("gemma:long")).name == "__profile__gemma%3Along.log"
     assert Path(manager.log_path("gemma__long")).name == "gemma__long.log"
 
 
 def test_set_favorite_on_profile_updates_family_favorite(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "profiles": {"long": {"port": 8083}},
-                },
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "order": 30}],
     )
-    manager = ProcessManager(config)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     status = manager.set_favorite("gemma:long", True)
 
-    assert config.models["gemma"].favorite is True
+    assert store.get_model(str(row["model_id"]))["favorite"] is True
     assert status.favorite is True
 
 
 def test_set_favorite_rejects_unknown_profile_before_mutating_family(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "profiles": {"long": {"port": 8083}},
-                },
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "order": 30}],
     )
-    manager = ProcessManager(config)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     try:
         manager.set_favorite("gemma:missing", True)
@@ -300,26 +353,21 @@ def test_set_favorite_rejects_unknown_profile_before_mutating_family(tmp_path):
     else:
         raise AssertionError("expected KeyError")
 
-    assert config.models["gemma"].favorite is False
+    assert store.get_model(str(row["model_id"]))["favorite"] is False
 
 
 def test_start_profile_adopts_existing_process_on_effective_port(tmp_path):
     import os
 
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "profiles": {"long": {"port": 8083}},
-                }
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "ctx": 131072, "order": 30, "port": 8083}],
     )
-    manager = ProcessManager(config, popen=lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not spawn")))
+    manager = ProcessManager(config, catalog_service=catalog, popen=lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not spawn")))
 
     with patch.object(manager, "_find_pid_on_port", return_value=os.getpid()) as find_pid:
         result = manager.start("gemma:long")
@@ -330,7 +378,8 @@ def test_start_profile_adopts_existing_process_on_effective_port(tmp_path):
 
 
 def test_process_manager_rejects_unknown_model(tmp_path):
-    manager = ProcessManager(load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+    config, _store, catalog = _catalog_config(tmp_path)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     try:
         manager.start("missing")
@@ -341,29 +390,17 @@ def test_process_manager_rejects_unknown_model(tmp_path):
 
 
 def _agent_config(tmp_path):
-    return load_config(
-        {
-            "mode": "agent",
-            "llama_server_bin": "llama-server",
-            "log_dir": str(tmp_path / "logs"),
-            "models": {
-                "qwen": {
-                    "path": "/models/qwen.gguf",
-                    "port": 8081,
-                    "ctx": 4096,
-                    "gpu_layers": 99,
-                }
-            },
-        }
-    )
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081, ctx=4096, gpu_layers=99)
+    return config, catalog
 
 
 def test_start_adopts_existing_process_on_port(tmp_path):
     """When a model server survives a manager restart, start() should adopt it."""
     import os
 
-    config = _agent_config(tmp_path)
-    manager = ProcessManager(config, popen=lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not spawn")))
+    config, catalog = _agent_config(tmp_path)
+    manager = ProcessManager(config, catalog_service=catalog, popen=lambda *a, **kw: (_ for _ in ()).throw(AssertionError("should not spawn")))
 
     live_pid = os.getpid()
     with patch.object(manager, "_find_pid_on_port", return_value=live_pid):
@@ -379,14 +416,14 @@ def test_start_adopts_existing_process_on_port(tmp_path):
 
 def test_start_spawns_when_port_free(tmp_path):
     """When no existing process is on the port, start() spawns normally."""
-    config = _agent_config(tmp_path)
+    config, catalog = _agent_config(tmp_path)
     spawned = []
 
     def fake_popen(command, stdout, stderr, cwd):
         spawned.append(command)
         return FakeProcess(pid=5555)
 
-    manager = ProcessManager(config, popen=fake_popen)
+    manager = ProcessManager(config, catalog_service=catalog, popen=fake_popen)
 
     with patch.object(manager, "_find_pid_on_port", return_value=None):
         result = manager.start("qwen")
@@ -398,8 +435,8 @@ def test_start_spawns_when_port_free(tmp_path):
 
 def test_adopted_process_stop(tmp_path):
     """stop() on an adopted process terminates it cleanly."""
-    config = _agent_config(tmp_path)
-    manager = ProcessManager(config)
+    config, catalog = _agent_config(tmp_path)
+    manager = ProcessManager(config, catalog_service=catalog)
 
     adopted = _AdoptedProcess(pid=12345)
     terminated = []
@@ -424,3 +461,26 @@ def test_adopted_process_poll_alive():
     import os
     proc = _AdoptedProcess(pid=os.getpid())
     assert proc.poll() is None
+
+
+def test_process_manager_status_includes_mmproj_and_mtp_from_db(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="vlm",
+        path="/models/vlm.gguf",
+        port=9001,
+        vision=True,
+        mmproj_path="/models/vlm-mmproj.gguf",
+        supports_mtp=True,
+        mtp_path="/models/vlm-draft.gguf",
+    )
+    manager = ProcessManager(config, catalog_service=catalog)
+
+    status = manager.status("vlm")
+    runtime = manager._get_model("vlm")
+
+    assert status.vision is True
+    assert status.mmproj == "/models/vlm-mmproj.gguf"
+    assert runtime.speculative is not None
+    assert runtime.speculative.draft_model_path == "/models/vlm-draft.gguf"

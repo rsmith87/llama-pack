@@ -1,5 +1,11 @@
 from llama_pack.core.persistence.models.app_state import ApiKeyOrm, AuditEventOrm, ChatSessionOrm, ModelDownloadOrm
-from llama_pack.core.persistence.models.model_asset import ModelAssetOrm, ModelDeploymentOrm, ModelOrm, ModelProfileOrm
+from llama_pack.core.persistence.models.model_asset import (
+    ModelAssetOrm,
+    ModelAssetProvenanceOrm,
+    ModelDeploymentOrm,
+    ModelOrm,
+    ModelProfileOrm,
+)
 from llama_pack.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
@@ -21,6 +27,7 @@ __all__ = [
     "JobEventOrm",
     "JobOrm",
     "ModelAssetOrm",
+    "ModelAssetProvenanceOrm",
     "ModelDeploymentOrm",
     "NodeLeaseOrm",
     "ModelOrm",

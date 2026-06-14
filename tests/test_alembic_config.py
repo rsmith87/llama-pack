@@ -1,6 +1,5 @@
 from pathlib import Path
 import configparser
-
 import pytest
 
 from llama_pack.core.config import load_config
@@ -89,6 +88,13 @@ def test_target_metadata_for_returns_only_selected_target_tables():
         "tool_loop_eval_cases",
         "tool_loop_eval_runs",
     }
+    assert set(target_metadata_for("models").tables) == {
+        "model_assets",
+        "model_asset_provenance",
+        "model_deployments",
+        "model_profiles",
+        "models",
+    }
     assert set(target_metadata_for("controller").tables) == {
         "artifacts",
         "controller_leases",
@@ -107,3 +113,20 @@ def test_head_revision_for_returns_target_branch_head():
     assert head_revision_for("chat_sessions") == "chat_sessions@head"
     assert head_revision_for("downloads") == "downloads@head"
     assert head_revision_for("benchmarks") == "benchmarks@head"
+    assert head_revision_for("models") == "models@head"
+
+def test_models_migrations_include_catalog_expansion_revision():
+    migration_path = Path("migrations/versions/models/20260614_0002_expand_model_catalog_for_db_authority.py")
+    assert migration_path.exists()
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("models_catalog_expansion", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "20260614_0002"
+    assert module.down_revision == "20260613_0002"
+    assert module.branch_labels is None

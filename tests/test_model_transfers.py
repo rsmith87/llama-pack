@@ -8,8 +8,11 @@ import httpx
 from fastapi.testclient import TestClient
 
 from llama_pack.core.config.models import AppConfig, ModelConfig
-from llama_pack.core.model_assets.library import GgufLibrary
+from llama_pack.core.model_assets.library import GgufLibrary, compute_file_id
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.transfers import TransferManager
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from tests.persistence_db_setup import prepare_models_db
 from llama_pack.core.nodes.worker import AgentWorker
 from llama_pack.main import create_app
 from tests.helpers import authenticated_client
@@ -22,14 +25,22 @@ def make_file(path: Path, content: bytes = b"data") -> Path:
     return path
 
 
+def _make_inventory(config, tmp_path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+    return ModelAssetInventoryService(config, store)
+
+
 def test_manifest_for_directory_model_includes_selected_gguf_and_sidecars(tmp_path):
     root = tmp_path / "HFModels"
     gguf = make_file(root / "Qwen" / "qwen-Q4_K_M.gguf", b"gguf")
     make_file(root / "Qwen" / "tokenizer.json", b"tokenizer")
     make_file(root / "Qwen" / "qwen-Q8_0.gguf", b"other-quant")
     config = AppConfig(hf_models_dirs=[root])
-    library = GgufLibrary(config)
-    manager = TransferManager(config)
+    inventory = _make_inventory(config, tmp_path)
+    library = GgufLibrary(config, inventory_service=inventory)
+    manager = TransferManager(config, inventory_service=inventory)
 
     manifest = manager.build_manifest(library.file_id(gguf))
 
@@ -46,8 +57,9 @@ def test_manifest_excludes_macos_ds_store_sidecar(tmp_path):
     make_file(root / "Qwen" / ".DS_Store", b"finder-metadata")
     make_file(root / "Qwen" / "tokenizer.json", b"tokenizer")
     config = AppConfig(hf_models_dirs=[root])
-    library = GgufLibrary(config)
-    manager = TransferManager(config)
+    inventory = _make_inventory(config, tmp_path)
+    library = GgufLibrary(config, inventory_service=inventory)
+    manager = TransferManager(config, inventory_service=inventory)
 
     manifest = manager.build_manifest(library.file_id(gguf))
 
@@ -62,8 +74,9 @@ def test_manifest_for_root_level_gguf_includes_only_selected_file(tmp_path):
     gguf = make_file(root / "standalone.gguf", b"gguf")
     make_file(root / "notes.txt", b"do-not-copy")
     config = AppConfig(hf_models_dirs=[root])
-    library = GgufLibrary(config)
-    manager = TransferManager(config)
+    inventory = _make_inventory(config, tmp_path)
+    library = GgufLibrary(config, inventory_service=inventory)
+    manager = TransferManager(config, inventory_service=inventory)
 
     manifest = manager.build_manifest(library.file_id(gguf))
 
@@ -79,8 +92,9 @@ def test_manifest_includes_configured_mmproj(tmp_path):
         hf_models_dirs=[root],
         models={"vision": ModelConfig(path=str(gguf), port=8081, mmproj=str(mmproj), vision=True)},
     )
-    library = GgufLibrary(config)
-    manager = TransferManager(config)
+    inventory = _make_inventory(config, tmp_path)
+    library = GgufLibrary(config, inventory_service=inventory)
+    manager = TransferManager(config, inventory_service=inventory)
 
     manifest = manager.build_manifest(library.file_id(gguf))
 
@@ -95,8 +109,9 @@ def test_manifest_includes_inferred_mmproj_for_unregistered_vision_model(tmp_pat
     gguf = make_file(root / "Vision" / "vision-Q4.gguf", b"gguf")
     make_file(root / "Vision" / "mmproj-F16.gguf", b"mmproj")
     config = AppConfig(hf_models_dirs=[root])
-    library = GgufLibrary(config)
-    manager = TransferManager(config)
+    inventory = _make_inventory(config, tmp_path)
+    library = GgufLibrary(config, inventory_service=inventory)
+    manager = TransferManager(config, inventory_service=inventory)
 
     manifest = manager.build_manifest(library.file_id(gguf))
 
@@ -119,7 +134,7 @@ def test_agent_transfer_manifest_endpoint_returns_manifest(tmp_path):
     gguf = make_file(root / "Qwen" / "qwen.gguf", b"gguf")
     config = AppConfig(mode="agent", log_dir=tmp_path, hf_models_dirs=[root], agent_api_key="agent-key")
     client = TestClient(create_app(config))
-    file_id = GgufLibrary(config).file_id(gguf)
+    file_id = compute_file_id(gguf)
 
     client.post(
         "/lm-api/v1/transfer-source/grants",
@@ -140,10 +155,14 @@ def test_agent_transfer_content_endpoint_streams_file(tmp_path):
     root = tmp_path / "HFModels"
     gguf = make_file(root / "Qwen" / "qwen.gguf", b"gguf-content")
     config = AppConfig(mode="agent", log_dir=tmp_path, hf_models_dirs=[root], agent_api_key="agent-key")
-    manager = TransferManager(config)
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inv = ModelAssetInventoryService(config, store)
+    manager = TransferManager(config, inventory_service=inv)
     token = manager.file_token(gguf)
     client = TestClient(create_app(config))
-    file_id = GgufLibrary(config).file_id(gguf)
+    file_id = compute_file_id(gguf)
 
     client.post(
         "/lm-api/v1/transfer-source/grants",
@@ -165,7 +184,7 @@ def test_agent_transfer_grant_allows_bearer_token_manifest_access(tmp_path):
     gguf = make_file(root / "Qwen" / "qwen.gguf", b"gguf")
     config = AppConfig(mode="agent", log_dir=tmp_path, hf_models_dirs=[root], agent_api_key="agent-key")
     client = TestClient(create_app(config))
-    file_id = GgufLibrary(config).file_id(gguf)
+    file_id = compute_file_id(gguf)
 
     grant = client.post(
         "/lm-api/v1/transfer-source/grants",
@@ -185,8 +204,12 @@ def test_create_transfer_grant_does_not_hash_large_source_file(tmp_path, monkeyp
     root = tmp_path / "HFModels"
     gguf = make_file(root / "Qwen" / "qwen.gguf", b"gguf")
     config = AppConfig(hf_models_dirs=[root])
-    library = GgufLibrary(config)
-    manager = TransferManager(config)
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inv = ModelAssetInventoryService(config, store)
+    library = GgufLibrary(config, inventory_service=inv)
+    manager = TransferManager(config, inventory_service=inv)
 
     def fail_hash(path):
         raise AssertionError(f"unexpected hash during grant creation: {path}")
@@ -501,7 +524,9 @@ def test_transfer_list_returns_model_transfer_jobs(tmp_path):
 def test_library_marks_recently_received_file(tmp_path):
     root = tmp_path / "HFModels"
     gguf = make_file(root / "Qwen" / "qwen.gguf", b"gguf")
-    library = GgufLibrary(AppConfig(hf_models_dirs=[root]))
+    config = AppConfig(hf_models_dirs=[root])
+    inventory = _make_inventory(config, tmp_path)
+    library = GgufLibrary(config, inventory_service=inventory)
     received = [
         {
             "id": "transfer-1",
@@ -535,4 +560,4 @@ def test_model_status_includes_file_id_for_library_transfer(tmp_path):
     assert response.status_code == 200
     model = response.json()[0]
     assert model["name"] == "qwen"
-    assert model["file_id"] == GgufLibrary(config).file_id(gguf)
+    assert model["file_id"] == compute_file_id(gguf)

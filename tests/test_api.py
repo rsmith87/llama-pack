@@ -13,9 +13,11 @@ from tests.helpers import authenticated_client as TestClient
 from llama_pack.core.persistence.audit_store_orm import AuditStoreOrm
 from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
 from llama_pack.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.persistence.models.orchestration import JobOrm
 from llama_pack.core.orchestration.store_orm import OrchestrationStoreOrm
-from tests.persistence_db_setup import prepare_all_persistence_dbs
+from tests.persistence_db_setup import prepare_all_persistence_dbs, prepare_models_db
 
 WORKER_HEADERS = {"X-Llama-Manager-Key": "node-secret"}
 
@@ -59,6 +61,88 @@ def test_controller_background_sweeper_requeues_expired_attempt(tmp_path):
 from llama_pack.core.config import load_config
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.main import create_app
+
+
+def _catalog_config(tmp_path, **overrides):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    payload = {
+        "mode": "agent",
+        "log_dir": str(tmp_path),
+        "models_db_url": f"sqlite+pysqlite:///{db_path}",
+    }
+    payload.update(overrides)
+    config = load_config(payload)
+    store = ModelAssetStoreOrm(db_path=db_path)
+    catalog = ModelCatalogService(store)
+    return config, store, catalog
+
+
+def _register_catalog_model(
+    store: ModelAssetStoreOrm,
+    *,
+    model_name: str,
+    path: str,
+    port: int,
+    prompt_template: str | None = None,
+    vision: bool = False,
+    mmproj_path: str | None = None,
+    profiles: list[dict[str, object]] | None = None,
+) -> dict[str, object]:
+    asset = store.upsert_asset(
+        canonical_path=path,
+        filename=Path(path).name,
+        display_name=model_name,
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    mmproj_asset_id = None
+    if mmproj_path is not None:
+        mmproj_asset_id = store.upsert_asset(
+            canonical_path=mmproj_path,
+            filename=Path(mmproj_path).name,
+            display_name=f"{model_name}-mmproj",
+            size_bytes=4,
+            asset_kind="mmproj",
+            source_type="download",
+        )["asset_id"]
+    row = store.upsert_model(
+        model_name=model_name,
+        asset_id=asset["asset_id"],
+        config_source="db",
+        vision=vision,
+        mmproj_asset_id=mmproj_asset_id,
+        prompt_template=prompt_template,
+    )
+    store.upsert_model_deployment(
+        model_id=str(row["model_id"]),
+        deployment_name="default",
+        node_name=None,
+        host="127.0.0.1",
+        port=port,
+    )
+    for profile in profiles or []:
+        store.upsert_model_profile(
+            model_id=str(row["model_id"]),
+            profile_key=str(profile["profile_key"]),
+            label=profile.get("label"),
+            order=int(profile.get("order", 100)),
+            kind=profile.get("kind"),
+            ctx=profile.get("ctx"),
+            gpu_layers=profile.get("gpu_layers"),
+            host=profile.get("host"),
+        )
+        if profile.get("port") is not None:
+            store.upsert_model_deployment(
+                model_id=str(row["model_id"]),
+                deployment_name=f"profile:{profile['profile_key']}",
+                node_name=None,
+                host=str(profile.get("host") or "127.0.0.1"),
+                port=int(profile["port"]),
+                profile_key=str(profile["profile_key"]),
+            )
+    return row
 
 
 class StubProcessManager:
@@ -108,23 +192,18 @@ class StubProcessManager:
 
 
 def test_models_route_reports_vision_config_for_chat_ui(tmp_path):
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "models": {
-                "llava": {
-                    "path": "/models/llava.gguf",
-                    "port": 8081,
-                    "vision": True,
-                    "mmproj": "/models/mmproj.gguf",
-                }
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_catalog_model(
+        store,
+        model_name="llava",
+        path="/models/llava.gguf",
+        port=8081,
+        vision=True,
+        mmproj_path="/models/mmproj.gguf",
     )
     app = create_app(
         config=config,
-        process_manager=ProcessManager(config),
+        process_manager=ProcessManager(config, catalog_service=catalog),
     )
     client = TestClient(app)
 
@@ -142,6 +221,11 @@ class StubProfileProcessManager:
         self._active = dict(active)
         self.stopped = []
         self.started = []
+
+    def _get_model(self, name):
+        if any(status.get("name") == name for status in self._statuses):
+            return {"name": name}
+        raise KeyError(name)
 
     def list_statuses(self):
         return [dict(status) for status in self._statuses]
@@ -1627,23 +1711,15 @@ def test_chat_stream_resolves_family_profile_before_proxying(tmp_path):
         spawned.append(command)
         return FakeProcess(pid=4321)
 
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "llama_server_bin": "llama-server",
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "profiles": {
-                        "long": {"ctx": 131072, "port": 8083},
-                    },
-                }
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path, llama_server_bin="llama-server")
+    _register_catalog_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "ctx": 131072, "order": 30, "port": 8083}],
     )
-    manager = ProcessManager(config, popen=fake_popen)
+    manager = ProcessManager(config, catalog_service=catalog, popen=fake_popen)
     app = create_app(
         config=config,
         process_manager=manager,
@@ -1699,23 +1775,15 @@ def test_openai_compat_resolves_family_profile_before_proxying(tmp_path):
         spawned.append(command)
         return FakeProcess(pid=9876)
 
-    config = load_config(
-        {
-            "mode": "agent",
-            "log_dir": str(tmp_path),
-            "llama_server_bin": "llama-server",
-            "models": {
-                "gemma": {
-                    "path": "/models/gemma.gguf",
-                    "port": 8081,
-                    "profiles": {
-                        "long": {"ctx": 131072, "port": 8083},
-                    },
-                }
-            },
-        }
+    config, store, catalog = _catalog_config(tmp_path, llama_server_bin="llama-server")
+    _register_catalog_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "ctx": 131072, "order": 30, "port": 8083}],
     )
-    manager = ProcessManager(config, popen=fake_popen)
+    manager = ProcessManager(config, catalog_service=catalog, popen=fake_popen)
     app = create_app(
         config=config,
         process_manager=manager,
@@ -1804,25 +1872,29 @@ def test_openai_compat_chat_completions_stream_route_proxies_to_llama_server():
     ]
 
 
-def test_chat_route_applies_model_prompt_template():
+def test_chat_route_applies_model_prompt_template(tmp_path):
     calls = []
 
     async def fake_chat_request(url, payload):
         calls.append((url, payload))
         return {"choices": [{"message": {"role": "assistant", "content": "hello"}}]}
 
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_catalog_model(
+        store,
+        model_name="qwen",
+        path="/models/qwen.gguf",
+        port=8081,
+        prompt_template="chatml",
+    )
     app = create_app(
-        config=load_config(
-            {
-                "mode": "agent",
-                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081, "prompt_template": "chatml"}},
-            }
-        ),
+        config=config,
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
         chat_request=fake_chat_request,
     )
+    app.state.process_manager.catalog_service = catalog
     client = TestClient(app)
 
     response = client.post("/lm-api/v1/chat/qwen", json={"messages": [{"role": "user", "content": "hi"}]})
@@ -2445,50 +2517,46 @@ def test_chat_capabilities_route():
     assert payload["supports"]["structured_output_source"]["grammar"] == "default"
 
 
-def test_chat_capabilities_reports_vision_support_from_model_config():
+def test_chat_capabilities_reports_vision_support_from_model_config(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_catalog_model(
+        store,
+        model_name="gemma-4-e2b-it",
+        path="/models/gemma.gguf",
+        port=8081,
+        vision=True,
+        mmproj_path="/models/mmproj.gguf",
+    )
     app = create_app(
-        config=load_config(
-            {
-                "mode": "agent",
-                "models": {
-                    "gemma-4-e2b-it": {
-                        "path": "/models/gemma.gguf",
-                        "port": 8081,
-                        "vision": True,
-                        "mmproj": "/models/mmproj.gguf",
-                    }
-                },
-            }
-        ),
+        config=config,
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
     )
+    app.state.process_manager.catalog_service = catalog
     client = TestClient(app)
     response = client.get("/lm-api/v1/chat/capabilities/gemma-4-e2b-it")
     assert response.status_code == 200
     assert response.json()["supports"]["vision"] is True
 
 
-def test_chat_capabilities_reports_structured_output_support_from_config():
+def test_chat_capabilities_reports_structured_output_support_from_config(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_catalog_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081)
+    store.upsert_model(
+        model_name="qwen",
+        asset_id=row["asset_id"],
+        config_source="db",
+        supports_json_schema=True,
+        supports_grammar=False,
+    )
     app = create_app(
-        config=load_config(
-            {
-                "mode": "agent",
-                "models": {
-                    "qwen": {
-                        "path": "/models/qwen.gguf",
-                        "port": 8081,
-                        "supports_json_schema": True,
-                        "supports_grammar": False,
-                    }
-                },
-            }
-        ),
+        config=config,
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
     )
+    app.state.process_manager.catalog_service = catalog
     client = TestClient(app)
     payload = client.get("/lm-api/v1/chat/capabilities/qwen").json()
     assert payload["supports"]["structured_output"]["json_schema"] is True
@@ -2497,24 +2565,22 @@ def test_chat_capabilities_reports_structured_output_support_from_config():
     assert payload["supports"]["structured_output_source"]["grammar"] == "config_flag"
 
 
-def test_chat_capabilities_inferrs_structured_output_support_from_extra_args():
+def test_chat_capabilities_inferrs_structured_output_support_from_extra_args(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_catalog_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081)
+    store.upsert_model(
+        model_name="qwen",
+        asset_id=row["asset_id"],
+        config_source="db",
+        extra_args=["--grammar-file", "/tmp/g.gbnf", "--json-schema"],
+    )
     app = create_app(
-        config=load_config(
-            {
-                "mode": "agent",
-                "models": {
-                    "qwen": {
-                        "path": "/models/qwen.gguf",
-                        "port": 8081,
-                        "extra_args": ["--grammar-file", "/tmp/g.gbnf", "--json-schema"],
-                    }
-                },
-            }
-        ),
+        config=config,
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
     )
+    app.state.process_manager.catalog_service = catalog
     client = TestClient(app)
     payload = client.get("/lm-api/v1/chat/capabilities/qwen").json()
     assert payload["supports"]["structured_output"]["json_schema"] is True
@@ -2860,8 +2926,9 @@ models:
     assert [model["name"] for model in models] == ["gemma", "qwen"]
     assert models[0]["favorite"] is True
 
-    reloaded = load_config(config_path)
-    assert reloaded.models["gemma"].favorite is True
+    persisted = app.state.model_asset_store.get_model_by_name("gemma")
+    assert persisted is not None
+    assert persisted["favorite"] is True
 
 
 def test_library_remove_model_hides_it_from_models():

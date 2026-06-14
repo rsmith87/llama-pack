@@ -47,6 +47,9 @@ class ModelOrm(Base):
     gpu_layers: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     mmproj: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mmproj_asset_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mtp_draft_asset_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    mtp_draft_model_id: Mapped[str | None] = mapped_column(Text, nullable=True)
     supports_json_schema: Mapped[int | None] = mapped_column(Integer, nullable=True)
     supports_grammar: Mapped[int | None] = mapped_column(Integer, nullable=True)
     supports_mtp: Mapped[int | None] = mapped_column(Integer, nullable=True)
@@ -63,7 +66,30 @@ class ModelOrm(Base):
     __table_args__ = (
         Index("idx_models_asset_id", "asset_id"),
         Index("idx_models_model_line", "model_line"),
+        Index("idx_models_mmproj_asset_id", "mmproj_asset_id"),
+        Index("idx_models_mtp_draft_asset_id", "mtp_draft_asset_id"),
+        Index("idx_models_mtp_draft_model_id", "mtp_draft_model_id"),
         Index("idx_models_name", "model_name"),
+    )
+
+
+class ModelAssetProvenanceOrm(Base):
+    __tablename__ = "model_asset_provenance"
+
+    provenance_id: Mapped[str] = mapped_column(Text, primary_key=True)
+    output_asset_id: Mapped[str] = mapped_column(Text, nullable=False)
+    source_asset_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    source_model_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    job_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    job_ref: Mapped[str] = mapped_column(Text, nullable=False)
+    detail_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}", server_default="{}")
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (
+        Index("idx_model_asset_provenance_output_asset_id", "output_asset_id"),
+        Index("idx_model_asset_provenance_source_asset_id", "source_asset_id"),
+        Index("idx_model_asset_provenance_source_model_id", "source_model_id"),
+        Index("idx_model_asset_provenance_job_kind_job_ref", "job_kind", "job_ref"),
     )
 
 
