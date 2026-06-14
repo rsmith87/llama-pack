@@ -416,52 +416,6 @@ export function GgufLibraryPage() {
           )}
         </Panel>
         ) : null}
-        {appMode !== "agent" ? (
-        <Panel title="Agent Node Models" eyebrow="Connected Nodes">
-          {nodeSnapshots.length === 0 ? (
-            <EmptyState message={loading ? "Loading nodes..." : "No agent nodes connected."} />
-          ) : (
-            <div className="node-model-sections">
-              {nodeSnapshots.map((node) => {
-                const nodeName = String(node.name || "unknown");
-                const models = Array.isArray(node.models) ? sortModelsForDisplay(node.models) : [];
-                return (
-                  <div key={nodeName} className="node-model-group">
-                    <div className="node-model-group-header">
-                      <strong>{nodeName}</strong>
-                      <StatusBadge tone={node.reachable ? "success" : "muted"}>
-                        {node.reachable ? "reachable" : "unreachable"}
-                      </StatusBadge>
-                    </div>
-                    <div className="node-model-list">
-                      {models.length ? models.map((model) => {
-                        const name = String(model.name || model.id || "unnamed");
-                        return (
-                          <div key={name} className={`node-model-item ${isActiveModel(model) ? "active" : ""}`.trim()}>
-                            <span className="node-model-name">{name}</span>
-                            <StatusBadge tone={isActiveModel(model) ? "success" : "muted"}>
-                              {String(model.status || (isActiveModel(model) ? "running" : "available"))}
-                            </StatusBadge>
-                              <button
-                                type="button"
-                                onClick={() => navigate(`/ui/chat?${chatSearch(name)}`)}
-                                aria-label={`Chat with ${name} on ${nodeName}`}
-                              >
-                                Chat
-                              </button>
-                          </div>
-                        );
-                      }) : (
-                        <EmptyState message={String(node.error || (node.reachable ? "No models reported." : "Stale heartbeat — no model data."))} />
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Panel>
-        ) : null}
       </div>
 
       <Modal title={selected ? fileName(selected) : "Model Detail"} open={Boolean(selected) && !editOpen} onClose={() => setSelected(null)}>
