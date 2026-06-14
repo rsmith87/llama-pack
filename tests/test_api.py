@@ -770,6 +770,60 @@ def test_controller_profile_catalog_groups_node_profiles():
     assert profiles[1]["ctx"] == 131072
 
 
+def test_controller_node_models_sync_remote_deployments_into_db(tmp_path):
+    config, store, catalog = _catalog_config(
+        tmp_path,
+        mode="controller",
+        node_heartbeat_timeout_seconds=999999,
+        nodes={"mac": {"url": "http://mac-agent:9000"}},
+    )
+    row = _register_catalog_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[
+            {
+                "profile_key": "fast",
+                "label": "Fast",
+                "order": 10,
+                "ctx": 8192,
+            }
+        ],
+    )
+
+    async def fake_request(method, url, api_key, verify_tls):
+        if url == "http://mac-agent:9000/lm-api/v1/models":
+            return [
+                {
+                    "name": "gemma:fast",
+                    "family": "gemma",
+                    "profile": "fast",
+                    "running": True,
+                    "port": 8092,
+                    "model_path": "/models/gemma.gguf",
+                }
+            ]
+        if url == "http://mac-agent:9000/health":
+            return {"config_source": "agent.yaml"}
+        raise AssertionError(url)
+
+    app = create_app(config=config, controller_request=fake_request)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/nodes/models")
+
+    assert response.status_code == 200
+    deployments = store.list_model_deployments(str(row["model_id"]))
+    remote = next(item for item in deployments if item["deployment_name"] == "remote:mac:fast")
+    assert remote["node_name"] == "mac"
+    assert remote["profile_key"] == "fast"
+    assert remote["port"] == 8092
+    assert remote["host"] == "mac-agent"
+
+
 def test_agent_api_key_enforcement():
     app = create_app(
         config=load_config(
@@ -2710,6 +2764,70 @@ def test_controller_chat_route_can_force_named_node_target():
     response = client.post(
         "/lm-api/v1/chat/qwen",
         json={"messages": [{"role": "user", "content": "hi"}], "target": "node:win"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["choices"][0]["message"]["content"] == "remote"
+    assert controller_calls == [("GET", "http://win-agent:9000/lm-api/v1/models", None, True)]
+    assert chat_calls[0][0] == "http://win-agent:9000/lm-api/v1/chat/qwen"
+
+
+def test_controller_chat_route_uses_persisted_remote_deployment_when_live_models_are_empty(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    controller_calls = []
+    chat_calls = []
+
+    async def fake_controller_request(method, url, api_key, verify_tls):
+        controller_calls.append((method, url, api_key, verify_tls))
+        if url == "http://win-agent:9000/lm-api/v1/models":
+            return []
+        raise AssertionError(url)
+
+    async def fake_chat_request(url, payload):
+        chat_calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "remote"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"win": {"url": "http://win-agent:9000"}},
+            }
+        ),
+        process_manager=StubProcessManager(running=False),
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+    )
+    store = app.state.model_asset_store
+    asset = store.upsert_asset(
+        canonical_path="/models/qwen.gguf",
+        filename="qwen.gguf",
+        display_name="qwen",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    model = store.upsert_model(
+        model_name="qwen",
+        asset_id=asset["asset_id"],
+        config_source="db",
+        ctx=8192,
+    )
+    store.upsert_model_deployment(
+        model_id=str(model["model_id"]),
+        deployment_name="remote:win:default",
+        node_name="win",
+        host="win-agent",
+        port=9000,
+        profile_key=None,
+        enabled=True,
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/lm-api/v1/chat/qwen",
+        json={"messages": [{"role": "user", "content": "hi"}]},
     )
 
     assert response.status_code == 200

@@ -344,6 +344,8 @@ class AgentWorker:
                 prompt_template=payload.get("prompt_template"),
                 vision=bool(payload.get("vision", False)),
                 mmproj=str(mmproj_path["path"]) if mmproj_path else None,
+                supports_mtp=bool(payload.get("supports_mtp", False)),
+                draft_model_path=payload.get("draft_model_path"),
             )
             await self._progress(
                 attempt_id,

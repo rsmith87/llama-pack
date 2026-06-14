@@ -689,6 +689,8 @@ def test_download_recommendations_ignore_mtp_and_prefer_ud_bitclass_over_mixed_p
     qwen = next(item for item in payload["recommendations"] if item["repo_id"] == "unsloth/Qwen3.6-35B-A3B-GGUF")
     assert qwen["include_file"] == "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf"
     assert qwen["quant"] == "UD-Q4_K_M"
+    assert qwen["supports_mtp"] is True
+    assert qwen["draft_model_path"] == "MTP/Qwen3.6-35B-A3B-Q8_0-MTP.gguf"
 
 def test_download_manager_caches_hugging_face_recommendations(tmp_path):
     api = FakeRecommendationHfApi()

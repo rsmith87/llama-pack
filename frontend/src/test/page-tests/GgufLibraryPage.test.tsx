@@ -207,13 +207,13 @@ it("shows db-backed catalog, profiles, and deployment details in the model modal
   await user.click(await screen.findByRole("button", { name: "Open qwen-Q4" }));
 
   expect(screen.getByText("Deployment")).toBeInTheDocument();
-  expect(screen.getByText("127.0.0.1:8088 (default)")).toBeInTheDocument();
-  expect(screen.getByText("Profiles")).toBeInTheDocument();
-  expect(screen.getByText("Default, Chat")).toBeInTheDocument();
+  expect(screen.getAllByText("127.0.0.1:8088 (default)").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Profiles").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Default, Chat").length).toBeGreaterThan(0);
   expect(screen.getByText("Catalog")).toBeInTheDocument();
   expect(screen.getByText(/ctx 32768/)).toBeInTheDocument();
   expect(screen.getByText(/48 GPU layers/)).toBeInTheDocument();
-  expect(screen.getByText(/coding, tool-use/)).toBeInTheDocument();
+  expect(screen.getAllByText(/coding, tool-use/).length).toBeGreaterThan(0);
 });
 
 it("offers gpu layers shortcuts in the add model modal", async () => {

@@ -159,6 +159,45 @@ it("renders rich model card runtime and configuration details", async () => {
   expect(screen.getByText("favorite")).toBeInTheDocument();
 });
 
+it("renders persisted catalog, profile, and deployment data on dashboard model cards", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "agent", configured_models: 1 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{
+        name: "qwen-vl",
+        status: "running",
+        path: "/models/qwen-vl.gguf",
+        model_catalog: {
+          strengths: ["vision", "coding"],
+          cost_tier: "medium",
+          favorite: true,
+        },
+        model_profiles: [
+          { profile_key: "fast", label: "Fast" },
+          { profile_key: "long", label: "Long Context" },
+        ],
+        model_deployments: [
+          { deployment_name: "default", host: "127.0.0.1", port: 8081 },
+          { deployment_name: "remote:gpu-1:fast", host: "gpu-1", port: 8091, profile_key: "fast" },
+        ],
+      }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) }),
+  );
+
+  renderDashboardPage();
+
+  expect(await screen.findByText("qwen-vl")).toBeInTheDocument();
+  expect(screen.getByText("Strengths")).toBeInTheDocument();
+  expect(screen.getByText("vision, coding")).toBeInTheDocument();
+  expect(screen.getByText("Cost Tier")).toBeInTheDocument();
+  expect(screen.getByText("medium")).toBeInTheDocument();
+  expect(screen.getByText("Profiles")).toBeInTheDocument();
+  expect(screen.getByText("Fast, Long Context")).toBeInTheDocument();
+  expect(screen.getByText("Deployments")).toBeInTheDocument();
+  expect(screen.getByText("127.0.0.1:8081, gpu-1:8091 (fast)")).toBeInTheDocument();
+});
+
 it("starts and stops local models from the Dashboard card", async () => {
   vi.stubGlobal(
     "fetch",

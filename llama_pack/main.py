@@ -148,7 +148,12 @@ async def _thread_model_available(registry: NodeRegistry, node: str, model: str)
     return False
 
 
-async def _thread_model_artifact_presence(registry: NodeRegistry, node: str, model: str) -> str | None:
+async def _thread_model_artifact_presence(
+    registry: NodeRegistry,
+    catalog_service: ModelCatalogService | None,
+    node: str,
+    model: str,
+) -> str | None:
     """9.2 — returns "registered", "gguf_present", or None for the routing policy."""
     try:
         models = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/models")
@@ -175,6 +180,31 @@ async def _thread_model_artifact_presence(registry: NodeRegistry, node: str, mod
         }
         if model in names:
             return "gguf_present"
+    return _persisted_thread_model_artifact_presence(catalog_service, node, model)
+
+
+def _persisted_thread_model_artifact_presence(
+    catalog_service: ModelCatalogService | None,
+    node: str,
+    model: str,
+) -> str | None:
+    if catalog_service is None:
+        return None
+    base_name, _, profile_key = model.partition(":")
+    try:
+        row = catalog_service.get_model(base_name)
+    except Exception:
+        return None
+    deployments = catalog_service.store.list_model_deployments(str(row["model_id"]))
+    for deployment in deployments:
+        if deployment.get("node_name") != node or not bool(deployment.get("enabled", True)):
+            continue
+        if profile_key:
+            if deployment.get("profile_key") == profile_key:
+                return "registered"
+            continue
+        if deployment.get("profile_key") in {None, "", "default"}:
+            return "registered"
     return None
 
 
@@ -241,6 +271,8 @@ def _configure_app_state(
         app_config,
         catalog_service=app.state.model_catalog_service,
     )
+    if getattr(app.state.process_manager, "catalog_service", None) is None:
+        setattr(app.state.process_manager, "catalog_service", app.state.model_catalog_service)
     app.state.chat_proxy = ChatProxy(
         app.state.process_manager,
         app_config,
@@ -264,7 +296,9 @@ def _configure_app_state(
         chat_proxy=app.state.chat_scheduler,
         model_running=lambda node, model: _thread_model_running(app.state.node_registry, node, model),
         model_available=lambda node, model: _thread_model_available(app.state.node_registry, node, model),
-        model_artifact_presence=lambda node, model: _thread_model_artifact_presence(app.state.node_registry, node, model),
+        model_artifact_presence=lambda node, model: _thread_model_artifact_presence(
+            app.state.node_registry, app.state.model_catalog_service, node, model
+        ),
         node_startup_allowed=lambda node, model: _thread_node_startup_allowed(app.state.node_registry, node, model),
     )
     app.state.model_asset_inventory_service = ModelAssetInventoryService(

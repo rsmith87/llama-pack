@@ -68,6 +68,8 @@ class RecommendationCatalogItem:
     source: str = "curated"
     vision: bool = False
     mmproj_file: str | None = None
+    supports_mtp: bool = False
+    draft_model_path: str | None = None
 
 
 FALLBACK_CATALOG: tuple[RecommendationCatalogItem, ...] = (
@@ -185,8 +187,36 @@ def recommend_downloads(system: dict[str, Any] | None, *, hf_api: Any | None = N
 
 def _catalog_with_hugging_face_discoveries(hf_api: Any | None) -> list[RecommendationCatalogItem]:
     catalog = list(_load_curated_catalog())
-    catalog.extend(_hugging_face_catalog_items(hf_api, known_repo_ids={item.repo_id for item in catalog}))
-    return catalog
+    discoveries = _hugging_face_catalog_items(hf_api, known_repo_ids={item.repo_id for item in catalog})
+    if not discoveries:
+        return catalog
+    discovered_by_repo = {item.repo_id: item for item in discoveries}
+    merged: list[RecommendationCatalogItem] = []
+    for item in catalog:
+        discovered = discovered_by_repo.pop(item.repo_id, None)
+        if discovered is None:
+            merged.append(item)
+            continue
+        merged.append(
+            RecommendationCatalogItem(
+                repo_id=item.repo_id,
+                title=item.title,
+                include_file=item.include_file,
+                quant=item.quant,
+                min_ram_gb=item.min_ram_gb,
+                min_vram_gb=item.min_vram_gb,
+                estimated_size_gb=item.estimated_size_gb,
+                fit_label=item.fit_label,
+                use_case=item.use_case,
+                source=item.source,
+                vision=item.vision or discovered.vision,
+                mmproj_file=item.mmproj_file or discovered.mmproj_file,
+                supports_mtp=item.supports_mtp or discovered.supports_mtp,
+                draft_model_path=item.draft_model_path or discovered.draft_model_path,
+            )
+        )
+    merged.extend(discovered_by_repo.values())
+    return merged
 
 
 def _catalog_item_from_dict(raw: dict[str, Any]) -> RecommendationCatalogItem:
@@ -205,6 +235,8 @@ def _catalog_item_from_dict(raw: dict[str, Any]) -> RecommendationCatalogItem:
         source=str(raw.get("source") or "curated"),
         vision=bool(raw.get("vision", False)),
         mmproj_file=str(raw["mmproj_file"]) if raw.get("mmproj_file") else None,
+        supports_mtp=bool(raw.get("supports_mtp", False)),
+        draft_model_path=str(raw["draft_model_path"]) if raw.get("draft_model_path") else None,
     )
 
 
@@ -224,6 +256,10 @@ def _catalog_item_to_dict(item: RecommendationCatalogItem) -> dict[str, object]:
     }
     if item.mmproj_file:
         payload["mmproj_file"] = item.mmproj_file
+    if item.supports_mtp:
+        payload["supports_mtp"] = True
+    if item.draft_model_path:
+        payload["draft_model_path"] = item.draft_model_path
     return payload
 
 
@@ -257,7 +293,6 @@ def _hugging_face_catalog_items(hf_api: Any | None, *, known_repo_ids: set[str])
         if (
             not repo_id
             or not _is_supported_repo_id(repo_id)
-            or repo_id in known_repo_ids
             or repo_id in discovered_repo_ids
         ):
             continue
@@ -277,6 +312,7 @@ def _catalog_item_from_hf_repo(hf_api: Any, repo_id: str) -> RecommendationCatal
     if quant_file is None:
         return None
     mmproj_file = _best_mmproj_file(files)
+    mtp_file = _best_mtp_file(files)
     path = str(getattr(quant_file, "path", ""))
     quant = _quant_from_path(path) or "GGUF"
     size_bytes = getattr(quant_file, "size", None)
@@ -298,6 +334,8 @@ def _catalog_item_from_hf_repo(hf_api: Any, repo_id: str) -> RecommendationCatal
         source="huggingface",
         vision=mmproj_file is not None,
         mmproj_file=str(getattr(mmproj_file, "path", "")) if mmproj_file else None,
+        supports_mtp=mtp_file is not None,
+        draft_model_path=str(getattr(mtp_file, "path", "")) if mtp_file else None,
     )
 
 
@@ -326,6 +364,21 @@ def _best_mmproj_file(files: Any) -> Any | None:
         quant = _quant_from_path(path) or ""
         priority = 0 if quant == "F16" else 1 if quant == "BF16" else 2
         candidates.append((priority, -_number(getattr(item, "size", None)), item))
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda candidate: (candidate[0], candidate[1]))[0][2]
+
+
+def _best_mtp_file(files: Any) -> Any | None:
+    candidates = []
+    for item in files or []:
+        path = str(getattr(item, "path", ""))
+        if not path.lower().endswith(".gguf") or not _is_mtp_artifact(path):
+            continue
+        quant = _quant_from_path(path) or ""
+        priority = _quant_priority(quant, path)
+        size = _number(getattr(item, "size", None))
+        candidates.append((priority, -size, item))
     if not candidates:
         return None
     return sorted(candidates, key=lambda candidate: (candidate[0], candidate[1]))[0][2]
@@ -487,4 +540,6 @@ def _item_payload(item: RecommendationCatalogItem, *, score: int, fit_reason: st
         "source": item.source,
         "vision": item.vision,
         "mmproj_file": item.mmproj_file,
+        "supports_mtp": item.supports_mtp,
+        "draft_model_path": item.draft_model_path,
     }

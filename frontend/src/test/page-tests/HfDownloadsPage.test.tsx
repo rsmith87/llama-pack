@@ -232,6 +232,66 @@ it("shows controller-only node target selector and queues an agent install job",
         port: 8080,
         ctx: 4096,
         gpu_layers: 0,
+        supports_mtp: false,
+        draft_model_path: null,
+        start: true,
+      },
+    }),
+  })));
+});
+
+it("includes inferred mmproj and mtp fields when downloading a recommendation through controller jobs", async () => {
+  mockHfDownloadsFetch({
+    "/lm-api/v1/nodes/models": [{ name: "agent-a", reachable: true, models: [] }],
+    "/lm-api/v1/downloads/recommendations": {
+      machine: { ram_gb: 64, vram_gb: 0, platform: "Darwin", architecture: "arm64" },
+      recommendations: [
+        {
+          repo_id: "unsloth/Qwen3.6-35B-A3B-GGUF",
+          title: "Qwen3.6 35B A3B",
+          include_file: "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+          mmproj_file: "mmproj-F16.gguf",
+          supports_mtp: true,
+          draft_model_path: "MTP/Qwen3.6-35B-A3B-Q8_0-MTP.gguf",
+          vision: true,
+          quant: "UD-Q4_K_M",
+          fit_label: "Large MoE workstation",
+          use_case: "Current large multimodal MoE release.",
+          fit_reason: "Fits unified memory.",
+          score: 95,
+        },
+      ],
+      excluded: [],
+    },
+  });
+  const user = userEvent.setup();
+
+  render(
+    <AppModeProvider appMode="controller">
+      <HfDownloadsPage />
+    </AppModeProvider>,
+  );
+
+  await screen.findByText("Qwen3.6 35B A3B");
+  await user.selectOptions(screen.getByLabelText("Target node"), "agent-a");
+  await user.click(screen.getByRole("button", { name: "Download Qwen3.6 35B A3B" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/jobs", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({
+      type: "model.install",
+      target: "node:agent-a",
+      payload: {
+        repo_id: "unsloth/Qwen3.6-35B-A3B-GGUF",
+        revision: null,
+        include_file: "Qwen3.6-35B-A3B-UD-Q4_K_M.gguf",
+        mmproj_file: "mmproj-F16.gguf",
+        model_name: "Qwen3.6-35B-A3B-UD-Q4_K_M",
+        port: 8080,
+        ctx: 4096,
+        gpu_layers: 0,
+        supports_mtp: true,
+        draft_model_path: "MTP/Qwen3.6-35B-A3B-Q8_0-MTP.gguf",
         start: true,
       },
     }),

@@ -39,6 +39,9 @@ class TargetResolver:
         for node in self.node_registry.list_nodes():
             if await self.is_model_running_on_node(node["name"], model_name):
                 return {"kind": "remote", "url": node["url"], "node_name": node["name"]}
+        for node in self.node_registry.list_nodes():
+            if self.has_persisted_remote_deployment(node["name"], model_name):
+                return {"kind": "remote", "url": node["url"], "node_name": node["name"]}
         raise ModelNotRunningError(f"Model is not running locally or on any controller node: {model_name}")
 
     def resolve_local_target(self, model_name: str) -> dict[str, str]:
@@ -56,7 +59,9 @@ class TargetResolver:
         node = next((item for item in self.node_registry.list_nodes() if item["name"] == node_name), None)
         if node is None:
             raise ModelNotRunningError(f"Unknown controller node: {node_name}")
-        if not await self.is_model_running_on_node(node_name, model_name):
+        if not await self.is_model_running_on_node(node_name, model_name) and not self.has_persisted_remote_deployment(
+            node_name, model_name
+        ):
             raise ModelNotRunningError(f"Model is not running on controller node '{node_name}': {model_name}")
         return {"kind": "remote", "url": node["url"], "node_name": node_name}
 
@@ -69,5 +74,26 @@ class TargetResolver:
             return False
         for status in statuses:
             if isinstance(status, dict) and status.get("name") == model_name and bool(status.get("running")):
+                return True
+        return False
+
+    def has_persisted_remote_deployment(self, node_name: str, model_name: str) -> bool:
+        catalog_service = getattr(self.process_manager, "catalog_service", None)
+        if catalog_service is None:
+            return False
+        base_name, _, profile_key = model_name.partition(":")
+        try:
+            model = catalog_service.get_model(base_name)
+        except Exception:
+            return False
+        deployments = catalog_service.store.list_model_deployments(str(model["model_id"]))
+        for deployment in deployments:
+            if deployment.get("node_name") != node_name or not bool(deployment.get("enabled", True)):
+                continue
+            if profile_key:
+                if deployment.get("profile_key") == profile_key:
+                    return True
+                continue
+            if deployment.get("profile_key") in {None, "", "default"}:
                 return True
         return False

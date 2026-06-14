@@ -7,6 +7,8 @@ export type DownloadRecommendation = {
   title: string;
   include_file: string;
   mmproj_file?: string | null;
+  supports_mtp?: boolean;
+  draft_model_path?: string | null;
   vision?: boolean;
   quant: string;
   fit_label: string;
@@ -50,6 +52,8 @@ export type RecommendedDownload = {
   title: string;
   includeFile: string;
   mmprojFile: string | null;
+  supportsMtp: boolean;
+  draftModelPath: string | null;
   vision: boolean;
   quant: string;
   fitLabel: string;

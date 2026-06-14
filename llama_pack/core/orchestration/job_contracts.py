@@ -135,9 +135,11 @@ class ModelInstallJobPayload(ModelDownloadJobPayload):
     reasoning_budget: int | None = None
     prompt_template: str | None = None
     vision: bool = False
+    supports_mtp: bool = False
+    draft_model_path: str | None = None
     start: bool = True
 
-    @field_validator("model_name", "host", "prompt_template")
+    @field_validator("model_name", "host", "prompt_template", "draft_model_path")
     @classmethod
     def normalize_optional_text(cls, value: str | None) -> str | None:
         if value is None:

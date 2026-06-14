@@ -37,6 +37,10 @@ function str(model: Record<string, unknown>, localKey: string, ggufKey: string):
   return typeof v === "string" ? v : undefined;
 }
 
+function strArray(value: unknown): string[] {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
+}
+
 /* ---------- props ---------- */
 
 export type ModelCardProps = {
@@ -110,6 +114,23 @@ export function ModelCard({
   const fileDir = str(raw, "model_dir", "model_dir") || "";
   const vision = Boolean(raw.vision || (raw as { supports?: { vision?: boolean } }).supports?.vision);
   const fileId = str(raw, "file_id", "file_id") || str(raw, "id", "id") || "";
+  const catalog = (typeof raw.model_catalog === "object" && raw.model_catalog) ? raw.model_catalog as Record<string, unknown> : null;
+  const profileRows = Array.isArray(raw.model_profiles) ? raw.model_profiles as Array<Record<string, unknown>> : [];
+  const deploymentRows = Array.isArray(raw.model_deployments) ? raw.model_deployments as Array<Record<string, unknown>> : [];
+  const strengths = strArray(raw.strengths).length > 0 ? strArray(raw.strengths) : strArray(catalog?.strengths);
+  const costTier = typeof raw.cost_tier === "string" && raw.cost_tier ? raw.cost_tier : typeof catalog?.cost_tier === "string" ? catalog.cost_tier : undefined;
+  const profileLabels = profileRows
+    .map((profile) => (typeof profile.label === "string" && profile.label ? profile.label : typeof profile.profile_key === "string" ? profile.profile_key : ""))
+    .filter((label) => label.length > 0);
+  const deploymentLabels = deploymentRows
+    .map((deployment) => {
+      const host = typeof deployment.host === "string" ? deployment.host : "";
+      const port = typeof deployment.port === "number" ? deployment.port : null;
+      const profileKey = typeof deployment.profile_key === "string" && deployment.profile_key ? deployment.profile_key : "";
+      if (!host || port === null) return "";
+      return `${host}:${port}${profileKey ? ` (${profileKey})` : ""}`;
+    })
+    .filter((label) => label.length > 0);
 
   const hasActions = Boolean(onStart || onStop || onChat || onBenchmark || onTransfer || onLogs || onAdd || onEdit || onDelete);
 
@@ -127,6 +148,10 @@ export function ModelCard({
     const label = sizeLabel(bytes);
     if (label) details.push(["Size", label]);
   }
+  if (strengths.length > 0) details.push(["Strengths", strengths.join(", ")]);
+  if (costTier) details.push(["Cost Tier", costTier]);
+  if (profileLabels.length > 0) details.push(["Profiles", profileLabels.join(", ")]);
+  if (deploymentLabels.length > 0) details.push(["Deployments", deploymentLabels.join(", ")]);
   if (fileId) details.push(["File ID", fileId]);
   if (fileDir) details.push(["Directory", fileDir]);
   if (registeredAs) details.push(["Added as", registeredAs]);

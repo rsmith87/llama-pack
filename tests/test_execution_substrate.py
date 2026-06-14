@@ -604,16 +604,22 @@ def test_model_install_job_validates_required_payload(tmp_path):
             "payload": {
                 "repo_id": "owner/model",
                 "include_file": "model-Q4.gguf",
+                "mmproj_file": "mmproj-F16.gguf",
                 "model_name": "model-q4",
                 "port": 8081,
                 "ctx": 8192,
                 "gpu_layers": 999,
+                "supports_mtp": True,
+                "draft_model_path": "/models/owner__model-GGUF/model-draft-q4.gguf",
             },
         },
     )
     assert valid.status_code == 201
     assert valid.json()["payload"]["model_name"] == "model-q4"
     assert valid.json()["payload"]["start"] is True
+    assert valid.json()["payload"]["mmproj_file"] == "mmproj-F16.gguf"
+    assert valid.json()["payload"]["supports_mtp"] is True
+    assert valid.json()["payload"]["draft_model_path"] == "/models/owner__model-GGUF/model-draft-q4.gguf"
 
 
 @pytest.mark.asyncio
@@ -666,6 +672,8 @@ async def test_agent_worker_installs_downloaded_model_and_starts_it():
                             "ctx": 8192,
                             "gpu_layers": 999,
                             "vision": True,
+                            "supports_mtp": True,
+                            "draft_model_path": "/models/owner__model-GGUF/model-draft-q4.gguf",
                         },
                     },
                 }
@@ -709,6 +717,8 @@ async def test_agent_worker_installs_downloaded_model_and_starts_it():
             "prompt_template": None,
             "vision": True,
             "mmproj": "/models/owner__model-GGUF/mmproj-F16.gguf",
+            "supports_mtp": True,
+            "draft_model_path": "/models/owner__model-GGUF/model-draft-q4.gguf",
         }
     ]
     assert process_manager.started == ["model-q4"]

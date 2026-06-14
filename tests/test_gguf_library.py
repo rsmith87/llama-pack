@@ -190,6 +190,37 @@ def test_gguf_library_add_model_persists_model_asset_link(tmp_path):
     assert deployments[0]["enabled"] is True
 
 
+def test_gguf_library_add_model_creates_stub_mtp_draft_asset_when_missing(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "gemma"
+    model_dir.mkdir(parents=True)
+    gguf_path = model_dir / "model.gguf"
+    gguf_path.write_text("", encoding="utf-8")
+    draft_path = model_dir / "model-draft-q4.gguf"
+
+    library, store, config = _make_library(tmp_path, hf_dir)
+
+    model = library.add_model(
+        library.file_id(gguf_path),
+        name="gemma-local",
+        port=8088,
+        ctx=8192,
+        gpu_layers=999,
+        host="0.0.0.0",
+        supports_mtp=True,
+        draft_model_path=str(draft_path),
+    )
+
+    assert model["supports_mtp"] is True
+    assert model["speculative"]["draft_model_path"] == str(draft_path.resolve())
+    db_model = store.get_model_by_name("gemma-local")
+    assert db_model is not None
+    assert db_model["mtp_draft_asset_id"]
+    draft_asset = store.get_asset(str(db_model["mtp_draft_asset_id"]))
+    assert draft_asset["canonical_path"] == str(draft_path.resolve())
+    assert draft_asset["size_bytes"] == 0
+
+
 def test_gguf_library_remove_and_delete_clear_model_asset_links(tmp_path):
     hf_dir = tmp_path / "HFModels"
     model_dir = hf_dir / "gemma"

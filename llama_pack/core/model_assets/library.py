@@ -95,8 +95,16 @@ class GgufLibrary:
         mtp_draft_asset_id = None
         if supports_mtp and draft_model_path:
             draft_asset = self.store.get_asset_by_path(str(Path(draft_model_path).resolve()))
-            if draft_asset is not None:
-                mtp_draft_asset_id = draft_asset["asset_id"]
+            if draft_asset is None:
+                draft_asset = self.store.upsert_asset(
+                    canonical_path=str(Path(draft_model_path).resolve()),
+                    filename=Path(draft_model_path).name,
+                    display_name=Path(draft_model_path).stem,
+                    size_bytes=0,
+                    asset_kind="gguf",
+                    source_type="config",
+                )
+            mtp_draft_asset_id = draft_asset["asset_id"]
 
         # Also auto-associate mmproj sidecar from same directory if not explicitly provided
         if not mmproj and not mmproj_asset_id:

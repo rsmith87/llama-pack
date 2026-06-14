@@ -102,10 +102,11 @@ class RoutePreviewService:
     async def _enrich_candidate(self, candidate: dict[str, Any], requirements: RoutePreviewRequirements) -> dict[str, Any]:
         models = await self._node_models(candidate["node"])
         model_info = next((item for item in models if item.get("name") == candidate["model"]), None)
+        persisted_deployment = self._persisted_remote_deployment(candidate["node"], candidate["model"]) if model_info is None else None
         metadata = self._model_metadata(candidate["model"], model_info)
         rejections: list[str] = []
         running = bool(model_info.get("running")) if model_info else False
-        available = model_info is not None
+        available = model_info is not None or persisted_deployment is not None
         startup_needed = available and not running
         startup_decision = self._startup_decision(candidate["node"], models) if startup_needed else None
         ctx = _first_int(model_info, "ctx", "intended_ctx") if model_info else metadata.get("ctx")
@@ -201,6 +202,26 @@ class RoutePreviewService:
             return self.catalog_service.runtime_model(model_name)
         except Exception:
             return None
+
+    def _persisted_remote_deployment(self, node_name: str, model_name: str) -> dict[str, Any] | None:
+        if self.catalog_service is None:
+            return None
+        base_name, _, profile_key = model_name.partition(":")
+        try:
+            model = self.catalog_service.get_model(base_name)
+        except Exception:
+            return None
+        deployments = self.catalog_service.store.list_model_deployments(str(model["model_id"]))
+        for deployment in deployments:
+            if deployment.get("node_name") != node_name:
+                continue
+            if profile_key:
+                if deployment.get("profile_key") == profile_key:
+                    return deployment
+                continue
+            if deployment.get("profile_key") in {None, "", "default"}:
+                return deployment
+        return None
 
 
 def _selected_payload(candidate: dict[str, Any] | None) -> dict[str, Any] | None:

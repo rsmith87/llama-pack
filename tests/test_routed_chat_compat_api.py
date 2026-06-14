@@ -10,7 +10,7 @@ from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
 
-def _controller_app(tmp_path, chat_responses=None, stream_chunks=None, model_running=True):
+def _controller_app(tmp_path, chat_responses=None, stream_chunks=None, model_running=True, controller_request=None):
     prepare_all_persistence_dbs(tmp_path)
     calls = []
     stream_calls = []
@@ -50,7 +50,8 @@ def _controller_app(tmp_path, chat_responses=None, stream_chunks=None, model_run
                     },
                 },
             }
-        )
+        ),
+        controller_request=controller_request,
     )
     app.state.chat_proxy.chat_with_meta = fake_chat
     app.state.chat_proxy.stream_with_meta = fake_stream
@@ -84,6 +85,63 @@ def test_openai_chat_completions_routes_by_request_type_and_creates_thread(tmp_p
     assert calls[0]["payload"]["target"] == "node:linux-2080ti"
     public_events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [event["event_type"] for event in public_events] == ["user_message", "assistant_message"]
+
+
+def test_openai_chat_completions_routes_from_persisted_remote_deployment_when_live_models_are_empty(tmp_path):
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        assert method == "GET"
+        if url == "http://linux/lm-api/v1/models":
+            return []
+        if url == "http://linux/lm-api/v1/library/ggufs":
+            return []
+        if url == "http://mac/lm-api/v1/models":
+            return []
+        if url == "http://mac/lm-api/v1/library/ggufs":
+            return []
+        raise AssertionError(f"unexpected url: {url}")
+
+    app, calls, _ = _controller_app(tmp_path, model_running=False, controller_request=fake_request)
+    store = app.state.model_asset_store
+    asset = store.upsert_asset(
+        canonical_path="/models/qwen.gguf",
+        filename="qwen.gguf",
+        display_name="qwen",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    model = store.upsert_model(
+        model_name="qwen",
+        asset_id=asset["asset_id"],
+        config_source="db",
+        ctx=8192,
+    )
+    store.upsert_model_deployment(
+        model_id=str(model["model_id"]),
+        deployment_name="remote:linux-2080ti:default",
+        node_name="linux-2080ti",
+        host="linux",
+        port=8091,
+        profile_key=None,
+        enabled=True,
+    )
+
+    client = TestClient(app)
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "write code"}],
+            "request_type": "coding",
+            "metadata": {"app": "integration-test"},
+            "stream": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Llama-Manager-Route"] == "node:linux-2080ti"
+    assert response.headers["X-Llama-Manager-Node"] == "linux-2080ti"
+    assert calls[0]["payload"]["target"] == "node:linux-2080ti"
 
 
 def test_openai_chat_completions_appends_to_existing_thread(tmp_path):

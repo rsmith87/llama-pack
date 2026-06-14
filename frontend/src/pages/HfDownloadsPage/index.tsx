@@ -141,6 +141,8 @@ function asRecommendations(payload: DownloadRecommendationsResponse | null): Rec
     title: item.title,
     includeFile: item.include_file,
     mmprojFile: item.mmproj_file || null,
+    supportsMtp: Boolean(item.supports_mtp),
+    draftModelPath: item.draft_model_path || null,
     vision: Boolean(item.vision || item.mmproj_file),
     quant: item.quant,
     fitLabel: item.fit_label,
@@ -220,6 +222,14 @@ type HfDownloadsData = {
   nodes: NodeRecord[];
 };
 
+type StartDownloadOptions = {
+  repo: string;
+  includeFile?: string;
+  mmprojFile?: string | null;
+  supportsMtp?: boolean;
+  draftModelPath?: string | null;
+};
+
 async function loadHfDownloadsData(): Promise<HfDownloadsData> {
   const [downloadPayload, recommendationResult, ggufsPayload, nodePayload] = await Promise.all([
     listDownloadHistory(),
@@ -282,7 +292,12 @@ export function HfDownloadsPage() {
     }
   }
 
-  async function start(repo = repoId, includeFile = "", mmprojFile: string | null = null) {
+  async function start(options?: StartDownloadOptions) {
+    const repo = options?.repo ?? repoId;
+    const includeFile = options?.includeFile ?? "";
+    const mmprojFile = options?.mmprojFile ?? null;
+    const supportsMtp = options?.supportsMtp ?? false;
+    const draftModelPath = options?.draftModelPath ?? null;
     if (!repo.trim()) return;
     const payload: Record<string, unknown> = { revision: revision.trim() || null, include_file: includeFile || null };
     if (mmprojFile) payload.mmproj_file = mmprojFile;
@@ -297,6 +312,8 @@ export function HfDownloadsPage() {
           port: Number(installPort) || 8080,
           ctx: 4096,
           gpu_layers: 0,
+          supports_mtp: supportsMtp,
+          draft_model_path: draftModelPath,
           start: true,
         },
       });
@@ -308,7 +325,7 @@ export function HfDownloadsPage() {
 
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
-    await start(repoId);
+    await start({ repo: repoId });
   }
 
   async function cancel(id: string) {
@@ -386,7 +403,13 @@ export function HfDownloadsPage() {
                   inventory={inventory}
                   canSend={canSend}
                   onSend={openTransfer}
-                  onDownload={(recommendedItem) => void start(recommendedItem.repoId, recommendedItem.includeFile, recommendedItem.mmprojFile)}
+                  onDownload={(recommendedItem) => void start({
+                    repo: recommendedItem.repoId,
+                    includeFile: recommendedItem.includeFile,
+                    mmprojFile: recommendedItem.mmprojFile,
+                    supportsMtp: recommendedItem.supportsMtp,
+                    draftModelPath: recommendedItem.draftModelPath,
+                  })}
                 />
               );
             })}
@@ -427,7 +450,7 @@ export function HfDownloadsPage() {
                 <span>{path}</span>
                 {mmproj ? <span>{mmproj}</span> : null}
                 <small>{field(quant, "size", "unknown size")}</small>
-                <Button type="button" onClick={() => void start(repoId, path, mmproj)} aria-label={`Download ${path}`}>Download</Button>
+                <Button type="button" onClick={() => void start({ repo: repoId, includeFile: path, mmprojFile: mmproj })} aria-label={`Download ${path}`}>Download</Button>
               </article>
             );
           })}
@@ -451,7 +474,7 @@ export function HfDownloadsPage() {
               { key: "actions", header: "Actions", render: (row) => {
                 const id = String(row.id || "");
                 const repo = field(row, "repo_id");
-                return <div className="actions"><Button type="button" onClick={() => void start(repo)} aria-label={`Download ${repo}`}>Download</Button><Button type="button" onClick={() => void cancel(id)} disabled={row.status !== "running"} aria-label={`Stop ${repo}`}>Stop</Button><Button type="button" onClick={() => void remove(id)} disabled={row.status === "running"} aria-label={`Delete ${repo}`}>Delete</Button></div>;
+                return <div className="actions"><Button type="button" onClick={() => void start({ repo })} aria-label={`Download ${repo}`}>Download</Button><Button type="button" onClick={() => void cancel(id)} disabled={row.status !== "running"} aria-label={`Stop ${repo}`}>Stop</Button><Button type="button" onClick={() => void remove(id)} disabled={row.status === "running"} aria-label={`Delete ${repo}`}>Delete</Button></div>;
               } },
             ]}
           />

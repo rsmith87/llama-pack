@@ -1324,4 +1324,81 @@ def test_route_preview_discovers_registered_node_models_without_configured_route
     assert body["selected"]["model"] == "qwen"
     assert body["candidates"][0]["source"] == "runtime_model"
     assert body["candidates"][0]["startup_needed"] is True
+
+
+def test_route_preview_uses_persisted_remote_deployment_when_live_models_are_empty(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        assert method == "GET"
+        if url == "http://mac/lm-api/v1/models":
+            return []
+        raise AssertionError(f"unexpected url: {url}")
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "mac": {
+                        "url": "http://mac",
+                        "max_running_models": 2,
+                        "request_types": {"general": {"model": "gemma:fast", "priority": 10}},
+                    },
+                },
+            }
+        ),
+        controller_request=fake_request,
+    )
+    store = app.state.model_asset_store
+    asset = store.upsert_asset(
+        canonical_path="/models/gemma.gguf",
+        filename="gemma.gguf",
+        display_name="gemma",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    model = store.upsert_model(
+        model_name="gemma",
+        asset_id=asset["asset_id"],
+        config_source="db",
+        ctx=8192,
+    )
+    store.upsert_model_profile(
+        model_id=str(model["model_id"]),
+        profile_key="fast",
+        label="Fast",
+        order=10,
+        kind="interactive",
+        ctx=8192,
+    )
+    store.upsert_model_deployment(
+        model_id=str(model["model_id"]),
+        deployment_name="remote:mac:fast",
+        node_name="mac",
+        host="mac",
+        port=8092,
+        profile_key="fast",
+        enabled=True,
+    )
+
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Manager-Key": key})
+
+    response = client.post(
+        "/lm-api/v1/runtime/route-preview",
+        json={"task": "Answer a question", "request_type": "general"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["selected"]["node"] == "mac"
+    assert body["selected"]["model"] == "gemma:fast"
+    assert body["selected"]["startup_needed"] is True
+    assert body["selected"]["startup_decision"] == "start_now"
+    assert body["candidates"][0]["source"] == "request_type"
+    assert body["candidates"][0]["available"] is True
     assert body["candidates"][0]["startup_decision"] == "start_now"

@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import httpx
-from fastapi import APIRouter, Depends
+from urllib.parse import urlparse
+from fastapi import APIRouter, Depends, Request
 
 from llama_pack.api.dependencies import get_node_registry
 from llama_pack.api.routes.nodes.common import (
@@ -18,7 +19,41 @@ from llama_pack.core.runtime.profile_catalog import build_profile_catalog
 router = APIRouter()
 
 
-async def _fetch_node_snapshot(registry: NodeRegistry, node: dict, include_models: bool) -> dict:
+def _sync_remote_deployments(request_node: dict, models: object, store: object | None) -> None:
+    if store is None or not isinstance(models, list):
+        return
+    node_name = str(request_node.get("name") or "").strip()
+    if not node_name:
+        return
+    host = urlparse(str(request_node.get("url") or "")).hostname or node_name
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        family = str(model.get("family") or "").strip()
+        name = str(model.get("name") or "").strip()
+        base_name = family or name.partition(":")[0].strip()
+        if not base_name:
+            continue
+        model_row = store.get_model_by_name(base_name)
+        if model_row is None:
+            continue
+        profile_key = str(model.get("profile") or "").strip() or None
+        suffix = profile_key or "default"
+        port = model.get("port")
+        if not isinstance(port, int):
+            continue
+        store.upsert_model_deployment(
+            model_id=str(model_row["model_id"]),
+            deployment_name=f"remote:{node_name}:{suffix}",
+            node_name=node_name,
+            host=host,
+            port=port,
+            profile_key=profile_key,
+            enabled=True,
+        )
+
+
+async def _fetch_node_snapshot(registry: NodeRegistry, node: dict, include_models: bool, store: object | None = None) -> dict:
     cert_expires_in_seconds = await probe_cert_expiry_seconds(node.get("url", ""))
     if not node["heartbeat_fresh"]:
         payload = stale_node_payload(node, include_models=include_models)
@@ -28,6 +63,7 @@ async def _fetch_node_snapshot(registry: NodeRegistry, node: dict, include_model
         if not include_models:
             return {**node, "reachable": True, "health": health, "cert_expires_in_seconds": cert_expires_in_seconds}
         models = await registry.request_node(node["name"], "GET", "/lm-api/v1/models")
+        _sync_remote_deployments(node, models, store)
         models_source = annotate_model_sources(models)
         return {
             **node,
@@ -54,8 +90,9 @@ async def node_status(registry: NodeRegistry = Depends(get_node_registry)):
 
 
 @router.get("/nodes/models")
-async def node_models(registry: NodeRegistry = Depends(get_node_registry)):
-    return [await _fetch_node_snapshot(registry, node, include_models=True) for node in registry.list_nodes()]
+async def node_models(request: Request, registry: NodeRegistry = Depends(get_node_registry)):
+    store = getattr(request.app.state, "model_asset_store", None)
+    return [await _fetch_node_snapshot(registry, node, include_models=True, store=store) for node in registry.list_nodes()]
 
 
 async def _fetch_node_gguf_snapshot(registry: NodeRegistry, node: dict) -> dict:
