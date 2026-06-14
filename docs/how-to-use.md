@@ -149,7 +149,7 @@ Before using the UI or protected API routes, create an admin key:
 uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 ```
 
-The command stores only a hash in `log_dir/auth_store.db` and prints the raw key once. Use that key in the UI login form or as the `X-Llama-Manager-Key` header for API requests. There is no `dev` fallback login.
+The command stores only a hash in `log_dir/auth_store.db` and prints the raw key once. Use that key in the UI login form or as the `X-Llama-Pack-Key` header for API requests. There is no `dev` fallback login.
 
 `scripts/onboard_controller.sh` performs these migration and first-admin-key
 steps for fresh controller setup.
@@ -390,7 +390,7 @@ nodes:
     verify_tls: true
 ```
 
-Worker APIs fail closed: the controller only accepts `/nodes/{node}/work/*` requests for registered nodes that have an `api_key`, and the request must send that key in `X-Llama-Manager-Key`.
+Worker APIs fail closed: the controller only accepts `/nodes/{node}/work/*` requests for registered nodes that have an `api_key`, and the request must send that key in `X-Llama-Pack-Key`.
 
 Agent config:
 

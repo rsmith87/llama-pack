@@ -11,6 +11,7 @@ from typing import Any
 
 import httpx
 
+from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
 from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.library import GgufLibrary
 from llama_pack.core.model_assets.transfers import TransferManager
@@ -634,7 +635,7 @@ class AgentWorker:
 
     def _headers(self) -> dict[str, str]:
         if self.config.agent_api_key:
-            return {"X-Llama-Manager-Key": self.config.agent_api_key}
+            return {LLAMA_PACK_API_KEY_HEADER: self.config.agent_api_key}
         return {}
 
     @staticmethod

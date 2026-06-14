@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
 from llama_pack.core.chat.target_resolver import ModelNotRunningError
 from llama_pack.core.nodes.registry import NodeRegistry
 
@@ -35,5 +36,5 @@ class TransportBuilder:
         node_config = self.node_registry.get_node_config(node_name)
         headers: dict[str, str] = {}
         if node_config.api_key:
-            headers["X-Llama-Manager-Key"] = node_config.api_key
+            headers[LLAMA_PACK_API_KEY_HEADER] = node_config.api_key
         return f"{node['url'].rstrip('/')}/{path.lstrip('/')}", headers, bool(node_config.verify_tls), {"route": f"node:{node_name}"}

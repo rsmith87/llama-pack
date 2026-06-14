@@ -178,7 +178,7 @@ async def test_request_node_allows_long_running_default_request(monkeypatch):
         "verify": False,
         "method": "POST",
         "url": "https://mac-mini.local/lm-api/v1/runtime/tool-loop-evals/run",
-        "headers": {"X-Llama-Manager-Key": "secret"},
+        "headers": {"X-Llama-Pack-Key": "secret"},
         "json": {"model": "gpt-oss-20b"},
     }
 
@@ -275,6 +275,6 @@ async def test_stream_node_request_relays_upstream_chunks(monkeypatch):
         "verify": False,
         "method": "GET",
         "url": "http://win-agent:9000/logs/qwen/stream?lines=200",
-        "headers": {"X-Llama-Manager-Key": "secret"},
+        "headers": {"X-Llama-Pack-Key": "secret"},
     }
     assert body == b'event: chunk\ndata: {"text":"loaded"}\n\n'

@@ -9,6 +9,13 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
+from llama_pack.api.http_headers import (
+    LEGACY_LLAMA_MANAGER_ROUTE_HEADER,
+    LLAMA_PACK_ROUTE_HEADER,
+    get_model_header,
+    get_node_header,
+    get_route_header,
+)
 from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_thread_service
 from llama_pack.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_pack.api.routes.external_usage_audit import audit_external_chat_completion
@@ -193,7 +200,11 @@ async def openai_chat_completions(
                 return StreamingResponse(
                     _agent_tool_detection_stream(stream),
                     media_type="text/event-stream",
-                    headers={"X-Llama-Manager-Route": headers.get("route", "local"), **profile_headers},
+                    headers={
+                        LLAMA_PACK_ROUTE_HEADER: headers.get("route", "local"),
+                        LEGACY_LLAMA_MANAGER_ROUTE_HEADER: headers.get("route", "local"),
+                        **profile_headers,
+                    },
                 )
             with track_model_if_local(manager, model_name):
                 response, headers = await AgentToolLoop(
@@ -201,7 +212,11 @@ async def openai_chat_completions(
                 ).run(model_name, payload)
             return JSONResponse(
                 content=response,
-                headers={"X-Llama-Manager-Route": headers.get("route", "local"), **profile_headers},
+                headers={
+                    LLAMA_PACK_ROUTE_HEADER: headers.get("route", "local"),
+                    LEGACY_LLAMA_MANAGER_ROUTE_HEADER: headers.get("route", "local"),
+                    **profile_headers,
+                },
             )
         if body.stream:
             stream, headers = await controller_stream(
@@ -429,9 +444,9 @@ def _diagnostic_payload(
 
 
 def _diagnostic_route(headers: dict[str, str]) -> dict[str, str] | None:
-    route = headers.get("X-Llama-Manager-Route")
-    node = headers.get("X-Llama-Manager-Node")
-    model = headers.get("X-Llama-Manager-Model")
+    route = get_route_header(headers)
+    node = get_node_header(headers)
+    model = get_model_header(headers)
     if not route:
         return None
     payload = {"route": route}

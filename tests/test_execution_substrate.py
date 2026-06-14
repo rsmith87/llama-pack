@@ -10,7 +10,7 @@ from llama_pack.main import create_app
 from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
-WORKER_HEADERS = {"X-Llama-Manager-Key": "node-secret"}
+WORKER_HEADERS = {"X-Llama-Pack-Key": "node-secret"}
 
 
 def worker_nodes(*names):
@@ -291,7 +291,7 @@ async def test_agent_worker_authenticates_work_requests_with_agent_api_key():
 
     assert processed == 0
     assert calls[0][1] == "http://controller/lm-api/v1/nodes/agent-a/work/claim"
-    assert calls[0][3] == {"X-Llama-Manager-Key": "agent-key"}
+    assert calls[0][3] == {"X-Llama-Pack-Key": "agent-key"}
 
 
 @pytest.mark.asyncio

@@ -358,7 +358,7 @@ Returns \`hash\`, \`subject\`, \`author\`, and \`age\` for each commit.
 ### \`process_status\`
 
 Report runtime health for locally managed model servers. Reads internal Llama
-Manager process state — no shell commands.
+Pack process state — no shell commands.
 
 \`\`\`yaml
 model_health:
@@ -782,7 +782,7 @@ and scoring model.
         "anchor": "tool-loop-evaluations"
       }
     ],
-    searchBody: "Agent Tools Agent tools give a coding agent structured, operator-controlled access to the local machine. Most tools are read-only; write-capable tools must be explicitly configured by the operator and are constrained by and per-tool limits. Each tool is a named YAML entry under with a and a that is shown to the LLM. Configuration skeleton --- Tool Types Run a fixed configured command and return stdout/stderr. Fields Field Default Description --- --- --- required Command array passed to the subprocess directly (no shell). Override the global timeout for this tool. --- Read a single configured file. Fields Field Default Description --- --- --- required File to read. Must resolve under . --- Read a file selected by the model under a configured root directory. The model must pass a relative argument; absolute paths and traversal outside the configured root are rejected. Example model arguments: Fields Field Default Description --- --- --- required Root directory for relative file reads. Must resolve under . Reject files larger than this limit before reading. --- Write, append, or create a single configured file. The model supplies only the argument; the destination path and write mode are fixed in YAML. Model arguments: Fields Field Default Description --- --- --- required File to write. Must resolve under . Parent directories are created if needed. , , or . fails if the file already exists. Reject content larger than this limit (1–1048576 bytes). --- Call a fixed HTTP endpoint and return the raw response body as text. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Override the global timeout. --- Call a fixed HTTP endpoint and return bounded parsed JSON. Returns a structured error if the response is not valid JSON. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Truncate response body before parsing. Override the global timeout. --- List files and directories under a configured path without shelling out. Fields Field Default Description --- --- --- required Directory to list. Must resolve under . Recurse into subdirectories. Max recursion depth when (0–32). Max entries to return (1–5000). Include dotfiles and hidden directories. --- Search file names under a configured root by glob pattern. Safe equivalent of or . Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern relative to . Include hidden files and directories. Max results to return (1–5000). --- Search file contents under a configured root. Safe equivalent of bounded . The agent provides a argument at call time (defined via ). Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern to filter which files to search. Case-sensitive matching. Treat as a compiled regex instead of a substring. Max total matches to return (1–2000). Skip files larger than this (bytes). --- Report read-only git state for a configured repository: current branch and changed files. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max changed files to return. Override the global timeout. --- Show the unstaged diff ( ) for a configured repository, bounded by . Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max diff lines to return (1–1000). Override the global timeout. --- Show recent commit metadata for a configured repository. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max commits to return (1–200). Override the global timeout. Returns , , , and for each commit. --- Report runtime health for locally managed model servers. Reads internal Llama Manager process state — no shell commands. Fields Field Default Description --- --- --- Max processes to return (1–5000). Returns , , , , and for each process. --- Return the last N lines of a configured log file without shelling out. Fields Field Default Description --- --- --- required Log file to read. Must resolve under . Max lines to return from the end of the file (1–1000). --- Run read-only SQL queries against one configured SQLite database, or against one of several configured databases selected by stem name. Only queries whose first non-comment token is or are allowed, and connections open in SQLite read-only mode. Single database: Multiple databases: Model arguments: For a single configured , omit : Fields Field Default Description --- --- --- optional SQLite database file. Required unless is set. Must resolve under . Multiple SQLite database files. The model chooses one with , using the file stem such as . Max rows to return (1–5000). --- Fetch a URL and return the page content. The agent provides the at call time. HTML is stripped to readable text by default using BeautifulSoup. Fields Field Default Description --- --- --- (open) If non-empty, only these domains and their subdomains are permitted. Strip HTML tags and extract visible text via BeautifulSoup. Truncate the response body before parsing (bytes). Override the global timeout. Built-in SSRF protection (always enforced, regardless of ): - Blocks , , - Blocks RFC 1918 private ranges: , , - Blocks link-local: , - Only and schemes are allowed ( , , etc. are rejected) --- Safety Rules - All path-based local tools ( , , , , , , , , , , and ) require to be set and will reject any path that does not resolve under a configured root. - is the only filesystem-mutating tool. It writes only to its configured , enforces , and rejects content larger than . - opens databases read-only and accepts only / queries after comments are stripped. - and URLs are fixed in YAML; the agent cannot supply or modify URLs at call time. - blocks loopback, private IP ranges, and non-http(s) schemes at all times. Set to further restrict which public sites the agent can reach. - reads in-memory state only — no subprocess or filesystem access. - Git tools are read-only status, diff, and log views. No commit, checkout, or push tools are implemented. --- Memory Tool Types These tools interact with the controller's semantic memory store (ChromaDB + ). They are only registered when the controller's memory subsystem is enabled and the store is not disabled. See for the config block. --- Write an observation or fact into the controller's memory store. The write is fire-and-forget — the tool returns immediately without waiting for the embedding and storage to complete. Near-identical entries (cosine similarity ≥ 0.92) are deduplicated server-side. Model arguments at call time: Fields (all optional in YAML — no static config beyond and ) Argument Default Description --- --- --- required The fact or observation to store. Must be non-empty. Memory tier: , , or . Optional topic label for grouping. Optional list of tag strings. --- Search the controller's memory store by semantic similarity and return the most relevant entries. The model provides the search query at call time. Model arguments at call time: Returns: Fields Argument Default Description --- --- --- required Natural language search query. Must be non-empty. store Max results to return (1–20). --- Tool-Loop Evaluations Use to run deterministic tool-loop evaluations against one or more local tool-capable models. The runner uses the same agent-local tool execution path as with , then writes an append-only JSONL history, a latest summary JSON file, and durable benchmark history for UI/API consumption. Default output paths are: - - The built-in cases use deterministic eval-only tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current synthetic presets cover: - short and long ordered tool sequences - avoiding unnecessary tool calls - recovery after a deterministic tool error - stopping after a tool reports that no more information is available - branch selection - exact tool argument preservation - order-insensitive fact gathering - helper/delegation-style synthesis Current real-world deterministic scenarios ask models to draft compact design documents from relevant project-like sources while avoiding unrelated scope. UI/API-triggered runs also include a live workspace scenario that uses actual workspace tools in a temporary seeded workspace and checks the generated artifact content. Run multiple models by repeating ; route to a specific controller node with ; run a single built-in case with . Node targets require a controller-mode config that defines the node. Running the command with an agent-mode config will resolve the model as local to that process instead of going through the controller. Runs started from the Tool Loop Evals UI call in agent mode or in controller mode, then persist summaries and case details in the benchmark database. See Tool-Loop Eval Presets for the preset roadmap and scoring model.",
+    searchBody: "Agent Tools Agent tools give a coding agent structured, operator-controlled access to the local machine. Most tools are read-only; write-capable tools must be explicitly configured by the operator and are constrained by and per-tool limits. Each tool is a named YAML entry under with a and a that is shown to the LLM. Configuration skeleton --- Tool Types Run a fixed configured command and return stdout/stderr. Fields Field Default Description --- --- --- required Command array passed to the subprocess directly (no shell). Override the global timeout for this tool. --- Read a single configured file. Fields Field Default Description --- --- --- required File to read. Must resolve under . --- Read a file selected by the model under a configured root directory. The model must pass a relative argument; absolute paths and traversal outside the configured root are rejected. Example model arguments: Fields Field Default Description --- --- --- required Root directory for relative file reads. Must resolve under . Reject files larger than this limit before reading. --- Write, append, or create a single configured file. The model supplies only the argument; the destination path and write mode are fixed in YAML. Model arguments: Fields Field Default Description --- --- --- required File to write. Must resolve under . Parent directories are created if needed. , , or . fails if the file already exists. Reject content larger than this limit (1–1048576 bytes). --- Call a fixed HTTP endpoint and return the raw response body as text. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Override the global timeout. --- Call a fixed HTTP endpoint and return bounded parsed JSON. Returns a structured error if the response is not valid JSON. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Truncate response body before parsing. Override the global timeout. --- List files and directories under a configured path without shelling out. Fields Field Default Description --- --- --- required Directory to list. Must resolve under . Recurse into subdirectories. Max recursion depth when (0–32). Max entries to return (1–5000). Include dotfiles and hidden directories. --- Search file names under a configured root by glob pattern. Safe equivalent of or . Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern relative to . Include hidden files and directories. Max results to return (1–5000). --- Search file contents under a configured root. Safe equivalent of bounded . The agent provides a argument at call time (defined via ). Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern to filter which files to search. Case-sensitive matching. Treat as a compiled regex instead of a substring. Max total matches to return (1–2000). Skip files larger than this (bytes). --- Report read-only git state for a configured repository: current branch and changed files. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max changed files to return. Override the global timeout. --- Show the unstaged diff ( ) for a configured repository, bounded by . Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max diff lines to return (1–1000). Override the global timeout. --- Show recent commit metadata for a configured repository. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max commits to return (1–200). Override the global timeout. Returns , , , and for each commit. --- Report runtime health for locally managed model servers. Reads internal Llama Pack process state — no shell commands. Fields Field Default Description --- --- --- Max processes to return (1–5000). Returns , , , , and for each process. --- Return the last N lines of a configured log file without shelling out. Fields Field Default Description --- --- --- required Log file to read. Must resolve under . Max lines to return from the end of the file (1–1000). --- Run read-only SQL queries against one configured SQLite database, or against one of several configured databases selected by stem name. Only queries whose first non-comment token is or are allowed, and connections open in SQLite read-only mode. Single database: Multiple databases: Model arguments: For a single configured , omit : Fields Field Default Description --- --- --- optional SQLite database file. Required unless is set. Must resolve under . Multiple SQLite database files. The model chooses one with , using the file stem such as . Max rows to return (1–5000). --- Fetch a URL and return the page content. The agent provides the at call time. HTML is stripped to readable text by default using BeautifulSoup. Fields Field Default Description --- --- --- (open) If non-empty, only these domains and their subdomains are permitted. Strip HTML tags and extract visible text via BeautifulSoup. Truncate the response body before parsing (bytes). Override the global timeout. Built-in SSRF protection (always enforced, regardless of ): - Blocks , , - Blocks RFC 1918 private ranges: , , - Blocks link-local: , - Only and schemes are allowed ( , , etc. are rejected) --- Safety Rules - All path-based local tools ( , , , , , , , , , , and ) require to be set and will reject any path that does not resolve under a configured root. - is the only filesystem-mutating tool. It writes only to its configured , enforces , and rejects content larger than . - opens databases read-only and accepts only / queries after comments are stripped. - and URLs are fixed in YAML; the agent cannot supply or modify URLs at call time. - blocks loopback, private IP ranges, and non-http(s) schemes at all times. Set to further restrict which public sites the agent can reach. - reads in-memory state only — no subprocess or filesystem access. - Git tools are read-only status, diff, and log views. No commit, checkout, or push tools are implemented. --- Memory Tool Types These tools interact with the controller's semantic memory store (ChromaDB + ). They are only registered when the controller's memory subsystem is enabled and the store is not disabled. See for the config block. --- Write an observation or fact into the controller's memory store. The write is fire-and-forget — the tool returns immediately without waiting for the embedding and storage to complete. Near-identical entries (cosine similarity ≥ 0.92) are deduplicated server-side. Model arguments at call time: Fields (all optional in YAML — no static config beyond and ) Argument Default Description --- --- --- required The fact or observation to store. Must be non-empty. Memory tier: , , or . Optional topic label for grouping. Optional list of tag strings. --- Search the controller's memory store by semantic similarity and return the most relevant entries. The model provides the search query at call time. Model arguments at call time: Returns: Fields Argument Default Description --- --- --- required Natural language search query. Must be non-empty. store Max results to return (1–20). --- Tool-Loop Evaluations Use to run deterministic tool-loop evaluations against one or more local tool-capable models. The runner uses the same agent-local tool execution path as with , then writes an append-only JSONL history, a latest summary JSON file, and durable benchmark history for UI/API consumption. Default output paths are: - - The built-in cases use deterministic eval-only tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current synthetic presets cover: - short and long ordered tool sequences - avoiding unnecessary tool calls - recovery after a deterministic tool error - stopping after a tool reports that no more information is available - branch selection - exact tool argument preservation - order-insensitive fact gathering - helper/delegation-style synthesis Current real-world deterministic scenarios ask models to draft compact design documents from relevant project-like sources while avoiding unrelated scope. UI/API-triggered runs also include a live workspace scenario that uses actual workspace tools in a temporary seeded workspace and checks the generated artifact content. Run multiple models by repeating ; route to a specific controller node with ; run a single built-in case with . Node targets require a controller-mode config that defines the node. Running the command with an agent-mode config will resolve the model as local to that process instead of going through the controller. Runs started from the Tool Loop Evals UI call in agent mode or in controller mode, then persist summaries and case details in the benchmark database. See Tool-Loop Eval Presets for the preset roadmap and scoring model.",
   },
   {
     id: "api",
@@ -803,7 +803,7 @@ operator, node, model, auth, audit, or settings endpoints.
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "model": "qwen",
     "messages": [
@@ -820,10 +820,10 @@ On a controller, \`request_type\` routes the call through
 default and returns routing metadata in response headers:
 
 \`\`\`text
-X-Llama-Manager-Thread-Id: ...
-X-Llama-Manager-Route: node:linux-2080ti
-X-Llama-Manager-Node: linux-2080ti
-X-Llama-Manager-Model: qwen
+X-Llama-Pack-Thread-Id: ...
+X-Llama-Pack-Route: node:linux-2080ti
+X-Llama-Pack-Node: linux-2080ti
+X-Llama-Pack-Model: qwen
 \`\`\`
 
 Send \`thread_id\` on later calls to append to the same durable record and keep
@@ -836,7 +836,7 @@ app key boundary applies here:
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/api/chat \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "model": "qwen",
     "messages": [
@@ -880,7 +880,7 @@ Example response:
   "auth": {
     "methods": ["llama_pack_api_key", "external_api_key"],
     "sessionHeader": "X-UI-Session",
-    "apiKeyHeader": "X-Llama-Manager-Key"
+    "apiKeyHeader": "X-Llama-Pack-Key"
   },
   "endpoints": {
     "openaiChatCompletions": "/v1/chat/completions",
@@ -909,7 +909,7 @@ External chat-only keys can call:
 
 These routes intentionally avoid admin/runtime details from \`/lm-api/v1/models\`.
 For standalone end-user chat apps, prefer external app keys with the
-\`X-Llama-Manager-Key\` header. Use UI sessions for the built-in operator/admin
+\`X-Llama-Pack-Key\` header. Use UI sessions for the built-in operator/admin
 UI. Plugin-provided auth modes should be discovered through client discovery and
 handled by plugin-owned routes.
 
@@ -947,7 +947,7 @@ Example diagnostics request:
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_EXTERNAL_APP_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_EXTERNAL_APP_KEY" \\
   -d '{"model":"qwen","request_type":"coding","stream":false}'
 \`\`\`
 
@@ -1258,7 +1258,7 @@ orchestration job, and targets it at the destination node's worker:
 \`\`\`bash
 curl -X POST http://127.0.0.1:9137/lm-api/v1/nodes/mac-mini/transfers \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "destination_node": "linux-2080ti",
     "source_file_id": "<gguf-file-id>",
@@ -1720,7 +1720,7 @@ List active definitions:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/definitions
 \`\`\`
 
@@ -1731,7 +1731,7 @@ Add \`?include_archived=true\` to include archived definitions.
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/definitions \\
   -d '{
     "name": "Coding Smoke",
@@ -1765,7 +1765,7 @@ Run one definition against one or more models:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs \\
   -d '{
     "definition_id": "<definition-id>",
@@ -1795,7 +1795,7 @@ Managed-load runs isolate a model on one target node:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs \\
   -d '{
     "definition_id": "<definition-id>",
@@ -1818,7 +1818,7 @@ List recent runs:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   "http://127.0.0.1:9137/lm-api/v1/benchmarks/runs?limit=50"
 \`\`\`
 
@@ -1826,7 +1826,7 @@ Fetch a run and its samples:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs/<run-id>
 \`\`\`
 
@@ -1849,14 +1849,13 @@ Compare runs from the same definition:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/benchmarks/runs/compare \\
   -d '{"run_ids":["<run-a>","<run-b>"]}'
 \`\`\`
 
 Comparison requires at least two run IDs and rejects runs from different
 benchmark definitions.
-
 `,
     headings: [
       {
@@ -2721,7 +2720,7 @@ curl -v http://linux-2080ti.local:9137/health
 Controller node visibility:
 
 \`\`\`bash
-curl -s -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" \\
+curl -s -H "X-Llama-Pack-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" \\
   https://pi-controller.local/lm-api/v1/nodes
 \`\`\`
 
@@ -2975,7 +2974,7 @@ Re-run the renewal script — the fullchain install step rebuilds
 | \`127.0.0.1:2019 already in use\` | Another Caddy process is running | Stop the manual process or restart the service cleanly. |
 | Caddy reload says cert/key permission denied | Caddy service user cannot read \`/etc/caddy/certs\` | Use \`systemctl show caddy -p User -p Group\`, then \`chown root:caddy\`, \`chmod 750\` on the cert dir, \`640\` on keys, and \`644\` on certs. |
 | Pi can ping an agent but HTTPS hangs | Firewall blocks TCP 443 | Allow \`443/tcp\` on the agent, for example \`sudo ufw allow 443/tcp\`. |
-| Admin API returns \`Unauthorized\` with \`Authorization: Bearer ...\` | Llama Pack does not use Bearer auth for admin APIs | Send \`X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY\`. |
+| Admin API returns \`Unauthorized\` with \`Authorization: Bearer ...\` | Llama Pack does not use Bearer auth for admin APIs | Send \`X-Llama-Pack-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY\`. |
 
 ## Mobile App Note
 
@@ -3531,7 +3530,7 @@ For the current Raspberry Pi controller topology and smoke checks, see
 
 ## Optional Security And Registration Fields
 
-- Agent-side auth: \`agent_api_key\` requires clients to send \`X-Llama-Manager-Key\`.
+- Agent-side auth: \`agent_api_key\` requires clients to send \`X-Llama-Pack-Key\`.
 - Controller-to-agent auth per node: \`nodes.<name>.api_key\`.
 - Auto-registration auth: \`controller_registration_key\` on controller, \`controller_registration_key_outbound\` on agent.
 - Agent heartbeat/registration fields: \`controller_url\`, \`node_name\`, \`agent_url\`, \`heartbeat_interval_seconds\`.
@@ -3632,7 +3631,7 @@ transparent to the agent — it sees a normal chat request with enriched context
 - \`agent_worker_labels\`: labels advertised to the controller claim matcher.
 - \`agent_worker_capacity\`: numeric/string capacity advertised to the controller claim matcher.
 
-Agent workers must be registered/configured on the controller under \`nodes.<name>\` with an \`api_key\`. The agent sends its \`agent_api_key\` as \`X-Llama-Manager-Key\` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
+Agent workers must be registered/configured on the controller under \`nodes.<name>\` with an \`api_key\`. The agent sends its \`agent_api_key\` as \`X-Llama-Pack-Key\` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
 
 The first typed worker contract is \`llm.generate\`. It is intentionally narrow and reuses the existing chat payload shape (\`model\`, \`messages\`, sampling fields, structured-output fields, \`reasoning\`, and optional \`target\`/\`requirements\`). Future typed contracts are tracked in \`superpowers/plans/2026-05-12-execution-substrate.md\`.
 
@@ -3716,7 +3715,7 @@ tail -f ./logs/agent_tool_calls.jsonl
 \`\`\`bash
 curl -s http://127.0.0.1:9137/v1/chat/completions \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   -d '{
     "model": "qwen",
     "messages": [
@@ -3885,7 +3884,7 @@ Use quant listing before download when a repo contains multiple GGUF files:
 
 \`\`\`bash
 curl -s \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   "http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/quants"
 \`\`\`
 
@@ -3901,7 +3900,7 @@ Download an entire repo:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \\
   -d '{}'
 \`\`\`
@@ -3911,7 +3910,7 @@ Download one GGUF file from a specific revision:
 \`\`\`bash
 curl -X POST \\
   -H "Content-Type: application/json" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \\
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \\
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \\
   -d '{
     "revision": "main",
@@ -3955,7 +3954,6 @@ be cancelled before deletion.
 \`GET /lm-api/v1/downloads/recommendations\` returns suggested model downloads
 based on the controller health payload. Results are cached in memory for one
 hour to avoid repeated Hugging Face API work.
-
 `,
     headings: [
       {
@@ -4378,7 +4376,7 @@ Before using the UI or protected API routes, create an admin key:
 uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 \`\`\`
 
-The command stores only a hash in \`log_dir/auth_store.db\` and prints the raw key once. Use that key in the UI login form or as the \`X-Llama-Manager-Key\` header for API requests. There is no \`dev\` fallback login.
+The command stores only a hash in \`log_dir/auth_store.db\` and prints the raw key once. Use that key in the UI login form or as the \`X-Llama-Pack-Key\` header for API requests. There is no \`dev\` fallback login.
 
 \`scripts/onboard_controller.sh\` performs these migration and first-admin-key
 steps for fresh controller setup.
@@ -4619,7 +4617,7 @@ nodes:
     verify_tls: true
 \`\`\`
 
-Worker APIs fail closed: the controller only accepts \`/nodes/{node}/work/*\` requests for registered nodes that have an \`api_key\`, and the request must send that key in \`X-Llama-Manager-Key\`.
+Worker APIs fail closed: the controller only accepts \`/nodes/{node}/work/*\` requests for registered nodes that have an \`api_key\`, and the request must send that key in \`X-Llama-Pack-Key\`.
 
 Agent config:
 
@@ -5300,7 +5298,7 @@ Controller node inventory, with an admin/controller API key:
 
 \`\`\`bash
 curl -s "$LLAMA_PACK_CONTROLLER_URL/nodes" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_API_KEY"
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_CONTROLLER_API_KEY"
 \`\`\`
 
 Expected checks:
@@ -5314,7 +5312,7 @@ Linux 2080 Ti agent health, after confirming the current URL from \`/nodes\`:
 
 \`\`\`bash
 curl -s "$LLAMA_PACK_LINUX_2080TI_AGENT_URL/health" \\
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY"
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY"
 \`\`\`
 
 ## Agent Startup
@@ -5359,7 +5357,7 @@ nodes:
 ## Troubleshooting
 
 If controller health works but \`/nodes\` returns \`Unauthorized\`, export an admin
-or controller API key and retry with \`X-Llama-Manager-Key\`.
+or controller API key and retry with \`X-Llama-Pack-Key\`.
 
 If a node is listed but not fresh, check that the agent has:
 
@@ -6679,7 +6677,7 @@ For manual setup, create the first admin key from the terminal:
 uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 \`\`\`
 
-The command stores a hashed key in \`log_dir/auth_store.db\` and prints the raw API key once. Use that key in the UI login form, or send it as \`X-Llama-Manager-Key\` for API requests. To create more keys later, log in as an admin and use the auth key management UI/API.
+The command stores a hashed key in \`log_dir/auth_store.db\` and prints the raw API key once. Use that key in the UI login form, or send it as \`X-Llama-Pack-Key\` for API requests. To create more keys later, log in as an admin and use the auth key management UI/API.
 
 There is no built-in \`dev\` login fallback. For local development, create a throwaway admin key with the same command.
 

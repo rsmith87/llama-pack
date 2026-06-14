@@ -6,6 +6,21 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
+from llama_pack.api.http_headers import (
+    LEGACY_LLAMA_MANAGER_CONTEXT_PROFILE_HEADER,
+    LEGACY_LLAMA_MANAGER_MODEL_FAMILY_HEADER,
+    LEGACY_LLAMA_MANAGER_MODEL_HEADER,
+    LEGACY_LLAMA_MANAGER_NODE_HEADER,
+    LEGACY_LLAMA_MANAGER_ROUTE_HEADER,
+    LEGACY_LLAMA_MANAGER_THREAD_ID_HEADER,
+    LLAMA_PACK_CONTEXT_PROFILE_HEADER,
+    LLAMA_PACK_MODEL_FAMILY_HEADER,
+    LLAMA_PACK_MODEL_HEADER,
+    LLAMA_PACK_NODE_HEADER,
+    LLAMA_PACK_ROUTE_HEADER,
+    LLAMA_PACK_THREAD_ID_HEADER,
+    compatibility_header_pairs,
+)
 from llama_pack.core.chat.scheduler import ChatAdmissionError
 from llama_pack.core.config import AppConfig
 from llama_pack.core.threads.service import ThreadChatError, ThreadService
@@ -25,18 +40,36 @@ class CompatChatHTTPError(RuntimeError):
 def compatibility_headers(thread_id: str | None, route: dict[str, Any] | None, response_meta: dict[str, Any] | None = None) -> dict[str, str]:
     headers: dict[str, str] = {}
     if thread_id:
-        headers["X-Llama-Manager-Thread-Id"] = thread_id
+        headers.update(compatibility_header_pairs(LLAMA_PACK_THREAD_ID_HEADER, LEGACY_LLAMA_MANAGER_THREAD_ID_HEADER, thread_id))
     if route:
-        headers["X-Llama-Manager-Node"] = str(route["node"])
-        headers["X-Llama-Manager-Model"] = str(route["model"])
-        headers["X-Llama-Manager-Route"] = f"node:{route['node']}"
+        headers.update(compatibility_header_pairs(LLAMA_PACK_NODE_HEADER, LEGACY_LLAMA_MANAGER_NODE_HEADER, str(route["node"])))
+        headers.update(compatibility_header_pairs(LLAMA_PACK_MODEL_HEADER, LEGACY_LLAMA_MANAGER_MODEL_HEADER, str(route["model"])))
+        headers.update(compatibility_header_pairs(LLAMA_PACK_ROUTE_HEADER, LEGACY_LLAMA_MANAGER_ROUTE_HEADER, f"node:{route['node']}"))
         if route.get("family"):
-            headers["X-Llama-Manager-Model-Family"] = str(route["family"])
+            headers.update(
+                compatibility_header_pairs(
+                    LLAMA_PACK_MODEL_FAMILY_HEADER,
+                    LEGACY_LLAMA_MANAGER_MODEL_FAMILY_HEADER,
+                    str(route["family"]),
+                )
+            )
         if route.get("profile"):
-            headers["X-Llama-Manager-Context-Profile"] = str(route["profile"])
+            headers.update(
+                compatibility_header_pairs(
+                    LLAMA_PACK_CONTEXT_PROFILE_HEADER,
+                    LEGACY_LLAMA_MANAGER_CONTEXT_PROFILE_HEADER,
+                    str(route["profile"]),
+                )
+            )
         return headers
     if response_meta:
-        headers["X-Llama-Manager-Route"] = str(response_meta.get("route", "unknown"))
+        headers.update(
+            compatibility_header_pairs(
+                LLAMA_PACK_ROUTE_HEADER,
+                LEGACY_LLAMA_MANAGER_ROUTE_HEADER,
+                str(response_meta.get("route", "unknown")),
+            )
+        )
     return headers
 
 

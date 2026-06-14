@@ -76,7 +76,7 @@ Controller node inventory, with an admin/controller API key:
 
 ```bash
 curl -s "$LLAMA_PACK_CONTROLLER_URL/nodes" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_API_KEY"
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_CONTROLLER_API_KEY"
 ```
 
 Expected checks:
@@ -90,7 +90,7 @@ Linux 2080 Ti agent health, after confirming the current URL from `/nodes`:
 
 ```bash
 curl -s "$LLAMA_PACK_LINUX_2080TI_AGENT_URL/health" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY"
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_LINUX_2080TI_AGENT_API_KEY"
 ```
 
 ## Agent Startup
@@ -135,7 +135,7 @@ nodes:
 ## Troubleshooting
 
 If controller health works but `/nodes` returns `Unauthorized`, export an admin
-or controller API key and retry with `X-Llama-Manager-Key`.
+or controller API key and retry with `X-Llama-Pack-Key`.
 
 If a node is listed but not fresh, check that the agent has:
 

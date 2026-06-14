@@ -335,7 +335,7 @@ Returns `hash`, `subject`, `author`, and `age` for each commit.
 ### `process_status`
 
 Report runtime health for locally managed model servers. Reads internal Llama
-Manager process state — no shell commands.
+Pack process state — no shell commands.
 
 ```yaml
 model_health:

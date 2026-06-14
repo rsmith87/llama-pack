@@ -138,7 +138,7 @@ def test_agent_transfer_manifest_endpoint_returns_manifest(tmp_path):
 
     client.post(
         "/lm-api/v1/transfer-source/grants",
-        headers={"X-Llama-Manager-Key": "agent-key"},
+        headers={"X-Llama-Pack-Key": "agent-key"},
         json={"source_file_id": file_id, "transfer_token": "transfer-token", "destination_node": "dest"},
     )
     response = client.get(
@@ -166,7 +166,7 @@ def test_agent_transfer_content_endpoint_streams_file(tmp_path):
 
     client.post(
         "/lm-api/v1/transfer-source/grants",
-        headers={"X-Llama-Manager-Key": "agent-key"},
+        headers={"X-Llama-Pack-Key": "agent-key"},
         json={"source_file_id": file_id, "transfer_token": "transfer-token", "destination_node": "dest"},
     )
     response = client.get(
@@ -188,7 +188,7 @@ def test_agent_transfer_grant_allows_bearer_token_manifest_access(tmp_path):
 
     grant = client.post(
         "/lm-api/v1/transfer-source/grants",
-        headers={"X-Llama-Manager-Key": "agent-key"},
+        headers={"X-Llama-Pack-Key": "agent-key"},
         json={"source_file_id": file_id, "transfer_token": "transfer-token", "destination_node": "dest"},
     )
     response = client.get(
@@ -403,7 +403,7 @@ def test_agent_mode_create_transfer_returns_controller_mode_error(tmp_path):
 
     response = client.post(
         "/lm-api/v1/nodes/source/transfers",
-        headers={"X-Llama-Manager-Key": "agent-key"},
+        headers={"X-Llama-Pack-Key": "agent-key"},
         json={"destination_node": "dest", "source_file_id": "abc123", "include": "selected_with_sidecars"},
     )
 
@@ -416,7 +416,7 @@ def test_agent_mode_list_transfers_returns_controller_mode_error(tmp_path):
     config = AppConfig(mode="agent", log_dir=tmp_path, agent_api_key="agent-key")
     client = TestClient(create_app(config))
 
-    response = client.get("/lm-api/v1/transfers", headers={"X-Llama-Manager-Key": "agent-key"})
+    response = client.get("/lm-api/v1/transfers", headers={"X-Llama-Pack-Key": "agent-key"})
 
     assert response.status_code == 409
     assert "controller node" in response.json()["detail"]

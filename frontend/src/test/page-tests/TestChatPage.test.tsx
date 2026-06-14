@@ -45,12 +45,12 @@ it("loads without UI login and uses server-scoped test chat session", async () =
       if (url === "/lm-api/v1/test-chat/bootstrap") return Promise.resolve(okJson({ enabled: true, key_hint: "lmt_te...test" }));
       if (url === "/lm-api/v1/models") return Promise.resolve(okJson({ models: [] }));
       if (url === "/lm-api/v1/nodes/models") {
-        expect(init?.headers).not.toMatchObject({ "X-Llama-Manager-Key": expect.any(String) });
+        expect(init?.headers).not.toMatchObject({ "X-Llama-Pack-Key": expect.any(String) });
         expect(init?.credentials).toBe("same-origin");
         return Promise.resolve(okJson([{ name: "linux-2080ti", reachable: true, models: [{ name: "qwen" }] }]));
       }
       if (url === "/lm-api/v1/chat/sessions") {
-        expect(init?.headers).not.toMatchObject({ "X-Llama-Manager-Key": expect.any(String) });
+        expect(init?.headers).not.toMatchObject({ "X-Llama-Pack-Key": expect.any(String) });
         expect(init?.credentials).toBe("same-origin");
         return Promise.resolve(okJson({ sessions: [{ id: "s1", name: "Coding test", model: "qwen", updated_at: "now" }] }));
       }

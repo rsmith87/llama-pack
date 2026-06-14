@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import httpx
 from fastapi import HTTPException
+
+from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
@@ -99,7 +101,7 @@ async def stream_node_request(registry, node: str, path: str) -> StreamingRespon
     url = f"{node_config.url.rstrip('/')}/{path.lstrip('/')}"
     headers: dict[str, str] = {}
     if node_config.api_key:
-        headers["X-Llama-Manager-Key"] = node_config.api_key
+        headers[LLAMA_PACK_API_KEY_HEADER] = node_config.api_key
 
     async def relay():
         try:

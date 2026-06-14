@@ -39,6 +39,7 @@ from llama_pack.api.routes import (
     transfers,
     ui,
 )
+from llama_pack.api.http_headers import get_request_api_key, request_api_key_headers, response_route_headers
 from llama_pack.core.config import AppConfig, load_config
 from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.chat.scheduler import ChatScheduler
@@ -399,13 +400,8 @@ def _register_middleware(app: FastAPI) -> None:
             allow_origins=app.state.config.client_cors_origins,
             allow_credentials=True,
             allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", "X-UI-Session", "X-Llama-Manager-Key"],
-            expose_headers=[
-                "X-Llama-Manager-Route",
-                "X-Llama-Manager-Thread-Id",
-                "X-Llama-Manager-Node",
-                "X-Llama-Manager-Model",
-            ],
+            allow_headers=["Content-Type", "X-UI-Session", *request_api_key_headers()],
+            expose_headers=response_route_headers(),
         )
 
     @app.middleware("http")
@@ -431,7 +427,7 @@ def _register_middleware(app: FastAPI) -> None:
 
         configured = app.state.config.agent_api_key
         auth_store = app.state.auth_store
-        provided_key = request.headers.get("X-Llama-Manager-Key") or ""
+        provided_key = get_request_api_key(request.headers)
         if not provided_key:
             test_chat_token = request.cookies.get(ui.TEST_CHAT_SESSION_COOKIE) or ""
             test_chat_session = app.state.test_chat_sessions.get(test_chat_token)

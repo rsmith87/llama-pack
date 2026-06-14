@@ -6,6 +6,14 @@ import httpx
 from fastapi import HTTPException
 from pydantic import BaseModel, Field, model_validator
 
+from llama_pack.api.http_headers import (
+    LEGACY_LLAMA_MANAGER_CONTEXT_PROFILE_HEADER,
+    LEGACY_LLAMA_MANAGER_MODEL_FAMILY_HEADER,
+    LEGACY_LLAMA_MANAGER_RESOLVED_MODEL_HEADER,
+    LLAMA_PACK_CONTEXT_PROFILE_HEADER,
+    LLAMA_PACK_MODEL_FAMILY_HEADER,
+    LLAMA_PACK_RESOLVED_MODEL_HEADER,
+)
 from llama_pack.core.chat.profile_activation import ProfileActivationService
 from llama_pack.core.chat.proxy import ModelNotRunningError
 from llama_pack.core.runtime.process_manager import ProcessManager
@@ -96,9 +104,12 @@ def resolve_profile_model(
     activation = service.activate(family, profile, str(target or "local"))
     resolved = str(activation["identity"])
     return resolved, {
-        "X-Llama-Manager-Resolved-Model": resolved,
-        "X-Llama-Manager-Model-Family": str(activation["family"]),
-        "X-Llama-Manager-Context-Profile": str(activation["profile"]),
+        LLAMA_PACK_RESOLVED_MODEL_HEADER: resolved,
+        LEGACY_LLAMA_MANAGER_RESOLVED_MODEL_HEADER: resolved,
+        LLAMA_PACK_MODEL_FAMILY_HEADER: str(activation["family"]),
+        LEGACY_LLAMA_MANAGER_MODEL_FAMILY_HEADER: str(activation["family"]),
+        LLAMA_PACK_CONTEXT_PROFILE_HEADER: str(activation["profile"]),
+        LEGACY_LLAMA_MANAGER_CONTEXT_PROFILE_HEADER: str(activation["profile"]),
     }
 
 

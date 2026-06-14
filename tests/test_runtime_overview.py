@@ -38,7 +38,7 @@ def test_runtime_overview_reports_agent_runtime_state(tmp_path):
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/overview")
 
@@ -79,7 +79,7 @@ def test_tool_loop_eval_latest_reports_missing_file(tmp_path):
     app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/tool-loop-evals/latest")
 
@@ -116,7 +116,7 @@ def test_tool_loop_eval_latest_returns_runner_summary(tmp_path):
     app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/tool-loop-evals/latest")
 
@@ -134,7 +134,7 @@ def test_tool_loop_eval_presets_returns_backend_catalog(tmp_path):
     app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/tool-loop-evals/presets")
 
@@ -180,7 +180,7 @@ def test_controller_tool_loop_eval_node_chat_forwards_to_agent_openai_tool_runti
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/node-chat",
@@ -261,7 +261,7 @@ def test_agent_tool_loop_eval_run_uses_local_agent_tools(tmp_path):
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/run",
@@ -339,7 +339,7 @@ def test_agent_tool_loop_eval_run_stream_emits_trace_events_and_persists(tmp_pat
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     with client.stream(
         "POST",
@@ -387,7 +387,7 @@ def test_standalone_tool_loop_eval_run_persists_local_instance_scope(tmp_path):
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/run",
@@ -437,7 +437,7 @@ def test_agent_tool_loop_eval_run_starts_or_adopts_model_before_eval(tmp_path):
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/run",
@@ -455,7 +455,7 @@ def test_controller_tool_loop_eval_run_rejects_local_eval(tmp_path):
     app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/run",
@@ -471,7 +471,7 @@ def test_agent_tool_loop_eval_node_run_rejects_controller_proxy(tmp_path):
     app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/node-run",
@@ -542,7 +542,7 @@ def test_agent_tool_loop_eval_run_executes_live_workspace_scenario(tmp_path):
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/run",
@@ -580,7 +580,7 @@ def test_agent_tool_loop_eval_run_returns_failed_live_case_when_model_server_err
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/run",
@@ -614,7 +614,7 @@ def test_controller_tool_loop_eval_node_run_forwards_to_agent_runtime_eval(tmp_p
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/node-run",
@@ -696,7 +696,7 @@ def test_controller_tool_loop_eval_node_run_stream_persists_agent_trace_events(t
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     with client.stream(
         "POST",
@@ -741,7 +741,7 @@ def test_controller_tool_loop_eval_node_run_returns_agent_error_detail(tmp_path)
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/node-run",
@@ -765,7 +765,7 @@ def test_controller_tool_loop_eval_node_run_rejects_node_url_without_scheme(tmp_
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/tool-loop-evals/node-run",
@@ -795,7 +795,7 @@ def test_tool_loop_eval_runs_api_lists_persisted_history(tmp_path):
         },
     )
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/tool-loop-evals/runs?model=gpt-oss-20b&status=passed")
 
@@ -841,7 +841,7 @@ def test_tool_loop_eval_run_api_returns_case_detail(tmp_path):
         },
     )
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get(f"/lm-api/v1/runtime/tool-loop-evals/runs/{run['id']}")
 
@@ -857,7 +857,7 @@ def test_tool_loop_eval_run_api_returns_404_for_missing_run(tmp_path):
     app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/tool-loop-evals/runs/missing")
 
@@ -917,7 +917,7 @@ def test_runtime_overview_reports_controller_runtime_state(tmp_path):
     app.state.orchestrator.create_job(job_type="task", payload={"x": 1}, target="auto")
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.get("/lm-api/v1/runtime/overview")
 
@@ -1008,7 +1008,7 @@ def test_route_preview_selects_explicit_request_type_candidate_with_requirements
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",
@@ -1053,7 +1053,7 @@ def test_route_preview_reports_no_selection_when_requirements_reject_every_candi
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",
@@ -1147,7 +1147,7 @@ def test_route_preview_prefers_model_strength_match_over_lower_priority(tmp_path
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",
@@ -1219,7 +1219,7 @@ def test_route_preview_applies_profile_metadata_over_base_model(tmp_path):
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",
@@ -1267,7 +1267,7 @@ def test_route_preview_includes_startup_metadata_for_available_stopped_model(tmp
     )
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",
@@ -1307,7 +1307,7 @@ def test_route_preview_discovers_registered_node_models_without_configured_route
     app.state.node_registry.register_node("mac", NodeConfig(url="http://mac"))
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",
@@ -1386,7 +1386,7 @@ def test_route_preview_uses_persisted_remote_deployment_when_live_models_are_emp
 
     key = app.state.auth_store.create_key("admin", "admin")["key"]
     client = TestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": key})
+    client.headers.update({"X-Llama-Pack-Key": key})
 
     response = client.post(
         "/lm-api/v1/runtime/route-preview",

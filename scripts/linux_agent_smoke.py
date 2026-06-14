@@ -67,7 +67,7 @@ def validate_runtime_paths(config: Any) -> None:
 
 
 def headers(api_key: str | None) -> dict[str, str]:
-    return {"X-Llama-Manager-Key": api_key} if api_key else {}
+    return {"X-Llama-Pack-Key": api_key} if api_key else {}
 
 
 def get_json(client: httpx.Client, url: str, api_key: str | None = None) -> Any:

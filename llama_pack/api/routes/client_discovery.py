@@ -5,6 +5,8 @@ from typing import Any, Literal
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
 
+from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
+
 
 router = APIRouter(prefix="/client-discovery", tags=["client-discovery"])
 
@@ -19,7 +21,7 @@ class ClientCapabilities(BaseModel):
 class ClientAuthDiscovery(BaseModel):
     methods: list[str] = Field(default_factory=lambda: ["llama_pack_api_key", "external_api_key"])
     sessionHeader: str = "X-UI-Session"
-    apiKeyHeader: str = "X-Llama-Manager-Key"
+    apiKeyHeader: str = LLAMA_PACK_API_KEY_HEADER
 
 
 class ClientEndpointDiscovery(BaseModel):

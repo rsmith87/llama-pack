@@ -24,7 +24,7 @@ def test_client_discovery_is_public_without_auth_keys(tmp_path: Path):
     assert payload["capabilities"]["streaming"] is True
     assert payload["capabilities"]["localChatSessions"] is False
     assert payload["auth"]["sessionHeader"] == "X-UI-Session"
-    assert payload["auth"]["apiKeyHeader"] == "X-Llama-Manager-Key"
+    assert payload["auth"]["apiKeyHeader"] == "X-Llama-Pack-Key"
     assert "llama_pack_api_key" in payload["auth"]["methods"]
     assert "external_api_key" in payload["auth"]["methods"]
     assert payload["endpoints"]["openaiChatCompletions"] == "/v1/chat/completions"
@@ -37,13 +37,14 @@ def test_client_discovery_is_public_without_auth_keys(tmp_path: Path):
 
 
 def test_client_discovery_stays_public_when_auth_is_enabled(tmp_path: Path):
-    config = discovery_config(tmp_path, {"api_keys": ["secret"]})
+    config = discovery_config(tmp_path, {"agent_api_key": "secret"})
     client = TestClient(create_app(config=config))
 
     response = client.get("/lm-api/v1/client-discovery")
 
     assert response.status_code == 200
     assert client.get("/lm-api/v1/models").status_code == 401
+    assert client.get("/lm-api/v1/models", headers={"X-Llama-Manager-Key": "secret"}).status_code == 200
 
 
 def test_configured_client_cors_origin_can_preflight_discovery(tmp_path: Path):

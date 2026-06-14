@@ -43,7 +43,7 @@ Use quant listing before download when a repo contains multiple GGUF files:
 
 ```bash
 curl -s \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   "http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/quants"
 ```
 
@@ -59,7 +59,7 @@ Download an entire repo:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \
   -d '{}'
 ```
@@ -69,7 +69,7 @@ Download one GGUF file from a specific revision:
 ```bash
 curl -X POST \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   http://127.0.0.1:9137/lm-api/v1/downloads/TheBloke/example-GGUF/start \
   -d '{
     "revision": "main",
@@ -113,4 +113,3 @@ be cancelled before deletion.
 `GET /lm-api/v1/downloads/recommendations` returns suggested model downloads
 based on the controller health payload. Results are cached in memory for one
 hour to avoid repeated Hugging Face API work.
-

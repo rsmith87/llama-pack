@@ -122,9 +122,9 @@ python -m pip install -e ".[dev]"
 
 Use `/v1/chat/completions` as the primary integration surface for other apps.
 Use `/api/chat` when migrating older Ollama clients. Both endpoints support
-controller routing metadata in headers, including `X-Llama-Manager-Thread-Id`,
-`X-Llama-Manager-Route`, `X-Llama-Manager-Node`, and
-`X-Llama-Manager-Model`.
+controller routing metadata in headers, including `X-Llama-Pack-Thread-Id`,
+`X-Llama-Pack-Route`, `X-Llama-Pack-Node`, and
+`X-Llama-Pack-Model`.
 
 See [API: External Chat Compatibility](docs/api.md#external-chat-compatibility)
 for request examples.

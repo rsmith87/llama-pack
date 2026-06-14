@@ -6,6 +6,7 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
 from llama_pack.core.config import AppConfig, NodeConfig
 
 
@@ -142,7 +143,7 @@ class NodeRegistry:
     ) -> dict[str, Any]:
         headers: dict[str, str] = {}
         if api_key:
-            headers["X-Llama-Manager-Key"] = api_key
+            headers[LLAMA_PACK_API_KEY_HEADER] = api_key
         async with httpx.AsyncClient(timeout=timeout, verify=verify_tls) as client:
             response = await client.request(method, url, headers=headers, json=json_body)
             response.raise_for_status()

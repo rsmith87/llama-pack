@@ -22,7 +22,7 @@ from llama_pack.core.persistence.models.orchestration import JobOrm
 from llama_pack.core.orchestration.store_orm import OrchestrationStoreOrm
 from tests.persistence_db_setup import prepare_all_persistence_dbs, prepare_models_db
 
-WORKER_HEADERS = {"X-Llama-Manager-Key": "node-secret"}
+WORKER_HEADERS = {"X-Llama-Pack-Key": "node-secret"}
 
 
 def worker_nodes(*names):
@@ -884,7 +884,7 @@ def test_agent_api_key_enforcement():
 
     assert client.get("/lm-api/v1/health").status_code == 200
     assert client.get("/lm-api/v1/models").status_code == 401
-    assert client.get("/lm-api/v1/models", headers={"X-Llama-Manager-Key": "secret"}).status_code == 200
+    assert client.get("/lm-api/v1/models", headers={"X-Llama-Pack-Key": "secret"}).status_code == 200
 
 
 def test_controller_can_register_node_and_track_heartbeat():
@@ -1842,9 +1842,9 @@ def test_chat_stream_resolves_family_profile_before_proxying(tmp_path):
             body = response.read()
 
     assert response.status_code == 200
-    assert response.headers["X-Llama-Manager-Resolved-Model"] == "gemma:long"
-    assert response.headers["X-Llama-Manager-Model-Family"] == "gemma"
-    assert response.headers["X-Llama-Manager-Context-Profile"] == "long"
+    assert response.headers["X-Llama-Pack-Resolved-Model"] == "gemma:long"
+    assert response.headers["X-Llama-Pack-Model-Family"] == "gemma"
+    assert response.headers["X-Llama-Pack-Context-Profile"] == "long"
     assert b"ok" in body
     assert calls[0][0] == "http://127.0.0.1:8083/v1/chat/completions"
     assert spawned[0] == [
@@ -1905,9 +1905,9 @@ def test_openai_compat_resolves_family_profile_before_proxying(tmp_path):
         )
 
     assert response.status_code == 200
-    assert response.headers["X-Llama-Manager-Resolved-Model"] == "gemma:long"
-    assert response.headers["X-Llama-Manager-Model-Family"] == "gemma"
-    assert response.headers["X-Llama-Manager-Context-Profile"] == "long"
+    assert response.headers["X-Llama-Pack-Resolved-Model"] == "gemma:long"
+    assert response.headers["X-Llama-Pack-Model-Family"] == "gemma"
+    assert response.headers["X-Llama-Pack-Context-Profile"] == "long"
     assert response.json()["choices"][0]["message"]["content"] == "hello"
     assert calls[0][0] == "http://127.0.0.1:8083/v1/chat/completions"
     assert spawned
@@ -3559,7 +3559,7 @@ def test_node_work_requires_node_api_key_when_configured(tmp_path):
     authorized = client.post(
         "/lm-api/v1/nodes/win/work/claim",
         json={"max_jobs": 1},
-        headers={"X-Llama-Manager-Key": "node-secret"},
+        headers={"X-Llama-Pack-Key": "node-secret"},
     )
     assert authorized.status_code == 200
 
@@ -3583,7 +3583,7 @@ def test_node_work_cancellation_check_uses_node_api_key(tmp_path):
 
     authorized = client.get(
         f"/lm-api/v1/nodes/win/work/jobs/{job['id']}/cancellation",
-        headers={"X-Llama-Manager-Key": "node-secret"},
+        headers={"X-Llama-Pack-Key": "node-secret"},
     )
     assert authorized.status_code == 200
     assert authorized.json() == {"id": job["id"], "cancellation_requested": True}
@@ -3808,7 +3808,7 @@ def test_sensitive_routes_fail_closed_until_auth_is_bootstrapped():
     assert client.get("/lm-api/v1/nodes").status_code == 401
 
     created = app.state.auth_store.create_key("admin", "admin")
-    assert client.get("/lm-api/v1/models", headers={"X-Llama-Manager-Key": created["key"]}).status_code == 200
+    assert client.get("/lm-api/v1/models", headers={"X-Llama-Pack-Key": created["key"]}).status_code == 200
 
 
 def test_setup_status_reports_auth_bootstrap_required_without_keys():
@@ -4088,7 +4088,7 @@ def test_heartbeat_route_bypasses_ui_session_auth_on_controller():
     heartbeat = client.post("/lm-api/v1/nodes/linux-2080ti/heartbeat")
     assert heartbeat.status_code == 200
 
-    nodes = client.get("/lm-api/v1/nodes", headers={"X-Llama-Manager-Key": created["key"]})
+    nodes = client.get("/lm-api/v1/nodes", headers={"X-Llama-Pack-Key": created["key"]})
     assert nodes.status_code == 200
     payload = nodes.json()
     assert payload[0]["name"] == "linux-2080ti"
@@ -4354,7 +4354,7 @@ def test_all_persistence_domains_use_orm_together(tmp_path):
             "route": "test",
             "payload": {"ok": True},
         },
-        headers={"X-Llama-Manager-Key": created_key["key"]},
+        headers={"X-Llama-Pack-Key": created_key["key"]},
     )
     assert audit_resp.status_code == 200
 
@@ -4368,7 +4368,7 @@ def test_all_persistence_domains_use_orm_together(tmp_path):
             "messages": [{"role": "user", "content": "hello"}],
             "request_defaults": {"temperature": 0.2},
         },
-        headers={"X-Llama-Manager-Key": created_key["key"]},
+        headers={"X-Llama-Pack-Key": created_key["key"]},
     )
     assert session_resp.status_code == 200
 
@@ -4376,7 +4376,7 @@ def test_all_persistence_domains_use_orm_together(tmp_path):
     job_resp = client.post(
         "/lm-api/v1/jobs",
         json={"type": "chat", "payload": {"prompt": "hi"}},
-        headers={"X-Llama-Manager-Key": created_key["key"]},
+        headers={"X-Llama-Pack-Key": created_key["key"]},
     )
     assert job_resp.status_code == 201
 

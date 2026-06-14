@@ -5,6 +5,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 
 from collections.abc import AsyncIterator
 
+from llama_pack.api.http_headers import LEGACY_LLAMA_MANAGER_ROUTE_HEADER, LLAMA_PACK_ROUTE_HEADER
 from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_process_manager, get_profile_activation_service
 from llama_pack.api.routes.chat.common import (
     ChatRequestBody,
@@ -22,6 +23,14 @@ from llama_pack.core.runtime.process_manager import ProcessManager
 router = APIRouter(prefix="/chat")
 
 
+def _route_headers(route: str, profile_headers: dict[str, str] | None = None) -> dict[str, str]:
+    return {
+        LLAMA_PACK_ROUTE_HEADER: route,
+        LEGACY_LLAMA_MANAGER_ROUTE_HEADER: route,
+        **(profile_headers or {}),
+    }
+
+
 @router.post("/{model_name}/embeddings")
 async def chat_embeddings(
     model_name: str,
@@ -31,7 +40,7 @@ async def chat_embeddings(
     try:
         values = [body.input] if isinstance(body.input, str) else body.input
         payload, meta = await proxy.embeddings_with_meta(model_name, values, body.target)
-        return JSONResponse(content=payload, headers={"X-Llama-Manager-Route": meta.get("route", "unknown")})
+        return JSONResponse(content=payload, headers=_route_headers(meta.get("route", "unknown")))
     except Exception as exc:
         raise_proxy_http_exception(exc)
 
@@ -74,7 +83,7 @@ async def chat(
         resolved_model, profile_headers = resolve_profile_model(model_name, request_payload, profile_activation)
         with track_model_if_local(manager, resolved_model):
             payload, meta = await scheduler.chat_with_meta(resolved_model, request_payload)
-        return JSONResponse(content=payload, headers={"X-Llama-Manager-Route": meta.get("route", "unknown"), **profile_headers})
+        return JSONResponse(content=payload, headers=_route_headers(meta.get("route", "unknown"), profile_headers))
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
@@ -98,7 +107,7 @@ async def chat_stream(
         return StreamingResponse(
             _track_stream(manager, resolved_model, stream),
             media_type="text/event-stream",
-            headers={"X-Llama-Manager-Route": meta.get("route", "unknown"), **profile_headers},
+            headers=_route_headers(meta.get("route", "unknown"), profile_headers),
         )
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc

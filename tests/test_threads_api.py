@@ -611,9 +611,9 @@ def test_threads_api_internal_events_require_admin_role(tmp_path):
     admin_key = app.state.auth_store.create_key("admin", "admin")["key"]
     viewer_key = app.state.auth_store.create_key("viewer", "viewer")["key"]
     admin = FastAPITestClient(app)
-    admin.headers.update({"X-Llama-Manager-Key": admin_key})
+    admin.headers.update({"X-Llama-Pack-Key": admin_key})
     viewer = FastAPITestClient(app)
-    viewer.headers.update({"X-Llama-Manager-Key": viewer_key})
+    viewer.headers.update({"X-Llama-Pack-Key": viewer_key})
 
     thread = admin.post("/lm-api/v1/threads", json={"title": "x"}).json()
     public_response = viewer.get(f"/lm-api/v1/threads/{thread['id']}/events")

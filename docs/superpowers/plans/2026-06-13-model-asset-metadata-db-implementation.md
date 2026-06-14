@@ -175,3 +175,64 @@
 - Scope: This is intentionally a hybrid architecture, not a full config-to-DB migration.
 - Type consistency: The design uses `asset_id` as the primary cross-system link and keeps downloads and model records as related but distinct domains.
 - Placeholder scan: No `TBD` or deferred ownership markers remain in the task structure.
+
+### Task 10: Expand Models DB Schema For Catalog Fields, Profiles, And Deployments
+
+**Files:**
+- Modify: `llama_pack/core/persistence/models/model_asset.py`
+- Modify: `llama_pack/core/persistence/model_asset_store_orm.py`
+- Create: `migrations/versions/models/<revision>_add_model_profiles_and_deployments.py`
+- Modify: `tests/test_model_asset_store.py`
+- Modify: `tests/test_alembic_config.py`
+
+- [x] **Step 1: Write failing store and migration tests for expanded `models` catalog fields plus new `model_profiles` and `model_deployments` tables**
+- [x] **Step 2: Run the focused tests and verify the new schema surfaces are missing**
+- [x] **Step 3: Extend ORM models with model-level catalog columns and add profile/deployment tables with indexes on model, profile key, node name, and port**
+- [x] **Step 4: Extend the ORM store with CRUD helpers for model profiles and deployments**
+- [x] **Step 5: Add the Alembic migration and verify focused store/migration tests pass**
+- [ ] **Step 6: Commit**
+
+### Task 11: Mirror YAML Model Config Into Catalog, Profiles, And Default Deployments
+
+**Files:**
+- Modify: `llama_pack/core/model_assets/library.py`
+- Modify: `llama_pack/core/model_assets/models_db.py`
+- Modify: `llama_pack/core/config/models.py`
+- Modify: `tests/test_models_db_integration.py`
+- Modify: `tests/test_gguf_library.py`
+
+- [x] **Step 1: Write failing tests showing configured YAML models sync catalog metadata, profiles, and default deployment rows into the `models` DB**
+- [x] **Step 2: Run the focused tests and verify only minimal model link rows exist today**
+- [x] **Step 3: Extend sync logic so YAML-backed model records populate model-level metadata, profile rows, and a default deployment row while preserving YAML as launch source**
+- [x] **Step 4: Define merge rules so deployment-specific values like `port` remain separate from catalog defaults**
+- [x] **Step 5: Run focused backend tests and verify they pass**
+- [ ] **Step 6: Commit**
+
+### Task 12: Expose Models DB Catalog And Deployment Data To Read Paths
+
+**Files:**
+- Modify: `llama_pack/api/routes/library.py`
+- Modify: `llama_pack/api/dependencies.py`
+- Modify: `frontend/src/types/library.ts`
+- Modify: `frontend/src/api/library.ts`
+- Modify: `frontend/src/pages/GgufLibraryPage/index.tsx`
+- Modify: `tests/test_api.py`
+- Modify: `frontend/src/test/page-tests/GgufLibraryPage.test.tsx`
+
+- [x] **Step 1: Write failing API and frontend tests for surfacing model catalog defaults, profiles, and deployment bindings from the `models` DB**
+- [x] **Step 2: Run the focused tests and verify the new DB-backed fields are not returned today**
+- [x] **Step 3: Extend library/API response shapes to include catalog metadata, profile summaries, and deployment bindings**
+- [x] **Step 4: Update the frontend GGUF/model views to render DB-backed profile/deployment data without changing launch behavior yet**
+- [x] **Step 5: Run focused backend/frontend tests and verify they pass**
+- [ ] **Step 6: Commit**
+
+### Task 13: Verification Pass For The Expanded Models Catalog
+
+**Files:**
+- Modify only if verification exposes a concrete issue.
+
+- [x] **Step 1: Run focused backend tests for model asset store, models DB integration, GGUF library, and API coverage**
+- [x] **Step 2: Run the relevant frontend GGUF Library tests**
+- [x] **Step 3: Verify Alembic upgrades for the new `models` revision path**
+- [x] **Step 4: Run broader suites only if the focused verification exposes drift**
+- [ ] **Step 5: Commit only if verification required fixes**

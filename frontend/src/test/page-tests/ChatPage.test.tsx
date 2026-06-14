@@ -160,7 +160,7 @@ it("loads controller node models into chat controls and sends to the selected no
       if (url === "/lm-api/v1/chat/qwen/stream") {
         return streamResponse([
           'data: {"choices":[{"delta":{"content":"node reply"}}]}\n\n',
-        ], new Headers({ "X-Llama-Manager-Route": "node:mac-agent" }));
+        ], new Headers({ "X-Llama-Pack-Route": "node:mac-agent" }));
       }
       return okJson({});
     }),
@@ -201,7 +201,7 @@ it("streams a direct chat response and builds the request payload", async () => 
       return streamResponse([
         'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
         'data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}\n\n',
-      ], new Headers({ "X-Llama-Manager-Route": "local:mistral" }));
+      ], new Headers({ "X-Llama-Pack-Route": "local:mistral" }));
     }
     return okJson({});
   });

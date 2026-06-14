@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from llama_pack.api.dependencies import get_orchestrator
+from llama_pack.api.http_headers import get_request_api_key
 from llama_pack.core.orchestration.orchestrator import Orchestrator
 
 
@@ -20,7 +21,7 @@ def _enforce_node_work_auth(request: Request, node: str) -> None:
     expected = node_config.api_key
     if not expected:
         raise HTTPException(status_code=401, detail="Node work API key is required")
-    provided = request.headers.get("X-Llama-Manager-Key")
+    provided = get_request_api_key(request.headers)
     if not provided or not secrets.compare_digest(provided, expected):
         raise HTTPException(status_code=401, detail="Unauthorized")
 

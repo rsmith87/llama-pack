@@ -573,7 +573,7 @@ curl -v http://linux-2080ti.local:9137/health
 Controller node visibility:
 
 ```bash
-curl -s -H "X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" \
+curl -s -H "X-Llama-Pack-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY" \
   https://pi-controller.local/lm-api/v1/nodes
 ```
 
@@ -827,7 +827,7 @@ Re-run the renewal script — the fullchain install step rebuilds
 | `127.0.0.1:2019 already in use` | Another Caddy process is running | Stop the manual process or restart the service cleanly. |
 | Caddy reload says cert/key permission denied | Caddy service user cannot read `/etc/caddy/certs` | Use `systemctl show caddy -p User -p Group`, then `chown root:caddy`, `chmod 750` on the cert dir, `640` on keys, and `644` on certs. |
 | Pi can ping an agent but HTTPS hangs | Firewall blocks TCP 443 | Allow `443/tcp` on the agent, for example `sudo ufw allow 443/tcp`. |
-| Admin API returns `Unauthorized` with `Authorization: Bearer ...` | Llama Pack does not use Bearer auth for admin APIs | Send `X-Llama-Manager-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY`. |
+| Admin API returns `Unauthorized` with `Authorization: Bearer ...` | Llama Pack does not use Bearer auth for admin APIs | Send `X-Llama-Pack-Key: $LLAMA_PACK_CONTROLLER_ADMIN_API_KEY`. |
 
 ## Mobile App Note
 

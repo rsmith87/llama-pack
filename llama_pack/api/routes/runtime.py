@@ -523,7 +523,7 @@ def _replay_suite_trace_events(recorder: RuntimeTraceRecorder, suite: Any) -> No
 
 async def _stream_node_tool_loop_eval(node: Any, node_name: str, payload: dict[str, object], recorder: RuntimeTraceRecorder) -> dict[str, Any]:
     base_url = _node_base_url(node_name, node.url)
-    headers = {"X-Llama-Manager-Key": node.api_key} if node.api_key else {}
+    headers = {"X-Llama-Pack-Key": node.api_key} if node.api_key else {}
     suite: dict[str, Any] | None = None
     async with httpx.AsyncClient(timeout=None, verify=node.verify_tls) as client:
         async with client.stream(

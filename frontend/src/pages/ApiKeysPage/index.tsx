@@ -75,7 +75,7 @@ function KeyRevealBanner({
         ) : null}
       </div>
       <div className="api-key-reveal-hint muted">
-        Send as <code>X-Llama-Manager-Key: {created.key}</code> on requests to{" "}
+        Send as <code>X-Llama-Pack-Key: {created.key}</code> on requests to{" "}
         <code>POST /v1/chat/completions</code> or <code>POST /api/chat</code>.
       </div>
       <Button variant="ghost" size="sm" className="api-key-reveal-dismiss" onClick={onDismiss}>

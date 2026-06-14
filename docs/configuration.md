@@ -438,7 +438,7 @@ For the current Raspberry Pi controller topology and smoke checks, see
 
 ## Optional Security And Registration Fields
 
-- Agent-side auth: `agent_api_key` requires clients to send `X-Llama-Manager-Key`.
+- Agent-side auth: `agent_api_key` requires clients to send `X-Llama-Pack-Key`.
 - Controller-to-agent auth per node: `nodes.<name>.api_key`.
 - Auto-registration auth: `controller_registration_key` on controller, `controller_registration_key_outbound` on agent.
 - Agent heartbeat/registration fields: `controller_url`, `node_name`, `agent_url`, `heartbeat_interval_seconds`.
@@ -539,7 +539,7 @@ transparent to the agent — it sees a normal chat request with enriched context
 - `agent_worker_labels`: labels advertised to the controller claim matcher.
 - `agent_worker_capacity`: numeric/string capacity advertised to the controller claim matcher.
 
-Agent workers must be registered/configured on the controller under `nodes.<name>` with an `api_key`. The agent sends its `agent_api_key` as `X-Llama-Manager-Key` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
+Agent workers must be registered/configured on the controller under `nodes.<name>` with an `api_key`. The agent sends its `agent_api_key` as `X-Llama-Pack-Key` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
 
 The first typed worker contract is `llm.generate`. It is intentionally narrow and reuses the existing chat payload shape (`model`, `messages`, sampling fields, structured-output fields, `reasoning`, and optional `target`/`requirements`). Future typed contracts are tracked in `superpowers/plans/2026-05-12-execution-substrate.md`.
 
@@ -623,7 +623,7 @@ tail -f ./logs/agent_tool_calls.jsonl
 ```bash
 curl -s http://127.0.0.1:9137/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [

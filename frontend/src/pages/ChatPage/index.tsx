@@ -573,7 +573,7 @@ export function ChatPage() {
       updateAssistant(assistantIndex, patch);
       return;
     }
-    const route = response.headers.get("X-Llama-Manager-Route");
+    const route = response.headers.get("X-Llama-Pack-Route") || response.headers.get("X-Llama-Manager-Route");
     if (route) updateAssistant(assistantIndex, { route });
     if (!response.body) throw new Error("Response did not include a readable stream");
     await readChatStream(response.body.getReader(), (delta, chunk, reasoningDelta) => appendAssistant(assistantIndex, delta, chunk, reasoningDelta));

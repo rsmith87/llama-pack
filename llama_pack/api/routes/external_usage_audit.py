@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi import Request
 
+from llama_pack.api.http_headers import get_model_header, get_node_header, get_route_header
+
 
 def audit_external_chat_completion(
     *,
@@ -15,9 +17,9 @@ def audit_external_chat_completion(
     if getattr(request.state, "ui_role", None) != "external":
         return
     key_id = getattr(request.state, "ui_key_id", None)
-    node = headers.get("X-Llama-Manager-Node")
-    routed_model = headers.get("X-Llama-Manager-Model") or model
-    route = headers.get("X-Llama-Manager-Route")
+    node = get_node_header(headers)
+    routed_model = get_model_header(headers) or model
+    route = get_route_header(headers)
     if key_id:
         request.app.state.auth_store.record_external_key_usage(
             key_id=key_id,

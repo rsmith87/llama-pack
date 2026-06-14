@@ -13,7 +13,7 @@ operator, node, model, auth, audit, or settings endpoints.
 ```bash
 curl -X POST http://127.0.0.1:9137/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [
@@ -30,10 +30,10 @@ On a controller, `request_type` routes the call through
 default and returns routing metadata in response headers:
 
 ```text
-X-Llama-Manager-Thread-Id: ...
-X-Llama-Manager-Route: node:linux-2080ti
-X-Llama-Manager-Node: linux-2080ti
-X-Llama-Manager-Model: qwen
+X-Llama-Pack-Thread-Id: ...
+X-Llama-Pack-Route: node:linux-2080ti
+X-Llama-Pack-Node: linux-2080ti
+X-Llama-Pack-Model: qwen
 ```
 
 Send `thread_id` on later calls to append to the same durable record and keep
@@ -46,7 +46,7 @@ app key boundary applies here:
 ```bash
 curl -X POST http://127.0.0.1:9137/api/chat \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "model": "qwen",
     "messages": [
@@ -90,7 +90,7 @@ Example response:
   "auth": {
     "methods": ["llama_pack_api_key", "external_api_key"],
     "sessionHeader": "X-UI-Session",
-    "apiKeyHeader": "X-Llama-Manager-Key"
+    "apiKeyHeader": "X-Llama-Pack-Key"
   },
   "endpoints": {
     "openaiChatCompletions": "/v1/chat/completions",
@@ -119,7 +119,7 @@ External chat-only keys can call:
 
 These routes intentionally avoid admin/runtime details from `/lm-api/v1/models`.
 For standalone end-user chat apps, prefer external app keys with the
-`X-Llama-Manager-Key` header. Use UI sessions for the built-in operator/admin
+`X-Llama-Pack-Key` header. Use UI sessions for the built-in operator/admin
 UI. Plugin-provided auth modes should be discovered through client discovery and
 handled by plugin-owned routes.
 
@@ -157,7 +157,7 @@ Example diagnostics request:
 ```bash
 curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_EXTERNAL_APP_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_EXTERNAL_APP_KEY" \
   -d '{"model":"qwen","request_type":"coding","stream":false}'
 ```
 
@@ -468,7 +468,7 @@ orchestration job, and targets it at the destination node's worker:
 ```bash
 curl -X POST http://127.0.0.1:9137/lm-api/v1/nodes/mac-mini/transfers \
   -H "Content-Type: application/json" \
-  -H "X-Llama-Manager-Key: $LLAMA_PACK_API_KEY" \
+  -H "X-Llama-Pack-Key: $LLAMA_PACK_API_KEY" \
   -d '{
     "destination_node": "linux-2080ti",
     "source_file_id": "<gguf-file-id>",

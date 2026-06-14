@@ -2,7 +2,7 @@
 
 ## Summary
 
-Llama Manager should support a mobile app that acts as a remote controller
+Llama Pack should support a mobile app that acts as a remote controller
 client for a user's home llama_pack system. V1 is not a compute node and
 does not run local inference on the phone. The app connects to the controller,
 lets the user chat through existing controller routing, and provides a compact

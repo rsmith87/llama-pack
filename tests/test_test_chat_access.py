@@ -31,7 +31,7 @@ def test_test_chat_key_can_call_safe_chat_testing_routes(tmp_path):
     app = _controller_app(tmp_path)
     raw_key = app.state.auth_store.create_key("test-chat", "test_chat")["key"]
     client = RawTestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": raw_key})
+    client.headers.update({"X-Llama-Pack-Key": raw_key})
 
     models_response = client.get("/lm-api/v1/models")
     nodes_response = client.get("/lm-api/v1/nodes")
@@ -45,7 +45,7 @@ def test_test_chat_key_can_call_safe_chat_testing_routes(tmp_path):
     # Use a no-raise client for the streaming endpoint: routing will fail (no real
     # model), but we only care that the test_chat key is not blocked with a 403.
     permissive_client = RawTestClient(app, raise_server_exceptions=False)
-    permissive_client.headers.update({"X-Llama-Manager-Key": raw_key})
+    permissive_client.headers.update({"X-Llama-Pack-Key": raw_key})
     stream_response = permissive_client.post(
         f"/lm-api/v1/threads/{thread.json()['id']}/messages/stream",
         json={"role": "user", "content": "hello"},
@@ -64,7 +64,7 @@ def test_test_chat_key_is_forbidden_from_admin_and_mutating_infra_routes(tmp_pat
     app = _controller_app(tmp_path)
     raw_key = app.state.auth_store.create_key("test-chat", "test_chat")["key"]
     client = RawTestClient(app)
-    client.headers.update({"X-Llama-Manager-Key": raw_key})
+    client.headers.update({"X-Llama-Pack-Key": raw_key})
 
     assert client.get("/lm-api/v1/auth/keys").status_code == 403
     assert client.get("/lm-api/v1/audit/events").status_code == 403
@@ -221,9 +221,9 @@ def test_test_chat_key_cannot_read_internal_thread_events(tmp_path):
     admin_key = app.state.auth_store.create_key("admin", "admin")["key"]
     test_key = app.state.auth_store.create_key("test-chat", "test_chat")["key"]
     admin = RawTestClient(app)
-    admin.headers.update({"X-Llama-Manager-Key": admin_key})
+    admin.headers.update({"X-Llama-Pack-Key": admin_key})
     tester = RawTestClient(app)
-    tester.headers.update({"X-Llama-Manager-Key": test_key})
+    tester.headers.update({"X-Llama-Pack-Key": test_key})
     thread = admin.post("/lm-api/v1/threads", json={"metadata": {"request_type": "coding"}}).json()
 
     response = tester.get(f"/lm-api/v1/threads/{thread['id']}/events?include_internal=true")
