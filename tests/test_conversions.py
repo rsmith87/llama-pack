@@ -1,7 +1,10 @@
 from pathlib import Path
 
 from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.conversions import ConversionManager
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from tests.persistence_db_setup import prepare_models_db
 
 
 class FakeProcess:
@@ -11,6 +14,12 @@ class FakeProcess:
 
     def poll(self):
         return self._returncode
+
+
+class FinishedProcess(FakeProcess):
+    def __init__(self, pid=4321, returncode=0):
+        super().__init__(pid=pid)
+        self._returncode = returncode
 
 
 def make_hf_model(path: Path):
@@ -141,3 +150,46 @@ def test_conversion_manager_lists_models_from_multiple_roots(tmp_path):
     )
 
     assert [model["name"] for model in manager.list_models()] == ["gemma", "qwen"]
+
+
+def test_conversion_manager_registers_output_asset_and_provenance_on_completion(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "qwen"
+    hf_dir.mkdir()
+    make_hf_model(model_dir)
+    output = model_dir / "qwen.gguf"
+    output.write_bytes(b"1234")
+    llama_cpp_dir = tmp_path / "llama.cpp"
+    llama_cpp_dir.mkdir()
+    (llama_cpp_dir / "convert_hf_to_gguf.py").write_text("", encoding="utf-8")
+
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config(
+        {
+            "hf_models_dir": str(hf_dir),
+            "llama_cpp_dir": str(llama_cpp_dir),
+            "python_bin": "python3",
+            "log_dir": str(tmp_path / "logs"),
+        }
+    )
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inventory = ModelAssetInventoryService(config, store)
+
+    manager = ConversionManager(
+        config,
+        inventory_service=inventory,
+        popen=lambda *args, **kwargs: FinishedProcess(),
+    )
+    manager._processes["qwen"] = FinishedProcess()
+
+    status = manager.status("qwen")
+
+    assert status["returncode"] == 0
+    output_asset = store.get_asset_by_path(str(output.resolve()))
+    assert output_asset is not None
+    assert output_asset["source_type"] == "conversion"
+    provenance_rows = store.list_asset_provenance(output_asset["asset_id"])
+    assert len(provenance_rows) == 1
+    assert provenance_rows[0]["job_kind"] == "conversion"
+    assert provenance_rows[0]["source_asset_id"] is None

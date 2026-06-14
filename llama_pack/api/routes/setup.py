@@ -23,7 +23,8 @@ def _auth_enabled(request: Request) -> bool:
 def setup_status(request: Request) -> dict[str, object]:
     auth_enabled = _auth_enabled(request)
     config = request.app.state.config
-    models_count = len(config.models) if config.models else 0
+    catalog = request.app.state.model_catalog_service
+    models_count = len(catalog.list_registered_models())
     has_nodes = bool(config.nodes)
     return {
         "mode": config.mode,
@@ -73,12 +74,14 @@ def bootstrap_admin(body: BootstrapAdminRequest, request: Request) -> dict[str, 
 @router.get("/current-config")
 def current_config(request: Request) -> dict[str, object]:
     config = request.app.state.config
+    catalog = request.app.state.model_catalog_service
 
     # First model (if any) — no secrets in model configs
     first_model: dict[str, object] | None = None
-    if config.models:
-        alias = next(iter(config.models))
-        m = config.models[alias]
+    registered_models = catalog.list_registered_models()
+    if registered_models:
+        alias = str(registered_models[0]["model_name"])
+        m = catalog.runtime_model(alias)
         first_model = {
             "alias": alias,
             "path": str(m.path),

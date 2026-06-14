@@ -4,10 +4,12 @@ import hashlib
 import re
 import shutil
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, IO
 
 from llama_pack.core.config import AppConfig
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 
 
 PopenFactory = Callable[..., subprocess.Popen]
@@ -26,8 +28,14 @@ def is_quantized_gguf_filename(filename: str) -> bool:
 class QuantizationManager:
     supported_types = ["Q4_K_M", "Q5_K_M", "Q8_0", "Q6_K", "Q3_K_M", "Q2_K"]
 
-    def __init__(self, config: AppConfig, popen: PopenFactory = subprocess.Popen):
+    def __init__(
+        self,
+        config: AppConfig,
+        inventory_service: ModelAssetInventoryService | None = None,
+        popen: PopenFactory = subprocess.Popen,
+    ):
         self.config = config
+        self.inventory_service = inventory_service
         self._popen = popen
         self._processes: dict[str, subprocess.Popen] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
@@ -92,6 +100,8 @@ class QuantizationManager:
         running = process is not None and returncode is None
         if process is not None and not running:
             self._close_log(file_id)
+            if returncode == 0:
+                self._register_quantized_output(path, quant_type, file_id)
 
         size_bytes = path.stat().st_size
         return {
@@ -177,3 +187,41 @@ class QuantizationManager:
         handle = self._log_handles.pop(file_id, None)
         if handle is not None and not handle.closed:
             handle.close()
+
+    def _register_quantized_output(self, source_path: Path, quant_type: str, file_id: str) -> None:
+        if self.inventory_service is None:
+            return
+        output_path = self._output_path(source_path, quant_type)
+        if not output_path.exists():
+            return
+        store = self.inventory_service.store
+        source_asset = store.get_asset_by_path(str(source_path.resolve()))
+        if source_asset is None:
+            reconciled = self.inventory_service.reconcile_scan([source_path])
+            source_asset = reconciled[0] if reconciled else None
+        if source_asset is None:
+            return
+        existing_output = store.get_asset_by_path(str(output_path.resolve()))
+        stat = output_path.stat()
+        output_asset = store.upsert_asset(
+            canonical_path=str(output_path.resolve()),
+            filename=output_path.name,
+            display_name=output_path.stem,
+            size_bytes=stat.st_size,
+            asset_kind="gguf",
+            source_type="quantization",
+        )
+        if existing_output is None and not store.list_asset_provenance(output_asset["asset_id"]):
+            store.record_asset_provenance(
+                output_asset_id=output_asset["asset_id"],
+                source_asset_id=source_asset["asset_id"],
+                source_model_id=None,
+                job_kind="quantization",
+                job_ref=file_id,
+                detail={
+                    "quant_type": quant_type,
+                    "source_path": str(source_path),
+                    "output_path": str(output_path),
+                    "recorded_at": datetime.now(UTC).isoformat(),
+                },
+            )

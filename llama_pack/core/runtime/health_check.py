@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from llama_pack.core.config import AppConfig
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
 from llama_pack.providers.system_metrics import get_system_metrics
 
 
-def health_payload(config: AppConfig) -> dict[str, object]:
+def health_payload(config: AppConfig, catalog_service: ModelCatalogService | None = None) -> dict[str, object]:
     system = get_system_metrics()
     cpu_percent = None
     memory_percent = None
@@ -25,13 +26,15 @@ def health_payload(config: AppConfig) -> dict[str, object]:
         if total_mb > 0:
             vram_percent = (used_mb / total_mb) * 100
 
+    models_count = len(catalog_service.list_registered_models()) if catalog_service is not None else len(config.models)
+
     return {
         "ok": True,
         "mode": config.mode,
         "controller_url": config.controller_url if config.mode == "agent" else None,
         "config_source": config.config_source,
-        "configured_models": len(config.models),
-        "models_configured": len(config.models),
+        "configured_models": models_count,
+        "models_configured": models_count,
         "nodes_configured": len(config.nodes),
         "system": {
             **system,

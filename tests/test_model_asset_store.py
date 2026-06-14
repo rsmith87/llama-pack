@@ -1,9 +1,10 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
-from sqlalchemy import create_engine, inspect
+from sqlalchemy import create_engine, inspect, update
 
 from llama_pack.core.persistence.alembic_config import (
     head_revision_for,
@@ -12,8 +13,9 @@ from llama_pack.core.persistence.alembic_config import (
     target_metadata_for,
     version_locations,
 )
-from llama_pack.core.persistence.db_infra import PersistenceUrls
+from llama_pack.core.persistence.db_infra import PersistenceUrls, session_scope
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from llama_pack.core.persistence.models.model_asset import ModelAssetOrm
 from tests.persistence_db_setup import prepare_models_db
 
 
@@ -334,6 +336,49 @@ def test_record_asset_provenance_persists_and_lists_rows(tmp_path: Path):
 
     rows = store.list_asset_provenance(output["asset_id"])
     assert rows == [recorded]
+
+
+def test_delete_stale_missing_assets_skips_referenced_assets(tmp_path: Path):
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    store = ModelAssetStoreOrm(db_path=db_path)
+
+    deletable = store.upsert_asset(
+        canonical_path="/models/stale.gguf",
+        filename="stale.gguf",
+        display_name="Stale",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    referenced = store.upsert_asset(
+        canonical_path="/models/referenced.gguf",
+        filename="referenced.gguf",
+        display_name="Referenced",
+        size_bytes=10,
+        asset_kind="gguf",
+        source_type="manual",
+    )
+    store.upsert_model(
+        model_name="referenced",
+        asset_id=referenced["asset_id"],
+        config_source="db",
+    )
+    store.mark_missing_assets(missing_asset_ids={deletable["asset_id"], referenced["asset_id"]})
+    stale_time = (datetime.now(UTC) - timedelta(days=10)).isoformat()
+    with session_scope(store.session_factory) as session:
+        session.execute(
+            update(ModelAssetOrm)
+            .where(ModelAssetOrm.asset_id.in_([deletable["asset_id"], referenced["asset_id"]]))
+            .values(last_seen_at=stale_time, last_scanned_at=stale_time)
+        )
+
+    result = store.delete_stale_missing_assets(older_than_seconds=7 * 86400)
+
+    assert result["deleted_asset_ids"] == [deletable["asset_id"]]
+    assert result["skipped_asset_ids"] == [referenced["asset_id"]]
+    assert store.get_asset_by_path("/models/stale.gguf") is None
+    assert store.get_asset_by_path("/models/referenced.gguf") is not None
 
 
 def test_update_model_companion_links_is_patch_safe(tmp_path: Path):

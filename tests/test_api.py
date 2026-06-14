@@ -1,5 +1,6 @@
 from pathlib import Path
 from unittest.mock import patch
+from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient as RawTestClient
 import json
 import httpx
@@ -15,6 +16,8 @@ from llama_pack.core.persistence.auth_store_orm import AuthStoreOrm
 from llama_pack.core.persistence.chat_session_store_orm import ChatSessionStoreOrm
 from llama_pack.core.model_assets.catalog_service import ModelCatalogService
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from llama_pack.core.persistence.db_infra import session_scope
+from llama_pack.core.persistence.models.model_asset import ModelAssetOrm
 from llama_pack.core.persistence.models.orchestration import JobOrm
 from llama_pack.core.orchestration.store_orm import OrchestrationStoreOrm
 from tests.persistence_db_setup import prepare_all_persistence_dbs, prepare_models_db
@@ -3046,6 +3049,217 @@ def test_library_patch_model_returns_404_for_unknown():
     assert resp.status_code == 404
 
 
+def test_library_catalog_models_lists_persisted_models_from_db(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_catalog_model(store, model_name="vision-pro", path="/models/vision-pro.gguf", port=8083, vision=True)
+    _register_catalog_model(store, model_name="qwen-7b", path="/models/qwen.gguf", port=8081)
+    app = create_app(config=config)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    resp = client.get("/lm-api/v1/library/catalog/models")
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert [item["model_name"] for item in payload] == ["qwen-7b", "vision-pro"]
+    assert payload[1]["vision"] is True
+    assert all(item["config_source"] == "db" for item in payload)
+
+
+def test_library_assets_filters_by_repo_download_and_model_line(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    keep = store.upsert_asset(
+        canonical_path="/models/gemma.gguf",
+        filename="gemma.gguf",
+        display_name="Gemma",
+        size_bytes=100,
+        asset_kind="gguf",
+        source_type="download",
+        source_repo_id="hf/gemma",
+        download_id="download-1",
+        model_line="gemma",
+    )
+    store.upsert_asset(
+        canonical_path="/models/qwen.gguf",
+        filename="qwen.gguf",
+        display_name="Qwen",
+        size_bytes=120,
+        asset_kind="gguf",
+        source_type="download",
+        source_repo_id="hf/qwen",
+        download_id="download-2",
+        model_line="qwen",
+    )
+    app = create_app(config=config)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    resp = client.get(
+        "/lm-api/v1/library/assets",
+        params={"source_repo_id": "hf/gemma", "download_id": "download-1", "model_line": "gemma"},
+    )
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert len(payload) == 1
+    assert payload[0]["asset_id"] == keep["asset_id"]
+    assert payload[0]["source_repo_id"] == "hf/gemma"
+
+
+def test_library_profiles_and_deployments_are_queryable_independently(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_catalog_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[
+            {
+                "profile_key": "fast",
+                "label": "Fast",
+                "order": 10,
+                "ctx": 8192,
+            }
+        ],
+    )
+    store.upsert_model_deployment(
+        model_id=str(row["model_id"]),
+        deployment_name="worker-a",
+        node_name="node-a",
+        host="10.0.0.8",
+        port=8091,
+        profile_key="fast",
+    )
+    app = create_app(config=config)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    profiles = client.get("/lm-api/v1/library/profiles", params={"model_name": "gemma"})
+    deployments = client.get("/lm-api/v1/library/deployments", params={"model_name": "gemma"})
+
+    assert profiles.status_code == 200
+    assert deployments.status_code == 200
+    assert [item["profile_key"] for item in profiles.json()] == ["fast"]
+    deployment_names = [item["deployment_name"] for item in deployments.json()]
+    assert deployment_names == ["default", "worker-a"]
+    assert deployments.json()[1]["node_name"] == "node-a"
+
+
+def test_library_asset_provenance_lists_db_records(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    source = store.upsert_asset(
+        canonical_path="/models/gemma.gguf",
+        filename="gemma.gguf",
+        display_name="Gemma",
+        size_bytes=100,
+        asset_kind="gguf",
+        source_type="download",
+    )
+    output = store.upsert_asset(
+        canonical_path="/models/gemma-q4.gguf",
+        filename="gemma-q4.gguf",
+        display_name="Gemma Q4",
+        size_bytes=80,
+        asset_kind="gguf",
+        source_type="quantization",
+    )
+    model = store.upsert_model(
+        model_name="gemma",
+        asset_id=source["asset_id"],
+        config_source="db",
+    )
+    store.record_asset_provenance(
+        output_asset_id=output["asset_id"],
+        source_asset_id=source["asset_id"],
+        source_model_id=model["model_id"],
+        job_kind="quantization",
+        job_ref="quant:gemma:Q4_K_M",
+        detail={"quant_type": "Q4_K_M"},
+    )
+    app = create_app(config=config)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    resp = client.get(f"/lm-api/v1/library/assets/{output['asset_id']}/provenance")
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert len(payload) == 1
+    assert payload[0]["job_kind"] == "quantization"
+    assert payload[0]["detail"]["quant_type"] == "Q4_K_M"
+
+
+def test_library_assets_lists_missing_assets_with_filter(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    keep = store.upsert_asset(
+        canonical_path="/models/missing.gguf",
+        filename="missing.gguf",
+        display_name="Missing",
+        size_bytes=100,
+        asset_kind="gguf",
+        source_type="download",
+    )
+    store.mark_missing_assets(missing_asset_ids={keep["asset_id"]})
+    app = create_app(config=config)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    resp = client.get("/lm-api/v1/library/assets", params={"missing": "true"})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert len(payload) == 1
+    assert payload[0]["asset_id"] == keep["asset_id"]
+    assert payload[0]["missing"] is True
+
+
+def test_library_delete_stale_missing_assets_skips_referenced_rows(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    deletable = store.upsert_asset(
+        canonical_path="/models/stale.gguf",
+        filename="stale.gguf",
+        display_name="Stale",
+        size_bytes=100,
+        asset_kind="gguf",
+        source_type="download",
+    )
+    referenced = store.upsert_asset(
+        canonical_path="/models/referenced.gguf",
+        filename="referenced.gguf",
+        display_name="Referenced",
+        size_bytes=100,
+        asset_kind="gguf",
+        source_type="download",
+    )
+    store.upsert_model(model_name="referenced", asset_id=referenced["asset_id"], config_source="db")
+    store.mark_missing_assets(missing_asset_ids={deletable["asset_id"], referenced["asset_id"]})
+    stale_time = (datetime.now(UTC) - timedelta(days=14)).isoformat()
+    with session_scope(store.session_factory) as session:
+        session.execute(
+            update(ModelAssetOrm)
+            .where(ModelAssetOrm.asset_id.in_([deletable["asset_id"], referenced["asset_id"]]))
+            .values(last_seen_at=stale_time, last_scanned_at=stale_time)
+        )
+    app = create_app(config=config)
+    app.state.model_asset_store = store
+    app.state.model_catalog_service = catalog
+    client = TestClient(app)
+
+    resp = client.delete("/lm-api/v1/library/assets/missing", params={"older_than_days": 7})
+
+    assert resp.status_code == 200
+    payload = resp.json()
+    assert payload["deleted_asset_ids"] == [deletable["asset_id"]]
+    assert payload["skipped_asset_ids"] == [referenced["asset_id"]]
+    assert store.get_asset_by_path("/models/stale.gguf") is None
+    assert store.get_asset_by_path("/models/referenced.gguf") is not None
+
+
 def test_controller_job_lifecycle_and_events(tmp_path):
     app = create_app(
         config=load_config({
@@ -3456,6 +3670,18 @@ def test_setup_status_reports_auth_bootstrap_required_without_keys():
     assert "key" not in payload
 
 
+def test_setup_status_counts_registered_models_from_db(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path, mode="controller", nodes={})
+    _register_catalog_model(store, model_name="qwen-7b", path="/models/qwen.gguf", port=8080)
+    app = create_app(config=config)
+    client = RawTestClient(app)
+
+    payload = client.get("/lm-api/v1/setup/status").json()
+
+    assert payload["models_count"] == 1
+    assert app.state.model_catalog_service.list_registered_models()[0]["model_name"] == "qwen-7b"
+
+
 def test_controller_health_reports_expired_tls_certificate(monkeypatch):
     app = create_app(
         config=load_config({"mode": "agent", "controller_url": "https://pi-controller.local"}),
@@ -3635,24 +3861,24 @@ def test_setup_current_config_masks_agent_secrets():
     assert "outbound-reg-key" not in response.text
 
 
-def test_setup_current_config_exposes_first_model():
-    app = create_app(
-        config=load_config(
-            {
-                "mode": "agent",
-                "models": {
-                    "qwen-7b": {
-                        "path": "./models/qwen.gguf",
-                        "port": 8080,
-                        "gpu_layers": 99,
-                        "ctx": 8192,
-                        "strengths": ["coding", "general"],
-                        "cost_tier": "low",
-                    }
-                },
-            }
-        ),
+def test_setup_current_config_exposes_first_model(tmp_path):
+    config, store, _catalog = _catalog_config(tmp_path)
+    row = _register_catalog_model(
+        store,
+        model_name="qwen-7b",
+        path="./models/qwen.gguf",
+        port=8080,
     )
+    store.upsert_model(
+        model_name="qwen-7b",
+        asset_id=row["asset_id"],
+        config_source="db",
+        ctx=8192,
+        gpu_layers=99,
+        strengths=["coding", "general"],
+        cost_tier="low",
+    )
+    app = create_app(config=config)
     client = TestClient(app)
 
     payload = client.get("/lm-api/v1/setup/current-config").json()
@@ -3665,6 +3891,18 @@ def test_setup_current_config_exposes_first_model():
     assert fm["ctx"] == 8192
     assert fm["strengths"] == ["coding", "general"]
     assert fm["cost_tier"] == "low"
+
+
+def test_health_reports_configured_models_from_db(tmp_path):
+    config, store, _catalog = _catalog_config(tmp_path)
+    _register_catalog_model(store, model_name="qwen-7b", path="/models/qwen.gguf", port=8080)
+    app = create_app(config=config)
+    client = RawTestClient(app)
+
+    payload = client.get("/lm-api/v1/health").json()
+
+    assert payload["configured_models"] == 1
+    assert payload["models_configured"] == 1
 
 
 def test_heartbeat_route_bypasses_ui_session_auth_on_controller():

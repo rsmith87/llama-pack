@@ -3,8 +3,9 @@ from __future__ import annotations
 import httpx
 from fastapi import APIRouter, Depends
 
-from llama_pack.api.dependencies import get_config
+from llama_pack.api.dependencies import get_config, get_model_catalog_service
 from llama_pack.core.config import AppConfig
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
 from llama_pack.core.network.tls_diagnostics import network_error_text
 from llama_pack.core.runtime.health_check import health_payload
 
@@ -13,8 +14,11 @@ router = APIRouter()
 
 
 @router.get("/health")
-def health(config: AppConfig = Depends(get_config)) -> dict[str, object]:
-    return health_payload(config)
+def health(
+    config: AppConfig = Depends(get_config),
+    catalog_service: ModelCatalogService = Depends(get_model_catalog_service),
+) -> dict[str, object]:
+    return health_payload(config, catalog_service)
 
 
 @router.get("/health/controller")

@@ -5,7 +5,11 @@ import pytest
 
 from llama_pack.core.config import load_config
 from llama_pack.core.model_assets.downloads import DownloadManager
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.recommendations import recommend_downloads
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
+from tests.persistence_db_setup import prepare_downloads_db, prepare_models_db
 
 
 class FakeStore:
@@ -359,6 +363,59 @@ def test_download_manager_cancels_running_download(tmp_path):
     assert cancelled["returncode"] == -15
     assert cancelled["error_detail"] == "Download cancelled by user"
     assert cancelled["finished_at"] is not None
+
+
+def test_download_manager_registers_assets_on_successful_completion(tmp_path):
+    config = load_config(
+        {
+            "mode": "agent",
+            "hf_models_dirs": [str(tmp_path / "models")],
+            "log_dir": str(tmp_path / "logs"),
+            "python_bin": "python-test",
+        }
+    )
+    downloads_db = tmp_path / "downloads.db"
+    models_db = tmp_path / "models.db"
+    prepare_downloads_db(downloads_db)
+    prepare_models_db(models_db)
+    download_store = ModelDownloadStoreOrm(db_path=downloads_db)
+    asset_store = ModelAssetStoreOrm(db_path=models_db)
+    inventory = ModelAssetInventoryService(config, asset_store, download_store=download_store)
+
+    process = FakeProcess()
+    manager = DownloadManager(
+        config,
+        download_store,
+        popen=lambda *args, **kwargs: process,
+        hf_api=FakeHfApi([FakeRepoFile("nested/model-Q5_K_M.gguf", 2048), FakeRepoFile("mmproj-F16.gguf", 128)]),
+        inventory_service=inventory,
+    )
+
+    started = manager.start(
+        "owner/model",
+        revision="main",
+        include_file="nested/model-Q5_K_M.gguf",
+        mmproj_file="mmproj-F16.gguf",
+        triggered_by="tester",
+    )
+    destination = Path(str(started["local_path"]))
+    (destination / "nested").mkdir(parents=True)
+    downloaded_model = destination / "nested" / "model-Q5_K_M.gguf"
+    downloaded_mmproj = destination / "mmproj-F16.gguf"
+    downloaded_model.write_bytes(b"x" * 2048)
+    downloaded_mmproj.write_bytes(b"x" * 128)
+    process.returncode = 0
+
+    completed = manager.status(str(started["id"]))
+
+    assert completed["status"] == "succeeded"
+    model_asset = asset_store.get_asset_by_path(str(downloaded_model.resolve()))
+    mmproj_asset = asset_store.get_asset_by_path(str(downloaded_mmproj.resolve()))
+    assert model_asset is not None
+    assert mmproj_asset is not None
+    assert model_asset["download_id"] == str(started["id"])
+    assert model_asset["source_repo_id"] == "owner/model"
+    assert mmproj_asset["download_id"] == str(started["id"])
 
 
 def test_download_manager_rejects_cancel_for_non_running_download(tmp_path):

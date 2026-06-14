@@ -241,8 +241,6 @@ def _configure_app_state(
         app_config,
         catalog_service=app.state.model_catalog_service,
     )
-    app.state.conversion_manager = conversion_manager or ConversionManager(app_config)
-    app.state.quantization_manager = quantization_manager or QuantizationManager(app_config)
     app.state.chat_proxy = ChatProxy(
         app.state.process_manager,
         app_config,
@@ -274,6 +272,14 @@ def _configure_app_state(
         app.state.model_asset_store,
         download_store=app.state.model_download_store,
     )
+    app.state.conversion_manager = conversion_manager or ConversionManager(
+        app_config,
+        inventory_service=app.state.model_asset_inventory_service,
+    )
+    app.state.quantization_manager = quantization_manager or QuantizationManager(
+        app_config,
+        inventory_service=app.state.model_asset_inventory_service,
+    )
     app.state.gguf_library = gguf_library or GgufLibrary(
         app_config,
         inventory_service=app.state.model_asset_inventory_service,
@@ -282,7 +288,11 @@ def _configure_app_state(
         app_config,
         inventory_service=app.state.model_asset_inventory_service,
     )
-    app.state.download_manager = DownloadManager(app_config, app.state.model_download_store)
+    app.state.download_manager = DownloadManager(
+        app_config,
+        app.state.model_download_store,
+        inventory_service=app.state.model_asset_inventory_service,
+    )
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     if app_config.mode == "controller":
         app.state.benchmark_runner = BenchmarkRunner(app.state.benchmark_store, app.state.chat_proxy)

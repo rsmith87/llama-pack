@@ -156,6 +156,13 @@ written back to their linked files and the root manifest keeps only root-owned
 fields plus the `files:` mapping. This keeps generated model, node, and tool
 updates out of the root file when those sections are split.
 
+Model persistence note:
+When `models_db_url` is configured and the models DB is migrated, the database
+is the authoritative source of truth for registered models, profiles,
+deployments, and companion links. YAML `models:` entries are only used for
+one-time bootstrap/backfill into the DB when present; runtime model changes do
+not persist back into YAML.
+
 ## Plugin Config
 
 Plugins are discovered only from configured local paths. Enable a plugin by

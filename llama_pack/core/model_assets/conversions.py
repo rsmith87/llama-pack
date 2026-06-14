@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import subprocess
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Callable, IO
 
 from llama_pack.core.config import AppConfig
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 
 
 PopenFactory = Callable[..., subprocess.Popen]
 
 
 class ConversionManager:
-    def __init__(self, config: AppConfig, popen: PopenFactory = subprocess.Popen):
+    def __init__(
+        self,
+        config: AppConfig,
+        inventory_service: ModelAssetInventoryService | None = None,
+        popen: PopenFactory = subprocess.Popen,
+    ):
         self.config = config
+        self.inventory_service = inventory_service
         self._popen = popen
         self._processes: dict[str, subprocess.Popen] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
@@ -76,6 +84,8 @@ class ConversionManager:
         running = process is not None and returncode is None
         if process is not None and not running:
             self._close_log(name)
+            if returncode == 0:
+                self._register_converted_output(name, model_path)
 
         output_path = self._output_path(name, model_path)
         gguf_files = self._gguf_files(model_path)
@@ -140,3 +150,35 @@ class ConversionManager:
         handle = self._log_handles.pop(name, None)
         if handle is not None and not handle.closed:
             handle.close()
+
+    def _register_converted_output(self, name: str, model_path: Path) -> None:
+        if self.inventory_service is None:
+            return
+        output_path = self._output_path(name, model_path)
+        if not output_path.exists():
+            return
+        store = self.inventory_service.store
+        existing_output = store.get_asset_by_path(str(output_path.resolve()))
+        stat = output_path.stat()
+        output_asset = store.upsert_asset(
+            canonical_path=str(output_path.resolve()),
+            filename=output_path.name,
+            display_name=output_path.stem,
+            size_bytes=stat.st_size,
+            asset_kind="gguf",
+            source_type="conversion",
+        )
+        if existing_output is None and not store.list_asset_provenance(output_asset["asset_id"]):
+            store.record_asset_provenance(
+                output_asset_id=output_asset["asset_id"],
+                source_asset_id=None,
+                source_model_id=None,
+                job_kind="conversion",
+                job_ref=name,
+                detail={
+                    "model_name": name,
+                    "model_path": str(model_path),
+                    "output_path": str(output_path),
+                    "recorded_at": datetime.now(UTC).isoformat(),
+                },
+            )

@@ -5,7 +5,7 @@ import uuid
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 from llama_pack.core.persistence.db_infra import (
     create_persistence_engine,
@@ -157,6 +157,45 @@ class ModelAssetStoreOrm:
                 .values(missing=1)
             )
         return int(result.rowcount or 0)
+
+    def delete_stale_missing_assets(self, *, older_than_seconds: int) -> dict[str, list[str]]:
+        cutoff = datetime.now(UTC).timestamp() - older_than_seconds
+        deleted_asset_ids: list[str] = []
+        skipped_asset_ids: list[str] = []
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(
+                select(ModelAssetOrm).where(ModelAssetOrm.missing == 1)
+            ).scalars().all()
+            for row in rows:
+                last_seen_at = self._parse_iso_timestamp(row.last_seen_at)
+                last_scanned_at = self._parse_iso_timestamp(row.last_scanned_at)
+                freshest_seen = max(last_seen_at, last_scanned_at)
+                if freshest_seen > cutoff:
+                    continue
+                referenced = session.execute(
+                    select(ModelOrm.model_id).where(
+                        (ModelOrm.asset_id == row.asset_id)
+                        | (ModelOrm.mmproj_asset_id == row.asset_id)
+                        | (ModelOrm.mtp_draft_asset_id == row.asset_id)
+                    )
+                ).first()
+                if referenced is not None:
+                    skipped_asset_ids.append(row.asset_id)
+                    continue
+                session.execute(
+                    delete(ModelAssetProvenanceOrm).where(
+                        (ModelAssetProvenanceOrm.output_asset_id == row.asset_id)
+                        | (ModelAssetProvenanceOrm.source_asset_id == row.asset_id)
+                    )
+                )
+                session.execute(
+                    delete(ModelAssetOrm).where(ModelAssetOrm.asset_id == row.asset_id)
+                )
+                deleted_asset_ids.append(row.asset_id)
+        return {
+            "deleted_asset_ids": sorted(deleted_asset_ids),
+            "skipped_asset_ids": sorted(skipped_asset_ids),
+        }
 
     def upsert_model(
         self,
@@ -657,3 +696,12 @@ class ModelAssetStoreOrm:
         if value is None:
             return None
         return bool(value)
+
+    @staticmethod
+    def _parse_iso_timestamp(value: str | None) -> float:
+        if not value:
+            return 0.0
+        try:
+            return datetime.fromisoformat(value).timestamp()
+        except ValueError:
+            return 0.0

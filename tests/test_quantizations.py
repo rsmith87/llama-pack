@@ -3,7 +3,10 @@ from pathlib import Path
 import pytest
 
 from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.quantizations import QuantizationManager
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from tests.persistence_db_setup import prepare_models_db
 
 
 class FakeProcess:
@@ -13,6 +16,12 @@ class FakeProcess:
 
     def poll(self):
         return self._returncode
+
+
+class FinishedProcess(FakeProcess):
+    def __init__(self, pid=9876, returncode=0):
+        super().__init__(pid=pid)
+        self._returncode = returncode
 
 
 def make_quantize_binary(path: Path):
@@ -214,3 +223,48 @@ def test_quantization_manager_tails_logs(tmp_path):
     log_path.write_text("one\ntwo\nthree\n", encoding="utf-8")
 
     assert manager.tail_logs(manager.file_id(source), lines=2) == "two\nthree\n"
+
+
+def test_quantization_manager_registers_output_asset_and_provenance_on_completion(tmp_path):
+    hf_dir = tmp_path / "HFModels"
+    model_dir = hf_dir / "qwen"
+    model_dir.mkdir(parents=True)
+    source = model_dir / "qwen.gguf"
+    source.write_bytes(b"1234")
+    output = model_dir / "qwen-Q5_K_M.gguf"
+    output.write_bytes(b"5678")
+    quantize_bin = tmp_path / "llama.cpp" / "build" / "bin" / "llama-quantize"
+    make_quantize_binary(quantize_bin)
+
+    db_path = tmp_path / "models.db"
+    prepare_models_db(db_path)
+    config = load_config(
+        {
+            "hf_models_dir": str(hf_dir),
+            "llama_cpp_dir": str(tmp_path / "llama.cpp"),
+            "log_dir": str(tmp_path / "logs"),
+        }
+    )
+    store = ModelAssetStoreOrm(db_path=db_path)
+    inventory = ModelAssetInventoryService(config, store)
+    inventory.reconcile_scan([source])
+
+    manager = QuantizationManager(
+        config,
+        inventory_service=inventory,
+        popen=lambda *args, **kwargs: FinishedProcess(),
+    )
+    file_id = manager.file_id(source)
+    manager._processes[file_id] = FinishedProcess()
+    manager._job_types[file_id] = "Q5_K_M"
+
+    status = manager.status(file_id)
+
+    assert status["returncode"] == 0
+    output_asset = store.get_asset_by_path(str(output.resolve()))
+    assert output_asset is not None
+    assert output_asset["source_type"] == "quantization"
+    provenance_rows = store.list_asset_provenance(output_asset["asset_id"])
+    assert len(provenance_rows) == 1
+    assert provenance_rows[0]["job_kind"] == "quantization"
+    assert provenance_rows[0]["source_asset_id"] == store.get_asset_by_path(str(source.resolve()))["asset_id"]

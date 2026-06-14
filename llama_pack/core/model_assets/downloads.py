@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Callable, IO
 
 from llama_pack.core.config import AppConfig
+from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
 from llama_pack.core.model_assets.recommendations import _quant_from_path as recommendation_quant_from_path
 from llama_pack.core.model_assets.recommendations import recommend_downloads
@@ -30,11 +31,13 @@ class DownloadManager:
         store: ModelDownloadStoreOrm,
         popen: PopenFactory = subprocess.Popen,
         hf_api: Any | None = None,
+        inventory_service: ModelAssetInventoryService | None = None,
     ):
         self.config = config
         self.store = store
         self._popen = popen
         self._hf_api = hf_api
+        self.inventory_service = inventory_service
         self._processes: dict[str, subprocess.Popen] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
         self._recommendations_cache: tuple[float, dict[str, object]] | None = None
@@ -150,6 +153,8 @@ class DownloadManager:
         self._processes.pop(download_id, None)
         terminal = "succeeded" if returncode == 0 else "failed"
         updated = self.store.update_status(download_id, status=terminal, returncode=returncode, error_detail=None if returncode == 0 else f"Downloader exited with code {returncode}")
+        if returncode == 0:
+            self._register_downloaded_assets(updated)
         return self._with_progress(updated)
 
     def tail_logs(self, download_id: str, lines: int = 200) -> str:
@@ -358,3 +363,22 @@ class DownloadManager:
             return True
         message = str(exc).lower()
         return "gated" in message or "accept" in message and "license" in message
+
+    def _register_downloaded_assets(self, record: dict[str, object]) -> None:
+        if self.inventory_service is None:
+            return
+        local_path = Path(str(record["local_path"]))
+        include_files = self._included_files_from_command(str(record.get("command") or ""))
+        paths: list[Path] = []
+        if include_files:
+            for include_file in include_files:
+                candidate = local_path / include_file
+                if candidate.exists() and candidate.is_file():
+                    paths.append(candidate)
+        elif local_path.exists():
+            if local_path.is_file():
+                paths.append(local_path)
+            else:
+                paths.extend(path for path in local_path.rglob("*.gguf") if path.is_file())
+        if paths:
+            self.inventory_service.reconcile_scan(paths)
