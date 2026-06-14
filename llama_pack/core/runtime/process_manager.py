@@ -78,6 +78,11 @@ class ModelStatus:
     file_id: str | None = None
     vision: bool = False
     mmproj: str | None = None
+    strengths: list[str] | None = None
+    cost_tier: str | None = None
+    model_catalog: dict[str, object] | None = None
+    model_profiles: list[dict[str, object]] | None = None
+    model_deployments: list[dict[str, object]] | None = None
 
     def to_dict(self) -> dict[str, object]:
         return asdict(self)
@@ -115,6 +120,7 @@ class ProcessManager:
     def status(self, name: str) -> ModelStatus:
         model = self._get_model(name)
         profile_metadata = self._profile_metadata(name)
+        model_catalog, model_profiles, model_deployments = self._catalog_payload(name)
         process = self._processes.get(name)
         running = process is not None and process.poll() is None
         if process is not None and not running:
@@ -141,6 +147,11 @@ class ProcessManager:
             file_id=compute_file_id(Path(model.path)),
             vision=model.vision,
             mmproj=model.mmproj,
+            strengths=list(model.strengths),
+            cost_tier=model.cost_tier,
+            model_catalog=model_catalog,
+            model_profiles=model_profiles,
+            model_deployments=model_deployments,
         )
 
     def set_favorite(self, name: str, favorite: bool) -> ModelStatus:
@@ -258,6 +269,14 @@ class ProcessManager:
             kv_cache_policy=profile.kv_cache_policy,
             resource_tier=profile.resource_tier,
         )
+
+    def _catalog_payload(self, name: str) -> tuple[dict[str, object], list[dict[str, object]], list[dict[str, object]]]:
+        family = name.split(":", 1)[0]
+        row = self.catalog_service.get_model(family)
+        model_id = str(row["model_id"])
+        profiles = self.catalog_service.store.list_model_profiles(model_id)
+        deployments = self.catalog_service.store.list_model_deployments(model_id)
+        return row, profiles, deployments
 
     def _close_log(self, name: str) -> None:
         handle = self._log_handles.pop(name, None)

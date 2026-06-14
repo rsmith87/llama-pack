@@ -342,7 +342,7 @@ export function GgufLibraryPage() {
       <ErrorBanner message={error} />
       <div className="library-sections">
         {appMode !== "controller" ? (
-          <Panel title="Local Model Navigator" eyebrow="Downloaded GGUFs">
+          <Panel>
             {localFiles.length ? (
               <ModelNavigator
                 lines={navigatorLines}

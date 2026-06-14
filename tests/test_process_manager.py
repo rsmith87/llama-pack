@@ -302,6 +302,54 @@ def test_list_statuses_includes_profile_identities_and_standalone_models(tmp_pat
     assert statuses[2]["profile"] is None
 
 
+def test_list_statuses_include_catalog_profiles_and_deployments(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_model(
+        store,
+        model_name="qwen",
+        path="/models/qwen.gguf",
+        port=8091,
+        ctx=4096,
+        gpu_layers=99,
+        favorite=True,
+        vision=True,
+        mmproj_path="/models/mmproj.gguf",
+        profiles=[
+            {
+                "profile_key": "fast",
+                "label": "Fast",
+                "order": 10,
+                "kind": "interactive",
+                "ctx": 8192,
+                "strengths": ["coding"],
+                "cost_tier": "low",
+                "port": 8093,
+            }
+        ],
+    )
+    store.upsert_model(
+        model_name="qwen",
+        asset_id=row["asset_id"],
+        config_source="db",
+        ctx=4096,
+        gpu_layers=99,
+        favorite=True,
+        vision=True,
+        mmproj_asset_id=row["mmproj_asset_id"],
+        strengths=["vision", "coding"],
+        cost_tier="medium",
+    )
+    manager = ProcessManager(config, catalog_service=catalog)
+
+    [status] = [item for item in manager.list_statuses() if item["name"] == "qwen:fast"]
+
+    assert status["strengths"] == ["coding"]
+    assert status["cost_tier"] == "low"
+    assert status["model_catalog"]["model_name"] == "qwen"
+    assert status["model_profiles"][0]["profile_key"] == "fast"
+    assert status["model_deployments"][0]["deployment_name"] == "default"
+
+
 def test_profile_log_path_does_not_collide_with_standalone_model_name(tmp_path):
     config, store, catalog = _catalog_config(tmp_path)
     _register_model(

@@ -218,6 +218,49 @@ def test_models_route_reports_vision_config_for_chat_ui(tmp_path):
     assert model["mmproj"] == "/models/mmproj.gguf"
 
 
+def test_models_route_includes_catalog_profiles_and_deployments(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    row = _register_catalog_model(
+        store,
+        model_name="qwen",
+        path="/models/qwen.gguf",
+        port=8081,
+        profiles=[
+            {
+                "profile_key": "fast",
+                "label": "Fast",
+                "order": 10,
+                "kind": "interactive",
+                "ctx": 8192,
+                "port": 8083,
+            }
+        ],
+    )
+    store.upsert_model(
+        model_name="qwen",
+        asset_id=row["asset_id"],
+        config_source="db",
+        strengths=["coding", "vision"],
+        cost_tier="medium",
+    )
+    app = create_app(
+        config=config,
+        process_manager=ProcessManager(config, catalog_service=catalog),
+    )
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/models")
+
+    assert response.status_code == 200
+    [model] = response.json()
+    assert model["name"] == "qwen:fast"
+    assert model["strengths"] == ["coding", "vision"]
+    assert model["cost_tier"] == "medium"
+    assert model["model_catalog"]["model_name"] == "qwen"
+    assert model["model_profiles"][0]["profile_key"] == "fast"
+    assert model["model_deployments"][0]["deployment_name"] == "default"
+
+
 class StubProfileProcessManager:
     def __init__(self, statuses, active):
         self._statuses = [dict(status) for status in statuses]
