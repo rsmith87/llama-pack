@@ -1,172 +1,196 @@
-/* Uses existing global library-card selectors from app.css */
-
-.library-sections {
-  display: grid;
-  gap: 14px;
+/* NodeNavigator — Inspired by ModelNavigator */
+/* Node selector bar */
+.node-navigator-bar {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  padding-bottom: 14px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--line);
 }
 
-.library-cards {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 14px;
-  align-items: start;
-}
-
-.library-card {
+.node-navigator-bar button {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 12px;
-  background: linear-gradient(180deg, var(--card-strong), var(--card));
-  display: grid;
-  gap: 10px;
-}
-
-.library-card.active {
-  box-shadow: 0 0 0 1px var(--success), 0 4px 12px var(--shadow-strong);
-}
-
-.library-card-button {
-  display: grid;
-  gap: 10px;
+  background: var(--card);
+  color: var(--ink);
   text-align: left;
-  border: 0;
-  padding: 0;
-  background: transparent;
-  color: inherit;
+  padding: 10px 14px;
   cursor: pointer;
+  display: grid;
+  gap: 4px;
+  min-width: 140px;
+  transition: border-color 0.15s, box-shadow 0.15s;
 }
 
-.library-card-button span,
-.library-card-button small {
-  color: var(--muted);
+.node-navigator-bar button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 
-.library-card-button strong {
+.node-navigator-bar button strong {
   font-size: 14px;
   line-height: 1.25;
 }
 
-.library-card-meta {
-  display: grid;
-  grid-template-columns: 104px minmax(0, 1fr);
-  gap: 7px 10px;
-  margin: 0;
-  font-size: 11px;
-}
-
-.library-card-meta div {
-  display: contents;
-}
-
-.library-card-meta dt {
+.node-navigator-bar button span {
   color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: 12px;
 }
 
-.library-card-meta dd {
-  margin: 0;
-  color: var(--ink);
-  overflow-wrap: anywhere;
+/* Main navigator grid — same three-column layout as model-navigator */
+.node-navigator {
+  display: grid;
+  grid-template-columns: 240px minmax(280px, 1fr) minmax(300px, 380px);
+  min-height: 520px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--card);
 }
 
-.inline-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-weight: 800;
+.node-navigator-lines,
+.node-navigator-models,
+.node-navigator-detail {
+  min-width: 0;
+  padding: 14px;
 }
 
-.inline-status::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 10px currentColor;
+.node-navigator-lines,
+.node-navigator-detail {
+  background: var(--card-strong);
 }
 
-.inline-status-success {
-  color: var(--success);
+.node-navigator-lines {
+  border-right: 1px solid var(--line);
 }
 
-.inline-status-warning {
-  color: var(--warning);
+.node-navigator-detail {
+  border-left: 1px solid var(--line);
 }
 
-/* Badge and action row */
-.library-card-badges,
-.modal-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-/* Model action buttons (from the unified card) */
-.model-actions {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-  align-items: center;
-}
-
-.model-actions button {
-  font-size: 11px;
-  min-height: 26px;
-  padding: 4px 8px;
-}
-
-/* First action button: Start/Add — styled with a teal gradient */
-.model-actions button:nth-child(1) {
-  border-color: rgba(55, 213, 229, 0.7);
-  background: linear-gradient(135deg, #14b8c7, #0f7f91);
-  color: #061014;
-  font-weight: 800;
-}
-
-/* Second action button: Stop — danger color */
-.model-actions button:nth-child(2) {
-  color: var(--danger);
-}
-
-/* Detail grid */
-.model-card-detail-grid {
+.node-navigator-pane-heading {
   display: grid;
   gap: 8px;
-  margin: 0;
-  font-size: 11px;
+  margin-bottom: 12px;
 }
 
-.model-card-detail-grid div {
+.node-navigator-pane-heading input,
+.node-navigator-reclassify input {
+  width: 100%;
+  box-sizing: border-box;
+  color: var(--ink);
+  background: var(--input-bg, var(--card));
   border: 1px solid var(--line);
   border-radius: 6px;
-  padding: 5px 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
+  padding: 8px 10px;
 }
 
-.model-card-detail-grid dt {
+.node-navigator-list,
+.node-navigator-model-grid,
+.node-navigator-quant-list,
+.node-navigator-detail-stack {
+  display: grid;
+  gap: 8px;
+}
+
+.node-navigator-list button,
+.node-navigator-model-grid button,
+.node-navigator-quant-list button {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--ink);
+  text-align: left;
+  padding: 10px;
+  cursor: pointer;
+}
+
+.node-navigator-list button {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.node-navigator-list button.active,
+.node-navigator-model-grid button.active,
+.node-navigator-quant-list button.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+
+.node-navigator-model-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.node-navigator-model-grid button,
+.node-navigator-quant-list button {
+  display: grid;
+  gap: 6px;
+}
+
+.node-navigator-model-grid span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.node-navigator-quant-list {
+  margin-bottom: 14px;
+}
+
+.node-navigator-quant-list button {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+
+.node-navigator-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.node-navigator-detail-grid div {
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+}
+
+.node-navigator-detail-grid dt {
   color: var(--muted);
   font-size: 10px;
-  letter-spacing: 0.08em;
   text-transform: uppercase;
-  order: -1;
 }
 
-.model-card-detail-grid dd {
+.node-navigator-detail-grid dd {
   margin: 3px 0 0;
   overflow-wrap: anywhere;
 }
 
-/* Library detail panels */
-.library-detail,
-.library-controls {
+.node-navigator-reclassify {
   display: grid;
-  gap: 14px;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--line);
 }
 
-.library-controls {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.node-navigator-reclassify label {
+  display: grid;
+  gap: 6px;
+  color: var(--ink);
+}
+
+@media (max-width: 980px) {
+  .node-navigator {
+    grid-template-columns: 1fr;
+  }
+
+  .node-navigator-lines,
+  .node-navigator-detail {
+    border: 0;
+  }
+
+  .node-navigator-model-grid {
+    grid-template-columns: 1fr;
+  }
 }

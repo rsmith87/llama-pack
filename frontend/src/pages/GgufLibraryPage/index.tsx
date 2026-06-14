@@ -7,6 +7,7 @@ import { useAppMode } from "../../features/appMode/appModeContext";
 import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
 import { ModelNavigator } from "../../components/ModelNavigator";
+import { NodeNavigator, type NodeNavigatorNode } from "../../components/NodeNavigator";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { buildModelNavigatorLines, type ModelNavigatorQuant } from "../../features/models/modelNavigator";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
@@ -161,6 +162,20 @@ export function GgufLibraryPage() {
 
   const localFiles = useMemo(() => files.filter((file) => !isMmproj(file)), [files]);
   const navigatorLines = useMemo(() => buildModelNavigatorLines(localFiles), [localFiles]);
+  const nodeNavigatorNodes = useMemo<NodeNavigatorNode<GgufFile>[]>(
+    () =>
+      nodeGgufSnapshots.map((node) => {
+        const nodeName = String(node.name || "unknown");
+        const rawFiles = Array.isArray(node.files) ? (node.files as GgufFile[]).filter((file) => !isMmproj(file)) : [];
+        const enriched = rawFiles.map((file) => ({ ...file, source_node: nodeName }));
+        return {
+          name: nodeName,
+          reachable: node.reachable,
+          lines: buildModelNavigatorLines(enriched),
+        };
+      }),
+    [nodeGgufSnapshots],
+  );
 
   function openDetail(file: GgufFile) {
     setSelected(file);
@@ -342,7 +357,7 @@ export function GgufLibraryPage() {
       <ErrorBanner message={error} />
       <div className="library-sections">
         {appMode !== "controller" ? (
-          <Panel>
+          <>
             {localFiles.length ? (
               <ModelNavigator
                 lines={navigatorLines}
@@ -365,45 +380,39 @@ export function GgufLibraryPage() {
             ) : (
               <EmptyState message={loading ? "Loading GGUF files..." : "No local GGUF files found."} />
             )}
-          </Panel>
+          </>
         ) : null}
         {appMode !== "agent" ? (
         <Panel title="Agent Node GGUF Files" eyebrow="Connected Nodes">
-          {nodeGgufSnapshots.length === 0 ? (
+          {nodeNavigatorNodes.length === 0 ? (
             <EmptyState message={loading ? "Loading node GGUF files..." : "No agent GGUF files reported."} />
           ) : (
-            <div className="node-model-sections">
-              {nodeGgufSnapshots.map((node) => {
-                const nodeName = String(node.name || "unknown");
-                const nodeFiles = Array.isArray(node.files) ? node.files as GgufFile[] : [];
+            <NodeNavigator<GgufFile>
+              nodes={nodeNavigatorNodes}
+              onSelectQuant={(quant) => {
+                const nodeName = String(quant.file.source_node || "");
+                selectNavigatorQuant(quant);
+              }}
+              renderDetail={({ selectedLine, selectedModel, selectedQuant }) => {
+                if (!selectedQuant) return <EmptyState message="Select a model to see its quants." />;
+                const nodeName = String(selectedQuant.file.source_node || "");
+                const nodeGgufModel = { ...selectedQuant.file, status: selectedQuant.file.registered ? "added" : "discovered" };
                 return (
-                  <div key={nodeName} className="node-model-group">
-                    <div className="node-model-group-header">
-                      <strong>{nodeName}</strong>
-                      <StatusBadge tone={node.reachable ? "success" : "muted"}>
-                        {node.reachable ? "reachable" : "unreachable"}
-                      </StatusBadge>
+                  <div className="library-detail">
+                    <div>
+                      <span className="eyebrow">{selectedLine?.label || "Model"}</span>
+                      <h3>{selectedModel?.label || fileName(selectedQuant.file)}</h3>
                     </div>
-                    <div className="library-cards">
-                      {nodeFiles.length ? nodeFiles.filter((file) => !isMmproj(file)).map((file) => {
-                        const nodeGgufModel = { ...file, status: file.registered ? "added" : "discovered" };
-                        return (
-                          <ModelCard
-                            key={`${nodeName}-${fileId(file)}`}
-                            model={nodeGgufModel}
-                            resolvedNode={nodeName}
-                            onOpen={() => openNodeGgufDetail(nodeName, file)}
-                            onTransfer={() => { openNodeGgufDetail(nodeName, file); void openTransferModal(nodeName); }}
-                          />
-                        );
-                      }) : (
-                        <EmptyState message={String(node.error || (node.reachable ? "No GGUF files reported." : "Stale heartbeat — no GGUF data."))} />
-                      )}
-                    </div>
+                    <ModelCard
+                      model={nodeGgufModel}
+                      resolvedNode={nodeName}
+                      onOpen={() => openNodeGgufDetail(nodeName, selectedQuant.file)}
+                      onTransfer={() => { openNodeGgufDetail(nodeName, selectedQuant.file); void openTransferModal(nodeName); }}
+                    />
                   </div>
                 );
-              })}
-            </div>
+              }}
+            />
           )}
         </Panel>
         ) : null}

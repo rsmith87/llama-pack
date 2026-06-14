@@ -26,7 +26,6 @@ it("groups local GGUF files in the model navigator by specific generation", asyn
 
   renderPage();
 
-  expect(await screen.findByRole("heading", { name: "Local Model Navigator" })).toBeInTheDocument();
   const modelLines = screen.getByRole("complementary", { name: "Model lines" });
   const selectedDetails = screen.getByRole("region", { name: "Selected model details" });
   expect(within(modelLines).getByRole("button", { name: /Qwen3/ })).toBeInTheDocument();
