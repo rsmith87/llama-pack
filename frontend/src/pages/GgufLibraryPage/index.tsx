@@ -383,7 +383,7 @@ export function GgufLibraryPage() {
           </>
         ) : null}
         {appMode !== "agent" ? (
-        <Panel title="Agent Node GGUF Files" eyebrow="Connected Nodes">
+        <>
           {nodeNavigatorNodes.length === 0 ? (
             <EmptyState message={loading ? "Loading node GGUF files..." : "No agent GGUF files reported."} />
           ) : (
@@ -414,7 +414,7 @@ export function GgufLibraryPage() {
               }}
             />
           )}
-        </Panel>
+        </>
         ) : null}
       </div>
 
