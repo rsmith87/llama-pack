@@ -17,6 +17,7 @@ import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
 import { modelName, statusTone } from "../../features/models";
+import { librarySelectionSearch } from "../../features/ggufLibrary";
 import { TIMERS } from "../../constants";
 import { 
   percent,
@@ -148,7 +149,9 @@ export function DashboardPage() {
         model={model}
         resolvedNode={resolvedNode}
         actingModel={actingModel}
-        onOpen={() => navigateToPage("gguf-library")}
+        onOpen={() => navigateToPage("gguf-library", {
+          search: librarySelectionSearch(name, resolvedNode || "", String(model.file_id || "")),
+        })}
         onStart={() => void runModelAction(model, "start")}
         onStop={() => void runModelAction(model, "stop")}
         onChat={() => navigateToPage("chat", {
@@ -245,7 +248,7 @@ export function DashboardPage() {
         <Panel
           className="dashboard-models"
           eyebrow="This agent"
-          title="Local Models"
+          title="Models ready to go"
           actions={<Button type="button" onClick={() => navigateToPage("gguf-library")}>Add Model</Button>}
         >
           {data.localModels.length === 0 ? (

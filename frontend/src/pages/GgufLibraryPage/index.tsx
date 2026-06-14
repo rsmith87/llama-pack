@@ -1,5 +1,5 @@
 import "./styles.css";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer, addGgufModel, deleteConfiguredModel, deleteGguf, listGgufs, updateGgufAsset, updateGgufModel } from "../../api/library";
 import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
@@ -24,7 +24,8 @@ import {
   isMmproj,
   sizeLabel,
   asNodes,
-  isTransferReachableNode
+  isTransferReachableNode,
+  readGgufLibraryHandoff,
 } from "../../features/ggufLibrary";
 
 function asStringArray(value: unknown): string[] {
@@ -154,6 +155,7 @@ export function GgufLibraryPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [transferOpen, setTransferOpen] = useState(false);
   const [selectedQuantId, setSelectedQuantId] = useState("");
+  const [selectedNodeName, setSelectedNodeName] = useState("");
   const [nodes, setNodes] = useState<NodeRecord[]>([]);
   const [sourceNode, setSourceNode] = useState("");
   const [destinationNode, setDestinationNode] = useState("");
@@ -162,6 +164,7 @@ export function GgufLibraryPage() {
 
   const localFiles = useMemo(() => files.filter((file) => !isMmproj(file)), [files]);
   const navigatorLines = useMemo(() => buildModelNavigatorLines(localFiles), [localFiles]);
+  const ggufLibraryHandoff = useMemo(() => readGgufLibraryHandoff(), []);
   const nodeNavigatorNodes = useMemo<NodeNavigatorNode<GgufFile>[]>(
     () =>
       nodeGgufSnapshots.map((node) => {
@@ -176,6 +179,60 @@ export function GgufLibraryPage() {
       }),
     [nodeGgufSnapshots],
   );
+
+  useEffect(() => {
+    if (ggufLibraryHandoff.source !== "dashboard") {
+      return;
+    }
+
+    const normalizedModel = ggufLibraryHandoff.model.trim().toLowerCase();
+    const normalizedFileId = ggufLibraryHandoff.fileId.trim();
+    const normalizedNode = ggufLibraryHandoff.node.trim();
+
+    const matchesModel = (file: GgufFile) => {
+      if (!normalizedModel) return false;
+      const candidates = [
+        typeof file.registered_as === "string" ? file.registered_as : "",
+        typeof file.name === "string" ? file.name : "",
+        typeof file.filename === "string" ? file.filename : "",
+      ];
+      return candidates.some((value) => value.trim().toLowerCase() === normalizedModel);
+    };
+
+    const matchesFileId = (file: GgufFile) => normalizedFileId.length > 0 && fileId(file) === normalizedFileId;
+
+    if (appMode === "controller") {
+      const matchedNode = nodeNavigatorNodes.find((node) => {
+        if (normalizedNode && node.name !== normalizedNode) return false;
+        return node.lines.some((line) =>
+          line.models.some((model) =>
+            model.quants.some((quant) => matchesFileId(quant.file) || (!normalizedFileId && matchesModel(quant.file))),
+          ),
+        );
+      });
+      if (!matchedNode) return;
+
+      const matchedQuant = matchedNode.lines
+        .flatMap((line) => line.models)
+        .flatMap((model) => model.quants)
+        .find((quant) => matchesFileId(quant.file) || (!normalizedFileId && matchesModel(quant.file)));
+
+      if (matchedQuant) {
+        setSelectedNodeName(matchedNode.name);
+        setSelectedQuantId(matchedQuant.id);
+      }
+      return;
+    }
+
+    const matchedQuant = navigatorLines
+      .flatMap((line) => line.models)
+      .flatMap((model) => model.quants)
+      .find((quant) => matchesFileId(quant.file) || (!normalizedFileId && matchesModel(quant.file)));
+
+    if (matchedQuant) {
+      setSelectedQuantId(matchedQuant.id);
+    }
+  }, [appMode, ggufLibraryHandoff, navigatorLines, nodeNavigatorNodes]);
 
   function openDetail(file: GgufFile) {
     setSelected(file);
@@ -389,8 +446,9 @@ export function GgufLibraryPage() {
           ) : (
             <NodeNavigator<GgufFile>
               nodes={nodeNavigatorNodes}
+              selectedNodeName={selectedNodeName || undefined}
+              onSelectNode={(nodeName) => setSelectedNodeName(nodeName)}
               onSelectQuant={(quant) => {
-                const nodeName = String(quant.file.source_node || "");
                 selectNavigatorQuant(quant);
               }}
               renderDetail={({ selectedLine, selectedModel, selectedQuant }) => {

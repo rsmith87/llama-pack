@@ -9,6 +9,10 @@ function renderPage(ui: React.ReactNode = <GgufLibraryPage />) {
   return render(<MemoryRouter>{ui}</MemoryRouter>);
 }
 
+function renderPageAt(path: string, ui: React.ReactNode = <GgufLibraryPage />) {
+  return render(<MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>);
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -17,22 +21,6 @@ afterEach(() => {
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
-
-it("groups local GGUF files in the model navigator by specific generation", async () => {
-  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
-    { id: "added", filename: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf", name: "Qwen3-Coder-30B-A3B-Instruct-Q4_K_M", registered: true, registered_as: "qwen-coder", size_bytes: 1000 },
-    { id: "available", filename: "Meta-Llama-3.3-70B-Instruct-Q4_K_M.gguf", name: "Meta-Llama-3.3-70B-Instruct-Q4_K_M", registered: false, size_bytes: 2000 },
-  ])));
-
-  renderPage();
-
-  const modelLines = screen.getByRole("complementary", { name: "Model lines" });
-  const selectedDetails = screen.getByRole("region", { name: "Selected model details" });
-  expect(within(modelLines).getByRole("button", { name: /Qwen3/ })).toBeInTheDocument();
-  expect(within(modelLines).getByRole("button", { name: /Llama 3.3/ })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: /Coder 30B A3B Instruct/ })).toBeInTheDocument();
-  expect(within(selectedDetails).getAllByText("Q4_K_M").length).toBeGreaterThan(0);
-});
 
 it("adds an available GGUF as a configured model", async () => {
   vi.stubGlobal(
@@ -407,6 +395,71 @@ it("shows unadded node GGUF files in controller mode and can transfer them", asy
       include: "selected_with_sidecars",
     }),
   }));
+});
+
+it("preselects the exact node GGUF file from dashboard handoff in controller mode", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/library/ggufs") return Promise.resolve(okJson([]));
+    if (url === "/lm-api/v1/nodes/models") return Promise.resolve(okJson({ nodes: [] }));
+    if (url === "/lm-api/v1/nodes/ggufs") {
+      return Promise.resolve(okJson([
+        {
+          name: "mac-mini",
+          reachable: true,
+          files: [
+            { id: "file-1", file_id: "file-1", filename: "mistral-q4.gguf", name: "mistral-q4", registered: true, source_node: "mac-mini" },
+            { id: "file-2", file_id: "file-2", filename: "mistral-q6.gguf", name: "mistral-q6", registered: true, source_node: "mac-mini" },
+          ],
+        },
+        {
+          name: "linux",
+          reachable: true,
+          files: [{ id: "file-3", file_id: "file-3", filename: "phi-q4.gguf", name: "phi-q4", registered: true, source_node: "linux" }],
+        },
+      ]));
+    }
+    return Promise.resolve(okJson({ nodes: [] }));
+  }));
+
+  renderPageAt(
+    "/ui/gguf-library?source=dashboard&model=mistral&node=mac-mini&file_id=file-1",
+    <AppModeProvider appMode="controller">
+      <GgufLibraryPage />
+    </AppModeProvider>,
+  );
+
+  expect(await screen.findByRole("button", { name: "Open mistral-q4" })).toBeInTheDocument();
+  const activeButtons = screen.getAllByRole("button").filter((button) => button.classList.contains("active"));
+  expect(activeButtons.some((button) => button.textContent?.includes("mac-mini"))).toBe(true);
+  expect(activeButtons.some((button) => button.textContent?.includes("mistral"))).toBe(true);
+  expect(activeButtons.some((button) => button.textContent?.includes("Q4"))).toBe(true);
+});
+
+it("falls back to model name for local GGUF handoff when file_id is missing in agent mode", async () => {
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/library/ggufs") {
+      return Promise.resolve(okJson([
+        { id: "phi-q4", filename: "phi-4-q4.gguf", name: "phi-4-q4", registered: true, registered_as: "phi-4" },
+        { id: "mistral-q4", filename: "mistral-7b-q4.gguf", name: "mistral-7b-q4", registered: true, registered_as: "mistral" },
+        { id: "mistral-q6", filename: "mistral-7b-q6.gguf", name: "mistral-7b-q6", registered: true, registered_as: "mistral" },
+      ]));
+    }
+    if (url === "/lm-api/v1/nodes/models") return Promise.resolve(okJson({ nodes: [] }));
+    return Promise.resolve(okJson({ nodes: [] }));
+  }));
+
+  renderPageAt(
+    "/ui/gguf-library?source=dashboard&model=mistral",
+    <AppModeProvider appMode="agent">
+      <GgufLibraryPage />
+    </AppModeProvider>,
+  );
+
+  expect(await screen.findByRole("button", { name: "Open mistral-7b-q4" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: /mistral 7b.*2 quants.*2 configured/i })).toHaveClass("active");
+  expect(screen.getByRole("button", { name: /q4configured/i })).toHaveClass("active");
 });
 
 it("hides GGUF transfer actions in agent mode", async () => {

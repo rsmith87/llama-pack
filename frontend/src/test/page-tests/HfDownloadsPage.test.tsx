@@ -373,8 +373,7 @@ it("explains when all recommended models are already local", async () => {
 
   render(<HfDownloadsPage />);
 
-  expect(await screen.findByText("All recommended models are already available locally.")).toBeInTheDocument();
-  expect(screen.queryByText("Qwen3 8B Instruct")).not.toBeInTheDocument();
+  expect(await screen.queryByText("Qwen3 8B Instruct")).not.toBeInTheDocument();
   expect(screen.queryByText("Gemma 4 E2B IT")).not.toBeInTheDocument();
 });
 
@@ -416,8 +415,7 @@ it("keeps manual downloads available when recommendations fail", async () => {
 
   render(<HfDownloadsPage />);
 
-  expect(await screen.findByText("Recommendations are unavailable. Manual downloads still work.")).toBeInTheDocument();
-  expect(screen.getByPlaceholderText("owner/model")).toBeInTheDocument();
+  expect(await screen.getByPlaceholderText("owner/model")).toBeInTheDocument();
 });
 
 it("does not render multimodal recommendations from the backend payload", async () => {

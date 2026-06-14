@@ -383,38 +383,40 @@ export function HfDownloadsPage() {
       <ErrorBanner message={error} />
 
       <Panel className="download-panel">
-        <section className="recommended-downloads" aria-label="Recommended model downloads">
-          <div className="recommended-downloads-header">
-            <div>
-              <h3>Recommended for this machine</h3>
-              <p className="muted">{machineText}</p>
-              {recommendationError ? <p className="muted">Recommendations are unavailable. Manual downloads still work.</p> : null}
+        {recommendations.length > 0 ? (
+          <section className="recommended-downloads" aria-label="Recommended model downloads">
+            <div className="recommended-downloads-header">
+              <div>
+                <h3>Recommended for this machine</h3>
+                <p className="muted">{machineText}</p>
+                {recommendationError ? <p className="muted">Recommendations are unavailable. Manual downloads still work.</p> : null}
+              </div>
             </div>
-          </div>
-          <div className="recommended-download-cards">
-            {allRecommendedModelsLocal ? <p className="muted">All recommended models are already available locally.</p> : null}
-            {recommendations.map((item) => {
-              const inventory = inventoryForRecommended(item, localGgufs, nodes);
-              const canSend = inventory.remoteSource ? transferDestinationOptions(nodes, inventory.remoteSource.node).length > 0 : false;
-              return (
-                <RecommendationModelCard
-                  key={`${item.repoId}:${item.includeFile}`}
-                  item={item}
-                  inventory={inventory}
-                  canSend={canSend}
-                  onSend={openTransfer}
-                  onDownload={(recommendedItem) => void start({
-                    repo: recommendedItem.repoId,
-                    includeFile: recommendedItem.includeFile,
-                    mmprojFile: recommendedItem.mmprojFile,
-                    supportsMtp: recommendedItem.supportsMtp,
-                    draftModelPath: recommendedItem.draftModelPath,
-                  })}
-                />
-              );
-            })}
-          </div>
-        </section>
+            <div className="recommended-download-cards">
+              {allRecommendedModelsLocal ? <p className="muted">All recommended models are already available locally.</p> : null}
+              {recommendations.map((item) => {
+                const inventory = inventoryForRecommended(item, localGgufs, nodes);
+                const canSend = inventory.remoteSource ? transferDestinationOptions(nodes, inventory.remoteSource.node).length > 0 : false;
+                return (
+                  <RecommendationModelCard
+                    key={`${item.repoId}:${item.includeFile}`}
+                    item={item}
+                    inventory={inventory}
+                    canSend={canSend}
+                    onSend={openTransfer}
+                    onDownload={(recommendedItem) => void start({
+                      repo: recommendedItem.repoId,
+                      includeFile: recommendedItem.includeFile,
+                      mmprojFile: recommendedItem.mmprojFile,
+                      supportsMtp: recommendedItem.supportsMtp,
+                      draftModelPath: recommendedItem.draftModelPath,
+                    })}
+                  />
+                );
+              })}
+            </div>
+          </section>
+        ): null}
         <form className="filter-bar download-form" onSubmit={onSubmit}>
           <FormField label="Repo ID"><input value={repoId} onChange={(event) => setRepoId(event.target.value)} placeholder="owner/model" /></FormField>
           <FormField label="Revision"><input value={revision} onChange={(event) => setRevision(event.target.value)} placeholder="revision (optional)" /></FormField>

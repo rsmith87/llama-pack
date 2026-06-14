@@ -96,6 +96,22 @@ it("navigates to Benchmarks with selected model and node context from a model ca
   expect(mockedNavigate).toHaveBeenCalledWith("/ui/benchmarks?model=mistral&target=node%3Amac-mini&target_node=mac-mini&source=dashboard");
 });
 
+it("navigates to GGUF Library with file-id-first handoff from a model card", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller", configured_models: 1 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "running", node: "mac-mini", file_id: "file-1" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) }),
+  );
+  const user = userEvent.setup();
+
+  renderDashboardPage();
+  await user.click(await screen.findByRole("button", { name: "Open mistral" }));
+
+  expect(mockedNavigate).toHaveBeenCalledWith("/ui/gguf-library?source=dashboard&model=mistral&node=mac-mini&file_id=file-1");
+});
+
 it("renders local models as GGUF-style cards with runtime actions", async () => {
   vi.stubGlobal(
     "fetch",

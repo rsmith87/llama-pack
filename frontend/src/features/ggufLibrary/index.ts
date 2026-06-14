@@ -2,6 +2,13 @@ import { GgufFile, GgufLibraryData, NodeRecord } from "../../types";
 import { getNodeGgufs, getNodeModels } from "../../api/nodes";
 import { listGgufs } from "../../api/library";
 
+type GgufLibraryHandoff = {
+  source: string;
+  model: string;
+  node: string;
+  fileId: string;
+};
+
 function asFiles(payload: unknown): GgufFile[] {
   if (Array.isArray(payload)) return payload as GgufFile[];
   const value = payload as { files?: GgufFile[]; ggufs?: GgufFile[] } | null;
@@ -52,6 +59,25 @@ function chatSearch(model: string): string {
   return params.toString();
 }
 
+function librarySelectionSearch(model: string, node = "", fileIdValue = ""): string {
+  const params = new URLSearchParams();
+  params.set("source", "dashboard");
+  params.set("model", model);
+  if (node) params.set("node", node);
+  if (fileIdValue) params.set("file_id", fileIdValue);
+  return params.toString();
+}
+
+function readGgufLibraryHandoff(search = window.location.search): GgufLibraryHandoff {
+  const params = new URLSearchParams(search);
+  return {
+    source: params.get("source") || "",
+    model: params.get("model") || "",
+    node: params.get("node") || "",
+    fileId: params.get("file_id") || "",
+  };
+}
+
 async function loadGgufLibraryData(appMode: string): Promise<GgufLibraryData> {
   const nodeGgufsPromise = appMode === "controller" ? getNodeGgufs() : Promise.resolve({ nodes: [] });
   const [ggufsResult, nodesResult, nodeGgufsResult] = await Promise.allSettled([listGgufs(), getNodeModels(), nodeGgufsPromise]);
@@ -72,5 +98,7 @@ export {
     compactPath,
     isTransferReachableNode,
     chatSearch,
+    librarySelectionSearch,
+    readGgufLibraryHandoff,
     loadGgufLibraryData
 }
