@@ -115,18 +115,27 @@ class FakeResponse:
         self.status_code = status_code
 
 
-def make_manager(tmp_path, *, files=None, popen=None, hf_api=None):
+def make_manager(tmp_path, *, files=None, popen=None, hf_api=None, config_overrides=None, disk_usage=None):
+    config_payload = {
+        "mode": "agent",
+        "hf_models_dirs": [str(tmp_path / "models")],
+        "log_dir": str(tmp_path / "logs"),
+        "python_bin": "python-test",
+    }
+    if config_overrides:
+        config_payload.update(config_overrides)
     config = load_config(
-        {
-            "mode": "agent",
-            "hf_models_dirs": [str(tmp_path / "models")],
-            "log_dir": str(tmp_path / "logs"),
-            "python_bin": "python-test",
-        }
+        config_payload
     )
     store = FakeStore()
     api = hf_api or FakeHfApi(files or [])
-    manager = DownloadManager(config, store, popen=popen or (lambda *args, **kwargs: FakeProcess()), hf_api=api)
+    manager_kwargs = {
+        "popen": popen or (lambda *args, **kwargs: FakeProcess()),
+        "hf_api": api,
+    }
+    if disk_usage is not None:
+        manager_kwargs["disk_usage"] = disk_usage
+    manager = DownloadManager(config, store, **manager_kwargs)
     return manager, store, api
 
 
@@ -303,6 +312,64 @@ def test_download_manager_records_provenance_for_selected_include_files(tmp_path
     assert store.created[0]["local_path"] == str(tmp_path / "models" / "owner__model")
     assert "--include nested/model-Q5_K_M.gguf" in store.created[0]["command"]
     assert "--include mmproj-F16.gguf" in store.created[0]["command"]
+
+
+def test_download_manager_uses_next_model_root_when_first_disk_is_full(tmp_path):
+    first_root = tmp_path / "models-a"
+    second_root = tmp_path / "models-b"
+    first_root.mkdir()
+    second_root.mkdir()
+    GiB = 1024**3
+    captured = {}
+
+    def fake_popen(command, **kwargs):
+        captured["command"] = command
+        return FakeProcess()
+
+    def fake_disk_usage(path: Path):
+        if path == first_root:
+            return (100 * GiB, 95 * GiB, 5 * GiB)
+        if path == second_root:
+            return (100 * GiB, 50 * GiB, 50 * GiB)
+        raise AssertionError(f"Unexpected disk usage path: {path}")
+
+    manager, store, _api = make_manager(
+        tmp_path,
+        files=[FakeRepoFile("nested/model-Q5_K_M.gguf", 8 * GiB)],
+        popen=fake_popen,
+        config_overrides={"hf_models_dirs": [str(first_root), str(second_root)]},
+        disk_usage=fake_disk_usage,
+    )
+
+    manager.start("owner/model", include_file="nested/model-Q5_K_M.gguf", triggered_by="tester")
+
+    assert store.created[0]["local_path"] == str(second_root / "owner__model")
+    assert captured["command"][6] == str(second_root / "owner__model")
+
+
+def test_download_manager_returns_no_space_when_no_model_root_qualifies(tmp_path):
+    first_root = tmp_path / "models-a"
+    second_root = tmp_path / "models-b"
+    first_root.mkdir()
+    second_root.mkdir()
+    GiB = 1024**3
+
+    def fake_disk_usage(path: Path):
+        if path in {first_root, second_root}:
+            return (100 * GiB, 95 * GiB, 5 * GiB)
+        raise AssertionError(f"Unexpected disk usage path: {path}")
+
+    manager, store, _api = make_manager(
+        tmp_path,
+        files=[FakeRepoFile("nested/model-Q5_K_M.gguf", 8 * GiB)],
+        config_overrides={"hf_models_dirs": [str(first_root), str(second_root)]},
+        disk_usage=fake_disk_usage,
+    )
+
+    with pytest.raises(ValueError, match="no space"):
+        manager.start("owner/model", include_file="nested/model-Q5_K_M.gguf", triggered_by="tester")
+
+    assert store.created == []
 
 
 def test_download_manager_reports_running_progress_from_selected_quant_file(tmp_path):

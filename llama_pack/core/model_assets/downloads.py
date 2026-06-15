@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 import signal
 import shlex
+import shutil
 import subprocess
 import time
 from importlib import import_module
@@ -17,11 +18,13 @@ from llama_pack.core.model_assets.recommendations import recommend_downloads
 
 
 PopenFactory = Callable[..., subprocess.Popen]
+DiskUsageFactory = Callable[[Path], tuple[int, int, int]]
 REPO_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 HF_AUTH_REQUIRED_MESSAGE = (
     "This repo requires a Hugging Face login or accepted license before download. "
     "Sign in with `hf auth login` and accept the repo terms on Hugging Face, then try again."
 )
+DOWNLOAD_DISK_HEADROOM_BYTES = 10 * 1024**3
 
 
 class DownloadManager:
@@ -32,12 +35,14 @@ class DownloadManager:
         popen: PopenFactory = subprocess.Popen,
         hf_api: Any | None = None,
         inventory_service: ModelAssetInventoryService | None = None,
+        disk_usage: DiskUsageFactory = shutil.disk_usage,
     ):
         self.config = config
         self.store = store
         self._popen = popen
         self._hf_api = hf_api
         self.inventory_service = inventory_service
+        self._disk_usage = disk_usage
         self._processes: dict[str, subprocess.Popen] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
         self._recommendations_cache: tuple[float, dict[str, object]] | None = None
@@ -119,10 +124,11 @@ class DownloadManager:
                 if active["repo_id"] == repo_id:
                     raise ValueError(f"Download already running for {repo_id}")
 
-        local_path = str(self._destination_for_repo(repo_id))
-        command = self._command(repo_id, revision=revision, include_files=[item for item in (include_file, mmproj_file) if item])
-        log_path = self._log_dir / f"{repo_id.replace('/', '__')}.log"
         bytes_total = self._bytes_total_for_include(repo_id, revision=revision, include_file=include_file)
+        destination = self._destination_for_repo(repo_id, required_bytes=bytes_total)
+        local_path = str(destination)
+        command = self._command(destination, repo_id, revision=revision, include_files=[item for item in (include_file, mmproj_file) if item])
+        log_path = self._log_dir / f"{repo_id.replace('/', '__')}.log"
         record = self.store.create_download(
             repo_id=repo_id,
             revision=revision,
@@ -199,9 +205,25 @@ class DownloadManager:
             error_detail="Download cancelled by user",
         )
 
-    def _destination_for_repo(self, repo_id: str) -> Path:
-        root = self.config.model_roots[0]
+    def _destination_for_repo(self, repo_id: str, *, required_bytes: int | None = None) -> Path:
+        root = self._select_download_root(required_bytes=required_bytes)
         return root / repo_id.replace("/", "__")
+
+    def _select_download_root(self, *, required_bytes: int | None = None) -> Path:
+        required_free_bytes = max(required_bytes or 0, 0) + DOWNLOAD_DISK_HEADROOM_BYTES
+        for root in self.config.model_roots:
+            _total, _used, free = self._disk_usage(self._disk_usage_path(root))
+            if free >= required_free_bytes:
+                return root
+        raise ValueError("no space")
+
+    def _disk_usage_path(self, root: Path) -> Path:
+        probe = root
+        while not probe.exists():
+            if probe.parent == probe:
+                break
+            probe = probe.parent
+        return probe
 
     def _bytes_total_for_include(self, repo_id: str, *, revision: str | None, include_file: str | None) -> int | None:
         if not include_file:
@@ -260,8 +282,8 @@ class DownloadManager:
                 total += item.stat().st_size
         return total
 
-    def _command(self, repo_id: str, *, revision: str | None, include_files: list[str] | None = None) -> list[str]:
-        target = str(self._destination_for_repo(repo_id))
+    def _command(self, destination: Path, repo_id: str, *, revision: str | None, include_files: list[str] | None = None) -> list[str]:
+        target = str(destination)
         cmd = [self.config.python_bin, "-m", "huggingface_hub.cli.hf", "download", repo_id, "--local-dir", target]
         if revision:
             cmd.extend(["--revision", revision])

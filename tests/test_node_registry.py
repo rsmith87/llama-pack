@@ -106,6 +106,39 @@ def test_persisted_static_node_override_inherits_configured_scheme():
     assert node.verify_tls is False
 
 
+def test_persisted_static_node_override_treats_blank_api_key_as_unset():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "pi": {
+                    "url": "https://pi.local",
+                    "api_key": "secret",
+                    "verify_tls": True,
+                }
+            },
+        }
+    )
+    store = InMemoryStore()
+    store.save(
+        {
+            "node_overrides": {
+                "pi": {
+                    "url": "pi.local",
+                    "api_key": "",
+                    "verify_tls": True,
+                }
+            }
+        }
+    )
+
+    registry = NodeRegistry(config=config, store=store)
+
+    node = registry.get_node_config("pi")
+    assert node.url == "https://pi.local"
+    assert node.api_key == "secret"
+
+
 @pytest.mark.asyncio
 async def test_request_node_rejects_node_url_without_http_scheme():
     config = load_config(
@@ -219,6 +252,18 @@ def test_updates_static_node_inherits_scheme_when_url_is_scheme_less():
     assert updated["url"] == "https://mac-mini.local"
     assert registry.get_node_config("mac-mini").url == "https://mac-mini.local"
     assert registry.get_node_config("mac-mini").api_key == "old"
+
+
+def test_updates_dynamic_node_preserves_api_key_when_update_omits_it():
+    config = load_config({"mode": "controller", "nodes": {}})
+    registry = NodeRegistry(config=config)
+    registry.register_node("pi", NodeConfig(url="http://pi.local:9000", api_key="secret", verify_tls=True))
+
+    updated = registry.update_node("pi", NodeConfig(url="http://pi.local:9001", verify_tls=False))
+
+    assert updated["url"] == "http://pi.local:9001"
+    assert updated["verify_tls"] is False
+    assert registry.get_node_config("pi").api_key == "secret"
 
 
 @pytest.mark.asyncio

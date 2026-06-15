@@ -60,9 +60,10 @@ export function NodesPage() {
 
   async function saveEdit() {
     if (!editNode?.name || !editNode.url) return;
+    const apiKey = editNode.api_key.trim();
     await updateNode(editNode.name, {
       url: editNode.url,
-      api_key: editNode.api_key,
+      ...(apiKey ? { api_key: apiKey } : {}),
       verify_tls: editNode.verify_tls,
     });
     setEditNode(null);

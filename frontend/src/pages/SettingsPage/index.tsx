@@ -1,8 +1,8 @@
 import "./styles.css";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createKey, listKeys, revokeKey } from "../../api/auth";
-import { generateApiKeys } from "../../api/settings";
-import { DataTable, ErrorBanner, FormField, Panel, Button } from "../../components/ui";
+import { generateApiKeys, listModelDisks, listNodeAuth, type ModelDiskInfo, type NodeAuthInfo } from "../../api/settings";
+import { DataTable, ErrorBanner, FormField, Panel, Button, StatusBadge } from "../../components/ui";
 import { useAuthSession } from "../../features/auth/authSession";
 import { downloadText } from "../../features/shared/helpers";
 import type { AuthKey } from "../../types/index";
@@ -17,6 +17,19 @@ function keyId(key: AuthKey) {
 
 function keyHint(key: AuthKey) {
   return String((key as Record<string, unknown>).key_hint || key.hint || "-");
+}
+
+function formatBytes(value: number) {
+  if (!Number.isFinite(value) || value < 0) return "-";
+  if (value < 1024) return `${value} B`;
+  const units = ["KB", "MB", "GB", "TB"];
+  let amount = value;
+  let unitIndex = -1;
+  while (amount >= 1024 && unitIndex < units.length - 1) {
+    amount /= 1024;
+    unitIndex += 1;
+  }
+  return `${amount.toFixed(amount >= 10 || unitIndex <= 0 ? 0 : 1)} ${units[unitIndex]}`;
 }
 
 export function SettingsPage() {
@@ -39,13 +52,37 @@ export function SettingsPage() {
   const [keyUsername, setKeyUsername] = useState("");
   const [keyRole, setKeyRole] = useState("operator");
   const [createdKey, setCreatedKey] = useState<Record<string, unknown> | null>(null);
+  const [disks, setDisks] = useState<ModelDiskInfo[]>([]);
+  const [nodeAuth, setNodeAuth] = useState<NodeAuthInfo[]>([]);
   const [error, setError] = useState("");
   const [utilityStatus, setUtilityStatus] = useState("");
   const paneLabels: Record<string, string> = {
     config: "Config Helper",
+    disks: "Disks",
     "api-keys": "Admin Keys",
     outputs: "Generated Files",
   };
+
+  useEffect(() => {
+    let cancelled = false;
+    void listModelDisks()
+      .then((payload) => {
+        if (!cancelled) setDisks(Array.isArray(payload) ? payload : []);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load model disks.");
+      });
+    void listNodeAuth()
+      .then((payload) => {
+        if (!cancelled) setNodeAuth(Array.isArray(payload) ? payload : []);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load node auth diagnostics.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const configYaml = useMemo(() => {
     const lines = [`mode: ${mode}`, `log_dir: ${JSON.stringify(logDir || "./logs")}`, "models: {}"];
@@ -157,7 +194,7 @@ export function SettingsPage() {
       <ErrorBanner message={error} />
       <Panel className="settings-panel">
         <div className="settings-tabs" role="tablist" aria-label="Settings Sections">
-          {["config", "api-keys", "outputs"].map((pane) => (
+          {["config", "disks", "api-keys", "outputs"].map((pane) => (
             <button key={pane} type="button" className={`settings-tab ${activePane === pane ? "active" : ""}`} aria-selected={activePane === pane} onClick={() => setActivePane(pane)}>{paneLabels[pane]}</button>
           ))}
         </div>
@@ -225,6 +262,38 @@ export function SettingsPage() {
           </div>
         ) : null}
 
+        {activePane === "disks" ? (
+          <div className="settings-pane active">
+            <p className="muted settings-pane-note">
+              Disks shows configured model roots with filesystem capacity and current space consumed under each root.
+            </p>
+            <DataTable
+              rows={disks}
+              emptyMessage="No configured model disks."
+              getRowKey={(disk, index) => `${disk.node_name}:${disk.path || index}`}
+              columns={[
+                { key: "node", header: "Node", render: (disk) => disk.node_name },
+                { key: "path", header: "Path", render: (disk) => disk.path },
+                {
+                  key: "status",
+                  header: "Status",
+                  render: (disk) => (
+                    <StatusBadge tone={disk.status === "error" ? "danger" : disk.status === "warning" ? "warning" : "success"}>
+                      {disk.status === "error" ? "error" : disk.status === "warning" ? "low space" : "ok"}
+                    </StatusBadge>
+                  ),
+                },
+                { key: "consumed", header: "Consumed", render: (disk) => formatBytes(disk.consumed_bytes) },
+                { key: "free", header: "Free", render: (disk) => formatBytes(disk.free_bytes) },
+                { key: "used", header: "Used", render: (disk) => formatBytes(disk.used_bytes) },
+                { key: "total", header: "Total", render: (disk) => formatBytes(disk.total_bytes) },
+                { key: "available", header: "Available %", render: (disk) => `${Number(disk.available_percent || 0).toFixed(1)}%` },
+                { key: "warning", header: "Warning", render: (disk) => disk.error || disk.warning || "-" },
+              ]}
+            />
+          </div>
+        ) : null}
+
         {activePane === "outputs" ? (
           <div className="settings-pane active">
             <p className="muted settings-pane-note">
@@ -235,6 +304,22 @@ export function SettingsPage() {
             <pre className="detail-json tall-json">{configYaml}</pre>
             <h3>Env Exports</h3>
             <pre className="detail-json">{envExports}</pre>
+            <h3>Node Auth Diagnostics</h3>
+            <DataTable
+              rows={nodeAuth}
+              emptyMessage="No node auth diagnostics."
+              getRowKey={(row, index) => row.node_name || String(index)}
+              columns={[
+                { key: "node_name", header: "Node", render: (row) => row.node_name },
+                { key: "effective_url", header: "Effective URL", render: (row) => row.effective_url },
+                { key: "effective_api_key_source", header: "Key Source", render: (row) => row.effective_api_key_source },
+                { key: "effective_api_key_present", header: "Effective Key", render: (row) => String(row.effective_api_key_present) },
+                { key: "configured_api_key_present", header: "Config Key", render: (row) => String(row.configured_api_key_present) },
+                { key: "override_api_key_present", header: "Override Key", render: (row) => String(row.override_api_key_present) },
+                { key: "override_present", header: "Override Row", render: (row) => String(row.override_present) },
+                { key: "verify_tls", header: "Verify TLS", render: (row) => String(row.verify_tls) },
+              ]}
+            />
           </div>
         ) : null}
 

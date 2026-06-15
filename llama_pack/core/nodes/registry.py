@@ -103,16 +103,21 @@ class NodeRegistry:
         self._save_state()
 
     def update_node(self, name: str, node: NodeConfig) -> dict[str, Any]:
-        self._get_node(name)
+        existing = self._get_node(name)
+        api_key = node.api_key if node.api_key not in (None, "") else existing.api_key
+        merged = NodeConfig(
+            **node.model_dump(exclude={"api_key"}),
+            api_key=api_key,
+        )
         if name in self._dynamic_nodes:
-            self._dynamic_nodes[name] = node
+            self._dynamic_nodes[name] = merged
         elif name in self.config.nodes:
-            node = _static_node_override(node, self.config.nodes[name])
-            self._node_overrides[name] = node
+            merged = _static_node_override(merged, self.config.nodes[name])
+            self._node_overrides[name] = merged
         else:
-            self._node_overrides[name] = node
+            self._node_overrides[name] = merged
         self._save_state()
-        return self._node_payload(name, node)
+        return self._node_payload(name, merged)
 
     def record_heartbeat(self, name: str) -> None:
         self._get_node(name)
@@ -121,6 +126,37 @@ class NodeRegistry:
 
     def get_node_config(self, name: str) -> NodeConfig:
         return self._get_node(name)
+
+    def node_auth_diagnostics(self) -> list[dict[str, Any]]:
+        diagnostics: list[dict[str, Any]] = []
+        names = sorted({*self.config.nodes.keys(), *self._node_overrides.keys(), *self._dynamic_nodes.keys()})
+        for name in names:
+            effective = self._get_node(name)
+            configured = self.config.nodes.get(name)
+            override = self._node_overrides.get(name)
+            if effective.api_key in (None, ""):
+                source = "missing"
+            elif override and override.api_key not in (None, ""):
+                source = "override"
+            elif configured and configured.api_key not in (None, ""):
+                source = "config"
+            elif name in self._dynamic_nodes:
+                source = "dynamic"
+            else:
+                source = "missing"
+            diagnostics.append(
+                {
+                    "node_name": name,
+                    "effective_url": effective.url,
+                    "effective_api_key_source": source,
+                    "effective_api_key_present": effective.api_key not in (None, ""),
+                    "configured_api_key_present": bool(configured and configured.api_key not in (None, "")),
+                    "override_api_key_present": bool(override and override.api_key not in (None, "")),
+                    "override_present": override is not None,
+                    "verify_tls": effective.verify_tls,
+                }
+            )
+        return diagnostics
 
     def _get_node(self, name: str) -> NodeConfig:
         if name in self._node_overrides:
@@ -163,7 +199,7 @@ class NodeRegistry:
                         registered = NodeConfig.model_validate(value)
                         self._node_overrides[name] = NodeConfig(
                             url=_inherit_url_scheme(registered.url, configured.url),
-                            api_key=registered.api_key if registered.api_key is not None else configured.api_key,
+                            api_key=_coalesce_secret(registered.api_key, configured.api_key),
                             verify_tls=configured.verify_tls if registered.verify_tls is True else registered.verify_tls,
                         )
                     else:
@@ -218,9 +254,13 @@ def _static_node_override(node: NodeConfig, configured: NodeConfig) -> NodeConfi
     return NodeConfig(
         **node.model_dump(exclude={"url", "api_key", "verify_tls"}),
         url=_inherit_url_scheme(node.url, configured.url),
-        api_key=node.api_key if node.api_key is not None else configured.api_key,
+        api_key=_coalesce_secret(node.api_key, configured.api_key),
         verify_tls=configured.verify_tls if node.verify_tls is True else node.verify_tls,
     )
+
+
+def _coalesce_secret(value: str | None, fallback: str | None) -> str | None:
+    return fallback if value in (None, "") else value
 
 
 def _validated_base_url(node_name: str, url: str) -> str:

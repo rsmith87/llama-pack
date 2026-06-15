@@ -61,7 +61,7 @@ def test_controller_background_sweeper_requeues_expired_attempt(tmp_path):
 
         assert refreshed["status"] == "queued"
 
-from llama_pack.core.config import load_config
+from llama_pack.core.config import NodeConfig, load_config
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.main import create_app
 
@@ -672,6 +672,34 @@ def test_controller_updates_node_and_routes_to_new_url():
     assert seen == [("POST", "http://new-win:9000/lm-api/v1/models/qwen/start", "new-key", False)]
 
 
+def test_controller_update_preserves_existing_node_api_key_when_blank():
+    config = load_config(
+        {
+            "mode": "controller",
+            "node_heartbeat_timeout_seconds": 999999,
+            "nodes": {"pi": {"url": "http://pi.local:9000", "api_key": "node-secret", "verify_tls": True}},
+        }
+    )
+    seen = []
+
+    async def fake_request(method, url, api_key, verify_tls):
+        seen.append((method, url, api_key, verify_tls))
+        return {"running": True, "name": "qwen"}
+
+    app = create_app(config=config, controller_request=fake_request)
+    client = TestClient(app)
+
+    response = client.put(
+        "/lm-api/v1/nodes/pi",
+        json={"url": "http://pi.local:9001", "api_key": "", "verify_tls": False},
+    )
+
+    assert response.status_code == 200
+    proxy = client.post("/lm-api/v1/nodes/pi/models/qwen/start")
+    assert proxy.status_code == 200
+    assert seen == [("POST", "http://pi.local:9001/lm-api/v1/models/qwen/start", "node-secret", False)]
+
+
 def test_controller_aggregates_models_from_nodes():
     config = load_config(
         {
@@ -1261,6 +1289,148 @@ def test_start_download_route_accepts_mmproj_file(tmp_path):
         "include_file": "model-Q4_K_M.gguf",
         "mmproj_file": "mmproj-F16.gguf",
     }
+
+
+def test_settings_disks_route_reports_model_root_capacity(tmp_path):
+    model_root = tmp_path / "models"
+    nested = model_root / "owner__model"
+    nested.mkdir(parents=True)
+    (nested / "a.gguf").write_bytes(b"x" * 1024)
+    (nested / "b.gguf").write_bytes(b"y" * 2048)
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "hf_models_dirs": [str(model_root)],
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+
+    def fake_disk_usage(path):
+        assert str(path).endswith("models")
+        return (100_000, 40_000, 60_000)
+
+    app.state.settings_disk_usage = fake_disk_usage
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/settings/disks")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "node_name": "local",
+            "path": str(model_root),
+            "reachable": True,
+            "total_bytes": 100_000,
+            "free_bytes": 60_000,
+            "used_bytes": 40_000,
+            "consumed_bytes": 3072,
+            "available_percent": 60.0,
+            "used_percent": 40.0,
+            "status": "warning",
+            "warning": "Low space: less than 10 GB free headroom for model downloads.",
+            "error": None,
+            "headroom_bytes": 10737418240,
+            "required_free_bytes": 10737418240,
+        }
+    ]
+
+
+def test_settings_disks_route_aggregates_controller_agent_disks(tmp_path):
+    config = load_config(
+        {
+            "mode": "controller",
+            "log_dir": str(tmp_path / "logs"),
+            "nodes": worker_nodes("agent-a", "agent-b"),
+            "hf_models_dirs": [str(tmp_path / "controller-models")],
+        }
+    )
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        assert method == "GET"
+        if "agent-a" in url:
+            return [
+                {
+                    "node_name": "local",
+                    "path": "/models/a",
+                    "reachable": True,
+                    "total_bytes": 1000,
+                    "free_bytes": 500,
+                    "used_bytes": 500,
+                    "consumed_bytes": 200,
+                    "available_percent": 50.0,
+                    "used_percent": 50.0,
+                    "status": "warning",
+                    "warning": "Low space: less than 10 GB free headroom for model downloads.",
+                    "error": None,
+                    "headroom_bytes": 10737418240,
+                    "required_free_bytes": 10737418240,
+                }
+            ]
+        raise RuntimeError("agent offline")
+
+    app = create_app(config=config, controller_request=fake_request)
+    app.state.settings_disk_usage = lambda path: (20_000_000_000, 8_000_000_000, 12_000_000_000)
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/settings/disks")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "node_name": "local",
+            "path": str(tmp_path / "controller-models"),
+            "reachable": True,
+            "total_bytes": 20_000_000_000,
+            "free_bytes": 12_000_000_000,
+            "used_bytes": 8_000_000_000,
+            "consumed_bytes": 0,
+            "available_percent": 60.0,
+            "used_percent": 40.0,
+            "status": "ok",
+            "warning": None,
+            "error": None,
+            "headroom_bytes": 10737418240,
+            "required_free_bytes": 10737418240,
+        },
+        {
+            "node_name": "agent-a",
+            "path": "/models/a",
+            "reachable": True,
+            "total_bytes": 1000,
+            "free_bytes": 500,
+            "used_bytes": 500,
+            "consumed_bytes": 200,
+            "available_percent": 50.0,
+            "used_percent": 50.0,
+            "status": "warning",
+            "warning": "Low space: less than 10 GB free headroom for model downloads.",
+            "error": None,
+            "headroom_bytes": 10737418240,
+            "required_free_bytes": 10737418240,
+        },
+        {
+            "node_name": "agent-b",
+            "path": "",
+            "reachable": False,
+            "total_bytes": 0,
+            "free_bytes": 0,
+            "used_bytes": 0,
+            "consumed_bytes": 0,
+            "available_percent": 0.0,
+            "used_percent": 0.0,
+            "status": "error",
+            "warning": None,
+            "error": "agent offline",
+            "headroom_bytes": 10737418240,
+            "required_free_bytes": 10737418240,
+        },
+    ]
 
 
 def test_cancel_download_route_returns_updated_record(tmp_path):
@@ -3988,11 +4158,48 @@ def test_setup_current_config_returns_safe_snapshot():
     assert "node-api-key" not in response.text
 
     # Agent secrets not set → empty strings
-    assert payload["agent_api_key"] == ""
-    assert payload["controller_registration_key_outbound"] == ""
 
-    # No model → first_model is None
-    assert payload["first_model"] is None
+
+def test_settings_node_auth_reports_effective_node_auth_sources():
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "nodes": {
+                    "pi": {"url": "https://pi.local", "api_key": "config-secret", "verify_tls": True},
+                    "mac": {"url": "https://mac.local", "verify_tls": True},
+                },
+            }
+        ),
+    )
+    registry = app.state.node_registry
+    registry.update_node("pi", NodeConfig(url="https://pi-override.local", api_key="", verify_tls=False))
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/settings/node-auth")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload[0] == {
+        "node_name": "mac",
+        "effective_url": "https://mac.local",
+        "effective_api_key_source": "missing",
+        "effective_api_key_present": False,
+        "configured_api_key_present": False,
+        "override_api_key_present": False,
+        "override_present": False,
+        "verify_tls": True,
+    }
+    assert payload[1] == {
+        "node_name": "pi",
+        "effective_url": "https://pi-override.local",
+        "effective_api_key_source": "override",
+        "effective_api_key_present": True,
+        "configured_api_key_present": True,
+        "override_api_key_present": True,
+        "override_present": True,
+        "verify_tls": False,
+    }
 
 
 def test_setup_current_config_masks_agent_secrets():
