@@ -63,7 +63,7 @@ export function NodesPage() {
     const apiKey = editNode.api_key.trim();
     await updateNode(editNode.name, {
       url: editNode.url,
-      ...(apiKey ? { api_key: apiKey } : {}),
+      api_key: apiKey,
       verify_tls: editNode.verify_tls,
     });
     setEditNode(null);

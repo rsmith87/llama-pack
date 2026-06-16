@@ -10,7 +10,7 @@ export type ModelDiskInfo = {
   consumed_bytes: number;
   available_percent: number;
   used_percent: number;
-  status: "ok" | "warning";
+  status: "ok" | "warning" | "error";
   warning?: string | null;
   error?: string | null;
   headroom_bytes: number;

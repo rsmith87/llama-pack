@@ -20,10 +20,42 @@ if str(ROOT_DIR) not in sys.path:
 from llama_pack.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
 from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.config import load_config
+from llama_pack.core.model_assets.catalog_service import ModelCatalogService
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
 from llama_pack.core.persistence.db_infra import resolve_persistence_urls
+from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.runtime.process_manager import ProcessManager
+
+
+class ConfigBackedCatalog:
+    def __init__(self, config: Any):
+        self.config = config
+        self.store = self
+
+    def list_model_identities(self) -> list[str]:
+        return sorted(getattr(self.config, "models", {}).keys())
+
+    def runtime_model(self, name: str) -> Any:
+        return self.config.runtime_model(name)
+
+    def get_model(self, name: str) -> dict[str, object]:
+        self.runtime_model(name)
+        return {"model_id": name, "model_name": name}
+
+    def list_model_profiles(self, _model_id: str) -> list[dict[str, object]]:
+        return []
+
+    def list_model_deployments(self, _model_id: str) -> list[dict[str, object]]:
+        return []
+
+
+def build_catalog_service(config: Any) -> Any:
+    urls = resolve_persistence_urls(config)
+    try:
+        return ModelCatalogService(ModelAssetStoreOrm(db_url=urls.models))
+    except RuntimeError:
+        return ConfigBackedCatalog(config)
 
 
 def parse_args(argv: list[str]) -> argparse.Namespace:
@@ -135,7 +167,8 @@ def cases_with_target(cases: list[ToolLoopEvalCase], target: str) -> list[ToolLo
 
 
 def build_proxy(config: Any) -> ChatProxy:
-    process_manager = ProcessManager(config)
+    catalog_service = build_catalog_service(config)
+    process_manager = ProcessManager(config, catalog_service=catalog_service)
     node_registry = NodeRegistry(config)
     return ChatProxy(process_manager, config, node_registry)
 
