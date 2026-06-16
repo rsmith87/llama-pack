@@ -138,7 +138,7 @@ jobs:
               'chat_sessions.db': '20260523_0007',
               'downloads.db': '20260523_0001',
               'benchmarks.db': '20260612_0007',
-              'models.db': '20260613_0002',
+              'models.db': '20260615_0001',
           }
           for name, expected in expected_revisions.items():
               conn = sqlite3.connect(base / name)
