@@ -307,7 +307,7 @@ export function GgufLibraryPage() {
       reasoning_budget: reasoningBudget,
       supports_mtp: mtpEnabled,
       draft_model_path: mtpEnabled ? (draftModelPath || null) : null,
-    });
+    }, true);
     setEditOpen(false);
     setSelected(null);
     await refresh();

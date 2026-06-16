@@ -430,8 +430,10 @@ it("hydrates plugin navigation from the last known metadata cache", async () => 
 
   render(<App />);
 
-  expect(await screen.findByRole("link", { name: "Business" })).toBeInTheDocument();
-  expect(await screen.findByText("Login Required")).toBeInTheDocument();
+  // When auth is enabled but the user has no session, the full shell is
+  // hidden and only the login screen is shown.
+  expect(screen.queryByRole("link", { name: "Business" })).not.toBeInTheDocument();
+  expect(await screen.findByText("Log in to continue")).toBeInTheDocument();
 });
 
 it("loads plugin navigation on document refresh with the persisted UI session", async () => {

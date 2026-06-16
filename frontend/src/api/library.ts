@@ -36,7 +36,10 @@ export type UpdateGgufAssetPayload = {
 export function listGgufs() { return apiGet<GgufLibraryResponse>("/library/ggufs"); }
 export function addGgufModel(fileId: string, payload: AddModelPayload) { return apiPost<Record<string, unknown>>(`/library/ggufs/${encodeURIComponent(fileId)}/add-model`, payload); }
 export function updateGgufAsset(assetRef: string, payload: UpdateGgufAssetPayload) { return apiPatch<Record<string, unknown>>(`/library/ggufs/${encodeURIComponent(assetRef)}`, payload); }
-export function updateGgufModel(name: string, payload: UpdateModelPayload) { return apiPatch<Record<string, unknown>>(`/library/models/${encodeURIComponent(name)}`, payload); }
+export function updateGgufModel(name: string, payload: UpdateModelPayload, restart?: boolean) {
+  const params = restart ? "?restart=true" : "";
+  return apiPatch<Record<string, unknown>>(`/library/models/${encodeURIComponent(name)}${params}`, payload);
+}
 export function deleteGguf(fileId: string) { return apiDelete<Record<string, unknown>>(`/library/ggufs/${encodeURIComponent(fileId)}`); }
 export function deleteConfiguredModel(name: string) { return apiDelete<Record<string, unknown>>(`/library/models/${encodeURIComponent(name)}`); }
 export function createGgufTransfer(sourceNode: string, payload: Record<string, unknown>) { return apiPost<Record<string, unknown>>(`/nodes/${encodeURIComponent(sourceNode)}/transfers`, payload); }

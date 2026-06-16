@@ -227,9 +227,11 @@ def update_model(
     name: str,
     body: UpdateModelRequest,
     library: GgufLibrary = Depends(get_gguf_library),
+    manager: ProcessManager = Depends(get_process_manager),
+    restart: bool = False,
 ) -> dict[str, object]:
     try:
-        return library.update_model(
+        result = library.update_model(
             name,
             vision=body.vision,
             mmproj=body.mmproj,
@@ -242,5 +244,10 @@ def update_model(
             supports_mtp=body.supports_mtp,
             draft_model_path=body.draft_model_path,
         )
+        if restart:
+            status = manager.status(name)
+            if status.running:
+                manager.restart(name)
+        return result
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc

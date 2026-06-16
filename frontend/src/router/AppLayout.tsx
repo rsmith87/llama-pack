@@ -9,7 +9,7 @@ import { usePluginNav } from "../features/plugins/pluginNavContext";
 import { useLogModal } from "../features/logs/logModalContext";
 import { pageForCurrentPath, pagesBySectionForMode } from "../routes/pages";
 import { LogModal } from "../components/LogModal";
-import { Button, Panel } from "../components/ui";
+import { Button } from "../components/ui";
 import { MenuIcon } from "../components/MenuIcon";
 import { BrandLogo } from "../components/BrandLogo";
 import headerLogoUrl from "../images/llama-pack-logo.png";
@@ -51,7 +51,28 @@ export function AppLayout() {
   }, [activePage.key, appMode, visiblePages, navigate]);
 
   const authRequired = authEnabled === true;
-  const showLoginRequired = !setupStatusPending && authRequired && !isAuthenticated;
+
+  // When auth is enabled but the user has no session, show only the login
+  // form — no sidebar, header chrome, or page content.
+  if (!setupStatusPending && authRequired && !isAuthenticated) {
+    return (
+      <div className="login-required-screen">
+        <div className="login-required-card">
+          <div className="brand-lockup">
+            <span className="brand-mark">
+              <BrandLogo />
+            </span>
+            <div>
+              <h1>Llama Pack</h1>
+              <p>Log in to continue</p>
+            </div>
+          </div>
+          <AuthLoginForm />
+          <ThemeToggle />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <AppModeProvider appMode={appMode}>
@@ -92,11 +113,6 @@ export function AppLayout() {
                   {pluginStatusIssues.map((issue) => <li key={issue}>{issue}</li>)}
                 </ul>
               </section>
-            ) : null}
-            {showLoginRequired ? (
-              <Panel title="Login Required" eyebrow="Session">
-                <p className="muted">Log in to Llama Pack to continue.</p>
-              </Panel>
             ) : null}
             {activePage.pluginId && activePage.secondaryNavigation?.length ? (
               <nav className="plugin-secondary-nav" aria-label={`${activePage.pluginName || activePage.label} navigation`}>

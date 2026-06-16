@@ -535,6 +535,53 @@
   }
 }
 
+.login-required-screen {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(rgba(138, 174, 190, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(138, 174, 190, 0.035) 1px, transparent 1px),
+    radial-gradient(circle at top left, var(--page-glow), transparent 30%),
+    var(--page);
+  background-size: 32px 32px, 32px 32px, auto, auto;
+}
+
+.login-required-card {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 28px 32px;
+  background: var(--panel);
+  box-shadow: 0 20px 60px var(--shadow);
+  display: grid;
+  gap: 18px;
+  min-width: 320px;
+  max-width: 420px;
+}
+
+.login-required-card .brand-lockup {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.login-required-card .auth-form {
+  display: grid;
+  gap: 10px;
+}
+
+.login-required-card .auth-form input {
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--button);
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.login-required-card .auth-form button[type="submit"] {
+  width: 100%;
+}
+
 nav.plugin-secondary-nav {
   margin-bottom:15px;
   display: flex;

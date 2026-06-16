@@ -278,8 +278,8 @@ export function SettingsPage() {
                   key: "status",
                   header: "Status",
                   render: (disk) => (
-                    <StatusBadge tone={disk.status === "error" ? "danger" : disk.status === "warning" ? "warning" : "success"}>
-                      {disk.status === "error" ? "error" : disk.status === "warning" ? "low space" : "ok"}
+                    <StatusBadge tone={disk.status === "warning" ? "warning" : "success"}>
+                      {disk.status === "warning" ? "low space" : "ok"}
                     </StatusBadge>
                   ),
                 },

@@ -7,11 +7,9 @@ const SETUP_PATH = "/ui/setup";
  * AuthGate only handles the bootstrap redirect: if the backend has not been
  * bootstrapped yet (no admin key configured), force the user to /ui/setup.
  *
- * Auth-required-but-not-authenticated is intentionally NOT handled here. The
- * layout (`AppLayout`) owns the chrome (sidebar, header, login form) and must
- * always render so the user can log in. A "Login Required" banner is shown
- * inside the main content area by `AppLayout` when auth is enabled but the
- * user has no session.
+ * Auth-required-but-not-authenticated is handled by `AppLayout`, which
+ * renders a full-viewport login screen (brand + login form only) when auth
+ * is enabled and the user has no session.
  */
 export function AuthGate() {
   const location = useLocation();
