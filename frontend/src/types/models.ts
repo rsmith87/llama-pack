@@ -35,6 +35,7 @@ export type LocalModelCatalog = {
   config_source?: string;
   model_line?: string | null;
   ctx?: number | null;
+  capacity_ctx?: number | null;
   gpu_layers?: number | null;
   vision?: boolean;
   mmproj?: string | null;
@@ -63,6 +64,7 @@ export type LocalModel = {
   port?: number;
   pid?: number | null;
   ctx?: number;
+  capacity_ctx?: number | null;
   gpu_layers?: number;
   host?: string;
   reasoning?: string | null;

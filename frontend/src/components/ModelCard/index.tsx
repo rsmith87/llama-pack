@@ -101,6 +101,7 @@ export function ModelCard({
   const port = num(raw, "port", "model_port");
   const pid = num(raw, "pid", "pid");
   const ctx = num(raw, "ctx", "model_ctx");
+  const capacityCtx = num(raw, "capacity_ctx", "model_capacity_ctx");
   const gpuLayers = num(raw, "gpu_layers", "model_gpu_layers");
   const host = str(raw, "host", "host");
   const reasoning = str(raw, "reasoning", "model_reasoning");
@@ -138,6 +139,7 @@ export function ModelCard({
   if (port !== undefined) details.push(["Port", String(port)]);
   if (pid !== undefined) details.push(["PID", String(pid)]);
   if (ctx !== undefined) details.push(["Context", numberLabel(ctx)]);
+  if (capacityCtx !== undefined) details.push(["Max Context", numberLabel(capacityCtx)]);
   if (gpuLayers !== undefined) details.push(["GPU Layers", String(gpuLayers)]);
   if (host) details.push(["Host", host]);
   if (reasoning) {
@@ -239,6 +241,11 @@ export function ModelCard({
         ) : null}
         {vision ? (
           <StatusBadge tone="muted">Vision</StatusBadge>
+        ) : null}
+        {ctx !== undefined && capacityCtx !== undefined && ctx < capacityCtx ? (
+          <StatusBadge tone="warning">
+            ctx {numberLabel(ctx)} / max {numberLabel(capacityCtx)}
+          </StatusBadge>
         ) : null}
       </div>
 

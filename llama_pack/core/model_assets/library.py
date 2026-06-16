@@ -5,6 +5,7 @@ from typing import Literal
 
 from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
+from llama_pack.core.model_assets.gguf_metadata import read_gguf_context_length
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 
 
@@ -115,12 +116,16 @@ class GgufLibrary:
                     mmproj_asset_id = mmproj_asset["asset_id"]
                     vision = True
 
+        # Extract native context length from GGUF file metadata.
+        capacity_ctx = read_gguf_context_length(path)
+
         persisted_model = self.store.upsert_model(
             model_name=model_name,
             asset_id=asset["asset_id"] if asset else None,
             config_source="db",
             model_line=model_line,
             ctx=ctx,
+            capacity_ctx=capacity_ctx,
             gpu_layers=gpu_layers,
             vision=vision,
             mmproj=mmproj,
@@ -311,6 +316,7 @@ class GgufLibrary:
             "path": asset_path,
             "port": port,
             "ctx": model_row.get("ctx"),
+            "capacity_ctx": model_row.get("capacity_ctx"),
             "gpu_layers": model_row.get("gpu_layers"),
             "host": host,
             "reasoning": model_row.get("reasoning"),
@@ -644,6 +650,7 @@ class GgufLibrary:
             "model_supports_mtp": registered_model.get("supports_mtp") if registered_model else None,
             "model_draft_model_path": draft_path,
             "model_ctx": registered_model.get("ctx") if registered_model else None,
+            "model_capacity_ctx": registered_model.get("capacity_ctx") if registered_model else None,
             "model_gpu_layers": registered_model.get("gpu_layers") if registered_model else None,
             "model_port": None,
             "model_prompt_template": registered_model.get("prompt_template") if registered_model else None,

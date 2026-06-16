@@ -44,6 +44,7 @@ class ModelOrm(Base):
     config_source: Mapped[str] = mapped_column(Text, nullable=False)
     model_line: Mapped[str | None] = mapped_column(Text, nullable=True)
     ctx: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    capacity_ctx: Mapped[int | None] = mapped_column(Integer, nullable=True)
     gpu_layers: Mapped[int | None] = mapped_column(Integer, nullable=True)
     vision: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     mmproj: Mapped[str | None] = mapped_column(Text, nullable=True)

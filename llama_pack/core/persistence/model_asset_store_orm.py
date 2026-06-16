@@ -205,6 +205,7 @@ class ModelAssetStoreOrm:
         config_source: str,
         model_line: str | None = None,
         ctx: int | None = None,
+        capacity_ctx: int | None = None,
         gpu_layers: int | None = None,
         vision: bool = False,
         mmproj: str | None = None,
@@ -233,6 +234,7 @@ class ModelAssetStoreOrm:
                     config_source=config_source,
                     model_line=model_line,
                     ctx=ctx,
+                    capacity_ctx=capacity_ctx,
                     gpu_layers=gpu_layers,
                     vision=1 if vision else 0,
                     mmproj=mmproj,
@@ -258,6 +260,7 @@ class ModelAssetStoreOrm:
                 row.config_source = config_source
                 row.model_line = model_line
                 row.ctx = ctx
+                row.capacity_ctx = capacity_ctx
                 row.gpu_layers = gpu_layers
                 row.vision = 1 if vision else 0
                 row.mmproj = mmproj
@@ -576,6 +579,7 @@ class ModelAssetStoreOrm:
             "config_source": row.config_source,
             "model_line": row.model_line,
             "ctx": row.ctx,
+            "capacity_ctx": row.capacity_ctx,
             "gpu_layers": row.gpu_layers,
             "vision": bool(row.vision),
             "mmproj": row.mmproj,
