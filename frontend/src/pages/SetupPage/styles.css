@@ -333,6 +333,53 @@
   gap: 8px;
 }
 
+.wizard-apply-panel {
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
+.wizard-apply-panel h4 {
+  margin: 0;
+}
+
+.wizard-checkbox-row {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  margin: 2px 0 4px;
+}
+
+.wizard-checkbox-row input {
+  flex: 0 0 auto;
+}
+
+.wizard-apply-result {
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  margin-top: 2px;
+  padding: 10px 12px;
+}
+
+.wizard-apply-result p {
+  margin: 0;
+}
+
+.wizard-apply-result.success {
+  background: var(--success-bg);
+  border: 1px solid var(--success);
+}
+
+.wizard-apply-result.blocked {
+  background: var(--warning-bg);
+  border: 1px solid var(--warning);
+}
+
 /* ---- Shared step form layout ---- */
 
 .wizard-step {
@@ -436,4 +483,3 @@
   color: var(--muted);
   font-size: 12px;
 }
-

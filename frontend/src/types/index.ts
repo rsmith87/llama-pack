@@ -9,6 +9,7 @@ export * from "./library";
 export * from "./models";
 export * from "./nodes";
 export * from "./operations";
+export * from "./setup";
 export * from "./streaming";
 export * from "./threads";
 export * from "./toolLoopEvals";

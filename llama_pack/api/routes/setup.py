@@ -4,7 +4,10 @@ import secrets
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, HTTPException, Request
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
+
+from llama_pack.core.setup import ActiveSetupRequest, apply_active_setup, preflight_active_setup
 
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -17,6 +20,39 @@ class BootstrapAdminRequest(BaseModel):
 
 def _auth_enabled(request: Request) -> bool:
     return bool(request.app.state.config.agent_api_key or request.app.state.auth_store.has_active_keys())
+
+
+def _audit_actor(request: Request) -> str:
+    ui_user = getattr(request.state, "ui_user", None)
+    if ui_user:
+        return str(ui_user)
+    session = getattr(request.state, "session", None)
+    if isinstance(session, dict):
+        return str(session.get("username") or "setup-ui")
+    return "setup-ui"
+
+
+def _audit_setup_event(
+    request: Request,
+    *,
+    event_type: str,
+    setup_request: ActiveSetupRequest,
+    payload: dict[str, object],
+) -> None:
+    request.app.state.audit_store.create_event(
+        actor=_audit_actor(request),
+        event_type=event_type,
+        dry_run=False,
+        target=setup_request.mode,
+        route="setup",
+        payload={
+            "mode": setup_request.mode,
+            "config_path": setup_request.config_path,
+            "env_path": setup_request.env_path,
+            "overwrite_existing": setup_request.overwrite_existing,
+            **payload,
+        },
+    )
 
 
 @router.get("/status")
@@ -139,3 +175,48 @@ def current_config(request: Request) -> dict[str, object]:
         "agent_worker_labels": {k: str(v) for k, v in config.agent_worker_labels.items()},
         "first_model": first_model,
     }
+
+
+@router.post("/preflight")
+def setup_preflight(body: ActiveSetupRequest, request: Request) -> dict[str, object]:
+    result = preflight_active_setup(body)
+    if result.status == "blocked_existing_files":
+        _audit_setup_event(
+            request,
+            event_type="setup_apply_blocked_existing_files",
+            setup_request=body,
+            payload={"existing_files": result.existing_files, "planned_files": result.planned_files},
+        )
+    return result.model_dump()
+
+
+@router.post("/apply", response_model=None)
+def setup_apply(body: ActiveSetupRequest, request: Request):
+    result = apply_active_setup(body)
+    if result.status == "blocked_existing_files":
+        _audit_setup_event(
+            request,
+            event_type="setup_apply_blocked_existing_files",
+            setup_request=body,
+            payload={"existing_files": result.existing_files, "planned_files": result.planned_files},
+        )
+        return JSONResponse(status_code=409, content=result.model_dump())
+    if result.ok:
+        _audit_setup_event(
+            request,
+            event_type="setup_apply_completed",
+            setup_request=body,
+            payload={
+                "existing_files": result.existing_files,
+                "planned_files": result.planned_files,
+                "backup_files": result.backup_files,
+            },
+        )
+        return result.model_dump()
+    _audit_setup_event(
+        request,
+        event_type="setup_apply_failed",
+        setup_request=body,
+        payload={"status": result.status, "message": result.message},
+    )
+    return JSONResponse(status_code=500, content=result.model_dump())

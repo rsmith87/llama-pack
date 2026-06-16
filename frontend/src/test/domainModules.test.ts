@@ -11,7 +11,7 @@ import { listGgufs } from "../api/library";
 import { listModels } from "../api/models";
 import { listNodes } from "../api/nodes";
 import { listQuantizationFiles } from "../api/quantizations";
-import { bootstrapAdmin, getSetupStatus } from "../api/setup";
+import { applySetup, bootstrapAdmin, getSetupStatus, preflightSetup } from "../api/setup";
 import { createThread } from "../api/threads";
 import { setAuthTokenProvider } from "../api/client";
 
@@ -73,5 +73,29 @@ describe("domain API modules", () => {
     expect(fetch).toHaveBeenNthCalledWith(4, "/lm-api/v1/chat/mistral/embeddings", expect.objectContaining({ method: "POST" }));
     expect(fetch).toHaveBeenNthCalledWith(5, "/lm-api/v1/threads", expect.objectContaining({ method: "POST" }));
     expect(fetch).toHaveBeenNthCalledWith(6, "/lm-api/v1/setup/bootstrap-admin", expect.objectContaining({ method: "POST" }));
+  });
+
+  it("calls active setup preflight and apply endpoints", async () => {
+    stubJson({ ok: true, status: "ready", existing_files: [], planned_files: [], backup_files: [], message: "ok" });
+    const payload = {
+      mode: "controller" as const,
+      config_path: "config.yaml",
+      env_path: ".llama_pack.env",
+      overwrite_existing: false,
+      inputs: {
+        controller: {
+          log_dir: "./logs",
+          controller_registration_key: "secret",
+          node_heartbeat_timeout_seconds: 90,
+          controller_instance_id: "local-controller",
+        },
+      },
+    };
+
+    await preflightSetup(payload);
+    await applySetup(payload);
+
+    expect(fetch).toHaveBeenCalledWith("/lm-api/v1/setup/preflight", expect.objectContaining({ method: "POST" }));
+    expect(fetch).toHaveBeenCalledWith("/lm-api/v1/setup/apply", expect.objectContaining({ method: "POST" }));
   });
 });

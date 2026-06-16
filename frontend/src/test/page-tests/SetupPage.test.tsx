@@ -13,7 +13,7 @@ afterEach(() => {
 function mockFetch(overrides: Record<string, unknown> = {}) {
   vi.stubGlobal(
     "fetch",
-    vi.fn((url: string) => {
+    vi.fn((url: string, init?: RequestInit) => {
       if (url === "/lm-api/v1/setup/status")
         return Promise.resolve({
           ok: true,
@@ -51,6 +51,20 @@ function mockFetch(overrides: Record<string, unknown> = {}) {
             first_model: null,
           }),
         });
+      if (url === "/lm-api/v1/setup/apply") {
+        const applyResponse = overrides.applyResponse as Record<string, unknown> | undefined;
+        if (applyResponse) {
+          const ok = applyResponse.ok !== false;
+          return Promise.resolve({
+            ok,
+            status: ok ? 200 : 409,
+            statusText: ok ? "OK" : "Conflict",
+            json: async () => applyResponse,
+            text: async () => JSON.stringify(applyResponse),
+          });
+        }
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }
       return Promise.resolve({ ok: true, json: async () => ({}) });
     }),
   );
@@ -97,3 +111,65 @@ it("pre-selects standalone mode when server returns agent mode", async () => {
   expect(screen.getByText("Controller")).toBeInTheDocument();
 });
 
+async function advanceToConfigAndCommands(user: ReturnType<typeof userEvent.setup>) {
+  await screen.findByText(/what is this machine/i);
+  const controllerCard = screen
+    .getAllByRole("button")
+    .find((el) => el.textContent?.includes("Coordinates agents"));
+  if (!controllerCard) throw new Error("Controller card not found");
+  await user.click(controllerCard);
+  await user.click(screen.getByRole("button", { name: /Continue/i }));
+  await user.click(screen.getByRole("button", { name: /Skip/i }));
+  await user.click(screen.getByRole("button", { name: /Skip/i }));
+  await user.click(screen.getByRole("button", { name: /Continue/i }));
+}
+
+it("shows backend overwrite conflict when apply is clicked without overwrite permission", async () => {
+  mockFetch({
+    auth_bootstrap_required: false,
+    auth_enabled: true,
+    applyResponse: {
+      ok: false,
+      status: "blocked_existing_files",
+      existing_files: ["config.yaml"],
+      planned_files: ["config.yaml", ".llama_pack.env"],
+      backup_files: [],
+      message: "Existing setup files require overwrite confirmation.",
+    },
+  });
+  const user = userEvent.setup();
+  renderSetup();
+  await advanceToConfigAndCommands(user);
+
+  await user.click(screen.getByRole("button", { name: /Apply Setup/i }));
+
+  expect(await screen.findByText(/Existing setup files require overwrite confirmation/i)).toBeInTheDocument();
+  expect(screen.getAllByText(/config.yaml/).length).toBeGreaterThan(0);
+});
+
+it("sends overwrite permission when checkbox is checked and shows success", async () => {
+  mockFetch({
+    auth_bootstrap_required: false,
+    auth_enabled: true,
+    applyResponse: {
+      ok: true,
+      status: "applied",
+      existing_files: ["config.yaml"],
+      planned_files: ["config.yaml", ".llama_pack.env"],
+      backup_files: ["config.yaml.20260616-120000.bak"],
+      message: "Setup files written.",
+    },
+  });
+  const user = userEvent.setup();
+  renderSetup();
+  await advanceToConfigAndCommands(user);
+
+  await user.click(screen.getByRole("checkbox", { name: /Allow setup to overwrite/i }));
+  await user.click(screen.getByRole("button", { name: /Apply Setup/i }));
+
+  expect(await screen.findByText(/Setup files written/i)).toBeInTheDocument();
+  const applyCall = vi.mocked(fetch).mock.calls.find(([url]) => url === "/lm-api/v1/setup/apply");
+  if (!applyCall) throw new Error("Apply call not found");
+  const body = JSON.parse(String(applyCall[1]?.body));
+  expect(body.overwrite_existing).toBe(true);
+});
