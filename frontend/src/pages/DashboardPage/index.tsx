@@ -3,7 +3,7 @@ import { useState } from "react";
 import { loadDashboardData } from "../../api/health";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer } from "../../api/library";
-import { startModel, stopModel } from "../../api/models";
+import { startModel, stopModel, setFavorite } from "../../api/models";
 import { startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
@@ -55,6 +55,21 @@ export function DashboardPage() {
   const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, emptyData);
   const [actingModel, setActingModel] = useState("");
   const [transfer, setTransfer] = useState<TransferState | null>(null);
+
+  async function toggleFavorite(model: LocalModel) {
+    const name = modelName(model);
+    const currently = Boolean((model as Record<string, unknown>).favorite);
+    setActingModel(`favorite:${name}`);
+    setError("");
+    try {
+      await setFavorite(name, !currently);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to favorite ${name}`);
+    } finally {
+      setActingModel("");
+    }
+  }
 
   async function runModelAction(model: LocalModel, action: "start" | "stop") {
     const name = modelName(model);
@@ -160,6 +175,7 @@ export function DashboardPage() {
         onBenchmark={() => navigateToPage("benchmarks", {
           search: benchmarkSearch(name, resolvedNode ? `node:${resolvedNode}` : "auto", resolvedNode || "", "dashboard"),
         })}
+        onFavorite={() => void toggleFavorite(model)}
         onTransfer={() => openTransfer(model)}
         onLogs={() => openLogs({
           source: resolvedNode ? "node-model" : "model",

@@ -101,6 +101,41 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* Favorite toggle button (styled like a StatusBadge) */
+.favorite-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.favorite-toggle:hover {
+  background: var(--card-strong);
+  border-color: var(--warning);
+  color: var(--warning);
+}
+
+.favorite-toggle--active {
+  border-color: var(--warning);
+  background: rgba(255, 183, 0, 0.12);
+  color: var(--warning);
+}
+
+.favorite-toggle--active:hover {
+  background: rgba(255, 183, 0, 0.22);
 }
 
 /* Model action buttons (from the unified card) */

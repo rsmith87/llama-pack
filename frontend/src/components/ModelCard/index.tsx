@@ -4,7 +4,7 @@ import type { LocalModel } from "../../types/models";
 import { Button, StatusBadge } from "../ui";
 import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
 import { modelName, statusTone } from "../../features/models";
-import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
+import { IoStar, IoStarOutline, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
 
 /* ---------- helpers ---------- */
 
@@ -71,6 +71,9 @@ export type ModelCardProps = {
   onEdit?: () => void;
   onDelete?: () => void;
 
+  // -- favorites --
+  onFavorite?: (favorite: boolean) => void;
+
   /** Extra content rendered below the detail grid. */
   children?: ReactNode;
 };
@@ -88,6 +91,7 @@ export function ModelCard({
   onBenchmark,
   onTransfer,
   onLogs,
+  onFavorite,
   onAdd,
   onEdit,
   onDelete,
@@ -234,7 +238,17 @@ export function ModelCard({
         <StatusBadge tone="muted">
           <IoHome /> {resolvedNode || (registered ? "local" : "discovered")}
         </StatusBadge>
-        {favorite ? (
+        {onFavorite ? (
+          <button
+            type="button"
+            className={`favorite-toggle${favorite ? " favorite-toggle--active" : ""}`}
+            onClick={() => onFavorite(!favorite)}
+            aria-label={favorite ? `Unfavorite ${name}` : `Favorite ${name}`}
+          >
+            {favorite ? <IoStar /> : <IoStarOutline />}
+            <span>{favorite ? "favorite" : "favorite"}</span>
+          </button>
+        ) : favorite ? (
           <StatusBadge tone="warning">
             <IoStar /> favorite
           </StatusBadge>
