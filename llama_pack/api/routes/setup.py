@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from llama_pack.core.setup import ActiveSetupRequest, apply_active_setup, preflight_active_setup
+from llama_pack.core.setup import ActiveSetupRequest, SetupActionResult, apply_active_setup, preflight_active_setup
 
 
 router = APIRouter(prefix="/setup", tags=["setup"])
@@ -16,6 +16,62 @@ SESSION_TTL_HOURS = 12
 
 class BootstrapAdminRequest(BaseModel):
     username: str = Field(min_length=1, max_length=80)
+
+
+def _create_admin_bootstrap(request: Request, *, username: str) -> dict[str, object]:
+    created = request.app.state.auth_store.create_key(username, "admin")
+    token = secrets.token_urlsafe(24)
+    now = datetime.now(UTC)
+    expires_at = (now + timedelta(hours=SESSION_TTL_HOURS)).isoformat()
+    request.app.state.ui_sessions[token] = {
+        "username": username,
+        "created_at": now.isoformat(),
+        "expires_at": expires_at,
+        "role": "admin",
+    }
+    request.app.state.audit_store.create_event(
+        actor=username,
+        event_type="auth_bootstrap_admin_create",
+        dry_run=False,
+        target=username,
+        route="setup",
+        payload={"key_id": created["id"], "role": "admin"},
+    )
+    return {
+        "created": True,
+        "token": token,
+        "username": username,
+        "expires_at": expires_at,
+        "role": "admin",
+        "key": created["key"],
+        "key_id": created["id"],
+        "key_hint": created["key_hint"],
+    }
+
+
+def _admin_bootstrap_audit_payload(result: dict[str, object]) -> dict[str, object]:
+    if not result.get("created"):
+        return {"created": False, "reason": str(result.get("reason", ""))}
+    return {
+        "created": True,
+        "username": str(result["username"]),
+        "role": str(result["role"]),
+        "key_id": str(result["key_id"]),
+    }
+
+
+def _admin_bootstrap_action(result: dict[str, object]) -> SetupActionResult:
+    if result.get("created"):
+        return SetupActionResult(
+            kind="admin_bootstrap",
+            status="completed",
+            detail=f"Created admin key for {result['username']}.",
+        )
+    return SetupActionResult(
+        kind="admin_bootstrap",
+        status="skipped",
+        detail="Admin key already configured.",
+    )
 
 
 def _auth_enabled(request: Request) -> bool:
@@ -79,32 +135,7 @@ def bootstrap_admin(body: BootstrapAdminRequest, request: Request) -> dict[str, 
     if request.app.state.auth_store.has_active_keys():
         raise HTTPException(status_code=409, detail="Authentication is already bootstrapped")
 
-    created = request.app.state.auth_store.create_key(body.username, "admin")
-    token = secrets.token_urlsafe(24)
-    now = datetime.now(UTC)
-    expires_at = (now + timedelta(hours=SESSION_TTL_HOURS)).isoformat()
-    request.app.state.ui_sessions[token] = {
-        "username": body.username,
-        "created_at": now.isoformat(),
-        "expires_at": expires_at,
-        "role": "admin",
-    }
-    request.app.state.audit_store.create_event(
-        actor=body.username,
-        event_type="auth_bootstrap_admin_create",
-        dry_run=False,
-        target=body.username,
-        route="setup",
-        payload={"key_id": created["id"], "role": "admin"},
-    )
-    return {
-        "token": token,
-        "username": body.username,
-        "expires_at": expires_at,
-        "role": "admin",
-        "key": created["key"],
-        "key_hint": created["key_hint"],
-    }
+    return _create_admin_bootstrap(request, username=body.username)
 
 
 @router.get("/current-config")
@@ -202,6 +233,11 @@ def setup_apply(body: ActiveSetupRequest, request: Request):
         )
         return JSONResponse(status_code=409, content=result.model_dump())
     if result.ok:
+        admin_bootstrap: dict[str, object] = {"created": False, "reason": "auth_already_configured"}
+        if not _auth_enabled(request):
+            admin_bootstrap = _create_admin_bootstrap(request, username="admin")
+        actions = [action.model_dump() for action in result.actions]
+        actions.append(_admin_bootstrap_action(admin_bootstrap).model_dump())
         _audit_setup_event(
             request,
             event_type="setup_apply_completed",
@@ -210,13 +246,21 @@ def setup_apply(body: ActiveSetupRequest, request: Request):
                 "existing_files": result.existing_files,
                 "planned_files": result.planned_files,
                 "backup_files": result.backup_files,
+                "migrations": [migration.model_dump() for migration in result.migrations],
+                "admin_bootstrap": _admin_bootstrap_audit_payload(admin_bootstrap),
+                "actions": actions,
             },
         )
-        return result.model_dump()
+        return {**result.model_dump(), "admin_bootstrap": admin_bootstrap, "actions": actions}
     _audit_setup_event(
         request,
         event_type="setup_apply_failed",
         setup_request=body,
-        payload={"status": result.status, "message": result.message},
+        payload={
+            "status": result.status,
+            "message": result.message,
+            "migrations": [migration.model_dump() for migration in result.migrations],
+            "actions": [action.model_dump() for action in result.actions],
+        },
     )
     return JSONResponse(status_code=500, content=result.model_dump())

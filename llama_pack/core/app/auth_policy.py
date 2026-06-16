@@ -39,6 +39,13 @@ def should_validate_ui_session(auth_enabled: bool, method: str) -> bool:
     return auth_enabled
 
 
+def should_allow_first_run_setup(path: str, method: str) -> bool:
+    return method == "POST" and path in {
+        f"{LM_API_PREFIX}/setup/apply",
+        f"{LM_API_PREFIX}/setup/preflight",
+    }
+
+
 def is_viewer_forbidden(path: str, role: str) -> bool:
     if role != "viewer":
         return False

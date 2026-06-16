@@ -37,5 +37,28 @@ export type ActiveSetupResult = {
   existing_files: string[];
   planned_files: string[];
   backup_files: string[];
+  migrations: {
+    target: string;
+    revision: string;
+    ok: boolean;
+    error: string;
+  }[];
+  actions: {
+    kind: "files_written" | "backups_created" | "migrations_run" | "admin_bootstrap" | "next_command";
+    status: "completed" | "failed" | "skipped";
+    detail: string;
+    command: string;
+  }[];
+  admin_bootstrap?: {
+    created: boolean;
+    reason?: string;
+    token?: string;
+    username?: string;
+    expires_at?: string;
+    role?: string;
+    key?: string;
+    key_id?: string;
+    key_hint?: string;
+  };
   message: string;
 };

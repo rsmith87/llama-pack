@@ -73,6 +73,7 @@ from llama_pack.core.app.auth_policy import (
     is_external_key_forbidden,
     is_test_chat_key_forbidden,
     is_viewer_forbidden,
+    should_allow_first_run_setup,
     should_bypass_middleware,
     should_enforce_agent_key,
     should_validate_ui_session,
@@ -474,6 +475,8 @@ def _register_middleware(app: FastAPI) -> None:
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})
             return await call_next(request)
 
+        if not auth_enabled and should_allow_first_run_setup(path, method):
+            return await call_next(request)
         if not auth_enabled:
             return JSONResponse(status_code=401, content={"detail": "Auth bootstrap required"})
         if not should_enforce_agent_key(app.state.config.mode, configured, path):

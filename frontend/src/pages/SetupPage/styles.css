@@ -292,45 +292,17 @@
   font-weight: 600;
 }
 
-/* ---- Tabs (Config & Commands step) ---- */
+/* ---- Apply and reference step ---- */
 
-.wizard-tabs {
-  border-bottom: 1px solid var(--line);
-  display: flex;
-  gap: 0;
-}
-
-.wizard-tab-btn {
-  background: none;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: -1px;
-  padding: 8px 16px;
-  transition: color 0.15s, border-color 0.15s;
-}
-
-.wizard-tab-btn:hover {
-  color: var(--ink);
-}
-
-.wizard-tab-btn.active {
-  border-bottom-color: var(--accent-dark);
-  color: var(--ink);
-  font-weight: 600;
-}
-
-.wizard-tab-content {
+.wizard-reference-panel {
+  border-top: 1px solid var(--line);
   display: grid;
-  gap: 12px;
+  gap: 10px;
+  padding-top: 14px;
 }
 
-.wizard-config-actions {
-  display: flex;
-  gap: 8px;
+.wizard-reference-panel h4 {
+  margin: 0;
 }
 
 .wizard-apply-panel {
@@ -378,6 +350,56 @@
 .wizard-apply-result.blocked {
   background: var(--warning-bg);
   border: 1px solid var(--warning);
+}
+
+.wizard-apply-actions {
+  display: grid;
+  gap: 6px;
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+}
+
+.wizard-apply-actions li {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.wizard-apply-actions span,
+.wizard-apply-actions code {
+  overflow-wrap: anywhere;
+}
+
+.wizard-action-status {
+  border: 1px solid currentColor;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 5px;
+}
+
+.wizard-action-status.completed {
+  color: var(--success);
+}
+
+.wizard-action-status.failed {
+  color: var(--danger);
+}
+
+.wizard-action-status.skipped {
+  color: var(--muted);
+}
+
+.wizard-apply-admin-key {
+  display: grid;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.wizard-apply-admin-key .wizard-code-block {
+  margin: 0;
 }
 
 /* ---- Shared step form layout ---- */

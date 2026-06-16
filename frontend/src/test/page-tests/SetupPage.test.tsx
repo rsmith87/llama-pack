@@ -134,6 +134,8 @@ it("shows backend overwrite conflict when apply is clicked without overwrite per
       existing_files: ["config.yaml"],
       planned_files: ["config.yaml", ".llama_pack.env"],
       backup_files: [],
+      migrations: [],
+      actions: [],
       message: "Existing setup files require overwrite confirmation.",
     },
   });
@@ -145,6 +147,8 @@ it("shows backend overwrite conflict when apply is clicked without overwrite per
 
   expect(await screen.findByText(/Existing setup files require overwrite confirmation/i)).toBeInTheDocument();
   expect(screen.getAllByText(/config.yaml/).length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: /Download config/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Copy to clipboard/i })).not.toBeInTheDocument();
 });
 
 it("sends overwrite permission when checkbox is checked and shows success", async () => {
@@ -157,7 +161,38 @@ it("sends overwrite permission when checkbox is checked and shows success", asyn
       existing_files: ["config.yaml"],
       planned_files: ["config.yaml", ".llama_pack.env"],
       backup_files: ["config.yaml.20260616-120000.bak"],
-      message: "Setup files written.",
+      migrations: [
+        { target: "controller", revision: "controller@head", ok: true, error: "" },
+        { target: "models", revision: "models@head", ok: true, error: "" },
+      ],
+      actions: [
+        { kind: "files_written", status: "completed", detail: "Wrote 2 setup files.", command: "" },
+        { kind: "backups_created", status: "completed", detail: "Created 1 backup files.", command: "" },
+        { kind: "migrations_run", status: "completed", detail: "2 migrations completed.", command: "" },
+        {
+          kind: "admin_bootstrap",
+          status: "completed",
+          detail: "Created admin key for admin.",
+          command: "",
+        },
+        {
+          kind: "next_command",
+          status: "completed",
+          detail: "Start the configured service.",
+          command: "scripts/start_controller.sh",
+        },
+      ],
+      admin_bootstrap: {
+        created: true,
+        token: "setup-session",
+        username: "admin",
+        expires_at: "2026-06-16T12:00:00+00:00",
+        role: "admin",
+        key: "lm_setup_admin_key",
+        key_id: "key-1",
+        key_hint: "lm_set..._key",
+      },
+      message: "Setup files written and migrations completed.",
     },
   });
   const user = userEvent.setup();
@@ -167,7 +202,14 @@ it("sends overwrite permission when checkbox is checked and shows success", asyn
   await user.click(screen.getByRole("checkbox", { name: /Allow setup to overwrite/i }));
   await user.click(screen.getByRole("button", { name: /Apply Setup/i }));
 
-  expect(await screen.findByText(/Setup files written/i)).toBeInTheDocument();
+  expect(await screen.findByText(/Setup files written and migrations completed/i)).toBeInTheDocument();
+  expect(screen.getByText("2 migrations completed.")).toBeInTheDocument();
+  expect(screen.getByText("scripts/start_controller.sh")).toBeInTheDocument();
+  expect(screen.getByText("lm_setup_admin_key")).toBeInTheDocument();
+  expect(screen.getByRole("region", { name: /Command reference/i })).toBeInTheDocument();
+  expect(screen.queryByRole("tab", { name: "Config" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Download config/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: /Copy to clipboard/i })).not.toBeInTheDocument();
   const applyCall = vi.mocked(fetch).mock.calls.find(([url]) => url === "/lm-api/v1/setup/apply");
   if (!applyCall) throw new Error("Apply call not found");
   const body = JSON.parse(String(applyCall[1]?.body));

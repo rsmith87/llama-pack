@@ -1,4 +1,5 @@
 from llama_pack.core.app.auth_policy import (
+    should_allow_first_run_setup,
     should_bypass_middleware,
     should_validate_ui_session,
     is_viewer_forbidden,
@@ -7,6 +8,7 @@ from llama_pack.core.app.auth_policy import (
 
 __all__ = [
     "should_bypass_middleware",
+    "should_allow_first_run_setup",
     "should_validate_ui_session",
     "is_viewer_forbidden",
     "should_enforce_agent_key",

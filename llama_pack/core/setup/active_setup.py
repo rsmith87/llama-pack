@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import os
 import shlex
+from argparse import Namespace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+from alembic import command
+from alembic.config import Config
 from pydantic import BaseModel, Field
+
+from llama_pack.core.persistence.alembic_config import DB_TARGETS, head_revision_for, version_locations
 
 
 SetupMode = Literal["controller", "agent", "standalone"]
@@ -45,12 +50,38 @@ class ActiveSetupRequest(BaseModel):
     inputs: SetupInputs
 
 
+class MigrationStepResult(BaseModel):
+    target: str
+    revision: str
+    ok: bool
+    error: str
+
+
+SetupActionKind = Literal[
+    "files_written",
+    "backups_created",
+    "migrations_run",
+    "admin_bootstrap",
+    "next_command",
+]
+SetupActionStatus = Literal["completed", "failed", "skipped"]
+
+
+class SetupActionResult(BaseModel):
+    kind: SetupActionKind
+    status: SetupActionStatus
+    detail: str
+    command: str = ""
+
+
 class ActiveSetupResult(BaseModel):
     ok: bool
     status: Literal["ready", "blocked_existing_files", "applied", "failed"]
     existing_files: list[str] = Field(default_factory=list)
     planned_files: list[str] = Field(default_factory=list)
     backup_files: list[str] = Field(default_factory=list)
+    migrations: list[MigrationStepResult] = Field(default_factory=list)
+    actions: list[SetupActionResult] = Field(default_factory=list)
     message: str
 
 
@@ -84,14 +115,71 @@ def _controller_env(request: ActiveSetupRequest, inputs: ControllerSetupInputs) 
     )
 
 
+def _agent_config(inputs: AgentSetupInputs, *, include_controller_connection: bool) -> str:
+    lines = [
+        "mode: agent",
+    ]
+    if include_controller_connection:
+        lines.extend(
+            [
+                "controller_url: ${LLAMA_PACK_CONTROLLER_URL}",
+                f"node_name: {inputs.node_name}",
+                "agent_url: ${LLAMA_PACK_AGENT_URL}",
+                "agent_api_key: ${LLAMA_PACK_AGENT_API_KEY}",
+                "controller_registration_key_outbound: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
+            ]
+        )
+    lines.extend(
+        [
+            f"llama_server_bin: {inputs.llama_server_bin}",
+            f"llama_cpp_dir: {inputs.llama_cpp_dir}",
+            f"python_bin: {inputs.python_bin}",
+            "hf_models_dirs:",
+            f"  - {inputs.hf_models_dir}",
+            f"log_dir: {inputs.log_dir}",
+        ]
+    )
+    return "\n".join(lines) + "\n"
+
+
+def _agent_env(request: ActiveSetupRequest, inputs: AgentSetupInputs, *, include_controller_connection: bool) -> str:
+    lines = [
+        f"export LLAMA_PACK_CONFIG={_quote_env(str(Path(request.config_path)))}",
+    ]
+    if include_controller_connection:
+        lines.extend(
+            [
+                f"export LLAMA_PACK_CONTROLLER_URL={_quote_env(inputs.controller_url)}",
+                f"export LLAMA_PACK_AGENT_URL={_quote_env(inputs.agent_url)}",
+                f"export LLAMA_PACK_AGENT_API_KEY={_quote_env(inputs.agent_api_key)}",
+                "export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND="
+                f"{_quote_env(inputs.controller_registration_key_outbound)}",
+            ]
+        )
+    return "\n".join(lines) + "\n"
+
+
 def _render_files(request: ActiveSetupRequest) -> dict[Path, str]:
-    if request.mode != "controller":
-        raise ValueError("Only controller active setup is implemented in this slice")
-    if request.inputs.controller is None:
-        raise ValueError("Controller setup inputs are required")
+    if request.mode == "controller":
+        if request.inputs.controller is None:
+            raise ValueError("Controller setup inputs are required")
+        return {
+            Path(request.config_path): _controller_config(request.inputs.controller),
+            Path(request.env_path): _controller_env(request, request.inputs.controller),
+        }
+    if request.inputs.agent is None:
+        raise ValueError("Agent setup inputs are required")
+    include_controller_connection = request.mode == "agent"
     return {
-        Path(request.config_path): _controller_config(request.inputs.controller),
-        Path(request.env_path): _controller_env(request, request.inputs.controller),
+        Path(request.config_path): _agent_config(
+            request.inputs.agent,
+            include_controller_connection=include_controller_connection,
+        ),
+        Path(request.env_path): _agent_env(
+            request,
+            request.inputs.agent,
+            include_controller_connection=include_controller_connection,
+        ),
     }
 
 
@@ -130,6 +218,87 @@ def _write_file(path: Path, content: str, mode: int | None = None) -> None:
     os.replace(tmp_path, path)
 
 
+def _project_root() -> Path:
+    return Path(__file__).resolve().parents[3]
+
+
+def _upgrade_target(config_path: Path, target: str) -> MigrationStepResult:
+    revision = head_revision_for(target)
+    previous_config = os.environ.get("LLAMA_PACK_CONFIG")
+    os.environ["LLAMA_PACK_CONFIG"] = str(config_path)
+    try:
+        alembic_cfg = Config(str(_project_root() / "alembic.ini"))
+        project_root = _project_root()
+        alembic_cfg.set_main_option("script_location", str(project_root / "migrations"))
+        alembic_cfg.set_main_option(
+            "version_locations",
+            os.pathsep.join(str(path) for path in version_locations(project_root)),
+        )
+        alembic_cfg.cmd_opts = Namespace(x=[f"db={target}"])
+        command.upgrade(alembic_cfg, revision)
+        return MigrationStepResult(target=target, revision=revision, ok=True, error="")
+    except Exception as exc:
+        return MigrationStepResult(target=target, revision=revision, ok=False, error=str(exc))
+    finally:
+        if previous_config is None:
+            os.environ.pop("LLAMA_PACK_CONFIG", None)
+        else:
+            os.environ["LLAMA_PACK_CONFIG"] = previous_config
+
+
+def run_setup_migrations(config_path: Path) -> list[MigrationStepResult]:
+    return [_upgrade_target(config_path, target) for target in DB_TARGETS]
+
+
+def _next_command_for_mode(mode: SetupMode) -> str:
+    if mode == "controller":
+        return "scripts/start_controller.sh"
+    return "scripts/start_agent.sh"
+
+
+def _base_actions(
+    request: ActiveSetupRequest,
+    *,
+    rendered: dict[Path, str],
+    backups: list[str],
+    migrations: list[MigrationStepResult],
+) -> list[SetupActionResult]:
+    failed_migrations = [step for step in migrations if not step.ok]
+    actions = [
+        SetupActionResult(
+            kind="files_written",
+            status="completed",
+            detail=f"Wrote {len(rendered)} setup files.",
+        ),
+        SetupActionResult(
+            kind="backups_created",
+            status="completed" if backups else "skipped",
+            detail=f"Created {len(backups)} backup files." if backups else "No existing files required backups.",
+        ),
+        SetupActionResult(
+            kind="migrations_run",
+            status="failed" if failed_migrations else "completed",
+            detail=(
+                f"{len(failed_migrations)} migration failed."
+                if len(failed_migrations) == 1
+                else f"{len(failed_migrations)} migrations failed."
+                if failed_migrations
+                else f"{len(migrations)} migrations completed."
+            ),
+        ),
+    ]
+    if not failed_migrations:
+        actions.append(
+            SetupActionResult(
+                kind="next_command",
+                status="completed",
+                detail="Start the configured service.",
+                command=_next_command_for_mode(request.mode),
+            )
+        )
+    return actions
+
+
 def apply_active_setup(request: ActiveSetupRequest) -> ActiveSetupResult:
     preflight = preflight_active_setup(request)
     if not preflight.ok:
@@ -145,11 +314,29 @@ def apply_active_setup(request: ActiveSetupRequest) -> ActiveSetupResult:
     for path, content in rendered.items():
         _write_file(path, content, 0o600 if path.name.endswith(".env") else None)
 
+    migrations = run_setup_migrations(Path(request.config_path))
+    actions = _base_actions(request, rendered=rendered, backups=backups, migrations=migrations)
+    failed_migrations = [step for step in migrations if not step.ok]
+    if failed_migrations:
+        failed_targets = ", ".join(step.target for step in failed_migrations)
+        return ActiveSetupResult(
+            ok=False,
+            status="failed",
+            existing_files=preflight.existing_files,
+            planned_files=[str(path) for path in rendered],
+            backup_files=backups,
+            migrations=migrations,
+            actions=actions,
+            message=f"Setup files written, but migrations failed for: {failed_targets}.",
+        )
+
     return ActiveSetupResult(
         ok=True,
         status="applied",
         existing_files=preflight.existing_files,
         planned_files=[str(path) for path in rendered],
         backup_files=backups,
-        message="Setup files written.",
+        migrations=migrations,
+        actions=actions,
+        message="Setup files written and migrations completed.",
     )
