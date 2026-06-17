@@ -13,9 +13,17 @@ class TransportBuilder:
     def __init__(self, node_registry: NodeRegistry):
         self.node_registry = node_registry
 
-    def chat_transport_for_target(self, target: dict[str, str], model_name: str, stream: bool) -> tuple[str, dict[str, str], bool, dict[str, str]]:
+    def chat_transport_for_target(
+        self,
+        target: dict[str, str],
+        model_name: str,
+        stream: bool,
+        use_openai_endpoint: bool,
+    ) -> tuple[str, dict[str, str], bool, dict[str, str]]:
         if target["kind"] == "local":
             return target["url"], {}, True, {"route": "local"}
+        if use_openai_endpoint:
+            return self.node_transport(target["node_name"], "/v1/chat/completions")
         suffix = "/stream" if stream else ""
         return self.node_transport(target["node_name"], f"{_API_PREFIX}/chat/{quote(model_name, safe='')}{suffix}")
 

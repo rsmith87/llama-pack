@@ -184,8 +184,10 @@ async def openai_chat_completions(
     try:
         model_name = body.model
         payload: dict[str, Any] = ChatRequestBody.model_validate(
-            body.model_dump(exclude={"model", "stream", "thread_id", "request_type", "metadata", "tool_runtime"})
+            body.model_dump(exclude={"model", "stream", "thread_id", "request_type", "metadata"})
         ).model_dump()
+        if body.tool_runtime is not None:
+            payload["tool_runtime"] = body.tool_runtime
         if body.tool_choice is not None:
             payload["tool_choice"] = body.tool_choice
         profile_headers: dict[str, str] = {}

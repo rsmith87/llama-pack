@@ -134,7 +134,19 @@ class ChatProxy:
         except Exception:
             model_template = None
         request_payload = self._prompt_templates.apply(model_name, model_template, request_payload, payload)
-        for key in ("top_p", "top_k", "min_p", "repeat_penalty", "seed", "stop", "json_schema", "grammar", "tools", "tool_choice"):
+        for key in (
+            "top_p",
+            "top_k",
+            "min_p",
+            "repeat_penalty",
+            "seed",
+            "stop",
+            "json_schema",
+            "grammar",
+            "tools",
+            "tool_choice",
+            "tool_runtime",
+        ):
             if payload.get(key) is not None:
                 request_payload[key] = payload[key]
         for key in ("cache_prompt", "slot_id"):
@@ -143,7 +155,15 @@ class ChatProxy:
 
         if self.config.mode == "controller":
             target = await self._resolver.resolve_controller_target(model_name, str(payload.get("target", "auto")))
-            url, headers, verify_tls, route_meta = self._transport.chat_transport_for_target(target, model_name, stream)
+            use_openai_endpoint = request_payload.get("tool_runtime") == "agent"
+            if use_openai_endpoint:
+                request_payload["model"] = model_name
+            url, headers, verify_tls, route_meta = self._transport.chat_transport_for_target(
+                target,
+                model_name,
+                stream,
+                use_openai_endpoint,
+            )
             return url, request_payload, headers, verify_tls, route_meta
 
         local_target = self._resolver.resolve_local_target(model_name)

@@ -2118,7 +2118,7 @@ def test_openai_compat_agent_tool_runtime_stream_detects_tool_call_finish_reason
     assert "data: [DONE]" in body
 
 
-def test_openai_compat_controller_does_not_execute_agent_tools(tmp_path):
+def test_openai_compat_controller_forwards_agent_tool_runtime_to_selected_agent(tmp_path):
     calls = []
 
     async def fake_controller_request(method, url, api_key=None, verify_tls=True, json_body=None):
@@ -2157,7 +2157,20 @@ def test_openai_compat_controller_does_not_execute_agent_tools(tmp_path):
     )
 
     assert response.status_code == 200
-    assert calls
+    assert calls == [
+        (
+            "http://linux/v1/chat/completions",
+            {
+                "messages": [{"role": "user", "content": "hi"}],
+                "temperature": 0.7,
+                "max_tokens": 512,
+                "stream": False,
+                "chat_template_kwargs": {"enable_thinking": False},
+                "tool_runtime": "agent",
+                "model": "qwen",
+            },
+        )
+    ]
     assert not (tmp_path / "agent_tool_calls.jsonl").exists()
 
 
