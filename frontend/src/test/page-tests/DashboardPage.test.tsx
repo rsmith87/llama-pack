@@ -176,6 +176,7 @@ it("renders rich model card runtime and configuration details", async () => {
 });
 
 it("renders persisted catalog, profile, and deployment data on dashboard model cards", async () => {
+  const user = userEvent.setup();
   vi.stubGlobal(
     "fetch",
     vi.fn()
@@ -209,7 +210,11 @@ it("renders persisted catalog, profile, and deployment data on dashboard model c
   expect(screen.getByText("Cost Tier")).toBeInTheDocument();
   expect(screen.getByText("medium")).toBeInTheDocument();
   expect(screen.getByText("Profiles")).toBeInTheDocument();
-  expect(screen.getByText("Fast, Long Context")).toBeInTheDocument();
+  expect(screen.getByText("2 profiles")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Show profiles for qwen-vl" }));
+  expect(screen.getByRole("region", { name: "Profiles for qwen-vl" })).toBeInTheDocument();
+  expect(screen.getByText("Fast")).toBeInTheDocument();
+  expect(screen.getByText("Long Context")).toBeInTheDocument();
   expect(screen.getByText("Deployments")).toBeInTheDocument();
   expect(screen.getByText("127.0.0.1:8081, gpu-1:8091 (fast)")).toBeInTheDocument();
 });
