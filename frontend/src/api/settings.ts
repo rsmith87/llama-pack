@@ -1,4 +1,4 @@
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiPatch, apiPost } from "./client";
 
 export type ModelDiskInfo = {
   node_name: string;
@@ -28,6 +28,33 @@ export type NodeAuthInfo = {
   verify_tls: boolean;
 };
 
+export type JsonScalar = string | number | boolean | null;
+
+export type RuntimeSettings = {
+  controller_retention_days: number;
+  controller_archive_retention_days: number;
+  controller_archive_dir: string;
+  routing_fanout_enabled: boolean;
+  routing_fanout_max: number;
+  agent_worker_enabled: boolean;
+  agent_worker_poll_interval_seconds: number;
+  agent_worker_max_jobs: number;
+  agent_worker_labels: Record<string, JsonScalar>;
+  agent_worker_capacity: Record<string, JsonScalar>;
+  client_cors_origins: string[];
+  agent_tools_enabled: boolean;
+  agent_tools_max_iterations: number;
+  agent_tools_tool_timeout_seconds: number;
+  agent_tools_safe_roots: string[];
+};
+
+export type RuntimeSettingsDocument = {
+  settings: RuntimeSettings;
+  sources: Record<keyof RuntimeSettings, "database" | "config" | "default">;
+};
+
+export type RuntimeSettingsPatch = Partial<RuntimeSettings>;
+
 export function generateApiKeys(payload: { prefix: string; token_bytes: number; count: number }) {
   return apiPost<{ keys?: string[]; count?: number; prefix?: string; token_bytes?: number }>("/settings/api-keys/generate", payload);
 }
@@ -38,4 +65,12 @@ export function listModelDisks() {
 
 export function listNodeAuth() {
   return apiGet<NodeAuthInfo[]>("/settings/node-auth");
+}
+
+export function getRuntimeSettings() {
+  return apiGet<RuntimeSettingsDocument>("/settings/runtime");
+}
+
+export function patchRuntimeSettings(payload: RuntimeSettingsPatch) {
+  return apiPatch<RuntimeSettingsDocument>("/settings/runtime", payload);
 }

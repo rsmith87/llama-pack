@@ -24,6 +24,7 @@ if TYPE_CHECKING:
     from llama_pack.core.orchestration.orchestrator import Orchestrator
     from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
     from llama_pack.core.runtime.process_manager import ProcessManager
+    from llama_pack.core.settings.runtime import RuntimeSettingsService
     from llama_pack.core.threads.service import ThreadService
 
 
@@ -113,3 +114,7 @@ def get_orchestrator(request: Request) -> Orchestrator:
     if orchestrator is None:
         raise RuntimeError("Orchestrator is only available in controller mode")
     return orchestrator
+
+
+def get_runtime_settings_service(request: Request) -> RuntimeSettingsService:
+    return request.app.state.runtime_settings_service

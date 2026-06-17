@@ -780,6 +780,7 @@ def test_split_config_env_var_expansion_in_linked_files(tmp_path, monkeypatch):
         {
             "controller_db_url": "${TEST_DB_URL}",
             "models_db_url": "${TEST_DB_URL}",
+            "settings_db_url": "${TEST_DB_URL}",
         },
     )
     manifest = tmp_path / "config.yaml"
@@ -791,6 +792,7 @@ def test_split_config_env_var_expansion_in_linked_files(tmp_path, monkeypatch):
 
     assert config.controller_db_url == "sqlite:///test.db"
     assert config.models_db_url == "sqlite:///test.db"
+    assert config.settings_db_url == "sqlite:///test.db"
 
 
 def test_split_config_loads_models_db_url_from_persistence_file(tmp_path):
@@ -810,6 +812,25 @@ def test_split_config_loads_models_db_url_from_persistence_file(tmp_path):
 
     assert config.models_db_url == "sqlite+pysqlite:///tmp/models.db"
     assert config._section_sources["models_db_url"] == persistence_file.resolve()
+
+
+def test_split_config_loads_settings_db_url_from_persistence_file(tmp_path):
+    persistence_file = tmp_path / "config" / "persistence.yaml"
+    persistence_file.parent.mkdir()
+    _write_yaml(
+        persistence_file,
+        {
+            "controller_db_url": "sqlite+pysqlite:///tmp/controller.db",
+            "settings_db_url": "sqlite+pysqlite:///tmp/settings.db",
+        },
+    )
+    manifest = tmp_path / "config.yaml"
+    _write_yaml(manifest, {"mode": "agent", "files": {"persistence": "config/persistence.yaml"}})
+
+    config = load_config(manifest)
+
+    assert config.settings_db_url == "sqlite+pysqlite:///tmp/settings.db"
+    assert config._section_sources["settings_db_url"] == persistence_file.resolve()
 
 
 def test_save_split_config_writes_models_to_linked_file(tmp_path):
@@ -937,6 +958,36 @@ def test_save_split_config_writes_models_db_url_to_persistence_file(tmp_path):
 
     saved_root = yaml.safe_load(manifest.read_text(encoding="utf-8"))
     assert "models_db_url" not in saved_root
+    assert saved_root["files"]["persistence"] == "config/persistence.yaml"
+
+
+def test_save_split_config_writes_settings_db_url_to_persistence_file(tmp_path):
+    persistence_file = tmp_path / "config" / "persistence.yaml"
+    persistence_file.parent.mkdir()
+    _write_yaml(
+        persistence_file,
+        {
+            "controller_db_url": "sqlite+pysqlite:///tmp/controller.db",
+            "settings_db_url": "sqlite+pysqlite:///tmp/settings.db",
+        },
+    )
+    manifest = tmp_path / "config.yaml"
+    _write_yaml(manifest, {"mode": "agent", "files": {"persistence": "config/persistence.yaml"}})
+
+    config = load_config(manifest)
+    config.settings_db_url = "sqlite+pysqlite:///tmp/override-settings.db"
+
+    from llama_pack.core.config import save_config
+
+    save_config(config)
+
+    import yaml
+
+    saved_persistence = yaml.safe_load(persistence_file.read_text(encoding="utf-8"))
+    assert saved_persistence["settings_db_url"] == "sqlite+pysqlite:///tmp/override-settings.db"
+
+    saved_root = yaml.safe_load(manifest.read_text(encoding="utf-8"))
+    assert "settings_db_url" not in saved_root
     assert saved_root["files"]["persistence"] == "config/persistence.yaml"
 
 

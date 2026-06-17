@@ -8,11 +8,13 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from llama_pack.api.dependencies import get_config
+from llama_pack.api.dependencies import get_config, get_runtime_settings_service
+from llama_pack.api.routes.auth.common import require_admin_session
 from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.downloads import DOWNLOAD_DISK_HEADROOM_BYTES
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.api.dependencies import get_node_registry
+from llama_pack.core.settings.runtime import RuntimeSettingsDocument, RuntimeSettingsPatch, RuntimeSettingsService, UnsupportedRuntimeSettingError
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
@@ -104,6 +106,28 @@ async def list_model_disks(
 @router.get("/node-auth", response_model=list[NodeAuthInfo])
 def list_node_auth(registry: NodeRegistry = Depends(get_node_registry)) -> list[NodeAuthInfo]:
     return [NodeAuthInfo(**item) for item in registry.node_auth_diagnostics()]
+
+
+@router.get("/runtime", response_model=RuntimeSettingsDocument)
+def get_runtime_settings(
+    service: RuntimeSettingsService = Depends(get_runtime_settings_service),
+) -> RuntimeSettingsDocument:
+    return service.get_document()
+
+
+@router.patch("/runtime", response_model=RuntimeSettingsDocument)
+def patch_runtime_settings(
+    payload: RuntimeSettingsPatch,
+    request: Request,
+    service: RuntimeSettingsService = Depends(get_runtime_settings_service),
+) -> RuntimeSettingsDocument:
+    session = require_admin_session(request)
+    try:
+        document = service.patch(payload, updated_by=str(session.get("username") or "unknown"))
+    except UnsupportedRuntimeSettingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    request.app.state.config = service.effective_config()
+    return document
 
 
 def _local_disk_rows(config: AppConfig, disk_usage) -> list[DiskInfo]:

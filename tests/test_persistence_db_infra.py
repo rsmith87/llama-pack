@@ -22,6 +22,7 @@ def test_resolve_persistence_urls_defaults_to_state_dir_paths(tmp_path):
     assert urls.chat_sessions == f"sqlite+pysqlite:///{state_dir / 'chat_sessions.db'}"
     assert urls.downloads == f"sqlite+pysqlite:///{state_dir / 'downloads.db'}"
     assert urls.benchmarks == f"sqlite+pysqlite:///{state_dir / 'benchmarks.db'}"
+    assert urls.settings == f"sqlite+pysqlite:///{state_dir / 'settings.db'}"
 
 
 def test_default_state_dir_stays_inside_non_logs_dir(tmp_path):
@@ -40,6 +41,7 @@ def test_resolve_persistence_urls_respects_overrides(tmp_path):
             "chat_sessions_db_url": "sqlite+pysqlite:///tmp/chat.db",
             "downloads_db_url": "sqlite+pysqlite:///tmp/downloads.db",
             "benchmarks_db_url": "sqlite+pysqlite:///tmp/benchmarks.db",
+            "settings_db_url": "sqlite+pysqlite:///tmp/settings.db",
         }
     )
 
@@ -51,6 +53,7 @@ def test_resolve_persistence_urls_respects_overrides(tmp_path):
     assert urls.chat_sessions == "sqlite+pysqlite:///tmp/chat.db"
     assert urls.downloads == "sqlite+pysqlite:///tmp/downloads.db"
     assert urls.benchmarks == "sqlite+pysqlite:///tmp/benchmarks.db"
+    assert urls.settings == "sqlite+pysqlite:///tmp/settings.db"
 
 
 def test_create_persistence_engine_enables_sqlite_foreign_keys(tmp_path):
