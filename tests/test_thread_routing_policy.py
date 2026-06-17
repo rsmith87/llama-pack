@@ -750,6 +750,139 @@ async def test_startup_decision_via_request_type_path():
     assert decision.reason == "request_type_model_available"
 
 
+@pytest.mark.asyncio
+async def test_model_running_failure_is_recorded_on_candidate_metadata():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "node-a": {
+                    "url": "http://a",
+                    "request_types": {"general": {"model": "m", "priority": 10}},
+                },
+                "node-b": {
+                    "url": "http://b",
+                    "request_types": {"general": {"model": "m", "priority": 20}},
+                },
+            },
+        }
+    )
+
+    def model_running(node: str, model: str) -> bool:
+        if node == "node-a":
+            raise RuntimeError("GET /lm-api/v1/models timed out")
+        return False
+
+    policy = RoutingPolicy(
+        config,
+        model_running=model_running,
+        model_available=lambda node, model: node == "node-b",
+    )
+
+    decision = await policy.choose(
+        request_type="general",
+        requested_model=None,
+        explicit_target="auto",
+        previous_route=None,
+    )
+
+    candidates = {candidate["node"]: candidate for candidate in decision.candidates}
+    assert candidates["node-a"]["route_check_errors"] == [
+        {
+            "check": "model_running",
+            "error_type": "RuntimeError",
+            "message": "GET /lm-api/v1/models timed out",
+        }
+    ]
+    assert decision.node == "node-b"
+
+
+@pytest.mark.asyncio
+async def test_artifact_presence_failure_is_recorded_on_candidate_metadata():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "node-a": {
+                    "url": "http://a",
+                    "request_types": {"general": {"model": "m", "priority": 10}},
+                },
+                "node-b": {
+                    "url": "http://b",
+                    "request_types": {"general": {"model": "m", "priority": 20}},
+                },
+            },
+        }
+    )
+
+    def presence(node: str, model: str) -> str | None:
+        if node == "node-a":
+            raise RuntimeError("GET /lm-api/v1/library/ggufs failed")
+        return "registered"
+
+    policy = RoutingPolicy(
+        config,
+        model_running=lambda node, model: False,
+        model_artifact_presence=presence,
+    )
+
+    decision = await policy.choose(
+        request_type="general",
+        requested_model=None,
+        explicit_target="auto",
+        previous_route=None,
+    )
+
+    candidates = {candidate["node"]: candidate for candidate in decision.candidates}
+    assert candidates["node-a"]["artifact_state"] is None
+    assert candidates["node-a"]["route_check_errors"] == [
+        {
+            "check": "artifact_presence",
+            "error_type": "RuntimeError",
+            "message": "GET /lm-api/v1/library/ggufs failed",
+        }
+    ]
+    assert decision.node == "node-b"
+
+
+@pytest.mark.asyncio
+async def test_startup_capacity_failure_is_recorded_and_defaults_to_start_now():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "mac-mini": {"url": "http://mac", "default_model": "gemma"},
+            },
+        }
+    )
+
+    def startup_allowed(node: str, model: str) -> bool:
+        raise RuntimeError("capacity check failed")
+
+    policy = RoutingPolicy(
+        config,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=startup_allowed,
+    )
+
+    decision = await policy.choose(
+        request_type="general",
+        requested_model=None,
+        explicit_target="auto",
+        previous_route=None,
+    )
+
+    assert decision.startup_decision == "start_now"
+    assert decision.candidates[0]["route_check_errors"] == [
+        {
+            "check": "startup_allowed",
+            "error_type": "RuntimeError",
+            "message": "capacity check failed",
+        }
+    ]
+
+
 # ---------------------------------------------------------------------------
 # Ticket 9.2 — Registry-Aware Placement (artifact-scored routing)
 # ---------------------------------------------------------------------------

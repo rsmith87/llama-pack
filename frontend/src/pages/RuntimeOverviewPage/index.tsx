@@ -293,6 +293,7 @@ export function RuntimeOverviewPage() {
               </div>
             )}
           </div>
+          <ErrorBanner message={overview?.downloads?.error || ""} />
         </Panel>
 
         <Panel eyebrow="Controller Runtime" title="Node Capabilities">
@@ -329,11 +330,12 @@ export function RuntimeOverviewPage() {
           />
         </Panel>
 
-        {overview?.running_models?.available && (
+        {(overview?.running_models?.available || overview?.running_models?.error) && (
           <Panel eyebrow="Agent Runtime" title="Running Models">
             <div className="runtime-summary">
               <div><span className="muted">Running</span><strong>{overview.running_models.count ?? 0}</strong></div>
             </div>
+            <ErrorBanner message={overview.running_models.error || ""} />
             <DataTable
               rows={runningModels}
               emptyMessage="No models running."

@@ -465,6 +465,65 @@ def test_threads_api_creates_thread_and_posts_message(tmp_path):
     assert [event["event_type"] for event in public_events] == ["user_message", "assistant_message"]
 
 
+@pytest.mark.asyncio
+async def test_thread_routing_records_node_request_failure_in_candidate_metadata(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_controller_request(method, url, api_key, verify_tls, json_body=None):
+        assert method == "GET"
+        if url == "http://node-a/lm-api/v1/models":
+            raise RuntimeError("node-a model list timed out")
+        if url == "http://node-b/lm-api/v1/models":
+            return [{"name": "qwen", "running": True}]
+        raise AssertionError(f"unexpected node request: {url}")
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "node-a": {
+                        "url": "http://node-a",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    },
+                    "node-b": {
+                        "url": "http://node-b",
+                        "request_types": {"coding": {"model": "qwen", "priority": 20}},
+                    },
+                },
+            }
+        ),
+        controller_request=fake_controller_request,
+    )
+
+    async def fake_chat(model_name, payload):
+        return {"choices": [{"message": {"content": "hello from node-b"}}]}, {"route": "node:node-b"}
+
+    app.state.chat_proxy.chat_with_meta = fake_chat
+    service = app.state.thread_service
+    thread = service.create_thread(
+        title=None,
+        default_model=None,
+        metadata={"request_type": "coding"},
+        created_by=None,
+    )
+
+    await service.post_message_async(thread["id"], "user", "hello", None, "auto", None)
+
+    events = service.list_events(thread["id"], include_internal=True)
+    routing_event = next(event for event in events if event["event_type"] == "routing_decision")
+    candidates = {candidate["node"]: candidate for candidate in routing_event["content"]["candidates"]}
+    assert candidates["node-a"]["route_check_errors"] == [
+        {
+            "check": "model_running",
+            "error_type": "RuntimeError",
+            "message": "Node node-a model status request failed for model qwen: node-a model list timed out",
+        }
+    ]
+    assert routing_event["content"]["node"] == "node-b"
+
+
 def test_threads_api_posts_message_with_context_profile_fields(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     app = create_app(

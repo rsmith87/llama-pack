@@ -169,7 +169,7 @@ class RoutingPolicy:
         if model is None:
             raise ValueError(f"No model specified for node target: {node_name}")
         candidates = ({"node": node_name, "model": model, "source": "explicit"},)
-        if await self._model_running(node_name, model):
+        if await self._candidate_model_running(candidates[0]):
             return RouteDecision(
                 node=node_name,
                 model=model,
@@ -187,7 +187,7 @@ class RoutingPolicy:
         if not isinstance(node, str) or not isinstance(model, str):
             return None
         candidates = ({"node": node, "model": model, "source": "previous_route"},)
-        if node in self.config.nodes and await self._model_running(node, model):
+        if node in self.config.nodes and await self._candidate_model_running(candidates[0]):
             return RouteDecision(
                 node=node,
                 model=model,
@@ -200,7 +200,7 @@ class RoutingPolicy:
     async def _choose_request_type(self, request_type: str) -> RouteDecision | None:
         candidates = self._request_type_candidates(request_type)
         for candidate in candidates:
-            if await self._model_running(candidate["node"], candidate["model"]):
+            if await self._candidate_model_running(candidate):
                 candidate["model_running"] = True
                 return RouteDecision(
                     node=candidate["node"],
@@ -221,7 +221,7 @@ class RoutingPolicy:
                 continue
             candidate = {"node": node_name, "model": model, "source": "fallback"}
             candidates.append(candidate)
-            if await self._model_running(node_name, model):
+            if await self._candidate_model_running(candidate):
                 candidate["model_running"] = True
                 return RouteDecision(
                     node=node_name,
@@ -248,7 +248,7 @@ class RoutingPolicy:
                 break
             if candidate["node"] == primary.node:
                 continue
-            if await self._model_running(candidate["node"], candidate["model"]):
+            if await self._candidate_model_running(candidate):
                 targets.append(
                     RouteDecision(
                         node=candidate["node"],
@@ -282,11 +282,25 @@ class RoutingPolicy:
             result = await result
         return bool(result)
 
+    async def _candidate_model_running(self, candidate: dict[str, Any]) -> bool:
+        try:
+            return await self._model_running(str(candidate["node"]), str(candidate["model"]))
+        except Exception as exc:
+            self._record_candidate_error(candidate, "model_running", exc)
+            return False
+
     async def _model_available(self, node: str, model: str) -> bool:
         result = self.model_available(node, model)
         if inspect.isawaitable(result):
             result = await result
         return bool(result)
+
+    async def _candidate_model_available(self, candidate: dict[str, Any]) -> bool:
+        try:
+            return await self._model_available(str(candidate["node"]), str(candidate["model"]))
+        except Exception as exc:
+            self._record_candidate_error(candidate, "model_available", exc)
+            return False
 
     async def _get_artifact_presence(self, node: str, model: str) -> str | None:
         """9.2 — returns "registered", "gguf_present", or None."""
@@ -297,6 +311,13 @@ class RoutingPolicy:
             result = await result
         return result  # type: ignore[return-value]
 
+    async def _candidate_artifact_presence(self, candidate: dict[str, Any]) -> str | None:
+        try:
+            return await self._get_artifact_presence(str(candidate["node"]), str(candidate["model"]))
+        except Exception as exc:
+            self._record_candidate_error(candidate, "artifact_presence", exc)
+            return None
+
     async def _is_startup_allowed(self, node: str, model: str) -> bool:
         """9.1 — returns True if the node may start a new model instance."""
         if self.node_startup_allowed is None:
@@ -305,6 +326,26 @@ class RoutingPolicy:
         if inspect.isawaitable(result):
             result = await result
         return bool(result)
+
+    async def _candidate_startup_allowed(self, candidate: dict[str, Any]) -> bool:
+        try:
+            return await self._is_startup_allowed(str(candidate["node"]), str(candidate["model"]))
+        except Exception as exc:
+            self._record_candidate_error(candidate, "startup_allowed", exc)
+            return True
+
+    def _record_candidate_error(self, candidate: dict[str, Any], check: str, exc: Exception) -> None:
+        errors = candidate.setdefault("route_check_errors", [])
+        if not isinstance(errors, list):
+            errors = []
+            candidate["route_check_errors"] = errors
+        errors.append(
+            {
+                "check": check,
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+            }
+        )
 
     async def _choose_available_candidate(
         self,
@@ -324,7 +365,7 @@ class RoutingPolicy:
             best_registered: dict[str, Any] | None = None
             best_gguf: dict[str, Any] | None = None
             for candidate in candidates:
-                presence = await self._get_artifact_presence(candidate["node"], candidate["model"])
+                presence = await self._candidate_artifact_presence(candidate)
                 candidate["artifact_state"] = presence
                 if presence == "registered" and best_registered is None:
                     best_registered = candidate
@@ -335,7 +376,7 @@ class RoutingPolicy:
             if chosen is None:
                 return None
 
-            startup_allowed = await self._is_startup_allowed(chosen["node"], chosen["model"])
+            startup_allowed = await self._candidate_startup_allowed(chosen)
             startup_decision = "start_now" if startup_allowed else "defer"
             reason = f"{reason_prefix}_artifact_{chosen['artifact_state']}"
             return RouteDecision(
@@ -350,9 +391,9 @@ class RoutingPolicy:
 
         # Legacy path — model_available only
         for candidate in candidates:
-            if await self._model_available(candidate["node"], candidate["model"]):
+            if await self._candidate_model_available(candidate):
                 candidate["model_available"] = True
-                startup_allowed = await self._is_startup_allowed(candidate["node"], candidate["model"])
+                startup_allowed = await self._candidate_startup_allowed(candidate)
                 startup_decision = "start_now" if startup_allowed else "defer"
                 return RouteDecision(
                     node=candidate["node"],

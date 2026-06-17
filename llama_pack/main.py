@@ -116,29 +116,30 @@ def _build_orchestrator(config: AppConfig) -> Orchestrator | None:
 async def _thread_model_running(registry: NodeRegistry, node: str, model: str) -> bool:
     try:
         models = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/models")
-    except Exception:
-        return False
+    except Exception as exc:
+        raise RuntimeError(f"Node {node} model status request failed for model {model}: {exc}") from exc
     if not isinstance(models, list):
-        return False
+        raise TypeError(f"Node {node} model status response for model {model} must be a list")
     return any(item.get("name") == model and item.get("running") is True for item in models if isinstance(item, dict))
 
 
 async def _thread_model_available(registry: NodeRegistry, node: str, model: str) -> bool:
     try:
         models = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/models")
-    except Exception:
-        models = []
-    if isinstance(models, list):
-        for item in models:
-            if isinstance(item, dict) and item.get("name") == model:
-                return True
+    except Exception as exc:
+        raise RuntimeError(f"Node {node} model availability request failed for model {model}: {exc}") from exc
+    if not isinstance(models, list):
+        raise TypeError(f"Node {node} model availability response for model {model} must be a list")
+    for item in models:
+        if isinstance(item, dict) and item.get("name") == model:
+            return True
 
     try:
         files = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/library/ggufs")
-    except Exception:
-        return False
+    except Exception as exc:
+        raise RuntimeError(f"Node {node} GGUF library request failed for model {model}: {exc}") from exc
     if not isinstance(files, list):
-        return False
+        raise TypeError(f"Node {node} GGUF library response for model {model} must be a list")
     for item in files:
         if not isinstance(item, dict):
             continue
@@ -161,19 +162,20 @@ async def _thread_model_artifact_presence(
     """9.2 — returns "registered", "gguf_present", or None for the routing policy."""
     try:
         models = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/models")
-    except Exception:
-        models = []
-    if isinstance(models, list):
-        for item in models:
-            if isinstance(item, dict) and item.get("name") == model:
-                return "registered"
+    except Exception as exc:
+        raise RuntimeError(f"Node {node} model artifact request failed for model {model}: {exc}") from exc
+    if not isinstance(models, list):
+        raise TypeError(f"Node {node} model artifact response for model {model} must be a list")
+    for item in models:
+        if isinstance(item, dict) and item.get("name") == model:
+            return "registered"
 
     try:
         files = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/library/ggufs")
-    except Exception:
-        return None
+    except Exception as exc:
+        raise RuntimeError(f"Node {node} GGUF artifact request failed for model {model}: {exc}") from exc
     if not isinstance(files, list):
-        return None
+        raise TypeError(f"Node {node} GGUF artifact response for model {model} must be a list")
     for item in files:
         if not isinstance(item, dict):
             continue
@@ -226,11 +228,10 @@ async def _thread_node_startup_allowed(registry: NodeRegistry, node: str, model:
 
     try:
         models = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/models")
-    except Exception:
-        # Cannot determine capacity — allow optimistically
-        return True
+    except Exception as exc:
+        raise RuntimeError(f"Node {node} startup capacity request failed for model {model}: {exc}") from exc
     if not isinstance(models, list):
-        return True
+        raise TypeError(f"Node {node} startup capacity response for model {model} must be a list")
     running_count = sum(1 for item in models if isinstance(item, dict) and item.get("running") is True)
     return running_count < max_running
 

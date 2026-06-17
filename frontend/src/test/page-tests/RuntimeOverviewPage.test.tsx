@@ -153,3 +153,38 @@ it("renders agent worker status fields for transfer debugging", async () => {
   expect(screen.getByText("gpu=1, disk_gb=500")).toBeInTheDocument();
   expect(screen.getByText("http://controller/lm-api/v1/nodes/agent-a/work/claim")).toBeInTheDocument();
 });
+
+it("renders degraded runtime summary errors", async () => {
+  const fetchMock = vi.fn((url: string) => {
+    if (url === "/lm-api/v1/runtime/overview") {
+      return Promise.resolve(okJson({
+        mode: "agent",
+        agent_tools: { enabled: true, tool_count: 1, tools: [], max_iterations: 4 },
+        memory: { configured: false, available: false, path: "./logs/agent_memory", auto_inject: true, top_k: 3 },
+        jobs: { available: false, counts: {} },
+        threads: { available: false, count: 0 },
+        nodes: { available: false, count: 0, items: [] },
+        node_runtimes: { available: false, items: [] },
+        running_models: {
+          available: false,
+          count: 0,
+          items: [],
+          error: "Runtime model status unavailable: models database schema is missing",
+        },
+        downloads: {
+          available: false,
+          active_count: 0,
+          error: "Download status unavailable: download history query failed",
+        },
+      }));
+    }
+    return Promise.resolve(okJson({}));
+  });
+  vi.stubGlobal("fetch", fetchMock);
+
+  render(<MemoryRouter><RuntimeOverviewPage /></MemoryRouter>);
+
+  expect(await screen.findByText("Runtime model status unavailable: models database schema is missing")).toBeInTheDocument();
+  expect(screen.getByText("Download status unavailable: download history query failed")).toBeInTheDocument();
+  expect(screen.getByText("Running Models")).toBeInTheDocument();
+});
