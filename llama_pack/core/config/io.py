@@ -53,6 +53,7 @@ GROUPED_FILE_FIELDS: dict[str, frozenset[str]] = {
             "downloads_db_url",
             "benchmarks_db_url",
             "models_db_url",
+            "settings_db_url",
             "controller_retention_days",
             "controller_archive_retention_days",
             "controller_archive_dir",

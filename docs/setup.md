@@ -48,10 +48,12 @@ scripts/start_controller.sh
 ```
 
 Then open the web UI and follow **Setup**. On first run, the Setup Assistant
-creates the first admin key before showing controller/agent guidance. The UI
-does not write config files or run migrations in this version; it generates
-script-backed commands and verifies backend, auth, mode, and node status after
-login.
+creates the first admin key before showing controller/agent guidance. The Setup
+UI can actively write `config.yaml` / `.llama_pack.env` during first-run setup.
+If either file already exists, Apply is blocked unless the operator checks
+**Allow setup to overwrite existing config.yaml or .llama_pack.env**.
+Successful and blocked apply attempts are recorded in the audit log without
+secret values.
 
 Script-first setup for a controller:
 

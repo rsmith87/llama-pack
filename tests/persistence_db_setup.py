@@ -30,6 +30,7 @@ from llama_pack.core.persistence.models.orchestration import (
     NodeLeaseOrm,
     SchemaMetaOrm,
 )
+from llama_pack.core.persistence.models.settings import SettingsEntryOrm
 
 
 TARGET_REVISIONS = {
@@ -40,6 +41,7 @@ TARGET_REVISIONS = {
     "downloads": "20260523_0001",
     "benchmarks": "20260612_0006",
     "models": "20260614_0002",
+    "settings": "20260617_0001",
 }
 LATEST_REVISION = TARGET_REVISIONS["chat_sessions"]
 
@@ -134,6 +136,16 @@ def prepare_controller_db(db_path: Path, revision: str = TARGET_REVISIONS["contr
     )
 
 
+def prepare_settings_db(db_path: Path, revision: str = TARGET_REVISIONS["settings"]) -> None:
+    _write_schema(
+        db_path,
+        [
+            SettingsEntryOrm.__table__,
+        ],
+        revision,
+    )
+
+
 def prepare_all_persistence_dbs(log_dir: Path, revision: str | None = None) -> None:
     state_dir = default_state_dir(load_config({"log_dir": str(log_dir)}))
     prepare_controller_db(state_dir / "controller_state.db", revision=revision or TARGET_REVISIONS["controller"])
@@ -143,3 +155,4 @@ def prepare_all_persistence_dbs(log_dir: Path, revision: str | None = None) -> N
     prepare_downloads_db(state_dir / "downloads.db", revision=revision or TARGET_REVISIONS["downloads"])
     prepare_benchmarks_db(state_dir / "benchmarks.db", revision=revision or TARGET_REVISIONS["benchmarks"])
     prepare_models_db(state_dir / "models.db", revision=revision or TARGET_REVISIONS["models"])
+    prepare_settings_db(state_dir / "settings.db", revision=revision or TARGET_REVISIONS["settings"])

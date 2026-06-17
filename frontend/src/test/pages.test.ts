@@ -17,6 +17,7 @@ describe("page route model", () => {
       "dashboard",
       "nodes",
       "controller-ops",
+      "models",
       "gguf-library",
       "hf-downloads",
       "hf-to-gguf",
@@ -41,6 +42,8 @@ describe("page route model", () => {
   it("resolves paths and falls back to dashboard", () => {
     expect(pageForPath("/").key).toBe("dashboard");
     expect(pageForPath("/ui/nodes").key).toBe("nodes");
+    expect(pageForPath("/ui/models").key).toBe("models");
+    expect(pageForPath("/ui/gguf-library").key).toBe("gguf-library");
     expect(pageForPath("/unknown").key).toBe("dashboard");
   });
 
@@ -65,7 +68,7 @@ describe("page route model", () => {
     }))).toEqual([
       { label: "Gateway", pages: ["chat", "api-keys", "audit"] },
       { label: "Operations", pages: ["dashboard", "nodes", "controller-ops"] },
-      { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization", "benchmarks"] },
+      { label: "Models", pages: ["models"] },
       { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals", "embeddings"] },
       { label: "Plugins", pages: ["plugins"] },
       { label: "System", pages: ["setup", "settings", "docs"] },
@@ -76,9 +79,27 @@ describe("page route model", () => {
     }))).toEqual([
       { label: "Gateway", pages: ["chat"] },
       { label: "Operations", pages: ["dashboard"] },
-      { label: "Models", pages: ["gguf-library", "hf-downloads", "hf-to-gguf", "quantization"] },
+      { label: "Models", pages: ["models"] },
       { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals", "embeddings"] },
       { label: "System", pages: ["setup", "settings", "docs"] },
     ]);
+  });
+
+  it("keeps model lifecycle routes addressable behind the primary Models entry", () => {
+    expect(pageForKey("models").secondaryNavigation?.map((item) => item.label)).toEqual([
+      "Overview",
+      "Library",
+      "Acquire",
+      "Convert",
+      "Quantize",
+      "Evaluate",
+    ]);
+    expect(pageForKey("gguf-library").hideFromPrimary).toBe(true);
+    expect(pageForKey("hf-downloads").label).toBe("Acquire");
+    expect(pageForKey("hf-to-gguf").label).toBe("Convert");
+    expect(pageForKey("quantization").label).toBe("Quantize");
+    expect(pageForKey("benchmarks").label).toBe("Evaluate");
+    expect(pagesForMode("agent").map((page) => page.key)).not.toContain("benchmarks");
+    expect(pageForPath("/ui/benchmarks").key).toBe("benchmarks");
   });
 });

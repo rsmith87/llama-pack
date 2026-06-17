@@ -1,10 +1,10 @@
 import "./styles.css";
-import type { ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 import type { LocalModel } from "../../types/models";
 import { Button, StatusBadge } from "../ui";
 import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
 import { modelName, statusTone } from "../../features/models";
-import { IoStar, IoStarOutline, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
+import { IoStar, IoStarOutline, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart, IoRefresh, IoLayers } from "react-icons/io5";
 
 /* ---------- helpers ---------- */
 
@@ -41,6 +41,48 @@ function strArray(value: unknown): string[] {
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string" && item.length > 0) : [];
 }
 
+function profileText(profile: Record<string, unknown>, key: string): string | null {
+  const value = profile[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function profileNumber(profile: Record<string, unknown>, key: string): number | null {
+  const value = profile[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function profileTitle(profile: Record<string, unknown>): string {
+  return profileText(profile, "label") || profileText(profile, "profile_key") || "Profile";
+}
+
+function profileMeta(profile: Record<string, unknown>): string[] {
+  const items: string[] = [];
+  const profileKey = profileText(profile, "profile_key");
+  const kind = profileText(profile, "kind");
+  const ctx = profileNumber(profile, "ctx");
+  const gpuLayers = profileNumber(profile, "gpu_layers");
+  if (profileKey) items.push(profileKey);
+  if (kind) items.push(kind);
+  if (ctx !== null) items.push(`ctx ${numberLabel(ctx)}`);
+  if (gpuLayers !== null) items.push(`${numberLabel(gpuLayers)} GPU layers`);
+  return items;
+}
+
+function profileTags(profile: Record<string, unknown>): string[] {
+  const items: string[] = [];
+  const resourceTier = profileText(profile, "resource_tier");
+  const kvCachePolicy = profileText(profile, "kv_cache_policy");
+  const costTier = profileText(profile, "cost_tier");
+  const strengths = strArray(profile.strengths);
+  const extraArgs = strArray(profile.extra_args);
+  if (resourceTier) items.push(resourceTier);
+  if (kvCachePolicy) items.push(kvCachePolicy);
+  if (costTier) items.push(costTier);
+  if (strengths.length > 0) items.push(strengths.join(", "));
+  if (extraArgs.length > 0) items.push(extraArgs.join(" "));
+  return items;
+}
+
 /* ---------- props ---------- */
 
 export type ModelCardProps = {
@@ -53,12 +95,16 @@ export type ModelCardProps = {
   /** Unique key for back-to-back actions. */
   actingModel?: string;
 
+  /** Optional suffix appended to action aria-labels. */
+  actionLabelSuffix?: string;
+
   // -- open / inspect --
   onOpen?: () => void;
 
   // -- lifecycle --
   onStart?: () => void;
   onStop?: () => void;
+  onRestart?: () => void;
 
   // -- actions --
   onChat?: () => void;
@@ -84,9 +130,11 @@ export function ModelCard({
   model,
   resolvedNode,
   actingModel = "",
+  actionLabelSuffix = "",
   onOpen,
   onStart,
   onStop,
+  onRestart,
   onChat,
   onBenchmark,
   onTransfer,
@@ -97,6 +145,8 @@ export function ModelCard({
   onDelete,
   children,
 }: ModelCardProps) {
+  const [profilesOpen, setProfilesOpen] = useState(false);
+  const profilesPanelId = useId();
   const raw = model as Record<string, unknown>;
   const name = modelName(model as Parameters<typeof modelName>[0]);
   const active = isActiveModel(model as Parameters<typeof isActiveModel>[0]);
@@ -137,7 +187,8 @@ export function ModelCard({
     })
     .filter((label) => label.length > 0);
 
-  const hasActions = Boolean(onStart || onStop || onChat || onBenchmark || onTransfer || onLogs || onAdd || onEdit || onDelete);
+  const hasActions = Boolean(profileRows.length > 0 || onStart || onStop || onRestart || onChat || onBenchmark || onTransfer || onLogs || onAdd || onEdit || onDelete);
+  const labelSuffix = actionLabelSuffix ? ` ${actionLabelSuffix}` : "";
 
   const details: Array<[string, string]> = [];
   if (port !== undefined) details.push(["Port", String(port)]);
@@ -156,7 +207,7 @@ export function ModelCard({
   }
   if (strengths.length > 0) details.push(["Strengths", strengths.join(", ")]);
   if (costTier) details.push(["Cost Tier", costTier]);
-  if (profileLabels.length > 0) details.push(["Profiles", profileLabels.join(", ")]);
+  if (profileLabels.length > 0) details.push(["Profiles", `${profileLabels.length} ${profileLabels.length === 1 ? "profile" : "profiles"}`]);
   if (deploymentLabels.length > 0) details.push(["Deployments", deploymentLabels.join(", ")]);
   if (fileId) details.push(["File ID", fileId]);
   if (fileDir) details.push(["Directory", fileDir]);
@@ -178,33 +229,50 @@ export function ModelCard({
           </Button>
         ) : null}
         {onStart ? (
-          <Button variant="success" onClick={onStart} disabled={actingModel === `start:${name}`} aria-label={`Start ${name}`}>
+          <Button variant="success" onClick={onStart} disabled={actingModel === `start:${name}`} aria-label={`Start ${name}${labelSuffix}`}>
             <IoPlaySharp />
           </Button>
         ) : null}
         {onStop ? (
-          <Button variant="danger" onClick={onStop} disabled={actingModel === `stop:${name}`} aria-label={`Stop ${name}`}>
+          <Button variant="danger" onClick={onStop} disabled={actingModel === `stop:${name}`} aria-label={`Stop ${name}${labelSuffix}`}>
             <IoStop />
           </Button>
         ) : null}
+        {onRestart ? (
+          <Button onClick={onRestart} disabled={actingModel === `restart:${name}`} aria-label={`Restart ${name}${labelSuffix}`}>
+            <IoRefresh />
+          </Button>
+        ) : null}
         {onChat ? (
-          <Button variant="warning" onClick={onChat} aria-label={`Chat with ${name}`}>
+          <Button variant="warning" onClick={onChat} aria-label={`Chat with ${name}${labelSuffix}`}>
             <IoChatbubbles />
           </Button>
         ) : null}
         {onBenchmark ? (
-          <Button type="button" onClick={onBenchmark} aria-label={`Benchmark ${name}`}>
+          <Button type="button" onClick={onBenchmark} aria-label={`Benchmark ${name}${labelSuffix}`}>
             <IoStatsChart />
           </Button>
         ) : null}
         {onTransfer ? (
-          <Button variant="success" onClick={onTransfer} aria-label={`Send ${name}`}>
+          <Button variant="success" onClick={onTransfer} aria-label={`Send ${name}${labelSuffix}`}>
             <IoSend />
           </Button>
         ) : null}
         {onLogs ? (
-          <Button type="button" onClick={onLogs} aria-label={`View logs for ${name}`}>
+          <Button type="button" onClick={onLogs} aria-label={`View logs for ${name}${labelSuffix}`}>
             <IoTerminal />
+          </Button>
+        ) : null}
+        {profileRows.length > 0 ? (
+          <Button
+            type="button"
+            variant="ghost"
+            aria-controls={profilesPanelId}
+            aria-expanded={profilesOpen}
+            aria-label={`${profilesOpen ? "Hide" : "Show"} profiles for ${name}`}
+            onClick={() => setProfilesOpen((open) => !open)}
+          >
+            <IoLayers />
           </Button>
         ) : null}
         {onDelete ? (
@@ -284,6 +352,29 @@ export function ModelCard({
       {children}
 
       {actions()}
+
+      {profileRows.length > 0 && profilesOpen ? (
+        <section id={profilesPanelId} className="model-profile-panel" aria-label={`Profiles for ${name}`}>
+          {profileRows.map((profile, index) => {
+            const meta = profileMeta(profile);
+            const tags = profileTags(profile);
+            const profileKey = profileText(profile, "profile_key") || String(index);
+            return (
+              <article className="model-profile-item" key={profileKey}>
+                <div>
+                  <strong>{profileTitle(profile)}</strong>
+                  {meta.length > 0 ? <span>{meta.join(" · ")}</span> : null}
+                </div>
+                {tags.length > 0 ? (
+                  <div className="model-profile-tags">
+                    {tags.map((tag) => <span key={tag}>{tag}</span>)}
+                  </div>
+                ) : null}
+              </article>
+            );
+          })}
+        </section>
+      ) : null}
     </article>
   );
 }

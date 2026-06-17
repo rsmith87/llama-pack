@@ -1,0 +1,56 @@
+.models-page {
+  display: grid;
+  gap: 16px;
+}
+
+.model-workflow-grid {
+  display: grid;
+  gap: 10px;
+}
+
+.model-workflow-card {
+  display: grid;
+  grid-template-columns: 34px 1fr;
+  gap: 12px;
+  align-items: start;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--ink);
+  text-decoration: none;
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+
+.model-workflow-card:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-soft);
+}
+
+.workflow-index {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--button);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-copy {
+  display: grid;
+  gap: 4px;
+}
+
+.workflow-copy strong {
+  font-size: 15px;
+}
+
+.workflow-copy span:last-child {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}

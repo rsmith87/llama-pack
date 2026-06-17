@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
@@ -44,8 +44,54 @@ function renderWithAuth(token = "admin-token") {
 
 function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> = {}) {
   return {
+    "/lm-api/v1/settings/runtime": () => okJson({
+      settings: {
+        controller_retention_days: 30,
+        controller_archive_retention_days: 90,
+        controller_archive_dir: "logs/archive",
+        routing_fanout_enabled: false,
+        routing_fanout_max: 2,
+        agent_worker_enabled: false,
+        agent_worker_poll_interval_seconds: 2,
+        agent_worker_max_jobs: 1,
+        agent_worker_labels: {},
+        agent_worker_capacity: {},
+        client_cors_origins: [],
+        agent_tools_enabled: false,
+        agent_tools_max_iterations: 4,
+        agent_tools_tool_timeout_seconds: 10,
+        agent_tools_safe_roots: [],
+      },
+      sources: {
+        controller_retention_days: "default",
+        controller_archive_retention_days: "default",
+        controller_archive_dir: "default",
+        routing_fanout_enabled: "default",
+        routing_fanout_max: "default",
+        agent_worker_enabled: "default",
+        agent_worker_poll_interval_seconds: "default",
+        agent_worker_max_jobs: "default",
+        agent_worker_labels: "default",
+        agent_worker_capacity: "default",
+        client_cors_origins: "default",
+        agent_tools_enabled: "default",
+        agent_tools_max_iterations: "default",
+        agent_tools_tool_timeout_seconds: "default",
+        agent_tools_safe_roots: "default",
+      },
+    }),
     "/lm-api/v1/settings/disks": () => okJson([]),
     "/lm-api/v1/settings/node-auth": () => okJson([]),
+    "/lm-api/v1/settings/tool-catalog": () => okJson({
+      enabled: false,
+      safe_roots: [],
+      tool_count: 0,
+      tools: [],
+      definitions: {},
+      profiles: {},
+      active_profile: null,
+      sources: {},
+    }),
     ...extra,
   };
 }
@@ -66,6 +112,7 @@ it("generates config and env exports from settings fields", async () => {
   renderWithAuth();
   await screen.findByText("admin (admin)");
   expect(screen.getByRole("heading", { name: "System Settings" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Config Tools" }));
   expect(screen.getByText(/Config Helper generates setup files/)).toBeInTheDocument();
   await user.selectOptions(screen.getByLabelText("Mode"), "agent");
   await user.clear(screen.getByLabelText("Controller URL"));
@@ -97,6 +144,7 @@ it("copies and downloads generated config utilities", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Config Tools" }));
   await user.click(screen.getByRole("button", { name: "Copy Config YAML" }));
   expect(await screen.findByText("Config YAML copied")).toBeInTheDocument();
 
@@ -121,14 +169,178 @@ it("generates helper keys and applies the first generated key", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Admin Keys" }));
+  await user.click(screen.getByRole("button", { name: "Access" }));
   await user.click(screen.getByRole("button", { name: "Generate with Script" }));
 
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/settings/api-keys/generate", expect.objectContaining({ method: "POST" })));
   expect(await screen.findByText(/llm_generated/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Apply First Key" }));
-  await user.click(screen.getByRole("button", { name: "Config Helper" }));
+  await user.click(screen.getByRole("button", { name: "Config Tools" }));
   expect(screen.getByLabelText("Controller API Key (Optional)")).toHaveValue("llm_generated");
+});
+
+it("shows the read-only tool catalog and inspector", async () => {
+  mockFetch(
+    [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
+    settingsRoutes({
+      "/lm-api/v1/settings/tool-catalog": () => okJson({
+        enabled: true,
+        safe_roots: ["/workspace"],
+        tool_count: 2,
+        definitions: {
+          read_project_file: {
+            type: "file_read_dynamic",
+            description: "Read a project file.",
+            path: "/workspace",
+          },
+          local_health: {
+            type: "http",
+            description: "Check local health.",
+            method: "GET",
+            url: "http://127.0.0.1:9137/health",
+          },
+        },
+        profiles: {
+          llama_pack: {
+            description: "Llama Pack workspace.",
+            safe_roots: ["/workspace"],
+            tools: ["read_project_file"],
+          },
+        },
+        active_profile: "llama_pack",
+        sources: {
+          read_project_file: "database",
+          local_health: "config",
+        },
+        tools: [
+          {
+            name: "read_project_file",
+            type: "file_read_dynamic",
+            description: "Read a project file.",
+            summary: { path: "/workspace" },
+            limits: { max_file_bytes: 524288 },
+            parameters: {
+              type: "object",
+              properties: { path: { type: "string", description: "Relative file path under the configured root." } },
+              required: ["path"],
+              additionalProperties: false,
+            },
+            safety: { status: "ok", message: "Path is under safe_roots." },
+          },
+          {
+            name: "local_health",
+            type: "http",
+            description: "Check local health.",
+            summary: { method: "GET", url: "http://127.0.0.1:9137/health" },
+            limits: { max_response_bytes: 65536 },
+            parameters: { type: "object", properties: {}, additionalProperties: false },
+            safety: { status: "not_applicable", message: "No filesystem path safety check required." },
+          },
+        ],
+      }),
+    }),
+  );
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Tool Catalog" }));
+
+  await waitFor(() => expect(screen.getAllByText("read_project_file").length).toBeGreaterThan(0));
+  expect(screen.getAllByText("file_read_dynamic").length).toBeGreaterThan(0);
+  expect(screen.getByText("2 configured tools")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Inspect local_health" }));
+  expect(screen.getByRole("heading", { name: "local_health" })).toBeInTheDocument();
+  expect(screen.getByText("http://127.0.0.1:9137/health")).toBeInTheDocument();
+  expect(screen.getByText(/No filesystem path safety check required/)).toBeInTheDocument();
+});
+
+it("edits and saves db-backed tool catalog profiles", async () => {
+  const savedPayloads: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, options?: RequestInit) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/settings/tool-catalog" && options?.method === "PATCH") {
+      savedPayloads.push(JSON.parse(String(options.body)));
+      return Promise.resolve(okJson({
+        enabled: true,
+        safe_roots: ["/workspace"],
+        tool_count: 1,
+        definitions: {
+          read_project_file: {
+            type: "file_read_dynamic",
+            description: "Read project file.",
+            path: "/workspace",
+          },
+        },
+        profiles: {
+          llama_pack: {
+            description: "Llama Pack workspace.",
+            safe_roots: ["/workspace"],
+            tools: ["read_project_file"],
+          },
+        },
+        active_profile: "llama_pack",
+        sources: { read_project_file: "database" },
+        tools: [
+          {
+            name: "read_project_file",
+            type: "file_read_dynamic",
+            description: "Read project file.",
+            summary: { path: "/workspace" },
+            limits: { max_file_bytes: 524288 },
+            parameters: { type: "object", properties: {}, additionalProperties: false },
+            safety: { status: "ok", message: "Path is under safe_roots." },
+          },
+        ],
+      }) as Response);
+    }
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson(SETUP_STATUS_RESPONSE) as Response);
+    if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "admin", role: "admin", created_at: "now" }) as Response);
+    if (url === "/lm-api/v1/settings/disks" || url === "/lm-api/v1/settings/node-auth") return Promise.resolve(okJson([]) as Response);
+    if (url === "/lm-api/v1/settings/runtime") return Promise.resolve(settingsRoutes()["/lm-api/v1/settings/runtime"]() as Response);
+    if (url === "/lm-api/v1/settings/tool-catalog") {
+      return Promise.resolve(okJson({
+        enabled: true,
+        safe_roots: [],
+        tool_count: 0,
+        tools: [],
+        definitions: {},
+        profiles: {},
+        active_profile: null,
+        sources: {},
+      }) as Response);
+    }
+    return Promise.resolve(okJson({}) as Response);
+  }));
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Tool Catalog" }));
+  fireEvent.change(screen.getByLabelText("Tool Definitions JSON"), { target: { value: JSON.stringify({
+    read_project_file: {
+      type: "file_read_dynamic",
+      description: "Read project file.",
+      path: "/workspace",
+    },
+  }) } });
+  fireEvent.change(screen.getByLabelText("Tool Profiles JSON"), { target: { value: JSON.stringify({
+    llama_pack: {
+      description: "Llama Pack workspace.",
+      safe_roots: ["/workspace"],
+      tools: ["read_project_file"],
+    },
+  }) } });
+  await user.clear(screen.getByLabelText("Active Tool Profile"));
+  await user.type(screen.getByLabelText("Active Tool Profile"), "llama_pack");
+  await user.click(screen.getByRole("button", { name: "Save Tool Catalog" }));
+
+  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({
+    active_profile: "llama_pack",
+    tools: expect.objectContaining({ read_project_file: expect.objectContaining({ type: "file_read_dynamic" }) }),
+  })));
+  expect(await screen.findByText("Tool catalog saved")).toBeInTheDocument();
+  expect(screen.getByText("1 configured tools")).toBeInTheDocument();
 });
 
 it("creates and revokes admin auth keys", async () => {
@@ -144,7 +356,7 @@ it("creates and revokes admin auth keys", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Admin Keys" }));
+  await user.click(screen.getByRole("button", { name: "Access" }));
   await user.click(screen.getByRole("button", { name: "Refresh Auth Keys" }));
   await user.type(screen.getByLabelText("Key username"), "service");
   await user.click(screen.getByRole("button", { name: "Create Auth Key" }));
@@ -214,7 +426,7 @@ it("renders configured model disks in settings", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Disks" }));
+  await user.click(screen.getByRole("button", { name: "Storage" }));
 
   expect(await screen.findByText("agent-a")).toBeInTheDocument();
   expect(screen.getByText("agent-b")).toBeInTheDocument();
@@ -234,8 +446,9 @@ it("renders effective node auth diagnostics in settings", async () => {
   mockFetch(
     [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
     {
-      "/lm-api/v1/settings/disks": () => okJson([]),
-      "/lm-api/v1/settings/node-auth": () => okJson([
+      ...settingsRoutes({
+        "/lm-api/v1/settings/disks": () => okJson([]),
+        "/lm-api/v1/settings/node-auth": () => okJson([
         {
           node_name: "pi",
           effective_url: "https://pi-override.local",
@@ -256,18 +469,270 @@ it("renders effective node auth diagnostics in settings", async () => {
           override_present: false,
           verify_tls: true,
         },
-      ]),
+        ]),
+      }),
     },
   );
   const user = userEvent.setup();
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Generated Files" }));
+  await user.click(screen.getByRole("button", { name: "Config Tools" }));
 
   expect(await screen.findByText("Node Auth Diagnostics")).toBeInTheDocument();
   expect(screen.getByText("pi")).toBeInTheDocument();
   expect(screen.getByText("https://pi-override.local")).toBeInTheDocument();
   expect(screen.getByText("config")).toBeInTheDocument();
   expect(screen.getByText("missing")).toBeInTheDocument();
+});
+
+it("edits and saves db-backed runtime settings", async () => {
+  const savedPayloads: unknown[] = [];
+  mockFetch(
+    [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
+    settingsRoutes({
+      "/lm-api/v1/settings/runtime": () => okJson({
+        settings: {
+          controller_retention_days: 45,
+          controller_archive_retention_days: 120,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: true,
+          routing_fanout_max: 3,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 4,
+          agent_worker_max_jobs: 2,
+          agent_worker_labels: { gpu: "metal" },
+          agent_worker_capacity: { vram_gb: 48 },
+          client_cors_origins: ["http://localhost:5173"],
+          agent_tools_enabled: false,
+          agent_tools_max_iterations: 4,
+          agent_tools_tool_timeout_seconds: 10,
+          agent_tools_safe_roots: [],
+        },
+        sources: {
+          controller_retention_days: "database",
+          controller_archive_retention_days: "database",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "database",
+          routing_fanout_max: "database",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "database",
+          agent_worker_max_jobs: "database",
+          agent_worker_labels: "database",
+          agent_worker_capacity: "database",
+          client_cors_origins: "database",
+          agent_tools_enabled: "default",
+          agent_tools_max_iterations: "default",
+          agent_tools_tool_timeout_seconds: "default",
+          agent_tools_safe_roots: "default",
+        },
+      }),
+    }),
+  );
+  vi.mocked(fetch).mockImplementation((input: RequestInfo | URL, options?: RequestInit) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/settings/runtime" && options?.method === "PATCH") {
+      savedPayloads.push(JSON.parse(String(options.body)));
+      return Promise.resolve(okJson({
+        settings: {
+          controller_retention_days: 45,
+          controller_archive_retention_days: 120,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: true,
+          routing_fanout_max: 6,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 4,
+          agent_worker_max_jobs: 2,
+          agent_worker_labels: { gpu: "metal" },
+          agent_worker_capacity: { vram_gb: 48 },
+          client_cors_origins: ["http://localhost:5173"],
+          agent_tools_enabled: false,
+          agent_tools_max_iterations: 4,
+          agent_tools_tool_timeout_seconds: 10,
+          agent_tools_safe_roots: [],
+        },
+        sources: {
+          controller_retention_days: "database",
+          controller_archive_retention_days: "database",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "database",
+          routing_fanout_max: "database",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "database",
+          agent_worker_max_jobs: "database",
+          agent_worker_labels: "database",
+          agent_worker_capacity: "database",
+          client_cors_origins: "database",
+          agent_tools_enabled: "default",
+          agent_tools_max_iterations: "default",
+          agent_tools_tool_timeout_seconds: "default",
+          agent_tools_safe_roots: "default",
+        },
+      }) as Response);
+    }
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson(SETUP_STATUS_RESPONSE) as Response);
+    if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "admin", role: "admin", created_at: "now" }) as Response);
+    if (url === "/lm-api/v1/settings/disks" || url === "/lm-api/v1/settings/node-auth") return Promise.resolve(okJson([]) as Response);
+    if (url === "/lm-api/v1/settings/runtime") {
+      return Promise.resolve(okJson({
+        settings: {
+          controller_retention_days: 45,
+          controller_archive_retention_days: 120,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: true,
+          routing_fanout_max: 3,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 4,
+          agent_worker_max_jobs: 2,
+          agent_worker_labels: { gpu: "metal" },
+          agent_worker_capacity: { vram_gb: 48 },
+          client_cors_origins: ["http://localhost:5173"],
+          agent_tools_enabled: false,
+          agent_tools_max_iterations: 4,
+          agent_tools_tool_timeout_seconds: 10,
+          agent_tools_safe_roots: [],
+        },
+        sources: {
+          controller_retention_days: "database",
+          controller_archive_retention_days: "database",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "database",
+          routing_fanout_max: "database",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "database",
+          agent_worker_max_jobs: "database",
+          agent_worker_labels: "database",
+          agent_worker_capacity: "database",
+          client_cors_origins: "database",
+          agent_tools_enabled: "default",
+          agent_tools_max_iterations: "default",
+          agent_tools_tool_timeout_seconds: "default",
+          agent_tools_safe_roots: "default",
+        },
+      }) as Response);
+    }
+    return Promise.resolve(okJson({}) as Response);
+  });
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  expect(await screen.findByRole("heading", { name: "Runtime Settings" })).toBeInTheDocument();
+  expect(screen.getAllByText("database").length).toBeGreaterThan(0);
+  await user.clear(screen.getByLabelText("Routing Fanout Max"));
+  await user.type(screen.getByLabelText("Routing Fanout Max"), "6");
+  await user.click(screen.getByRole("button", { name: "Save Runtime Settings" }));
+
+  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({ routing_fanout_max: 6 })));
+  expect(await screen.findByText("Runtime settings saved")).toBeInTheDocument();
+});
+
+it("edits and saves chat tool settings", async () => {
+  const savedPayloads: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, options?: RequestInit) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/settings/runtime" && options?.method === "PATCH") {
+      savedPayloads.push(JSON.parse(String(options.body)));
+      return Promise.resolve(okJson({
+        settings: {
+          controller_retention_days: 30,
+          controller_archive_retention_days: 90,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: false,
+          routing_fanout_max: 2,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 2,
+          agent_worker_max_jobs: 1,
+          agent_worker_labels: {},
+          agent_worker_capacity: {},
+          client_cors_origins: [],
+          agent_tools_enabled: true,
+          agent_tools_max_iterations: 9,
+          agent_tools_tool_timeout_seconds: 18,
+          agent_tools_safe_roots: ["/tmp/tools", "/var/log"],
+        },
+        sources: {
+          controller_retention_days: "default",
+          controller_archive_retention_days: "default",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "default",
+          routing_fanout_max: "default",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "default",
+          agent_worker_max_jobs: "default",
+          agent_worker_labels: "default",
+          agent_worker_capacity: "default",
+          client_cors_origins: "default",
+          agent_tools_enabled: "database",
+          agent_tools_max_iterations: "database",
+          agent_tools_tool_timeout_seconds: "database",
+          agent_tools_safe_roots: "database",
+        },
+      }) as Response);
+    }
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson(SETUP_STATUS_RESPONSE) as Response);
+    if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "admin", role: "admin", created_at: "now" }) as Response);
+    if (url === "/lm-api/v1/settings/disks" || url === "/lm-api/v1/settings/node-auth") return Promise.resolve(okJson([]) as Response);
+    if (url === "/lm-api/v1/settings/runtime") {
+      return Promise.resolve(okJson({
+        settings: {
+          controller_retention_days: 30,
+          controller_archive_retention_days: 90,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: false,
+          routing_fanout_max: 2,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 2,
+          agent_worker_max_jobs: 1,
+          agent_worker_labels: {},
+          agent_worker_capacity: {},
+          client_cors_origins: [],
+          agent_tools_enabled: false,
+          agent_tools_max_iterations: 4,
+          agent_tools_tool_timeout_seconds: 10,
+          agent_tools_safe_roots: ["/tmp/tools"],
+        },
+        sources: {
+          controller_retention_days: "default",
+          controller_archive_retention_days: "default",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "default",
+          routing_fanout_max: "default",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "default",
+          agent_worker_max_jobs: "default",
+          agent_worker_labels: "default",
+          agent_worker_capacity: "default",
+          client_cors_origins: "default",
+          agent_tools_enabled: "config",
+          agent_tools_max_iterations: "config",
+          agent_tools_tool_timeout_seconds: "config",
+          agent_tools_safe_roots: "config",
+        },
+      }) as Response);
+    }
+    return Promise.resolve(okJson({}) as Response);
+  }));
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Chat Tools" }));
+  expect(await screen.findByRole("heading", { name: "Chat Tools" })).toBeInTheDocument();
+  await user.click(screen.getByLabelText("Agent Tools Enabled"));
+  await user.clear(screen.getByLabelText("Agent Tools Max Iterations"));
+  await user.type(screen.getByLabelText("Agent Tools Max Iterations"), "9");
+  await user.clear(screen.getByLabelText("Agent Tools Timeout Seconds"));
+  await user.type(screen.getByLabelText("Agent Tools Timeout Seconds"), "18");
+  await user.clear(screen.getByLabelText("Agent Tools Safe Roots"));
+  await user.type(screen.getByLabelText("Agent Tools Safe Roots"), "/tmp/tools\n/var/log");
+  await user.click(screen.getByRole("button", { name: "Save Chat Tools" }));
+
+  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({
+    agent_tools_enabled: true,
+    agent_tools_max_iterations: 9,
+    agent_tools_tool_timeout_seconds: 18,
+    agent_tools_safe_roots: ["/tmp/tools", "/var/log"],
+  })));
+  expect(await screen.findByText("Chat tool settings saved")).toBeInTheDocument();
 });

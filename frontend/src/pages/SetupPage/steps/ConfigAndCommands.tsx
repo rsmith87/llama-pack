@@ -1,30 +1,21 @@
 import { useState } from "react";
+import { applySetup } from "../../../api/setup";
 import { Button } from "../../../components/ui";
-import {
-  generateCommands,
-  generateConfig,
-} from "../../../features/setup/generateConfig";
+import { generateCommands } from "../../../features/setup/generateConfig";
+import { useAuthSession } from "../../../features/auth/authSession";
 import type { WizardNav } from "../../../features/setup/useOnboardingWizard";
-
-type Tab = "config" | "commands" | "reg-key";
-
-function downloadConfig(yaml: string) {
-  const blob = new Blob([yaml], { type: "text/yaml" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "config.yaml";
-  a.click();
-  URL.revokeObjectURL(url);
-}
+import type { ActiveSetupRequest, ActiveSetupResult } from "../../../types";
 
 export function ConfigAndCommands({ nav }: { nav: WizardNav }) {
   const { state } = nav;
+  const { acceptSession } = useAuthSession();
   const isController = state.mode === "controller";
-  const [tab, setTab] = useState<Tab>("config");
   const [copied, setCopied] = useState(false);
+  const [allowOverwrite, setAllowOverwrite] = useState(false);
+  const [applying, setApplying] = useState(false);
+  const [applyResult, setApplyResult] = useState<ActiveSetupResult | null>(null);
+  const [applyError, setApplyError] = useState("");
 
-  const yaml = generateConfig(state);
   const commands = generateCommands(state);
   const regKey = state.controllerIdentity.controller_registration_key;
 
@@ -34,90 +25,155 @@ export function ConfigAndCommands({ nav }: { nav: WizardNav }) {
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function buildActiveSetupRequest(): ActiveSetupRequest {
+    if (state.mode === "controller") {
+      return {
+        mode: "controller",
+        config_path: "config.yaml",
+        env_path: ".llama_pack.env",
+        overwrite_existing: allowOverwrite,
+        inputs: {
+          controller: {
+            log_dir: state.controllerIdentity.log_dir,
+            controller_registration_key: state.controllerIdentity.controller_registration_key,
+            node_heartbeat_timeout_seconds: Number(state.controllerIdentity.node_heartbeat_timeout_seconds || 90),
+            controller_instance_id: state.controllerIdentity.controller_instance_id || "local-controller",
+          },
+        },
+      };
+    }
+    return {
+      mode: state.mode,
+      config_path: state.mode === "agent" ? "agent.config.yaml" : "config.yaml",
+      env_path: ".llama_pack.env",
+      overwrite_existing: allowOverwrite,
+      inputs: {
+        agent: {
+          controller_url: state.agentConnection.controller_url,
+          node_name: state.agentConnection.node_name,
+          agent_url: state.agentConnection.agent_url,
+          agent_api_key: state.agentConnection.agent_api_key,
+          controller_registration_key_outbound: state.agentConnection.controller_registration_key_outbound,
+          llama_server_bin: state.agentRuntimePaths.llama_server_bin,
+          llama_cpp_dir: state.agentRuntimePaths.llama_cpp_dir,
+          python_bin: state.agentRuntimePaths.python_bin,
+          hf_models_dir: state.agentRuntimePaths.hf_models_dir,
+          log_dir: state.agentRuntimePaths.log_dir,
+        },
+      },
+    };
+  }
+
+  function parseApplyError(err: unknown): string {
+    if (!(err instanceof Error)) return "Setup apply failed";
+    const jsonStart = err.message.indexOf("{");
+    if (jsonStart >= 0) {
+      try {
+        const parsed = JSON.parse(err.message.slice(jsonStart)) as Partial<ActiveSetupResult>;
+        return parsed.message || err.message;
+      } catch {
+        return err.message;
+      }
+    }
+    return err.message;
+  }
+
+  async function handleApply() {
+    setApplying(true);
+    setApplyError("");
+    setApplyResult(null);
+    try {
+      const result = await applySetup(buildActiveSetupRequest());
+      if (
+        result.admin_bootstrap?.created &&
+        result.admin_bootstrap.token &&
+        result.admin_bootstrap.username &&
+        result.admin_bootstrap.role
+      ) {
+        acceptSession({
+          token: result.admin_bootstrap.token,
+          username: result.admin_bootstrap.username,
+          role: result.admin_bootstrap.role,
+        });
+      }
+      setApplyResult(result);
+    } catch (err) {
+      setApplyError(parseApplyError(err));
+    } finally {
+      setApplying(false);
+    }
+  }
+
+  const configFileName = state.mode === "agent" ? "agent.config.yaml" : "config.yaml";
+
   return (
     <div className="wizard-step">
       <p className="wizard-step-desc">
-        Your configuration is ready. Copy or download{" "}
-        <code>config.yaml</code> and place it in the project root, then run the
-        setup commands.
+        Apply setup from the UI. Generated commands are kept as a fallback reference.
       </p>
 
-      <div className="wizard-tabs" role="tablist">
-        <button
-          role="tab"
-          aria-selected={tab === "config"}
-          className={`wizard-tab-btn${tab === "config" ? " active" : ""}`}
-          onClick={() => setTab("config")}
-        >
-          Config
-        </button>
-        <button
-          role="tab"
-          aria-selected={tab === "commands"}
-          className={`wizard-tab-btn${tab === "commands" ? " active" : ""}`}
-          onClick={() => setTab("commands")}
-        >
-          Commands
-        </button>
-        {isController ? (
-          <button
-            role="tab"
-            aria-selected={tab === "reg-key"}
-            className={`wizard-tab-btn${tab === "reg-key" ? " active" : ""}`}
-            onClick={() => setTab("reg-key")}
-          >
-            Registration Key
-          </button>
+      <div className="wizard-apply-panel">
+        <h4>Apply setup</h4>
+        <p className="wizard-step-desc">
+          The backend will write <code>{configFileName}</code> and <code>.llama_pack.env</code>.
+        </p>
+        <label className="wizard-checkbox-row">
+          <input
+            type="checkbox"
+            checked={allowOverwrite}
+            onChange={(event) => setAllowOverwrite(event.target.checked)}
+          />
+          <span>Allow setup to overwrite existing config.yaml or .llama_pack.env</span>
+        </label>
+        <Button variant="primary" onClick={() => void handleApply()} disabled={applying}>
+          {applying ? "Applying..." : "Apply Setup"}
+        </Button>
+        {applyError ? <p className="wizard-validation-error">{applyError}</p> : null}
+        {applyResult ? (
+          <div className={`wizard-apply-result ${applyResult.ok ? "success" : "blocked"}`}>
+            <p>{applyResult.message}</p>
+            {applyResult.existing_files.length ? <p>Existing files: {applyResult.existing_files.join(", ")}</p> : null}
+            {applyResult.backup_files.length ? <p>Backups: {applyResult.backup_files.join(", ")}</p> : null}
+            {applyResult.actions.length ? (
+              <ul className="wizard-apply-actions" aria-label="Setup actions">
+                {applyResult.actions.map((action) => (
+                  <li key={action.kind}>
+                    <span className={`wizard-action-status ${action.status}`}>{action.status}</span>
+                    <span>{action.detail}</span>
+                    {action.command ? <code>{action.command}</code> : null}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {applyResult.admin_bootstrap?.created && applyResult.admin_bootstrap.key ? (
+              <div className="wizard-apply-admin-key">
+                <p>Admin key created. Copy it now - it will not be shown again.</p>
+                <pre className="wizard-code-block wizard-secret">{applyResult.admin_bootstrap.key}</pre>
+                <Button variant="ghost" size="sm" onClick={() => copyText(applyResult.admin_bootstrap?.key || "")}>
+                  {copied ? "Copied!" : "Copy admin key"}
+                </Button>
+              </div>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
-      {tab === "config" ? (
-        <div className="wizard-tab-content">
-          <pre className="wizard-code-block">{yaml}</pre>
-          <div className="wizard-config-actions">
-            <Button variant="primary" onClick={() => downloadConfig(yaml)}>
-              Download config.yaml
-            </Button>
-            <Button variant="ghost" onClick={() => copyText(yaml)}>
-              {copied ? "Copied!" : "Copy to clipboard"}
-            </Button>
-          </div>
-        </div>
-      ) : null}
+      <section className="wizard-reference-panel" aria-label="Command reference">
+        <h4>Command reference</h4>
+        <pre className="wizard-code-block">{commands}</pre>
+      </section>
 
-      {tab === "commands" ? (
-        <div className="wizard-tab-content">
-          <pre className="wizard-code-block">{commands}</pre>
-          <div className="wizard-config-actions">
-            <Button variant="ghost" onClick={() => copyText(commands)}>
-              {copied ? "Copied!" : "Copy to clipboard"}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      {tab === "reg-key" && isController ? (
-        <div className="wizard-tab-content">
+      {isController && regKey ? (
+        <section className="wizard-reference-panel" aria-label="Registration key reference">
+          <h4>Registration key reference</h4>
           <p className="wizard-step-desc">
-            Share this key with every agent that needs to register with this
-            controller. Store it securely — treat it like a password.
+            Share this key with agents that need to register with this controller.
           </p>
-          {regKey ? (
-            <>
-              <pre className="wizard-code-block wizard-secret">{regKey}</pre>
-              <div className="wizard-config-actions">
-                <Button variant="ghost" onClick={() => copyText(regKey)}>
-                  {copied ? "Copied!" : "Copy key"}
-                </Button>
-              </div>
-            </>
-          ) : (
-            <p className="wizard-step-desc">
-              No registration key was set. Go back to Controller Identity to
-              generate one.
-            </p>
-          )}
-        </div>
+          <pre className="wizard-code-block wizard-secret">{regKey}</pre>
+          <Button variant="ghost" size="sm" onClick={() => copyText(regKey)}>
+            {copied ? "Copied!" : "Copy key"}
+          </Button>
+        </section>
       ) : null}
     </div>
   );

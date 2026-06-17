@@ -68,11 +68,14 @@ from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
 from llama_pack.core.persistence.db_infra import default_state_dir, resolve_persistence_urls, sqlite_path_from_url
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
+from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
+from llama_pack.core.settings.runtime import RuntimeSettingsService
 from llama_pack.core.benchmarks.runner import BenchmarkRunner
 from llama_pack.core.app.auth_policy import (
     is_external_key_forbidden,
     is_test_chat_key_forbidden,
     is_viewer_forbidden,
+    should_allow_first_run_setup,
     should_bypass_middleware,
     should_enforce_agent_key,
     should_validate_ui_session,
@@ -244,6 +247,10 @@ def _configure_app_state(
     chat_stream_request: Callable[[str, dict[str, Any]], AsyncIterator[bytes]] | None,
     heartbeat_request: Callable[[str, str, dict[str, Any] | None], Awaitable[dict[str, Any]]] | None,
 ) -> None:
+    auth_urls = resolve_persistence_urls(app_config)
+    app.state.settings_store = SettingsStoreOrm(db_url=auth_urls.settings)
+    app.state.runtime_settings_service = RuntimeSettingsService(config=app_config, store=app.state.settings_store)
+    app_config = app.state.runtime_settings_service.effective_config()
     app.state.config = app_config
     app.state.plugin_registry = load_plugins(app_config)
     persistent_config = app_config.config_source not in {"(defaults)", "(in-memory)"}
@@ -256,7 +263,6 @@ def _configure_app_state(
     )
     app.state.node_registry = NodeRegistry(app_config, request=controller_request, store=store)
     app.state.orchestrator = _build_orchestrator(app_config)
-    auth_urls = resolve_persistence_urls(app_config)
     app.state.chat_session_store = ChatSessionStoreOrm(db_url=auth_urls.chat_sessions)
     app.state.model_download_store = ModelDownloadStoreOrm(db_url=auth_urls.downloads)
     try:
@@ -474,6 +480,8 @@ def _register_middleware(app: FastAPI) -> None:
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})
             return await call_next(request)
 
+        if not auth_enabled and should_allow_first_run_setup(path, method):
+            return await call_next(request)
         if not auth_enabled:
             return JSONResponse(status_code=401, content={"detail": "Auth bootstrap required"})
         if not should_enforce_agent_key(app.state.config.mode, configured, path):

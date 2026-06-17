@@ -97,6 +97,7 @@ export function ChatPage() {
   const [selectedSessionId, setSelectedSessionId] = useState(() => localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
   const [sessionName, setSessionName] = useState("");
   const abortRef = useRef<AbortController | null>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
 
   async function refreshModels() {
     setError("");
@@ -143,6 +144,12 @@ export function ChatPage() {
       abortRef.current?.abort();
     };
   }, []);
+
+  useEffect(() => {
+    const el = transcriptRef.current;
+    if (!el) return;
+    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+  }, [messages]);
 
   function updateAdvanced<K extends keyof AdvancedDefaults>(key: K, value: AdvancedDefaults[K]) {
     setAdvanced((current) => ({ ...current, [key]: value }));
@@ -698,7 +705,7 @@ export function ChatPage() {
           </Panel>
 
           <Panel title="Transcript" eyebrow="Streaming response" className="chat-workbench-panel">
-            <div className="chat-transcript" aria-live="polite">
+            <div ref={transcriptRef} className="chat-transcript" aria-live="polite">
               {messages.length ? messages.map((message, index) => (
                 <article className={`chat-bubble chat-bubble-${message.role}`} key={`${message.role}-${index}`}>
                   <span className="chat-role">{message.role}</span>

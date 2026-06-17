@@ -1433,6 +1433,255 @@ def test_settings_disks_route_aggregates_controller_agent_disks(tmp_path):
     ]
 
 
+def test_settings_runtime_route_returns_effective_document(tmp_path):
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "routing_fanout_max": 3,
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/settings/runtime")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["settings"]["routing_fanout_max"] == 3
+    assert payload["sources"]["routing_fanout_max"] == "config"
+
+
+def test_settings_runtime_patch_requires_admin_ui_session(tmp_path):
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.patch("/lm-api/v1/settings/runtime", json={"routing_fanout_max": 4})
+
+    assert response.status_code == 401
+
+
+def test_settings_runtime_patch_persists_database_value(tmp_path):
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs"), "routing_fanout_max": 2}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {
+        "username": "admin-user",
+        "role": "admin",
+    }
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/runtime",
+        json={"routing_fanout_max": 5, "agent_worker_labels": {"gpu": "metal"}},
+        headers={"X-UI-Session": "admin-token"},
+    )
+    reloaded = client.get("/lm-api/v1/settings/runtime")
+
+    assert response.status_code == 200
+    assert response.json()["settings"]["routing_fanout_max"] == 5
+    assert response.json()["sources"]["routing_fanout_max"] == "database"
+    assert reloaded.json()["settings"]["agent_worker_labels"] == {"gpu": "metal"}
+
+
+def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "agent_tools": {
+                    "enabled": False,
+                    "max_iterations": 4,
+                    "tool_timeout_seconds": 10.0,
+                    "safe_roots": [str(tmp_path)],
+                    "tools": {},
+                },
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {"username": "admin-user", "role": "admin"}
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/runtime",
+        json={
+            "agent_tools_enabled": True,
+            "agent_tools_max_iterations": 6,
+            "agent_tools_tool_timeout_seconds": 15.5,
+            "agent_tools_safe_roots": [str(tmp_path / "workspace")],
+        },
+        headers={"X-UI-Session": "admin-token"},
+    )
+    reloaded = client.get("/lm-api/v1/settings/runtime")
+
+    assert response.status_code == 200
+    assert response.json()["settings"]["agent_tools_enabled"] is True
+    assert response.json()["sources"]["agent_tools_enabled"] == "database"
+    assert reloaded.json()["settings"]["agent_tools_safe_roots"] == [str(tmp_path / "workspace")]
+
+
+def test_settings_tool_catalog_lists_effective_agent_tools(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "agent_tools": {
+                    "enabled": True,
+                    "max_iterations": 4,
+                    "tool_timeout_seconds": 10.0,
+                    "safe_roots": [str(workspace)],
+                    "tools": {
+                        "read_project_file": {
+                            "type": "file_read_dynamic",
+                            "description": "Read a project file.",
+                            "path": str(workspace),
+                        },
+                        "local_health": {
+                            "type": "http",
+                            "description": "Check local health.",
+                            "method": "GET",
+                            "url": "http://127.0.0.1:9137/health",
+                            "allowed_domains": ["127.0.0.1"],
+                        },
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/settings/tool-catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["enabled"] is True
+    assert payload["tool_count"] == 2
+    assert payload["safe_roots"] == [str(workspace)]
+    read_tool = next(tool for tool in payload["tools"] if tool["name"] == "read_project_file")
+    assert read_tool["type"] == "file_read_dynamic"
+    assert read_tool["description"] == "Read a project file."
+    assert read_tool["summary"]["path"] == str(workspace)
+    assert read_tool["safety"]["status"] == "ok"
+    assert read_tool["parameters"]["required"] == ["path"]
+    health_tool = next(tool for tool in payload["tools"] if tool["name"] == "local_health")
+    assert health_tool["summary"]["url"] == "http://127.0.0.1:9137/health"
+    assert health_tool["safety"]["status"] == "not_applicable"
+
+
+def test_settings_tool_catalog_patch_persists_database_profile(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "agent_tools": {
+                    "enabled": True,
+                    "safe_roots": [str(tmp_path)],
+                    "tools": {
+                        "config_status": {
+                            "type": "shell",
+                            "description": "Config status.",
+                            "command": ["printf", "ok"],
+                        }
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {"username": "admin-user", "role": "admin"}
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/tool-catalog",
+        json={
+            "tools": {
+                "read_project_file": {
+                    "type": "file_read_dynamic",
+                    "description": "Read project file.",
+                    "path": str(workspace),
+                }
+            },
+            "profiles": {
+                "llama_pack": {
+                    "description": "Llama Pack workspace.",
+                    "safe_roots": [str(workspace)],
+                    "tools": ["read_project_file"],
+                }
+            },
+            "active_profile": "llama_pack",
+        },
+        headers={"X-UI-Session": "admin-token"},
+    )
+    reloaded = client.get("/lm-api/v1/settings/tool-catalog")
+
+    assert response.status_code == 200
+    assert response.json()["active_profile"] == "llama_pack"
+    assert response.json()["profiles"]["llama_pack"]["tools"] == ["read_project_file"]
+    assert reloaded.json()["tool_count"] == 1
+    assert reloaded.json()["tools"][0]["name"] == "read_project_file"
+    assert app.state.config.agent_tools.safe_roots == [workspace]
+
+
+def test_settings_tool_catalog_patch_requires_admin_ui_session(tmp_path):
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.patch("/lm-api/v1/settings/tool-catalog", json={"active_profile": None})
+
+    assert response.status_code == 401
+
+
+def test_settings_runtime_patch_rejects_unsupported_key(tmp_path):
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {"username": "admin-user", "role": "admin"}
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/runtime",
+        json={"mode": "controller"},
+        headers={"X-UI-Session": "admin-token"},
+    )
+
+    assert response.status_code == 422
+
+
 def test_cancel_download_route_returns_updated_record(tmp_path):
     app = create_app(
         config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),

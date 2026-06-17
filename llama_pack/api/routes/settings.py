@@ -8,11 +8,14 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from llama_pack.api.dependencies import get_config
+from llama_pack.api.dependencies import get_config, get_runtime_settings_service
+from llama_pack.api.routes.auth.common import require_admin_session
+from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.downloads import DOWNLOAD_DISK_HEADROOM_BYTES
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.api.dependencies import get_node_registry
+from llama_pack.core.settings.runtime import AgentToolCatalogPatch, RuntimeSettingsDocument, RuntimeSettingsPatch, RuntimeSettingsService, UnsupportedRuntimeSettingError
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
@@ -51,6 +54,32 @@ class NodeAuthInfo(BaseModel):
     override_api_key_present: bool
     override_present: bool
     verify_tls: bool
+
+
+class ToolCatalogSafety(BaseModel):
+    status: str
+    message: str
+
+
+class ToolCatalogItem(BaseModel):
+    name: str
+    type: str
+    description: str
+    summary: dict[str, object]
+    limits: dict[str, object]
+    parameters: dict[str, object]
+    safety: ToolCatalogSafety
+
+
+class ToolCatalogResponse(BaseModel):
+    enabled: bool
+    safe_roots: list[str]
+    tool_count: int
+    tools: list[ToolCatalogItem]
+    definitions: dict[str, dict[str, object]]
+    profiles: dict[str, dict[str, object]]
+    active_profile: str | None
+    sources: dict[str, str]
 
 
 @router.post("/api-keys/generate")
@@ -104,6 +133,79 @@ async def list_model_disks(
 @router.get("/node-auth", response_model=list[NodeAuthInfo])
 def list_node_auth(registry: NodeRegistry = Depends(get_node_registry)) -> list[NodeAuthInfo]:
     return [NodeAuthInfo(**item) for item in registry.node_auth_diagnostics()]
+
+
+@router.get("/tool-catalog", response_model=ToolCatalogResponse)
+def get_tool_catalog(service: RuntimeSettingsService = Depends(get_runtime_settings_service)) -> ToolCatalogResponse:
+    return _tool_catalog_response(service)
+
+
+@router.patch("/tool-catalog", response_model=ToolCatalogResponse)
+def patch_tool_catalog(
+    payload: AgentToolCatalogPatch,
+    request: Request,
+    service: RuntimeSettingsService = Depends(get_runtime_settings_service),
+) -> ToolCatalogResponse:
+    session = require_admin_session(request)
+    try:
+        service.patch_agent_tool_catalog(payload, updated_by=str(session.get("username") or "unknown"))
+    except UnsupportedRuntimeSettingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    request.app.state.config = service.effective_config()
+    return _tool_catalog_response(service)
+
+
+def _tool_catalog_response(service: RuntimeSettingsService) -> ToolCatalogResponse:
+    config = service.effective_config()
+    document = service.get_agent_tool_catalog_document()
+    openai_tools = {
+        str(item["function"]["name"]): item["function"]["parameters"]
+        for item in ToolRegistry(config.agent_tools).openai_tools()
+    }
+    tools = [
+        ToolCatalogItem(
+            name=name,
+            type=tool.type,
+            description=tool.description,
+            summary=_tool_summary(tool),
+            limits=_tool_limits(tool),
+            parameters=openai_tools[name],
+            safety=_tool_safety(config, tool),
+        )
+        for name, tool in sorted(config.agent_tools.tools.items())
+    ]
+    return ToolCatalogResponse(
+        enabled=config.agent_tools.enabled,
+        safe_roots=[str(root) for root in config.agent_tools.safe_roots],
+        tool_count=len(tools),
+        tools=tools,
+        definitions={name: tool.model_dump(mode="json") for name, tool in document.tools.items()},
+        profiles={name: profile.model_dump(mode="json") for name, profile in document.profiles.items()},
+        active_profile=document.active_profile,
+        sources=document.sources,
+    )
+
+
+@router.get("/runtime", response_model=RuntimeSettingsDocument)
+def get_runtime_settings(
+    service: RuntimeSettingsService = Depends(get_runtime_settings_service),
+) -> RuntimeSettingsDocument:
+    return service.get_document()
+
+
+@router.patch("/runtime", response_model=RuntimeSettingsDocument)
+def patch_runtime_settings(
+    payload: RuntimeSettingsPatch,
+    request: Request,
+    service: RuntimeSettingsService = Depends(get_runtime_settings_service),
+) -> RuntimeSettingsDocument:
+    session = require_admin_session(request)
+    try:
+        document = service.patch(payload, updated_by=str(session.get("username") or "unknown"))
+    except UnsupportedRuntimeSettingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    request.app.state.config = service.effective_config()
+    return document
 
 
 def _local_disk_rows(config: AppConfig, disk_usage) -> list[DiskInfo]:
@@ -199,3 +301,85 @@ def _consumed_bytes(root: Path) -> int:
         if item.is_file():
             total += item.stat().st_size
     return total
+
+
+def _tool_summary(tool) -> dict[str, object]:
+    values: dict[str, object] = {}
+    if tool.command:
+        values["command"] = tool.command
+    if tool.path is not None:
+        values["path"] = str(tool.path)
+    if tool.method is not None:
+        values["method"] = tool.method
+    if tool.url is not None:
+        values["url"] = tool.url
+    if tool.glob is not None:
+        values["glob"] = tool.glob
+    if tool.paths:
+        values["paths"] = [str(path) for path in tool.paths]
+    if tool.allowed_domains:
+        values["allowed_domains"] = tool.allowed_domains
+    if tool.write_mode != "append":
+        values["write_mode"] = tool.write_mode
+    return values
+
+
+def _tool_limits(tool) -> dict[str, object]:
+    values: dict[str, object] = {
+        "max_entries": tool.max_entries,
+        "max_response_bytes": tool.max_response_bytes,
+        "max_file_bytes": tool.max_file_bytes,
+        "max_matches": tool.max_matches,
+        "max_lines": tool.max_lines,
+        "max_commits": tool.max_commits,
+        "max_write_bytes": tool.max_write_bytes,
+    }
+    if tool.timeout_seconds is not None:
+        values["timeout_seconds"] = tool.timeout_seconds
+    if tool.max_depth > 0:
+        values["max_depth"] = tool.max_depth
+    if tool.recursive:
+        values["recursive"] = tool.recursive
+    if tool.include_hidden:
+        values["include_hidden"] = tool.include_hidden
+    if tool.case_sensitive:
+        values["case_sensitive"] = tool.case_sensitive
+    if tool.regex:
+        values["regex"] = tool.regex
+    if not tool.strip_html:
+        values["strip_html"] = tool.strip_html
+    return values
+
+
+def _tool_safety(config: AppConfig, tool) -> ToolCatalogSafety:
+    path_types = {
+        "file_read",
+        "file_read_dynamic",
+        "file_write",
+        "directory_list",
+        "file_search",
+        "text_search",
+        "git_status",
+        "git_diff",
+        "git_log",
+        "log_tail",
+        "sqlite_query",
+    }
+    if tool.type not in path_types:
+        return ToolCatalogSafety(status="not_applicable", message="No filesystem path safety check required.")
+    if not config.agent_tools.safe_roots:
+        return ToolCatalogSafety(status="warning", message="No safe_roots are configured for filesystem tools.")
+    roots = [root.resolve() for root in config.agent_tools.safe_roots]
+    paths = list(tool.paths) if tool.paths else ([tool.path] if tool.path else [])
+    unsafe_paths = [str(path) for path in paths if path is not None and not any(_is_relative_to(path.resolve(), root) for root in roots)]
+    if unsafe_paths:
+        return ToolCatalogSafety(status="error", message=f"Paths outside safe_roots: {', '.join(unsafe_paths)}")
+    return ToolCatalogSafety(status="ok", message="Path is under safe_roots.")
+
+
+def _is_relative_to(path: Path, root: Path) -> bool:
+    try:
+        path.relative_to(root)
+        return True
+    except ValueError:
+        return False

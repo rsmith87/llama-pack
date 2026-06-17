@@ -5,6 +5,7 @@ import pytest
 
 from llama_pack.core.config import load_config
 from llama_pack.core.network.tls_diagnostics import TLS_RECOVERY_DOC, network_error_text
+from llama_pack.core.nodes import heartbeat
 from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
 
 
@@ -56,7 +57,7 @@ def test_untrusted_ca_certificate_diagnostic_is_specific():
 
 
 @pytest.mark.asyncio
-async def test_agent_registration_log_includes_expired_certificate_recovery(caplog):
+async def test_agent_registration_log_includes_expired_certificate_recovery(monkeypatch):
     config = load_config(
         {
             "mode": "agent",
@@ -73,10 +74,16 @@ async def test_agent_registration_log_includes_expired_certificate_recovery(capl
         )
 
     client = AgentHeartbeatClient(config, request=failing_request)
+    warnings: list[tuple[str, tuple[object, ...]]] = []
 
-    with caplog.at_level("WARNING", logger="llama_pack.core.nodes.heartbeat"):
-        await client.start()
-        await client.stop()
+    def capture_warning(message, *args, **_kwargs):
+        warnings.append((message, args))
 
-    assert "Agent registration failed for mac-mini" in caplog.text
-    assert TLS_RECOVERY_DOC in caplog.text
+    monkeypatch.setattr(heartbeat.logger, "warning", capture_warning)
+
+    await client.start()
+    await client.stop()
+
+    rendered = "\n".join(message % args for message, args in warnings)
+    assert "Agent registration failed for mac-mini" in rendered
+    assert TLS_RECOVERY_DOC in rendered
