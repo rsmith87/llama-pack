@@ -91,6 +91,7 @@ export type RuntimeOverview = {
   running_models?: {
     available?: boolean;
     count?: number;
+    error?: string;
     items?: Array<{
       name?: string;
       port?: number;
@@ -102,6 +103,7 @@ export type RuntimeOverview = {
   downloads?: {
     available?: boolean;
     active_count?: number;
+    error?: string;
   };
 };
 

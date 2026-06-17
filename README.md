@@ -134,4 +134,5 @@ for request examples.
 - `agent` mode starts `llama-server` with `--model`, `--host`, `--port`, `--ctx-size`, and `--n-gpu-layers`.
 - HF model conversion writes `{model-name}.gguf` inside the existing HF model directory, and existing conversion detection checks for any top-level `*.gguf` in that directory.
 - Logs are written per model under `log_dir`.
-- Process state is in-memory for this MVP. If the manager restarts, it reports configured models but does not reattach to old processes.
+- Process state is tracked in memory, and model status reads reattach to existing
+  servers listening on configured model ports after a manager restart.

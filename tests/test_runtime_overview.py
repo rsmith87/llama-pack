@@ -74,6 +74,51 @@ def test_runtime_overview_reports_agent_runtime_state(tmp_path):
     assert body["downloads"]["available"] is True
 
 
+def test_runtime_overview_reports_running_model_summary_error(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+
+    class BrokenProcessManager:
+        def list_statuses(self) -> list[dict[str, object]]:
+            raise RuntimeError("models database schema is missing")
+
+    app.state.process_manager = BrokenProcessManager()
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/overview")
+
+    assert response.status_code == 200
+    running_models = response.json()["running_models"]
+    assert running_models["available"] is False
+    assert running_models["count"] == 0
+    assert running_models["items"] == []
+    assert running_models["error"] == "Runtime model status unavailable: models database schema is missing"
+
+
+def test_runtime_overview_reports_download_summary_error(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+
+    class BrokenDownloadManager:
+        def history(self, *, status: str, limit: int) -> list[dict[str, object]]:
+            raise RuntimeError(f"download history failed for status={status} limit={limit}")
+
+    app.state.download_manager = BrokenDownloadManager()
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/overview")
+
+    assert response.status_code == 200
+    downloads = response.json()["downloads"]
+    assert downloads["available"] is False
+    assert downloads["active_count"] == 0
+    assert downloads["error"] == "Download status unavailable: download history failed for status=running limit=100"
+
+
 def test_tool_loop_eval_latest_reports_missing_file(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))

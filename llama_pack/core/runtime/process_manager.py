@@ -7,7 +7,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import asdict, dataclass
 from pathlib import Path
-from typing import Callable, IO, Iterator
+from typing import Callable, IO, Iterator, Protocol
 from urllib.parse import quote
 
 from llama_pack.core.config import AppConfig, ModelConfig
@@ -17,6 +17,22 @@ from llama_pack.providers.llama_cpp import build_llama_server_command
 
 
 PopenFactory = Callable[..., subprocess.Popen]
+
+
+class _ManagedProcess(Protocol):
+    pid: int
+
+    def poll(self) -> int | None:
+        raise NotImplementedError
+
+    def terminate(self) -> None:
+        raise NotImplementedError
+
+    def kill(self) -> None:
+        raise NotImplementedError
+
+    def wait(self, timeout: float | None = None) -> int:
+        raise NotImplementedError
 
 
 class _AdoptedProcess:
@@ -109,7 +125,7 @@ class ProcessManager:
         self.config = config
         self.catalog_service = catalog_service
         self._popen = popen
-        self._processes: dict[str, subprocess.Popen] = {}
+        self._processes: dict[str, _ManagedProcess] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
         self._active_requests: dict[str, int] = {}
         self.config.log_dir.mkdir(parents=True, exist_ok=True)
@@ -121,7 +137,7 @@ class ProcessManager:
         model = self._get_model(name)
         profile_metadata = self._profile_metadata(name)
         model_catalog, model_profiles, model_deployments = self._catalog_payload(name)
-        process = self._processes.get(name)
+        process = self._process_for_status(name, model)
         running = process is not None and process.poll() is None
         if process is not None and not running:
             self._processes.pop(name, None)
@@ -166,11 +182,7 @@ class ProcessManager:
 
         model = self._get_model(name)
 
-        # Re-use a model server that survived a manager restart rather than
-        # spawning a duplicate (or crashing because the port is taken).
-        existing_pid = self._find_pid_on_port(model.port)
-        if existing_pid is not None:
-            self._processes[name] = _AdoptedProcess(existing_pid)  # type: ignore[assignment]
+        if self._adopt_existing_process(name, model) is not None:
             return self.status(name)
 
         log_path = self._log_path(name)
@@ -233,6 +245,22 @@ class ProcessManager:
             return self.catalog_service.runtime_model(name)
         except KeyError as exc:
             raise KeyError(f"Unknown model: {name}") from exc
+
+    def _process_for_status(self, name: str, model: ModelConfig) -> _ManagedProcess | None:
+        process = self._processes.get(name)
+        if process is not None:
+            return process
+        return self._adopt_existing_process(name, model)
+
+    def _adopt_existing_process(self, name: str, model: ModelConfig) -> _ManagedProcess | None:
+        # Re-use a model server that survived a manager restart rather than
+        # reporting stale state or spawning a duplicate.
+        existing_pid = self._find_pid_on_port(model.port)
+        if existing_pid is None:
+            return None
+        process = _AdoptedProcess(existing_pid)
+        self._processes[name] = process
+        return process
 
     def _log_path(self, name: str) -> Path:
         return self.config.log_dir / f"{self._safe_identity(name)}.log"

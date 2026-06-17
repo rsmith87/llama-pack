@@ -462,6 +462,58 @@ def test_start_adopts_existing_process_on_port(tmp_path):
     assert result2.pid == live_pid
 
 
+def test_status_adopts_existing_process_on_port(tmp_path):
+    """Status should report a model server that survived a manager restart."""
+    import os
+
+    config, catalog = _agent_config(tmp_path)
+    manager = ProcessManager(config, catalog_service=catalog)
+
+    live_pid = os.getpid()
+    with patch.object(manager, "_find_pid_on_port", return_value=live_pid) as find_pid:
+        result = manager.status("qwen")
+
+    find_pid.assert_called_once_with(8081)
+    assert result.running is True
+    assert result.pid == live_pid
+
+
+def test_list_statuses_adopts_existing_process_on_port(tmp_path):
+    import os
+
+    config, catalog = _agent_config(tmp_path)
+    manager = ProcessManager(config, catalog_service=catalog)
+
+    live_pid = os.getpid()
+    with patch.object(manager, "_find_pid_on_port", return_value=live_pid):
+        [result] = manager.list_statuses()
+
+    assert result["running"] is True
+    assert result["pid"] == live_pid
+
+
+def test_status_profile_adopts_existing_process_on_effective_port(tmp_path):
+    import os
+
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(
+        store,
+        model_name="gemma",
+        path="/models/gemma.gguf",
+        port=8081,
+        profiles=[{"profile_key": "long", "ctx": 131072, "order": 30, "port": 8083}],
+    )
+    manager = ProcessManager(config, catalog_service=catalog)
+
+    live_pid = os.getpid()
+    with patch.object(manager, "_find_pid_on_port", return_value=live_pid) as find_pid:
+        result = manager.status("gemma:long")
+
+    find_pid.assert_called_once_with(8083)
+    assert result.running is True
+    assert result.pid == live_pid
+
+
 def test_start_spawns_when_port_free(tmp_path):
     """When no existing process is on the port, start() spawns normally."""
     config, catalog = _agent_config(tmp_path)

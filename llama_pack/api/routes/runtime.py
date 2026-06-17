@@ -811,8 +811,13 @@ def _running_models_summary(process_manager, mode: str) -> dict[str, object]:
         return {"available": False, "count": 0, "items": []}
     try:
         statuses = process_manager.list_statuses()
-    except Exception:
-        return {"available": False, "count": 0, "items": []}
+    except Exception as exc:
+        return {
+            "available": False,
+            "count": 0,
+            "items": [],
+            "error": f"Runtime model status unavailable: {exc}",
+        }
     running = [s for s in statuses if s.get("running")]
     return {
         "available": True,
@@ -835,8 +840,12 @@ def _downloads_summary(download_manager) -> dict[str, object]:
         return {"available": False, "active_count": 0}
     try:
         active = download_manager.history(status="running", limit=100)
-    except Exception:
-        active = []
+    except Exception as exc:
+        return {
+            "available": False,
+            "active_count": 0,
+            "error": f"Download status unavailable: {exc}",
+        }
     return {
         "available": True,
         "active_count": len(active),
