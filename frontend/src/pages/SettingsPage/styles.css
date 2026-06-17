@@ -73,6 +73,10 @@
   overflow-wrap: anywhere;
 }
 
+.tool-catalog-editors {
+  margin-top: 16px;
+}
+
 @media (max-width: 900px) {
   .settings-tool-catalog {
     grid-template-columns: 1fr;

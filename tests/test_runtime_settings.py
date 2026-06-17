@@ -9,6 +9,7 @@ from llama_pack.core.persistence.alembic_config import Base
 from llama_pack.core.persistence.db_infra import create_persistence_engine
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
 from llama_pack.core.settings.runtime import (
+    AgentToolCatalogPatch,
     RuntimeSettingsPatch,
     RuntimeSettingsService,
     UnsupportedRuntimeSettingError,
@@ -122,3 +123,109 @@ def test_runtime_settings_effective_config_does_not_mutate_bootstrap_config(tmp_
 
     assert effective.routing_fanout_max == 5
     assert config.routing_fanout_max == 2
+
+
+def test_agent_tool_catalog_patch_persists_project_profile_and_effective_config(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    config = load_config(
+        {
+            "log_dir": str(tmp_path / "logs"),
+            "agent_tools": {
+                "enabled": True,
+                "safe_roots": [str(tmp_path)],
+                "tools": {
+                    "config_status": {
+                        "type": "shell",
+                        "description": "Config status.",
+                        "command": ["printf", "ok"],
+                    }
+                },
+            },
+        }
+    )
+    store = _store(tmp_path)
+    service = RuntimeSettingsService(config=config, store=store)
+
+    document = service.patch_agent_tool_catalog(
+        AgentToolCatalogPatch(
+            tools={
+                "read_project_file": {
+                    "type": "file_read_dynamic",
+                    "description": "Read project file.",
+                    "path": str(workspace),
+                }
+            },
+            profiles={
+                "llama_pack": {
+                    "description": "Llama Pack workspace.",
+                    "safe_roots": [str(workspace)],
+                    "tools": ["read_project_file"],
+                }
+            },
+            active_profile="llama_pack",
+        ),
+        updated_by="admin",
+    )
+    effective = RuntimeSettingsService(config=config, store=store).effective_config()
+
+    assert document.active_profile == "llama_pack"
+    assert set(document.tools) == {"config_status", "read_project_file"}
+    assert document.sources["read_project_file"] == "database"
+    assert set(effective.agent_tools.tools) == {"read_project_file"}
+    assert effective.agent_tools.safe_roots == [workspace]
+    assert config.agent_tools.safe_roots == [tmp_path]
+
+
+def test_agent_tool_catalog_patch_rejects_unknown_profile_tool(tmp_path: Path):
+    config = load_config({"log_dir": str(tmp_path / "logs")})
+    service = RuntimeSettingsService(config=config, store=_store(tmp_path))
+
+    with pytest.raises(UnsupportedRuntimeSettingError, match="Unknown tools in profile llama_pack: missing_tool"):
+        service.patch_agent_tool_catalog(
+            AgentToolCatalogPatch(
+                profiles={
+                    "llama_pack": {
+                        "description": "Broken profile.",
+                        "safe_roots": [str(tmp_path)],
+                        "tools": ["missing_tool"],
+                    }
+                },
+                active_profile="llama_pack",
+            ),
+            updated_by="admin",
+        )
+
+
+def test_agent_tool_catalog_effective_config_validates_profile_safe_roots(tmp_path: Path):
+    workspace = tmp_path / "workspace"
+    outside = tmp_path / "outside"
+    workspace.mkdir()
+    outside.mkdir()
+    config = load_config({"log_dir": str(tmp_path / "logs"), "agent_tools": {"enabled": True}})
+    store = _store(tmp_path)
+    service = RuntimeSettingsService(config=config, store=store)
+
+    service.patch_agent_tool_catalog(
+        AgentToolCatalogPatch(
+            tools={
+                "read_outside": {
+                    "type": "file_read_dynamic",
+                    "description": "Read outside file.",
+                    "path": str(outside),
+                }
+            },
+            profiles={
+                "llama_pack": {
+                    "description": "Llama Pack workspace.",
+                    "safe_roots": [str(workspace)],
+                    "tools": ["read_outside"],
+                }
+            },
+            active_profile="llama_pack",
+        ),
+        updated_by="admin",
+    )
+
+    with pytest.raises(ValueError, match="safe_roots"):
+        service.effective_config()

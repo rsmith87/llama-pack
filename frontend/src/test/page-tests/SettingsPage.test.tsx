@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
@@ -82,7 +82,16 @@ function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> =
     }),
     "/lm-api/v1/settings/disks": () => okJson([]),
     "/lm-api/v1/settings/node-auth": () => okJson([]),
-    "/lm-api/v1/settings/tool-catalog": () => okJson({ enabled: false, safe_roots: [], tool_count: 0, tools: [] }),
+    "/lm-api/v1/settings/tool-catalog": () => okJson({
+      enabled: false,
+      safe_roots: [],
+      tool_count: 0,
+      tools: [],
+      definitions: {},
+      profiles: {},
+      active_profile: null,
+      sources: {},
+    }),
     ...extra,
   };
 }
@@ -178,6 +187,31 @@ it("shows the read-only tool catalog and inspector", async () => {
         enabled: true,
         safe_roots: ["/workspace"],
         tool_count: 2,
+        definitions: {
+          read_project_file: {
+            type: "file_read_dynamic",
+            description: "Read a project file.",
+            path: "/workspace",
+          },
+          local_health: {
+            type: "http",
+            description: "Check local health.",
+            method: "GET",
+            url: "http://127.0.0.1:9137/health",
+          },
+        },
+        profiles: {
+          llama_pack: {
+            description: "Llama Pack workspace.",
+            safe_roots: ["/workspace"],
+            tools: ["read_project_file"],
+          },
+        },
+        active_profile: "llama_pack",
+        sources: {
+          read_project_file: "database",
+          local_health: "config",
+        },
         tools: [
           {
             name: "read_project_file",
@@ -219,6 +253,94 @@ it("shows the read-only tool catalog and inspector", async () => {
   expect(screen.getByRole("heading", { name: "local_health" })).toBeInTheDocument();
   expect(screen.getByText("http://127.0.0.1:9137/health")).toBeInTheDocument();
   expect(screen.getByText(/No filesystem path safety check required/)).toBeInTheDocument();
+});
+
+it("edits and saves db-backed tool catalog profiles", async () => {
+  const savedPayloads: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, options?: RequestInit) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/settings/tool-catalog" && options?.method === "PATCH") {
+      savedPayloads.push(JSON.parse(String(options.body)));
+      return Promise.resolve(okJson({
+        enabled: true,
+        safe_roots: ["/workspace"],
+        tool_count: 1,
+        definitions: {
+          read_project_file: {
+            type: "file_read_dynamic",
+            description: "Read project file.",
+            path: "/workspace",
+          },
+        },
+        profiles: {
+          llama_pack: {
+            description: "Llama Pack workspace.",
+            safe_roots: ["/workspace"],
+            tools: ["read_project_file"],
+          },
+        },
+        active_profile: "llama_pack",
+        sources: { read_project_file: "database" },
+        tools: [
+          {
+            name: "read_project_file",
+            type: "file_read_dynamic",
+            description: "Read project file.",
+            summary: { path: "/workspace" },
+            limits: { max_file_bytes: 524288 },
+            parameters: { type: "object", properties: {}, additionalProperties: false },
+            safety: { status: "ok", message: "Path is under safe_roots." },
+          },
+        ],
+      }) as Response);
+    }
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson(SETUP_STATUS_RESPONSE) as Response);
+    if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "admin", role: "admin", created_at: "now" }) as Response);
+    if (url === "/lm-api/v1/settings/disks" || url === "/lm-api/v1/settings/node-auth") return Promise.resolve(okJson([]) as Response);
+    if (url === "/lm-api/v1/settings/runtime") return Promise.resolve(settingsRoutes()["/lm-api/v1/settings/runtime"]() as Response);
+    if (url === "/lm-api/v1/settings/tool-catalog") {
+      return Promise.resolve(okJson({
+        enabled: true,
+        safe_roots: [],
+        tool_count: 0,
+        tools: [],
+        definitions: {},
+        profiles: {},
+        active_profile: null,
+        sources: {},
+      }) as Response);
+    }
+    return Promise.resolve(okJson({}) as Response);
+  }));
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Tool Catalog" }));
+  fireEvent.change(screen.getByLabelText("Tool Definitions JSON"), { target: { value: JSON.stringify({
+    read_project_file: {
+      type: "file_read_dynamic",
+      description: "Read project file.",
+      path: "/workspace",
+    },
+  }) } });
+  fireEvent.change(screen.getByLabelText("Tool Profiles JSON"), { target: { value: JSON.stringify({
+    llama_pack: {
+      description: "Llama Pack workspace.",
+      safe_roots: ["/workspace"],
+      tools: ["read_project_file"],
+    },
+  }) } });
+  await user.clear(screen.getByLabelText("Active Tool Profile"));
+  await user.type(screen.getByLabelText("Active Tool Profile"), "llama_pack");
+  await user.click(screen.getByRole("button", { name: "Save Tool Catalog" }));
+
+  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({
+    active_profile: "llama_pack",
+    tools: expect.objectContaining({ read_project_file: expect.objectContaining({ type: "file_read_dynamic" }) }),
+  })));
+  expect(await screen.findByText("Tool catalog saved")).toBeInTheDocument();
+  expect(screen.getByText("1 configured tools")).toBeInTheDocument();
 });
 
 it("creates and revokes admin auth keys", async () => {

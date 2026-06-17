@@ -15,7 +15,7 @@ from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.downloads import DOWNLOAD_DISK_HEADROOM_BYTES
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.api.dependencies import get_node_registry
-from llama_pack.core.settings.runtime import RuntimeSettingsDocument, RuntimeSettingsPatch, RuntimeSettingsService, UnsupportedRuntimeSettingError
+from llama_pack.core.settings.runtime import AgentToolCatalogPatch, RuntimeSettingsDocument, RuntimeSettingsPatch, RuntimeSettingsService, UnsupportedRuntimeSettingError
 
 router = APIRouter(prefix="/settings", tags=["settings"])
 SCRIPTS_DIR = Path(__file__).resolve().parents[3] / "scripts"
@@ -76,6 +76,10 @@ class ToolCatalogResponse(BaseModel):
     safe_roots: list[str]
     tool_count: int
     tools: list[ToolCatalogItem]
+    definitions: dict[str, dict[str, object]]
+    profiles: dict[str, dict[str, object]]
+    active_profile: str | None
+    sources: dict[str, str]
 
 
 @router.post("/api-keys/generate")
@@ -132,7 +136,28 @@ def list_node_auth(registry: NodeRegistry = Depends(get_node_registry)) -> list[
 
 
 @router.get("/tool-catalog", response_model=ToolCatalogResponse)
-def get_tool_catalog(config: AppConfig = Depends(get_config)) -> ToolCatalogResponse:
+def get_tool_catalog(service: RuntimeSettingsService = Depends(get_runtime_settings_service)) -> ToolCatalogResponse:
+    return _tool_catalog_response(service)
+
+
+@router.patch("/tool-catalog", response_model=ToolCatalogResponse)
+def patch_tool_catalog(
+    payload: AgentToolCatalogPatch,
+    request: Request,
+    service: RuntimeSettingsService = Depends(get_runtime_settings_service),
+) -> ToolCatalogResponse:
+    session = require_admin_session(request)
+    try:
+        service.patch_agent_tool_catalog(payload, updated_by=str(session.get("username") or "unknown"))
+    except UnsupportedRuntimeSettingError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    request.app.state.config = service.effective_config()
+    return _tool_catalog_response(service)
+
+
+def _tool_catalog_response(service: RuntimeSettingsService) -> ToolCatalogResponse:
+    config = service.effective_config()
+    document = service.get_agent_tool_catalog_document()
     openai_tools = {
         str(item["function"]["name"]): item["function"]["parameters"]
         for item in ToolRegistry(config.agent_tools).openai_tools()
@@ -154,6 +179,10 @@ def get_tool_catalog(config: AppConfig = Depends(get_config)) -> ToolCatalogResp
         safe_roots=[str(root) for root in config.agent_tools.safe_roots],
         tool_count=len(tools),
         tools=tools,
+        definitions={name: tool.model_dump(mode="json") for name, tool in document.tools.items()},
+        profiles={name: profile.model_dump(mode="json") for name, profile in document.profiles.items()},
+        active_profile=document.active_profile,
+        sources=document.sources,
     )
 
 

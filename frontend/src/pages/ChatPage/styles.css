@@ -11,9 +11,10 @@
 }
 
 .chat-workbench-panel {
-  min-height: calc(100vh - 142px);
+  height: calc(100vh + 228px);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
 .chat-session-panel-top {
@@ -30,8 +31,9 @@
   gap: 12px;
   align-content: start;
   flex: 1;
-  min-height: 380px;
+  min-height: 0;
   margin-bottom: 16px;
+  overflow-y: auto;
 }
 
 .chat-bubble {
@@ -193,7 +195,12 @@
   }
 
   .chat-workbench-panel {
-    min-height: auto;
+    height: auto;
+    overflow: visible;
+  }
+
+  .chat-transcript {
+    min-height: 380px;
   }
 
   .chat-bubble-user,

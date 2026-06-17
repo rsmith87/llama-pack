@@ -8,6 +8,7 @@ import {
   listModelDisks,
   listNodeAuth,
   patchRuntimeSettings,
+  patchToolCatalog,
   type ModelDiskInfo,
   type NodeAuthInfo,
   type RuntimeSettings,
@@ -75,6 +76,14 @@ function parseJsonObject(value: string, label: string): Record<string, string | 
   return parsed as Record<string, string | number | boolean | null>;
 }
 
+function parseJsonRecord(value: string, label: string): Record<string, unknown> {
+  const parsed = JSON.parse(value || "{}") as unknown;
+  if (!parsed || Array.isArray(parsed) || typeof parsed !== "object") {
+    throw new Error(`${label} must be a JSON object.`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
 function sourceFor(document: RuntimeSettingsDocument | null, key: keyof RuntimeSettings) {
   return document?.sources?.[key] || "default";
 }
@@ -111,12 +120,25 @@ export function SettingsPage() {
   const [agentWorkerCapacityText, setAgentWorkerCapacityText] = useState("{}");
   const [clientCorsOriginsText, setClientCorsOriginsText] = useState("");
   const [agentToolsSafeRootsText, setAgentToolsSafeRootsText] = useState("");
-  const [toolCatalog, setToolCatalog] = useState<ToolCatalog>({ enabled: false, safe_roots: [], tool_count: 0, tools: [] });
+  const [toolCatalog, setToolCatalog] = useState<ToolCatalog>({
+    enabled: false,
+    safe_roots: [],
+    tool_count: 0,
+    tools: [],
+    definitions: {},
+    profiles: {},
+    active_profile: null,
+    sources: {},
+  });
   const [selectedToolName, setSelectedToolName] = useState("");
   const [toolSearch, setToolSearch] = useState("");
   const [toolTypeFilter, setToolTypeFilter] = useState("all");
+  const [toolDefinitionsText, setToolDefinitionsText] = useState("{}");
+  const [toolProfilesText, setToolProfilesText] = useState("{}");
+  const [activeToolProfile, setActiveToolProfile] = useState("");
   const [runtimeStatus, setRuntimeStatus] = useState("");
   const [chatToolsStatus, setChatToolsStatus] = useState("");
+  const [toolCatalogStatus, setToolCatalogStatus] = useState("");
   const [prefix, setPrefix] = useState("llm");
   const [tokenBytes, setTokenBytes] = useState(32);
   const [keyCount, setKeyCount] = useState(1);
@@ -173,7 +195,18 @@ export function SettingsPage() {
       .then((payload) => {
         if (cancelled) return;
         const tools = Array.isArray(payload.tools) ? payload.tools : [];
-        setToolCatalog({ ...payload, tools, safe_roots: Array.isArray(payload.safe_roots) ? payload.safe_roots : [], tool_count: Number(payload.tool_count || tools.length) });
+        const catalog = {
+          ...payload,
+          tools,
+          definitions: payload.definitions || {},
+          profiles: payload.profiles || {},
+          safe_roots: Array.isArray(payload.safe_roots) ? payload.safe_roots : [],
+          tool_count: Number(payload.tool_count || tools.length),
+        };
+        setToolCatalog(catalog);
+        setToolDefinitionsText(JSON.stringify(catalog.definitions, null, 2));
+        setToolProfilesText(JSON.stringify(catalog.profiles, null, 2));
+        setActiveToolProfile(catalog.active_profile || "");
         setSelectedToolName((current) => current || tools[0]?.name || "");
       })
       .catch((err: unknown) => {
@@ -326,6 +359,39 @@ export function SettingsPage() {
       setChatToolsStatus("Chat tool settings saved");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save chat tool settings.");
+    }
+  }
+
+  async function saveToolCatalog() {
+    if (authRole !== "admin") {
+      setError("Admin role required.");
+      return;
+    }
+    setError("");
+    setToolCatalogStatus("");
+    try {
+      const updated = await patchToolCatalog({
+        tools: parseJsonRecord(toolDefinitionsText, "Tool Definitions") as Record<string, Record<string, unknown>>,
+        profiles: parseJsonRecord(toolProfilesText, "Tool Profiles") as Record<string, { description?: string | null; safe_roots: string[]; tools: string[] }>,
+        active_profile: activeToolProfile.trim() || null,
+      });
+      const tools = Array.isArray(updated.tools) ? updated.tools : [];
+      const catalog = {
+        ...updated,
+        tools,
+        definitions: updated.definitions || {},
+        profiles: updated.profiles || {},
+        safe_roots: Array.isArray(updated.safe_roots) ? updated.safe_roots : [],
+        tool_count: Number(updated.tool_count || tools.length),
+      };
+      setToolCatalog(catalog);
+      setToolDefinitionsText(JSON.stringify(catalog.definitions, null, 2));
+      setToolProfilesText(JSON.stringify(catalog.profiles, null, 2));
+      setActiveToolProfile(catalog.active_profile || "");
+      setSelectedToolName((current) => current && tools.some((tool) => tool.name === current) ? current : tools[0]?.name || "");
+      setToolCatalogStatus("Tool catalog saved");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save tool catalog.");
     }
   }
 
@@ -550,6 +616,26 @@ export function SettingsPage() {
                   <p className="muted">No tool selected.</p>
                 )}
               </div>
+            </div>
+            <div className="settings-grid settings-grid-wide tool-catalog-editors">
+              <FormField label="Tool Definitions JSON">
+                <textarea aria-label="Tool Definitions JSON" rows={10} value={toolDefinitionsText} onChange={(event) => setToolDefinitionsText(event.target.value)} />
+              </FormField>
+              <FormField label="Tool Profiles JSON">
+                <textarea aria-label="Tool Profiles JSON" rows={10} value={toolProfilesText} onChange={(event) => setToolProfilesText(event.target.value)} />
+              </FormField>
+              <FormField label="Active Tool Profile">
+                <input aria-label="Active Tool Profile" list="active-tool-profile-options" value={activeToolProfile} onChange={(event) => setActiveToolProfile(event.target.value)} />
+                <datalist id="active-tool-profile-options">
+                  {Object.keys(toolCatalog.profiles).sort().map((profileName) => (
+                    <option key={profileName} value={profileName} />
+                  ))}
+                </datalist>
+              </FormField>
+            </div>
+            <div className="modal-actions settings-utilities">
+              <Button type="button" onClick={() => void saveToolCatalog()}>Save Tool Catalog</Button>
+              {toolCatalogStatus ? <span className="muted">{toolCatalogStatus}</span> : null}
             </div>
           </div>
         ) : null}

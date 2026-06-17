@@ -1590,6 +1590,79 @@ def test_settings_tool_catalog_lists_effective_agent_tools(tmp_path):
     assert health_tool["safety"]["status"] == "not_applicable"
 
 
+def test_settings_tool_catalog_patch_persists_database_profile(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "agent_tools": {
+                    "enabled": True,
+                    "safe_roots": [str(tmp_path)],
+                    "tools": {
+                        "config_status": {
+                            "type": "shell",
+                            "description": "Config status.",
+                            "command": ["printf", "ok"],
+                        }
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {"username": "admin-user", "role": "admin"}
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/tool-catalog",
+        json={
+            "tools": {
+                "read_project_file": {
+                    "type": "file_read_dynamic",
+                    "description": "Read project file.",
+                    "path": str(workspace),
+                }
+            },
+            "profiles": {
+                "llama_pack": {
+                    "description": "Llama Pack workspace.",
+                    "safe_roots": [str(workspace)],
+                    "tools": ["read_project_file"],
+                }
+            },
+            "active_profile": "llama_pack",
+        },
+        headers={"X-UI-Session": "admin-token"},
+    )
+    reloaded = client.get("/lm-api/v1/settings/tool-catalog")
+
+    assert response.status_code == 200
+    assert response.json()["active_profile"] == "llama_pack"
+    assert response.json()["profiles"]["llama_pack"]["tools"] == ["read_project_file"]
+    assert reloaded.json()["tool_count"] == 1
+    assert reloaded.json()["tools"][0]["name"] == "read_project_file"
+    assert app.state.config.agent_tools.safe_roots == [workspace]
+
+
+def test_settings_tool_catalog_patch_requires_admin_ui_session(tmp_path):
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.patch("/lm-api/v1/settings/tool-catalog", json={"active_profile": None})
+
+    assert response.status_code == 401
+
+
 def test_settings_runtime_patch_rejects_unsupported_key(tmp_path):
     app = create_app(
         config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),

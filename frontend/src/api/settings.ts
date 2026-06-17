@@ -75,6 +75,22 @@ export type ToolCatalog = {
   safe_roots: string[];
   tool_count: number;
   tools: ToolCatalogItem[];
+  definitions: Record<string, Record<string, unknown>>;
+  profiles: Record<string, ToolProjectProfile>;
+  active_profile: string | null;
+  sources: Record<string, "database" | "config" | "default">;
+};
+
+export type ToolProjectProfile = {
+  description?: string | null;
+  safe_roots: string[];
+  tools: string[];
+};
+
+export type ToolCatalogPatch = {
+  tools?: Record<string, Record<string, unknown>>;
+  profiles?: Record<string, ToolProjectProfile>;
+  active_profile?: string | null;
 };
 
 export function generateApiKeys(payload: { prefix: string; token_bytes: number; count: number }) {
@@ -99,4 +115,8 @@ export function patchRuntimeSettings(payload: RuntimeSettingsPatch) {
 
 export function getToolCatalog() {
   return apiGet<ToolCatalog>("/settings/tool-catalog");
+}
+
+export function patchToolCatalog(payload: ToolCatalogPatch) {
+  return apiPatch<ToolCatalog>("/settings/tool-catalog", payload);
 }

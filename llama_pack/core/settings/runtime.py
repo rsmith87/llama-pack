@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from llama_pack.core.config import AppConfig
+from llama_pack.core.config.models import AgentToolDefinitionConfig, AgentToolsConfig
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
 
 
@@ -87,6 +88,31 @@ class RuntimeSettingsDocument(BaseModel):
     sources: dict[str, SettingSource]
 
 
+class AgentToolProjectProfile(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    description: str | None = None
+    safe_roots: list[Path]
+    tools: list[str]
+
+
+class AgentToolCatalogPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tools: dict[str, AgentToolDefinitionConfig] | None = None
+    profiles: dict[str, AgentToolProjectProfile] | None = None
+    active_profile: str | None = None
+
+
+class AgentToolCatalogDocument(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    tools: dict[str, AgentToolDefinitionConfig]
+    sources: dict[str, SettingSource]
+    profiles: dict[str, AgentToolProjectProfile]
+    active_profile: str | None
+
+
 RUNTIME_SETTING_FIELDS: tuple[str, ...] = (
     "controller_retention_days",
     "controller_archive_retention_days",
@@ -104,6 +130,9 @@ RUNTIME_SETTING_FIELDS: tuple[str, ...] = (
     "agent_tools_tool_timeout_seconds",
     "agent_tools_safe_roots",
 )
+AGENT_TOOLS_TOOLS_KEY = "agent_tools_tools"
+AGENT_TOOLS_PROFILES_KEY = "agent_tools_profiles"
+AGENT_TOOLS_ACTIVE_PROFILE_KEY = "agent_tools_active_profile"
 
 
 class RuntimeSettingsService:
@@ -140,17 +169,70 @@ class RuntimeSettingsService:
         )
         return self.get_document()
 
+    def get_agent_tool_catalog_document(self) -> AgentToolCatalogDocument:
+        raw_entries = self.store.get_entries()
+        tools = dict(self.config.agent_tools.tools)
+        sources = {name: self._tool_source(name, tools[name]) for name in tools}
+        if AGENT_TOOLS_TOOLS_KEY in raw_entries:
+            database_tools = self._database_tools(raw_entries[AGENT_TOOLS_TOOLS_KEY])
+            tools.update(database_tools)
+            sources.update({name: "database" for name in database_tools})
+        profiles = self._database_profiles(raw_entries.get(AGENT_TOOLS_PROFILES_KEY))
+        active_profile = self._database_active_profile(raw_entries.get(AGENT_TOOLS_ACTIVE_PROFILE_KEY))
+        return AgentToolCatalogDocument(
+            tools=tools,
+            sources=sources,
+            profiles=profiles,
+            active_profile=active_profile,
+        )
+
+    def patch_agent_tool_catalog(self, patch: AgentToolCatalogPatch, updated_by: str | None) -> AgentToolCatalogDocument:
+        if not patch.model_fields_set:
+            raise UnsupportedRuntimeSettingError("No agent tool catalog settings were provided")
+        current = self.get_agent_tool_catalog_document()
+        tools = patch.tools if "tools" in patch.model_fields_set and patch.tools is not None else current.tools
+        profiles = patch.profiles if "profiles" in patch.model_fields_set and patch.profiles is not None else current.profiles
+        active_profile = patch.active_profile if "active_profile" in patch.model_fields_set else current.active_profile
+        self._validate_profile_tools(tools, profiles, active_profile)
+        values: dict[str, str] = {}
+        if "tools" in patch.model_fields_set and patch.tools is not None:
+            values[AGENT_TOOLS_TOOLS_KEY] = json.dumps(
+                {name: tool.model_dump(mode="json") for name, tool in patch.tools.items()},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        if "profiles" in patch.model_fields_set and patch.profiles is not None:
+            values[AGENT_TOOLS_PROFILES_KEY] = json.dumps(
+                {name: profile.model_dump(mode="json") for name, profile in patch.profiles.items()},
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+        if "active_profile" in patch.model_fields_set:
+            values[AGENT_TOOLS_ACTIVE_PROFILE_KEY] = json.dumps(active_profile, sort_keys=True, separators=(",", ":"))
+        if not values:
+            raise UnsupportedRuntimeSettingError("No agent tool catalog settings were provided")
+        self.store.upsert_entries(values, updated_by)
+        return self.get_agent_tool_catalog_document()
+
     def effective_config(self) -> AppConfig:
         document = self.get_document()
         data = document.settings.model_dump()
-        agent_tools = self.config.agent_tools.model_copy(
-            update={
-                "enabled": data.pop("agent_tools_enabled"),
-                "max_iterations": data.pop("agent_tools_max_iterations"),
-                "tool_timeout_seconds": data.pop("agent_tools_tool_timeout_seconds"),
-                "safe_roots": data.pop("agent_tools_safe_roots"),
-            }
-        )
+        catalog = self.get_agent_tool_catalog_document()
+        agent_tool_values = {
+            "enabled": data.pop("agent_tools_enabled"),
+            "max_iterations": data.pop("agent_tools_max_iterations"),
+            "tool_timeout_seconds": data.pop("agent_tools_tool_timeout_seconds"),
+            "safe_roots": data.pop("agent_tools_safe_roots"),
+            "tools": catalog.tools,
+        }
+        if catalog.active_profile is not None:
+            profile = catalog.profiles.get(catalog.active_profile)
+            if profile is None:
+                raise UnsupportedRuntimeSettingError(f"Unknown active agent tool profile: {catalog.active_profile}")
+            self._validate_profile_tools(catalog.tools, catalog.profiles, catalog.active_profile)
+            agent_tool_values["safe_roots"] = profile.safe_roots
+            agent_tool_values["tools"] = {name: catalog.tools[name] for name in profile.tools}
+        agent_tools = AgentToolsConfig.model_validate({**self.config.agent_tools.model_dump(), **agent_tool_values})
         return self.config.model_copy(update={**data, "agent_tools": agent_tools})
 
     def _config_values(self) -> dict[str, object]:
@@ -181,3 +263,44 @@ class RuntimeSettingsService:
             else:
                 sources[key] = "default" if getattr(self.config, key) == getattr(defaults, key) else "config"
         return sources
+
+    def _tool_source(self, name: str, tool: AgentToolDefinitionConfig) -> SettingSource:
+        defaults = AppConfig()
+        if name in defaults.agent_tools.tools and defaults.agent_tools.tools[name] == tool:
+            return "default"
+        return "config"
+
+    def _database_tools(self, value_json: str) -> dict[str, AgentToolDefinitionConfig]:
+        raw = json.loads(value_json)
+        if not isinstance(raw, dict):
+            raise UnsupportedRuntimeSettingError("agent_tools_tools must be a JSON object")
+        return {str(name): AgentToolDefinitionConfig.model_validate(value) for name, value in raw.items()}
+
+    def _database_profiles(self, value_json: str | None) -> dict[str, AgentToolProjectProfile]:
+        if value_json is None:
+            return {}
+        raw = json.loads(value_json)
+        if not isinstance(raw, dict):
+            raise UnsupportedRuntimeSettingError("agent_tools_profiles must be a JSON object")
+        return {str(name): AgentToolProjectProfile.model_validate(value) for name, value in raw.items()}
+
+    def _database_active_profile(self, value_json: str | None) -> str | None:
+        if value_json is None:
+            return None
+        raw = json.loads(value_json)
+        if raw is None:
+            return None
+        return str(raw)
+
+    def _validate_profile_tools(
+        self,
+        tools: dict[str, AgentToolDefinitionConfig],
+        profiles: dict[str, AgentToolProjectProfile],
+        active_profile: str | None,
+    ) -> None:
+        for profile_name, profile in profiles.items():
+            missing = [name for name in profile.tools if name not in tools]
+            if missing:
+                raise UnsupportedRuntimeSettingError(f"Unknown tools in profile {profile_name}: {', '.join(missing)}")
+        if active_profile is not None and active_profile not in profiles:
+            raise UnsupportedRuntimeSettingError(f"Unknown active agent tool profile: {active_profile}")
