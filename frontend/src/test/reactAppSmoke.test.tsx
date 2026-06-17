@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "../App";
@@ -60,11 +60,14 @@ it("smoke tests migrated React pages and logs modal", async () => {
   expect(await screen.findByRole("heading", { name: "Nodes" })).toBeInTheDocument();
   await user.click(screen.getByRole("link", { name: "Chat" }));
   expect(await screen.findByRole("heading", { name: "Chat" })).toBeInTheDocument();
-  await user.click(screen.getByRole("link", { name: "GGUF Library" }));
+  await user.click(screen.getByRole("link", { name: "Models" }));
+  expect(await screen.findByRole("heading", { name: "Models" })).toBeInTheDocument();
+  const modelNav = screen.getByRole("navigation", { name: "Models navigation" });
+  await user.click(within(modelNav).getByRole("link", { name: "Library" }));
   expect(await screen.findByRole("heading", { name: "GGUF Library" })).toBeInTheDocument();
-  await user.click(screen.getByRole("link", { name: "HF Downloads" }));
+  await user.click(within(screen.getByRole("navigation", { name: "Library navigation" })).getByRole("link", { name: "Acquire" }));
   expect(await screen.findByRole("heading", { name: "HF Downloads" })).toBeInTheDocument();
-  await user.click(screen.getByRole("link", { name: "Quantization" }));
+  await user.click(within(screen.getByRole("navigation", { name: "Acquire navigation" })).getByRole("link", { name: "Quantize" }));
   expect(await screen.findByRole("heading", { name: "Quantization" })).toBeInTheDocument();
   await user.click(screen.getByRole("link", { name: "Audit" }));
   expect(await screen.findByRole("heading", { name: "Audit" })).toBeInTheDocument();

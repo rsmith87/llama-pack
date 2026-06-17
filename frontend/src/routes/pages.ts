@@ -1,4 +1,4 @@
-export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "tool-loop-evals" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
+export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "models" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "tool-loop-evals" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
 export type PageKey = BuiltInPageKey | string;
 export type PageIcon =
   | "dashboard"
@@ -45,6 +45,15 @@ export const navSections: NavSection[] = [
   { key: "system", label: "System" },
 ];
 
+export const modelLifecycleNavigation: Array<{ label: string; path: string }> = [
+  { label: "Overview", path: "/ui/models" },
+  { label: "Library", path: "/ui/gguf-library" },
+  { label: "Acquire", path: "/ui/hf-downloads" },
+  { label: "Convert", path: "/ui/hf-to-gguf" },
+  { label: "Quantize", path: "/ui/quantization" },
+  { label: "Evaluate", path: "/ui/benchmarks" },
+];
+
 export const pages: PageDefinition[] = [
   { key: "chat", label: "Chat", path: "/ui/chat", icon: "chat", section: "gateway" },
   { key: "api-keys", label: "App Keys", path: "/ui/api-keys", icon: "api-keys", section: "gateway", hideInModes: ["agent"] },
@@ -52,11 +61,12 @@ export const pages: PageDefinition[] = [
   { key: "dashboard", label: "Dashboard", path: "/", icon: "dashboard", section: "operations" },
   { key: "nodes", label: "Nodes", path: "/ui/nodes", icon: "nodes", section: "operations", hideInModes: ["agent"] },
   { key: "controller-ops", label: "Controller Ops", path: "/ui/controller-ops", icon: "controller", section: "operations", hideInModes: ["agent"] },
-  { key: "gguf-library", label: "GGUF Library", path: "/ui/gguf-library", icon: "library", section: "models" },
-  { key: "hf-downloads", label: "HF Downloads", path: "/ui/hf-downloads", icon: "download", section: "models" },
-  { key: "hf-to-gguf", label: "HF to GGUF", path: "/ui/hf-to-gguf", icon: "convert", section: "models" },
-  { key: "quantization", label: "Quantization", path: "/ui/quantization", icon: "quantize", section: "models" },
-  { key: "benchmarks", label: "Benchmarks", path: "/ui/benchmarks", icon: "benchmark", section: "models", hideInModes: ["agent"] },
+  { key: "models", label: "Models", path: "/ui/models", icon: "library", section: "models", secondaryNavigation: modelLifecycleNavigation },
+  { key: "gguf-library", label: "Library", path: "/ui/gguf-library", icon: "library", section: "models", hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },
+  { key: "hf-downloads", label: "Acquire", path: "/ui/hf-downloads", icon: "download", section: "models", hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },
+  { key: "hf-to-gguf", label: "Convert", path: "/ui/hf-to-gguf", icon: "convert", section: "models", hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },
+  { key: "quantization", label: "Quantize", path: "/ui/quantization", icon: "quantize", section: "models", hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },
+  { key: "benchmarks", label: "Evaluate", path: "/ui/benchmarks", icon: "benchmark", section: "models", hideInModes: ["agent"], hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },
   { key: "runtime-overview", label: "Overview", path: "/ui/runtime", icon: "runtime", section: "runtime" },
   { key: "tool-loop-evals", label: "Tool Loop Evals", path: "/ui/tool-loop-evals", icon: "benchmark", section: "runtime" },
   { key: "embeddings", label: "Embeddings", path: "/ui/embeddings", icon: "embeddings", section: "runtime" },

@@ -75,6 +75,9 @@ it("renders primary React navigation and defaults to dashboard", async () => {
     "System",
   ]);
   expect(screen.getByRole("link", { name: "Dashboard" })).toHaveClass("active");
+  expect(screen.getByRole("link", { name: "Models" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Library" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: "Acquire" })).not.toBeInTheDocument();
   expect(await screen.findByText("System Snapshot")).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Switch to dark mode" })).toBeInTheDocument();
   expect(screen.queryByText("Legacy Console")).not.toBeInTheDocument();
@@ -156,6 +159,7 @@ it("hides controller navigation when the backend is running as an agent", async 
   expect(screen.queryByRole("link", { name: "Controller Ops" })).not.toBeInTheDocument();
   expect(screen.queryByRole("link", { name: "Audit" })).not.toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Chat" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Models" })).toBeInTheDocument();
 });
 
 it("renders enabled plugin navigation and a generic hosted route", async () => {

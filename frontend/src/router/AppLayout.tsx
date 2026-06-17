@@ -1,5 +1,5 @@
 import "./layout.css";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppModeProvider } from "../features/appMode/appModeContext";
 import { AuthLoginForm, useAuthSession } from "../features/auth/authSession";
@@ -7,7 +7,7 @@ import { ThemeToggle } from "../features/theme/themeSession";
 import { useGlobalStatus } from "../features/globalStatus/globalStatusContext";
 import { usePluginNav } from "../features/plugins/pluginNavContext";
 import { useLogModal } from "../features/logs/logModalContext";
-import { pageForCurrentPath, pagesBySectionForMode } from "../routes/pages";
+import { pageForCurrentPath, pagesForMode } from "../routes/pages";
 import { LogModal } from "../components/LogModal";
 import { Button } from "../components/ui";
 import { MenuIcon } from "../components/MenuIcon";
@@ -27,9 +27,9 @@ export function AppLayout() {
   const [navOpen, setNavOpen] = useState(false);
   const activePage = pageForCurrentPath(location.pathname, pluginPages);
 
-  // Visible pages for mode-based redirect
-  const visiblePages = pagesBySectionForMode(appMode, pluginPages)
-    .flatMap((section) => section.pages);
+  const modePages = useMemo(() => [...pagesForMode(appMode), ...pluginPages], [appMode, pluginPages]);
+  const secondaryNavigation = (activePage.secondaryNavigation || [])
+    .filter((item) => modePages.some((page) => page.path === item.path));
 
   // Close mobile nav on route change
   useEffect(() => {
@@ -44,11 +44,11 @@ export function AppLayout() {
 
   // Redirect away from hidden pages
   useEffect(() => {
-    if (appMode && !visiblePages.some((page) => page.key === activePage.key)) {
+    if (appMode && !modePages.some((page) => page.key === activePage.key)) {
       if (activePage.pluginId) return;
       if (activePage.key !== "dashboard") navigate("/", { replace: true });
     }
-  }, [activePage.key, appMode, visiblePages, navigate]);
+  }, [activePage.key, appMode, modePages, navigate]);
 
   const authRequired = authEnabled === true;
 
@@ -114,9 +114,9 @@ export function AppLayout() {
                 </ul>
               </section>
             ) : null}
-            {activePage.pluginId && activePage.secondaryNavigation?.length ? (
+            {secondaryNavigation.length ? (
               <nav className="plugin-secondary-nav" aria-label={`${activePage.pluginName || activePage.label} navigation`}>
-                {activePage.secondaryNavigation.map((item) => (
+                {secondaryNavigation.map((item) => (
                   <NavLink
                     key={item.path}
                     to={item.path}

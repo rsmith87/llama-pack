@@ -588,10 +588,11 @@ nav.plugin-secondary-nav {
   justify-content: flex-start;
 }
 
-nav.plugin-secondary-nav button {
+nav.plugin-secondary-nav .plugin-secondary-button {
   border: 1px solid var(--line);
   background: var(--button);
   color: var(--ink);
+  text-decoration: none;
   cursor: pointer;
   border-radius: 8px;
   padding: 8px 12px;
@@ -605,4 +606,10 @@ nav.plugin-secondary-nav button {
   transition: border-color .15s, box-shadow .15s, opacity .15s, background .15s, color .15s;
   display: inline;
   margin-right: 10px;
+}
+
+nav.plugin-secondary-nav .plugin-secondary-button.active {
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 20%, transparent);
 }

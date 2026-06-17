@@ -75,7 +75,7 @@ export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
                   key={item.key}
                   to={item.path}
                   className={({ isActive }) =>
-                    `nav-button cursor-pointer ${isActive ? "active" : ""}`
+                    `nav-button cursor-pointer ${isActive || (item.key === "models" && activePage.section === "models") ? "active" : ""}`
                   }
                   onClick={onClose}
                   end={item.path === "/"}

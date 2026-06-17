@@ -4,7 +4,7 @@ import type { LocalModel } from "../../types/models";
 import { Button, StatusBadge } from "../ui";
 import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
 import { modelName, statusTone } from "../../features/models";
-import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart } from "react-icons/io5";
+import { IoStar, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart, IoRefresh } from "react-icons/io5";
 
 /* ---------- helpers ---------- */
 
@@ -53,12 +53,16 @@ export type ModelCardProps = {
   /** Unique key for back-to-back actions. */
   actingModel?: string;
 
+  /** Optional suffix appended to action aria-labels. */
+  actionLabelSuffix?: string;
+
   // -- open / inspect --
   onOpen?: () => void;
 
   // -- lifecycle --
   onStart?: () => void;
   onStop?: () => void;
+  onRestart?: () => void;
 
   // -- actions --
   onChat?: () => void;
@@ -81,9 +85,11 @@ export function ModelCard({
   model,
   resolvedNode,
   actingModel = "",
+  actionLabelSuffix = "",
   onOpen,
   onStart,
   onStop,
+  onRestart,
   onChat,
   onBenchmark,
   onTransfer,
@@ -132,7 +138,8 @@ export function ModelCard({
     })
     .filter((label) => label.length > 0);
 
-  const hasActions = Boolean(onStart || onStop || onChat || onBenchmark || onTransfer || onLogs || onAdd || onEdit || onDelete);
+  const hasActions = Boolean(onStart || onStop || onRestart || onChat || onBenchmark || onTransfer || onLogs || onAdd || onEdit || onDelete);
+  const labelSuffix = actionLabelSuffix ? ` ${actionLabelSuffix}` : "";
 
   const details: Array<[string, string]> = [];
   if (port !== undefined) details.push(["Port", String(port)]);
@@ -172,32 +179,37 @@ export function ModelCard({
           </Button>
         ) : null}
         {onStart ? (
-          <Button variant="success" onClick={onStart} disabled={actingModel === `start:${name}`} aria-label={`Start ${name}`}>
+          <Button variant="success" onClick={onStart} disabled={actingModel === `start:${name}`} aria-label={`Start ${name}${labelSuffix}`}>
             <IoPlaySharp />
           </Button>
         ) : null}
         {onStop ? (
-          <Button variant="danger" onClick={onStop} disabled={actingModel === `stop:${name}`} aria-label={`Stop ${name}`}>
+          <Button variant="danger" onClick={onStop} disabled={actingModel === `stop:${name}`} aria-label={`Stop ${name}${labelSuffix}`}>
             <IoStop />
           </Button>
         ) : null}
+        {onRestart ? (
+          <Button onClick={onRestart} disabled={actingModel === `restart:${name}`} aria-label={`Restart ${name}${labelSuffix}`}>
+            <IoRefresh />
+          </Button>
+        ) : null}
         {onChat ? (
-          <Button variant="warning" onClick={onChat} aria-label={`Chat with ${name}`}>
+          <Button variant="warning" onClick={onChat} aria-label={`Chat with ${name}${labelSuffix}`}>
             <IoChatbubbles />
           </Button>
         ) : null}
         {onBenchmark ? (
-          <Button type="button" onClick={onBenchmark} aria-label={`Benchmark ${name}`}>
+          <Button type="button" onClick={onBenchmark} aria-label={`Benchmark ${name}${labelSuffix}`}>
             <IoStatsChart />
           </Button>
         ) : null}
         {onTransfer ? (
-          <Button variant="success" onClick={onTransfer} aria-label={`Send ${name}`}>
+          <Button variant="success" onClick={onTransfer} aria-label={`Send ${name}${labelSuffix}`}>
             <IoSend />
           </Button>
         ) : null}
         {onLogs ? (
-          <Button type="button" onClick={onLogs} aria-label={`View logs for ${name}`}>
+          <Button type="button" onClick={onLogs} aria-label={`View logs for ${name}${labelSuffix}`}>
             <IoTerminal />
           </Button>
         ) : null}

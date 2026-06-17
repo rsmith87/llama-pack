@@ -4,12 +4,14 @@ import { createGgufTransfer } from "../../api/library";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel, stopNodeModel, updateNode } from "../../api/nodes";
 import { EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
+import { ModelCard } from "../../components/ModelCard";
 import { useLogModal } from "../../features/logs/logModalContext";
-import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
 import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
 import { modelName, modelFileId } from "../../features/models";
+import { useNavigateToPage } from "../../hooks/useNavigateToPage";
+import { librarySelectionSearch } from "../../features/ggufLibrary";
 
 type NodeEditState = {
   name: string;
@@ -40,6 +42,7 @@ function transferProgressText(transfer: Record<string, unknown> | null) {
 
 export function NodesPage() {
   const { openLogs } = useLogModal();
+  const navigateToPage = useNavigateToPage();
   const { data: nodes, loading, error, refresh, setError } = useAsyncResource<NodeRecord[]>(
     () => Promise.all([listNodes(), getNodeModels()])
       .then(([configuredPayload, modelsPayload]) => mergeNodeInventory(asNodeArray(configuredPayload), asNodeArray(modelsPayload))),
@@ -50,6 +53,7 @@ export function NodesPage() {
   const [registration, setRegistration] = useState("");
   const [editNode, setEditNode] = useState<NodeEditState | null>(null);
   const [transfer, setTransfer] = useState<TransferState | null>(null);
+  const [actingModel, setActingModel] = useState("");
 
   const filteredNodes = useMemo(() => filterNodes(nodes, { query, status, registration }), [nodes, query, status, registration]);
   const summary = nodeSummary(nodes);
@@ -71,10 +75,18 @@ export function NodesPage() {
   }
 
   async function runModelAction(nodeName: string, name: string, action: "start" | "stop" | "restart") {
-    if (action === "start") await startNodeModel(nodeName, name);
-    if (action === "stop") await stopNodeModel(nodeName, name);
-    if (action === "restart") await restartNodeModel(nodeName, name);
-    await refresh();
+    setActingModel(`${action}:${name}`);
+    setError("");
+    try {
+      if (action === "start") await startNodeModel(nodeName, name);
+      if (action === "stop") await stopNodeModel(nodeName, name);
+      if (action === "restart") await restartNodeModel(nodeName, name);
+      await refresh();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to ${action} ${name} on ${nodeName}`);
+    } finally {
+      setActingModel("");
+    }
   }
 
   function openTransfer(node: NodeRecord, model: Record<string, unknown>) {
@@ -165,32 +177,27 @@ export function NodesPage() {
               <div className="model-cards">
                 {node.models?.length ? sortModelsForDisplay(node.models).map((model) => {
                   const name = modelName(model);
-                  const stateClass = isLoadingModel(model) ? "loading" : isActiveModel(model) ? "active" : "";
                   return (
-                    <article className={`model-card ${stateClass}`.trim()} key={name}>
-                      <strong>{name}</strong>
-                      <span>{String(model.status || "available")}</span>
-                      <div className="model-actions">
-                        <button type="button" onClick={() => void runModelAction(node.name || "", name, "start")} aria-label={`Start ${name} on ${node.name}`}>Start</button>
-                        <button type="button" onClick={() => void runModelAction(node.name || "", name, "stop")} aria-label={`Stop ${name} on ${node.name}`}>Stop</button>
-                        <button type="button" onClick={() => void runModelAction(node.name || "", name, "restart")} aria-label={`Restart ${name} on ${node.name}`}>Restart</button>
-                        <button
-                          type="button"
-                          onClick={() => openLogs({
-                            source: "node-model",
-                            identifier: name,
-                            node: node.name || "",
-                            autoLoad: true,
-                          })}
-                          aria-label={`View logs for ${name} on ${node.name}`}
-                        >
-                          Logs
-                        </button>
-                        {isSendableGgufModel(node, model) ? (
-                          <button type="button" onClick={() => openTransfer(node, model)} aria-label={`Send ${name} from ${node.name}`}>Send</button>
-                        ) : null}
-                      </div>
-                    </article>
+                    <ModelCard
+                      key={name}
+                      model={model}
+                      resolvedNode={node.name || ""}
+                      actingModel={actingModel}
+                      actionLabelSuffix={`on ${node.name || "unknown node"}`}
+                      onOpen={() => navigateToPage("gguf-library", {
+                        search: librarySelectionSearch(name, node.name || "", modelFileId(model)),
+                      })}
+                      onStart={() => void runModelAction(node.name || "", name, "start")}
+                      onStop={() => void runModelAction(node.name || "", name, "stop")}
+                      onRestart={() => void runModelAction(node.name || "", name, "restart")}
+                      onLogs={() => openLogs({
+                        source: "node-model",
+                        identifier: name,
+                        node: node.name || "",
+                        autoLoad: true,
+                      })}
+                      onTransfer={isSendableGgufModel(node, model) ? () => openTransfer(node, model) : undefined}
+                    />
                   );
                 }) : <EmptyState message={String(node.error || "No models reported.")} />}
               </div>

@@ -1,11 +1,33 @@
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { MemoryRouter } from "react-router-dom";
 import { NodesPage } from "../../pages/NodesPage";
+
+const { mockedNavigate } = vi.hoisted(() => ({
+  mockedNavigate: vi.fn(),
+}));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockedNavigate,
+  };
+});
+
+function renderNodesPage() {
+  return render(
+    <MemoryRouter>
+      <NodesPage />
+    </MemoryRouter>,
+  );
+}
 
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  mockedNavigate.mockReset();
 });
 
 function okJson(payload: unknown) {
@@ -27,15 +49,15 @@ it("loads, merges, filters, and summarizes nodes", async () => {
   );
   const user = userEvent.setup();
 
-  render(<NodesPage />);
+  renderNodesPage();
 
   expect(await screen.findByText("1/2 reachable nodes, 1 reported models")).toBeInTheDocument();
-  expect(screen.getByText("mac-agent")).toBeInTheDocument();
-  expect(screen.getByText("win-agent")).toBeInTheDocument();
+  expect(screen.getAllByText("mac-agent").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("win-agent").length).toBeGreaterThan(0);
 
   await user.selectOptions(screen.getByLabelText("Status"), "reachable");
 
-  expect(screen.getByText("mac-agent")).toBeInTheDocument();
+  expect(screen.getAllByText("mac-agent").length).toBeGreaterThan(0);
   expect(screen.queryByText("win-agent")).not.toBeInTheDocument();
 });
 
@@ -51,7 +73,7 @@ it("saves node edits with PUT payload", async () => {
   );
   const user = userEvent.setup();
 
-  render(<NodesPage />);
+  renderNodesPage();
   await screen.findByText("mac-agent");
   await user.click(screen.getByRole("button", { name: "Edit mac-agent" }));
   await user.clear(screen.getByLabelText("URL"));
@@ -77,7 +99,7 @@ it("sends remote model actions", async () => {
   );
   const user = userEvent.setup();
 
-  render(<NodesPage />);
+  renderNodesPage();
   await screen.findByText("qwen");
   await user.click(screen.getByRole("button", { name: "Start qwen on mac-agent" }));
 
@@ -93,7 +115,7 @@ it("opens node model logs from each model card", async () => {
   );
   const user = userEvent.setup();
 
-  render(<NodesPage />);
+  renderNodesPage();
   await user.click(await screen.findByRole("button", { name: "View logs for qwen on mac-agent" }));
 });
 
@@ -113,11 +135,11 @@ it("offers Send only for reachable source GGUF models", async () => {
       ])),
   );
 
-  render(<NodesPage />);
+  renderNodesPage();
 
-  expect(await screen.findByRole("button", { name: "Send qwen from source" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Send llama from dest" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Send mistral from offline" })).not.toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Send qwen on source" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Send llama on dest" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Send mistral on offline" })).not.toBeInTheDocument();
 });
 
 it("submits a model transfer from a reachable source to another reachable node", async () => {
@@ -147,8 +169,8 @@ it("submits a model transfer from a reachable source to another reachable node",
   );
   const user = userEvent.setup();
 
-  render(<NodesPage />);
-  await user.click(await screen.findByRole("button", { name: "Send qwen from source" }));
+  renderNodesPage();
+  await user.click(await screen.findByRole("button", { name: "Send qwen on source" }));
 
   expect(screen.getByRole("heading", { name: "Send qwen" })).toBeInTheDocument();
   const destinationSelect = screen.getByLabelText("Destination node");
@@ -169,4 +191,20 @@ it("submits a model transfer from a reachable source to another reachable node",
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/transfers/transfer-1", expect.objectContaining({ method: "GET" })));
   expect(await screen.findByText("running")).toBeInTheDocument();
   expect(screen.getByText("1/2 files copied, 0 skipped")).toBeInTheDocument();
+});
+
+it("navigates to GGUF Library from a node model card with dashboard-style handoff", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson([{ name: "mac-agent", url: "http://mac:9000" }]))
+      .mockResolvedValueOnce(okJson([{ name: "mac-agent", reachable: true, models: [{ name: "qwen", file_id: "file-qwen", favorite: true, status: "running" }] }])),
+  );
+  const user = userEvent.setup();
+
+  renderNodesPage();
+  await user.click(await screen.findByRole("button", { name: "Open qwen" }));
+
+  expect(mockedNavigate).toHaveBeenCalledWith("/ui/gguf-library?source=dashboard&model=qwen&node=mac-agent&file_id=file-qwen");
+  expect(screen.getByText("favorite")).toBeInTheDocument();
 });
