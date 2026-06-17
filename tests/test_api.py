@@ -1536,6 +1536,60 @@ def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
     assert reloaded.json()["settings"]["agent_tools_safe_roots"] == [str(tmp_path / "workspace")]
 
 
+def test_settings_tool_catalog_lists_effective_agent_tools(tmp_path):
+    workspace = tmp_path / "workspace"
+    workspace.mkdir()
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "agent_tools": {
+                    "enabled": True,
+                    "max_iterations": 4,
+                    "tool_timeout_seconds": 10.0,
+                    "safe_roots": [str(workspace)],
+                    "tools": {
+                        "read_project_file": {
+                            "type": "file_read_dynamic",
+                            "description": "Read a project file.",
+                            "path": str(workspace),
+                        },
+                        "local_health": {
+                            "type": "http",
+                            "description": "Check local health.",
+                            "method": "GET",
+                            "url": "http://127.0.0.1:9137/health",
+                            "allowed_domains": ["127.0.0.1"],
+                        },
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/settings/tool-catalog")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["enabled"] is True
+    assert payload["tool_count"] == 2
+    assert payload["safe_roots"] == [str(workspace)]
+    read_tool = next(tool for tool in payload["tools"] if tool["name"] == "read_project_file")
+    assert read_tool["type"] == "file_read_dynamic"
+    assert read_tool["description"] == "Read a project file."
+    assert read_tool["summary"]["path"] == str(workspace)
+    assert read_tool["safety"]["status"] == "ok"
+    assert read_tool["parameters"]["required"] == ["path"]
+    health_tool = next(tool for tool in payload["tools"] if tool["name"] == "local_health")
+    assert health_tool["summary"]["url"] == "http://127.0.0.1:9137/health"
+    assert health_tool["safety"]["status"] == "not_applicable"
+
+
 def test_settings_runtime_patch_rejects_unsupported_key(tmp_path):
     app = create_app(
         config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),

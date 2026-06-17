@@ -31,3 +31,57 @@
   font-size: 11px;
   margin-top: 2px;
 }
+
+.settings-tool-catalog {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+}
+
+.tool-inspector {
+  border-left: 1px solid var(--border);
+  min-width: 0;
+  padding-left: 16px;
+}
+
+.tool-inspector h4 {
+  margin: 14px 0 6px;
+}
+
+.tool-summary-list {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.tool-summary-list div {
+  align-items: baseline;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.tool-summary-list span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.tool-summary-list strong {
+  font-size: 13px;
+  font-weight: 600;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 900px) {
+  .settings-tool-catalog {
+    grid-template-columns: 1fr;
+  }
+
+  .tool-inspector {
+    border-left: 0;
+    border-top: 1px solid var(--border);
+    padding-left: 0;
+    padding-top: 16px;
+  }
+}

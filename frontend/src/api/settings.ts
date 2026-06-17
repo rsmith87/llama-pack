@@ -55,6 +55,28 @@ export type RuntimeSettingsDocument = {
 
 export type RuntimeSettingsPatch = Partial<RuntimeSettings>;
 
+export type ToolCatalogSafety = {
+  status: "ok" | "warning" | "error" | "not_applicable";
+  message: string;
+};
+
+export type ToolCatalogItem = {
+  name: string;
+  type: string;
+  description: string;
+  summary: Record<string, unknown>;
+  limits: Record<string, unknown>;
+  parameters: Record<string, unknown>;
+  safety: ToolCatalogSafety;
+};
+
+export type ToolCatalog = {
+  enabled: boolean;
+  safe_roots: string[];
+  tool_count: number;
+  tools: ToolCatalogItem[];
+};
+
 export function generateApiKeys(payload: { prefix: string; token_bytes: number; count: number }) {
   return apiPost<{ keys?: string[]; count?: number; prefix?: string; token_bytes?: number }>("/settings/api-keys/generate", payload);
 }
@@ -73,4 +95,8 @@ export function getRuntimeSettings() {
 
 export function patchRuntimeSettings(payload: RuntimeSettingsPatch) {
   return apiPatch<RuntimeSettingsDocument>("/settings/runtime", payload);
+}
+
+export function getToolCatalog() {
+  return apiGet<ToolCatalog>("/settings/tool-catalog");
 }

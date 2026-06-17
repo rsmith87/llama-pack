@@ -82,6 +82,7 @@ function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> =
     }),
     "/lm-api/v1/settings/disks": () => okJson([]),
     "/lm-api/v1/settings/node-auth": () => okJson([]),
+    "/lm-api/v1/settings/tool-catalog": () => okJson({ enabled: false, safe_roots: [], tool_count: 0, tools: [] }),
     ...extra,
   };
 }
@@ -167,6 +168,57 @@ it("generates helper keys and applies the first generated key", async () => {
   await user.click(screen.getByRole("button", { name: "Apply First Key" }));
   await user.click(screen.getByRole("button", { name: "Config Tools" }));
   expect(screen.getByLabelText("Controller API Key (Optional)")).toHaveValue("llm_generated");
+});
+
+it("shows the read-only tool catalog and inspector", async () => {
+  mockFetch(
+    [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
+    settingsRoutes({
+      "/lm-api/v1/settings/tool-catalog": () => okJson({
+        enabled: true,
+        safe_roots: ["/workspace"],
+        tool_count: 2,
+        tools: [
+          {
+            name: "read_project_file",
+            type: "file_read_dynamic",
+            description: "Read a project file.",
+            summary: { path: "/workspace" },
+            limits: { max_file_bytes: 524288 },
+            parameters: {
+              type: "object",
+              properties: { path: { type: "string", description: "Relative file path under the configured root." } },
+              required: ["path"],
+              additionalProperties: false,
+            },
+            safety: { status: "ok", message: "Path is under safe_roots." },
+          },
+          {
+            name: "local_health",
+            type: "http",
+            description: "Check local health.",
+            summary: { method: "GET", url: "http://127.0.0.1:9137/health" },
+            limits: { max_response_bytes: 65536 },
+            parameters: { type: "object", properties: {}, additionalProperties: false },
+            safety: { status: "not_applicable", message: "No filesystem path safety check required." },
+          },
+        ],
+      }),
+    }),
+  );
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Tool Catalog" }));
+
+  await waitFor(() => expect(screen.getAllByText("read_project_file").length).toBeGreaterThan(0));
+  expect(screen.getAllByText("file_read_dynamic").length).toBeGreaterThan(0);
+  expect(screen.getByText("2 configured tools")).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Inspect local_health" }));
+  expect(screen.getByRole("heading", { name: "local_health" })).toBeInTheDocument();
+  expect(screen.getByText("http://127.0.0.1:9137/health")).toBeInTheDocument();
+  expect(screen.getByText(/No filesystem path safety check required/)).toBeInTheDocument();
 });
 
 it("creates and revokes admin auth keys", async () => {

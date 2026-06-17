@@ -4,6 +4,7 @@ import { createKey, listKeys, revokeKey } from "../../api/auth";
 import {
   generateApiKeys,
   getRuntimeSettings,
+  getToolCatalog,
   listModelDisks,
   listNodeAuth,
   patchRuntimeSettings,
@@ -11,6 +12,7 @@ import {
   type NodeAuthInfo,
   type RuntimeSettings,
   type RuntimeSettingsDocument,
+  type ToolCatalog,
 } from "../../api/settings";
 import { DataTable, ErrorBanner, FormField, Panel, Button, StatusBadge } from "../../components/ui";
 import { useAuthSession } from "../../features/auth/authSession";
@@ -81,6 +83,17 @@ function safeRootsText(value: string[] | undefined): string {
   return (value || []).join("\n");
 }
 
+function jsonPreview(value: unknown): string {
+  return JSON.stringify(value, null, 2);
+}
+
+function summaryValue(value: unknown): string {
+  if (Array.isArray(value)) return value.join(" ");
+  if (value === null || value === undefined) return "-";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
 export function SettingsPage() {
   const { authUser, authRole } = useAuthSession();
   const [mode, setMode] = useState("single");
@@ -98,6 +111,10 @@ export function SettingsPage() {
   const [agentWorkerCapacityText, setAgentWorkerCapacityText] = useState("{}");
   const [clientCorsOriginsText, setClientCorsOriginsText] = useState("");
   const [agentToolsSafeRootsText, setAgentToolsSafeRootsText] = useState("");
+  const [toolCatalog, setToolCatalog] = useState<ToolCatalog>({ enabled: false, safe_roots: [], tool_count: 0, tools: [] });
+  const [selectedToolName, setSelectedToolName] = useState("");
+  const [toolSearch, setToolSearch] = useState("");
+  const [toolTypeFilter, setToolTypeFilter] = useState("all");
   const [runtimeStatus, setRuntimeStatus] = useState("");
   const [chatToolsStatus, setChatToolsStatus] = useState("");
   const [prefix, setPrefix] = useState("llm");
@@ -116,10 +133,18 @@ export function SettingsPage() {
   const paneLabels: Record<string, string> = {
     runtime: "Runtime Settings",
     chatTools: "Chat Tools",
+    toolCatalog: "Tool Catalog",
     storage: "Storage",
     access: "Access",
     config: "Config Tools",
   };
+  const selectedTool = toolCatalog.tools.find((tool) => tool.name === selectedToolName) || toolCatalog.tools[0] || null;
+  const toolTypes = Array.from(new Set(toolCatalog.tools.map((tool) => tool.type))).sort();
+  const filteredTools = toolCatalog.tools.filter((tool) => {
+    const matchesType = toolTypeFilter === "all" || tool.type === toolTypeFilter;
+    const text = `${tool.name} ${tool.type} ${tool.description}`.toLowerCase();
+    return matchesType && text.includes(toolSearch.trim().toLowerCase());
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -136,6 +161,23 @@ export function SettingsPage() {
       })
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load node auth diagnostics.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    void getToolCatalog()
+      .then((payload) => {
+        if (cancelled) return;
+        const tools = Array.isArray(payload.tools) ? payload.tools : [];
+        setToolCatalog({ ...payload, tools, safe_roots: Array.isArray(payload.safe_roots) ? payload.safe_roots : [], tool_count: Number(payload.tool_count || tools.length) });
+        setSelectedToolName((current) => current || tools[0]?.name || "");
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load tool catalog.");
       });
     return () => {
       cancelled = true;
@@ -334,7 +376,7 @@ export function SettingsPage() {
       <ErrorBanner message={error} />
       <Panel className="settings-panel">
         <div className="settings-tabs" role="tablist" aria-label="Settings Sections">
-          {["runtime", "chatTools", "storage", "access", "config"].map((pane) => (
+          {["runtime", "chatTools", "toolCatalog", "storage", "access", "config"].map((pane) => (
             <button key={pane} type="button" className={`settings-tab ${activePane === pane ? "active" : ""}`} aria-selected={activePane === pane} onClick={() => setActivePane(pane)}>{paneLabels[pane]}</button>
           ))}
         </div>
@@ -438,6 +480,76 @@ export function SettingsPage() {
             <div className="modal-actions settings-utilities">
               <Button type="button" onClick={() => void saveChatTools()}>Save Chat Tools</Button>
               {chatToolsStatus ? <span className="muted">{chatToolsStatus}</span> : null}
+            </div>
+          </div>
+        ) : null}
+
+        {activePane === "toolCatalog" ? (
+          <div className="settings-pane active">
+            <div className="settings-section-heading">
+              <h3>Tool Catalog</h3>
+              <span className="muted">{toolCatalog.tool_count} configured tools</span>
+            </div>
+            <div className="controller-filters settings-filters">
+              <FormField label="Search Tools">
+                <input aria-label="Search Tools" value={toolSearch} onChange={(event) => setToolSearch(event.target.value)} />
+              </FormField>
+              <FormField label="Tool Type">
+                <select aria-label="Tool Type" value={toolTypeFilter} onChange={(event) => setToolTypeFilter(event.target.value)}>
+                  <option value="all">All Types</option>
+                  {toolTypes.map((type) => <option key={type} value={type}>{type}</option>)}
+                </select>
+              </FormField>
+              <StatusBadge tone={toolCatalog.enabled ? "success" : "warning"}>{toolCatalog.enabled ? "enabled" : "disabled"}</StatusBadge>
+            </div>
+            <div className="settings-tool-catalog">
+              <DataTable
+                rows={filteredTools}
+                emptyMessage="No configured tools."
+                getRowKey={(tool) => tool.name}
+                columns={[
+                  { key: "name", header: "Name", render: (tool) => tool.name },
+                  { key: "type", header: "Type", render: (tool) => tool.type },
+                  { key: "description", header: "Description", render: (tool) => tool.description },
+                  {
+                    key: "safety",
+                    header: "Safety",
+                    render: (tool) => (
+                      <StatusBadge tone={tool.safety.status === "error" ? "danger" : tool.safety.status === "warning" ? "warning" : "success"}>
+                        {tool.safety.status}
+                      </StatusBadge>
+                    ),
+                  },
+                  {
+                    key: "action",
+                    header: "Action",
+                    render: (tool) => <button type="button" aria-label={`Inspect ${tool.name}`} onClick={() => setSelectedToolName(tool.name)}>Inspect</button>,
+                  },
+                ]}
+              />
+              <div className="tool-inspector">
+                {selectedTool ? (
+                  <>
+                    <div className="settings-section-heading">
+                      <h3>{selectedTool.name}</h3>
+                      <StatusBadge tone={selectedTool.safety.status === "error" ? "danger" : selectedTool.safety.status === "warning" ? "warning" : "success"}>{selectedTool.type}</StatusBadge>
+                    </div>
+                    <p className="muted">{selectedTool.description}</p>
+                    <div className="tool-summary-list">
+                      {Object.entries(selectedTool.summary).map(([key, value]) => (
+                        <div key={key}><span>{key}</span><strong>{summaryValue(value)}</strong></div>
+                      ))}
+                    </div>
+                    <p className="muted">{selectedTool.safety.message}</p>
+                    <h4>Parameters</h4>
+                    <pre className="detail-json compact-json">{jsonPreview(selectedTool.parameters)}</pre>
+                    <h4>Limits</h4>
+                    <pre className="detail-json compact-json">{jsonPreview(selectedTool.limits)}</pre>
+                  </>
+                ) : (
+                  <p className="muted">No tool selected.</p>
+                )}
+              </div>
             </div>
           </div>
         ) : null}
