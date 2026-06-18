@@ -6,3 +6,4 @@ audit_db_url: sqlite+pysqlite:///./tests/tmp/task7/audit.db
 chat_sessions_db_url: sqlite+pysqlite:///./tests/tmp/task7/chat_sessions.db
 downloads_db_url: sqlite+pysqlite:///./tests/tmp/task7/downloads.db
 benchmarks_db_url: sqlite+pysqlite:///./tests/tmp/task7/benchmarks.db
+models_db_url: sqlite+pysqlite:///./tests/tmp/task7/models.db
