@@ -178,7 +178,7 @@ it("renders enabled plugin navigation and a generic hosted route", async () => {
               name: "Hello Plugin",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: null, style: null },
+              frontend: { style_entries: [], pages: [] },
               navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
               secondary_navigation: [{ label: "Settings", path: "/ui/plugins/hello_plugin/settings" }],
               ui_routes: [{ path: "/ui/plugins/hello_plugin", label: "Hello Plugin" }],
@@ -197,7 +197,7 @@ it("renders enabled plugin navigation and a generic hosted route", async () => {
   expect(await screen.findByRole("link", { name: "Hello" })).toBeInTheDocument();
   await user.click(screen.getByRole("link", { name: "Hello" }));
 
-  expect(await screen.findByText(/does not declare a frontend entry/)).toBeInTheDocument();
+  expect(await screen.findByText(/does not declare a plugin page/)).toBeInTheDocument();
   expect(within(screen.getByRole("navigation", { name: "Hello Plugin navigation" })).getByRole("link", { name: "Settings" })).toBeInTheDocument();
 });
 
@@ -218,8 +218,6 @@ it("renders plugin navigation from frontend pages", async () => {
               version: "1.0",
               status: "enabled",
               frontend: {
-                entry: null,
-                style: null,
                 style_entries: ["/plugin-assets/page_plugin/plugin.css"],
                 pages: [
                   {
@@ -272,7 +270,7 @@ it("keeps a refreshed plugin URL on the plugin page after metadata loads", async
               name: "Business",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: null, style: null },
+              frontend: { style_entries: [], pages: [] },
               navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
               ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
@@ -307,7 +305,7 @@ it("resolves browser history navigation to plugin pages after shell mount", asyn
               name: "Business",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: null, style: null },
+              frontend: { style_entries: [], pages: [] },
               navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
               ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
@@ -352,7 +350,7 @@ it("preserves plugin navigation when a metadata refresh fails", async () => {
               name: "Business",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: null, style: null },
+              frontend: { style_entries: [], pages: [] },
               navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
               ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
@@ -387,7 +385,7 @@ it("preserves plugin navigation when a later metadata refresh is unexpectedly em
               name: "Business",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: null, style: null },
+              frontend: { style_entries: [], pages: [] },
               navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
               ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
@@ -414,7 +412,7 @@ it("hydrates plugin navigation from the last known metadata cache", async () => 
       name: "Business",
       version: "1.0",
       status: "enabled",
-      frontend: { entry: null, style: null },
+      frontend: { style_entries: [], pages: [] },
       navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
       secondary_navigation: [],
       ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
@@ -461,7 +459,7 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
               name: "Business",
               version: "1.0",
               status: "enabled",
-              frontend: { entry: null, style: null },
+              frontend: { style_entries: [], pages: [] },
               navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
               secondary_navigation: [],
               ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],
@@ -494,7 +492,7 @@ it("keeps cached plugin navigation when the persisted UI session is stale", asyn
       name: "Business",
       version: "1.0",
       status: "enabled",
-      frontend: { entry: null, style: null },
+      frontend: { style_entries: [], pages: [] },
       navigation: [{ label: "Business", path: "/ui/plugins/llama_pack_business" }],
       secondary_navigation: [],
       ui_routes: [{ path: "/ui/plugins/llama_pack_business", label: "Business" }],

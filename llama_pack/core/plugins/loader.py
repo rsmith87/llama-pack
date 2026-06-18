@@ -53,8 +53,6 @@ def _load_one(registry: PluginRegistry, plugin_id: str, path: Path, plugin_confi
         if manifest.frontend:
             page_prefix = f"/ui/plugins/{plugin_id}"
             _validate_static_dir(path, manifest)
-            _plugin_asset_url(plugin_id, manifest.frontend.entry)
-            _plugin_asset_url(plugin_id, manifest.frontend.style)
             for style_entry in manifest.frontend.style_entries:
                 _plugin_asset_url(plugin_id, style_entry)
             for page in manifest.frontend.pages:
@@ -95,7 +93,7 @@ def _validate_static_dir(plugin_root: Path, manifest: PluginManifest) -> None:
     frontend = manifest.frontend
     if frontend is None:
         return
-    has_declared_assets = bool(frontend.entry or frontend.style or frontend.style_entries or frontend.pages)
+    has_declared_assets = bool(frontend.style_entries or frontend.pages)
     if not has_declared_assets:
         return
     if not frontend.static_dir:

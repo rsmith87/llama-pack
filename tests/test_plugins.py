@@ -20,7 +20,11 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
     package_dir.mkdir(parents=True)
     static_dir = package_dir / "static"
     static_dir.mkdir()
-    (static_dir / "hello-entry.js").write_text("export const hello = true;\n", encoding="utf-8")
+    (static_dir / "templates").mkdir(exist_ok=True)
+    (static_dir / "templates" / "hello.html").write_text("<section>Hello Plugin</section>\n", encoding="utf-8")
+    (static_dir / "controllers").mkdir(exist_ok=True)
+    (static_dir / "controllers" / "hello.js").write_text("export function mountPage() {}\n", encoding="utf-8")
+    (static_dir / "hello.css").write_text(".hello-plugin { display: block; }\n", encoding="utf-8")
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
     extra = textwrap.indent(manifest_extra.strip(), "            ") if manifest_extra.strip() else ""
     (plugin_dir / "plugin.yaml").write_text(
@@ -35,7 +39,13 @@ def write_plugin(root: Path, plugin_id: str, *, manifest_extra: str = "", body: 
             entrypoint: {plugin_id}.plugin:plugin
             frontend:
               static_dir: {plugin_id}/static
-              entry: /plugin-assets/{plugin_id}/hello-entry.js
+              style_entries:
+                - hello.css
+              pages:
+                - route: /ui/plugins/{plugin_id}
+                  template: templates/hello.html
+                  controller: controllers/hello.js
+                  title: {plugin_id.replace("_", " ").title()}
 {extra}
             """
         ),
@@ -110,7 +120,8 @@ def test_enabled_plugin_loads_registers_route_and_frontend_metadata(tmp_path: Pa
     assert client.get("/lm-api/v1/plugins/sample_plugin/hello").json() == {"message": "hello"}
     metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
     assert metadata["id"] == "sample_plugin"
-    assert metadata["frontend"]["entry"] == "/plugin-assets/sample_plugin/hello-entry.js"
+    assert metadata["frontend"]["style_entries"] == ["/plugin-assets/sample_plugin/hello.css"]
+    assert metadata["frontend"]["pages"][0]["template"] == "/plugin-assets/sample_plugin/templates/hello.html"
     status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
     assert status["status"] == "enabled"
     assert status["warnings"] == []
@@ -138,10 +149,10 @@ def test_plugin_manifest_accepts_template_first_frontend_pages(tmp_path: Path):
     )
     static_dir = plugin_dir / "page_plugin" / "static"
     (static_dir / "plugin.css").write_text(".page-plugin { display: block; }", encoding="utf-8")
-    (static_dir / "templates").mkdir()
+    (static_dir / "templates").mkdir(exist_ok=True)
     (static_dir / "templates" / "index.html").write_text("<section>Index</section>", encoding="utf-8")
     (static_dir / "templates" / "settings.html").write_text("<section>Settings</section>", encoding="utf-8")
-    (static_dir / "controllers").mkdir()
+    (static_dir / "controllers").mkdir(exist_ok=True)
     (static_dir / "controllers" / "index.js").write_text("export function mountPage() {}\n", encoding="utf-8")
     app = create_app(config=plugin_config(tmp_path, plugin_dir))
     client = authenticated_client(app)
@@ -177,7 +188,6 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     assert client.get("/lm-api/v1/plugins/hello_plugin/hello").json() == {"message": "hello from plugin"}
     metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
     assert metadata["id"] == "hello_plugin"
-    assert metadata["frontend"]["entry"] is None
     assert metadata["frontend"]["style_entries"] == ["/plugin-assets/hello_plugin/hello.css"]
     page = metadata["frontend"]["pages"][0]
     assert page["route"] == "/ui/plugins/hello_plugin"
@@ -193,7 +203,6 @@ def test_checked_in_hello_plugin_loads_as_sample_integration(tmp_path: Path):
     style_response = client.get("/plugin-assets/hello_plugin/hello.css")
     assert style_response.status_code == 200
     assert ".hello-plugin" in style_response.text
-    assert client.get("/plugin-assets/hello_plugin/hello-entry.js").status_code == 404
     migration_status = client.get("/lm-api/v1/plugins/hello_plugin/migrations/status").json()
     target = migration_status["targets"][0]
     assert target["id"] == "main"
@@ -208,10 +217,10 @@ def test_plugin_asset_is_served_from_declared_static_directory(tmp_path: Path):
     app = create_app(config=plugin_config(tmp_path, plugin_dir))
     client = authenticated_client(app)
 
-    response = client.get("/plugin-assets/sample_plugin/hello-entry.js")
+    response = client.get("/plugin-assets/sample_plugin/controllers/hello.js")
 
     assert response.status_code == 200
-    assert "export const hello" in response.text
+    assert "export function mountPage" in response.text
     assert response.headers["cache-control"] == "no-store"
 
 
@@ -231,9 +240,9 @@ def test_disabled_failed_and_unknown_plugin_assets_are_not_served(tmp_path: Path
     app = create_app(config=config)
     client = authenticated_client(app)
 
-    assert client.get("/plugin-assets/disabled_plugin/hello-entry.js").status_code == 404
-    assert client.get("/plugin-assets/failed_plugin/hello-entry.js").status_code == 404
-    assert client.get("/plugin-assets/missing_plugin/hello-entry.js").status_code == 404
+    assert client.get("/plugin-assets/disabled_plugin/controllers/hello.js").status_code == 404
+    assert client.get("/plugin-assets/failed_plugin/controllers/hello.js").status_code == 404
+    assert client.get("/plugin-assets/missing_plugin/controllers/hello.js").status_code == 404
 
 
 def test_plugin_asset_path_traversal_is_rejected(tmp_path: Path):
@@ -412,14 +421,14 @@ def test_plugin_same_namespace_page_asset_urls_remain_valid(tmp_path: Path):
 
 
 @pytest.mark.parametrize("field", ["entry", "style"])
-def test_plugin_legacy_frontend_asset_urls_must_stay_under_plugin_namespace(tmp_path: Path, field: str):
+def test_plugin_legacy_frontend_fields_are_rejected(tmp_path: Path, field: str):
     plugin_dir = write_plugin(
         tmp_path,
         "page_plugin",
         manifest_extra=f"""
         frontend:
           static_dir: page_plugin/static
-          {field}: /plugin-assets/other_plugin/plugin.css
+          {field}: /plugin-assets/page_plugin/plugin.css
         """,
     )
 
@@ -428,27 +437,18 @@ def test_plugin_legacy_frontend_asset_urls_must_stay_under_plugin_namespace(tmp_
 
     status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
     assert status["status"] == "failed"
-    assert "must stay under /plugin-assets/page_plugin/" in status["errors"][0]
+    assert f"frontend.{field} is no longer supported" in status["errors"][0]
 
 
-@pytest.mark.parametrize("field", ["entry", "style", "style_entries"])
-def test_plugin_legacy_frontend_asset_paths_reject_traversal(tmp_path: Path, field: str):
-    if field == "style_entries":
-        field_yaml = """
-          style_entries:
-            - ../other_plugin/file.js
-        """
-    else:
-        field_yaml = f"""
-          {field}: ../other_plugin/file.js
-        """
+def test_plugin_style_entry_paths_reject_traversal(tmp_path: Path):
     plugin_dir = write_plugin(
         tmp_path,
         "page_plugin",
-        manifest_extra=f"""
+        manifest_extra="""
         frontend:
           static_dir: page_plugin/static
-{field_yaml}
+          style_entries:
+            - ../other_plugin/file.js
         """,
     )
 
@@ -458,28 +458,6 @@ def test_plugin_legacy_frontend_asset_paths_reject_traversal(tmp_path: Path, fie
     status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
     assert status["status"] == "failed"
     assert "must not contain traversal segments" in status["errors"][0]
-
-
-def test_plugin_same_namespace_legacy_frontend_asset_urls_remain_valid(tmp_path: Path):
-    plugin_dir = write_plugin(
-        tmp_path,
-        "page_plugin",
-        manifest_extra="""
-        frontend:
-          static_dir: page_plugin/static
-          entry: /plugin-assets/page_plugin/entry.js
-          style: /plugin-assets/page_plugin/plugin.css
-        """,
-    )
-
-    app = create_app(config=plugin_config(tmp_path, plugin_dir))
-    client = authenticated_client(app)
-
-    status = client.get("/lm-api/v1/plugins/status").json()["plugins"][0]
-    metadata = client.get("/lm-api/v1/plugins/enabled").json()[0]
-    assert status["status"] == "enabled"
-    assert metadata["frontend"]["entry"] == "/plugin-assets/page_plugin/entry.js"
-    assert metadata["frontend"]["style"] == "/plugin-assets/page_plugin/plugin.css"
 
 
 def test_disabled_plugin_is_ignored_and_not_registered(tmp_path: Path):
@@ -504,14 +482,14 @@ def test_plugin_can_be_activated_at_runtime_from_configured_path(tmp_path: Path)
     client = authenticated_client(app)
 
     assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 404
-    assert client.get("/plugin-assets/sample_plugin/hello-entry.js").status_code == 404
+    assert client.get("/plugin-assets/sample_plugin/controllers/hello.js").status_code == 404
 
     response = client.post("/lm-api/v1/plugins/sample_plugin/activate")
 
     assert response.status_code == 200
     assert response.json()["status"] == "enabled"
     assert client.get("/lm-api/v1/plugins/sample_plugin/hello").json() == {"message": "hello"}
-    assert client.get("/plugin-assets/sample_plugin/hello-entry.js").status_code == 200
+    assert client.get("/plugin-assets/sample_plugin/controllers/hello.js").status_code == 200
     assert client.get("/lm-api/v1/plugins/enabled").json()[0]["id"] == "sample_plugin"
 
 
@@ -527,7 +505,7 @@ def test_plugin_can_be_deactivated_at_runtime(tmp_path: Path):
     assert response.status_code == 200
     assert response.json()["status"] == "disabled"
     assert client.get("/lm-api/v1/plugins/sample_plugin/hello").status_code == 404
-    assert client.get("/plugin-assets/sample_plugin/hello-entry.js").status_code == 404
+    assert client.get("/plugin-assets/sample_plugin/controllers/hello.js").status_code == 404
     assert client.get("/lm-api/v1/plugins/enabled").json() == []
     assert client.get("/lm-api/v1/plugins/status").json()["plugins"][0]["status"] == "disabled"
 

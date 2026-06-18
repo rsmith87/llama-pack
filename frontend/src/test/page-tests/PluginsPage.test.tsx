@@ -19,7 +19,10 @@ it("renders plugin status, health, frontend, and migration metadata", async () =
             name: "Hello Plugin",
             version: "1.0",
             status: "enabled",
-            frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+            frontend: {
+              style_entries: ["/plugin-assets/hello_plugin/hello.css"],
+              pages: [{ route: "/ui/plugins/hello_plugin", template: "/plugin-assets/hello_plugin/templates/hello.html", controller: "/plugin-assets/hello_plugin/controllers/hello.js", title: "Hello Plugin" }],
+            },
             navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
             ui_routes: [{ label: "Hello Plugin", path: "/ui/plugins/hello_plugin" }],
           },
@@ -72,7 +75,7 @@ it("renders plugin status, health, frontend, and migration metadata", async () =
 
   expect(await screen.findByRole("heading", { name: "Plugins" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Hello Plugin" }));
-  expect(screen.getByText("/plugin-assets/hello_plugin/hello-entry.js")).toBeInTheDocument();
+  expect(screen.getByText("/ui/plugins/hello_plugin")).toBeInTheDocument();
   expect(screen.getByText("Hello plugin ready")).toBeInTheDocument();
   expect(screen.getAllByText("001_hello").length).toBeGreaterThanOrEqual(2);
 
@@ -107,7 +110,10 @@ it("activates and deactivates the selected plugin", async () => {
         name: "Business Plugin",
         version: "1.0",
         status: "enabled",
-        frontend: { entry: "/plugin-assets/business_plugin/business-entry.js", style: null },
+        frontend: {
+          style_entries: [],
+          pages: [{ route: "/ui/plugins/business_plugin", template: "/plugin-assets/business_plugin/templates/index.html", controller: null, title: "Business Plugin" }],
+        },
         navigation: [],
         ui_routes: [],
       }] : [] });
@@ -144,7 +150,7 @@ it("activates and deactivates the selected plugin", async () => {
   await user.click(screen.getAllByRole("button", { name: "Activate" })[0]);
 
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/business_plugin/activate", expect.objectContaining({ method: "POST" }));
-  await screen.findByText("/plugin-assets/business_plugin/business-entry.js");
+  await screen.findByText("/ui/plugins/business_plugin");
   await user.click(screen.getAllByRole("button", { name: "Deactivate" })[0]);
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/plugins/business_plugin/deactivate", expect.objectContaining({ method: "POST" }));
 });
@@ -204,7 +210,10 @@ it("upgrades a pending migration target and refreshes migration status", async (
         name: "Hello Plugin",
         version: "1.0",
         status: "enabled",
-        frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+        frontend: {
+          style_entries: [],
+          pages: [{ route: "/ui/plugins/hello_plugin", template: "/plugin-assets/hello_plugin/templates/hello.html", controller: null, title: "Hello Plugin" }],
+        },
         navigation: [],
         ui_routes: [],
       }]) });
@@ -284,7 +293,10 @@ it("shows last_error when a migration upgrade fails", async () => {
         name: "Hello Plugin",
         version: "1.0",
         status: "enabled",
-        frontend: { entry: "/plugin-assets/hello_plugin/hello-entry.js", style: null },
+        frontend: {
+          style_entries: [],
+          pages: [{ route: "/ui/plugins/hello_plugin", template: "/plugin-assets/hello_plugin/templates/hello.html", controller: null, title: "Hello Plugin" }],
+        },
         navigation: [],
         ui_routes: [],
       }]) });

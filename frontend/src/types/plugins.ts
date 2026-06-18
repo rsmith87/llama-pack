@@ -3,7 +3,6 @@ export type PluginRow = {
   name: string;
   version: string;
   status: string;
-  frontendEntry?: string | null;
   routes: string[];
   warnings: string[];
   errors: string[];
@@ -30,8 +29,6 @@ export type EnabledPlugin = {
   version: string;
   status: "enabled";
   frontend?: {
-    entry?: string | null;
-    style?: string | null;
     style_entries?: string[];
     pages?: PluginFrontendPage[];
   } | null;

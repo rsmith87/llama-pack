@@ -168,8 +168,15 @@ GET /lm-api/v1/plugins/status
     "version": "1.0",
     "status": "enabled",
     "frontend": {
-      "entry": "/plugin-assets/hello_plugin/hello-entry.js",
-      "style": null
+      "style_entries": ["/plugin-assets/hello_plugin/hello.css"],
+      "pages": [
+        {
+          "route": "/ui/plugins/hello_plugin",
+          "template": "/plugin-assets/hello_plugin/templates/hello.html",
+          "controller": "/plugin-assets/hello_plugin/controllers/hello.js",
+          "title": "Hello Plugin"
+        }
+      ]
     },
     "navigation": [],
     "secondary_navigation": [],
@@ -365,7 +372,11 @@ plugins/hello_plugin/
 |   |-- __init__.py
 |   |-- plugin.py
 |   `-- static/
-|       `-- hello-entry.js
+|       |-- hello.css
+|       |-- templates/
+|       |   `-- hello.html
+|       `-- controllers/
+|           `-- hello.js
 ```
 
 The sample plugin should include:

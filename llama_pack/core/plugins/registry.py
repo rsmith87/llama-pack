@@ -232,10 +232,8 @@ class PluginRegistry:
 
     def _frontend_payload(self, record: PluginRecord) -> dict[str, Any]:
         manifest = record.manifest
-        frontend = manifest.frontend.model_dump(mode="json") if manifest and manifest.frontend else {"entry": None, "style": None}
+        frontend = manifest.frontend.model_dump(mode="json") if manifest and manifest.frontend else {}
         if manifest and manifest.frontend:
-            frontend["entry"] = _plugin_asset_url(record.id, manifest.frontend.entry)
-            frontend["style"] = _plugin_asset_url(record.id, manifest.frontend.style)
             frontend["style_entries"] = [_plugin_asset_url(record.id, item) for item in manifest.frontend.style_entries]
             frontend["pages"] = [
                 {

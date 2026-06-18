@@ -163,8 +163,7 @@ The React shell uses that metadata to add plugin primary navigation, scoped
 secondary navigation, and host pages for plugin UI routes. New plugin pages use
 `frontend.pages`: the shell fetches an HTML fragment template, imports the
 optional page controller, calls `mountPage(root, host)`, and attaches declared
-`style_entries`. Legacy `frontend.entry` modules remain supported for existing
-plugins.
+`style_entries`.
 
 The shell also reads `/lm-api/v1/plugins/status` and shows a compact
 administrator-facing alert when plugins are failed, incompatible, or reporting

@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Any, Literal
 
 import yaml
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 PLUGIN_ID_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
 PluginMode = Literal["agent", "controller"]
@@ -39,11 +39,19 @@ class PluginFrontendPage(BaseModel):
 
 
 class PluginFrontend(BaseModel):
-    entry: str | None = None
-    style: str | None = None
     static_dir: str | None = None
     style_entries: list[str] = Field(default_factory=list)
     pages: list[PluginFrontendPage] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def reject_legacy_fields(cls, value: Any) -> Any:
+        if not isinstance(value, dict):
+            return value
+        for field in ("entry", "style"):
+            if field in value:
+                raise ValueError(f"frontend.{field} is no longer supported; use frontend.pages and style_entries")
+        return value
 
 
 ConfigFieldType = Literal["string", "integer", "number", "boolean"]

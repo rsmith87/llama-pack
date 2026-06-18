@@ -31,7 +31,7 @@ function renderPluginHost(loadModule: PluginModuleLoader) {
   );
 }
 
-function stubEnabledPlugin(entry = "/plugin-assets/hello_plugin/hello-entry.js") {
+function stubEnabledPluginWithoutPages() {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
@@ -43,7 +43,7 @@ function stubEnabledPlugin(entry = "/plugin-assets/hello_plugin/hello-entry.js")
             name: "Hello Plugin",
             version: "1.0",
             status: "enabled",
-            frontend: { entry, style: null },
+            frontend: { style_entries: [], pages: [] },
             navigation: [{ label: "Hello", path: "/ui/plugins/hello_plugin" }],
             ui_routes: [{ label: "Hello Plugin", path: "/ui/plugins/hello_plugin" }],
           }]),
@@ -67,8 +67,6 @@ function stubTemplatePlugin({ controller, styleEntries = [] }: { controller: str
             version: "1.0",
             status: "enabled",
             frontend: {
-              entry: null,
-              style: null,
               style_entries: styleEntries,
               pages: [{
                 route: "/ui/plugins/hello_plugin",
@@ -92,24 +90,6 @@ function stubTemplatePlugin({ controller, styleEntries = [] }: { controller: str
     }),
   );
 }
-
-it("loads a plugin frontend module and mounts it into the host container", async () => {
-  stubEnabledPlugin();
-  const cleanup = vi.fn();
-  const loadModule = vi.fn().mockResolvedValue({
-    mount(container: HTMLElement, host: { pluginId: string }) {
-      container.textContent = `mounted ${host.pluginId}`;
-      return cleanup;
-    },
-  });
-  const { unmount } = renderPluginHost(loadModule);
-
-  expect(await screen.findByText("mounted hello_plugin")).toBeInTheDocument();
-  expect(loadModule).toHaveBeenCalledWith("/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=0");
-
-  unmount();
-  expect(cleanup).toHaveBeenCalled();
-});
 
 it("loads the checked-in hello_plugin template, controller, and styles through plugin metadata", async () => {
   const helloTemplate = readFileSync(
@@ -137,8 +117,6 @@ it("loads the checked-in hello_plugin template, controller, and styles through p
             version: "1.0",
             status: "enabled",
             frontend: {
-              entry: null,
-              style: null,
               style_entries: ["/plugin-assets/hello_plugin/hello.css"],
               pages: [{
                 route: "/ui/plugins/hello_plugin",
@@ -217,35 +195,44 @@ it("loads and cleans up plugin style entries", async () => {
   expect(document.head.querySelector("link[data-plugin-style='hello_plugin']")).toBeNull();
 });
 
-it("shows a clear error when the module does not export mount", async () => {
-  stubEnabledPlugin();
+it("shows a clear error when the page controller does not export mountPage", async () => {
+  stubTemplatePlugin({ controller: "/plugin-assets/hello_plugin/controllers/hello.js" });
   renderPluginHost(vi.fn().mockResolvedValue({ registerPlugin: vi.fn() }));
 
   const alert = await screen.findByRole("alert");
-  expect(alert).toHaveTextContent("frontend does not export mount()");
+  expect(alert).toHaveTextContent("controller does not export mountPage()");
 });
 
-it("passes navigation and refresh helpers to the plugin module", async () => {
-  stubEnabledPlugin();
+it("requires plugin pages instead of legacy frontend modules", async () => {
+  stubEnabledPluginWithoutPages();
+
+  renderPluginHost(vi.fn());
+
+  const alert = await screen.findByRole("alert");
+  expect(alert).toHaveTextContent("does not declare a plugin page for /ui/plugins/hello_plugin");
+});
+
+it("passes navigation and refresh helpers to the page controller", async () => {
+  stubTemplatePlugin({ controller: "/plugin-assets/hello_plugin/controllers/hello.js" });
   const loadModule = vi.fn().mockResolvedValue({
-    mount(container: HTMLElement, host: { navigate(_path: string): void; refreshPluginStatus(): void }) {
-      container.textContent = "ready";
+    mountPage(root: HTMLElement, host: { navigate(_path: string): void; refreshPluginStatus(): void }) {
+      root.textContent = "ready";
     },
   });
 
   renderPluginHost(loadModule);
 
   expect(await screen.findByText("ready")).toBeInTheDocument();
-  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(1));
+  await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
   expect(loadModule).toHaveBeenCalledTimes(1);
 });
 
 it("reloads the plugin module with a new cache-bust token", async () => {
-  stubEnabledPlugin();
+  stubTemplatePlugin({ controller: "/plugin-assets/hello_plugin/controllers/hello.js" });
   const user = userEvent.setup();
   const loadModule = vi.fn().mockResolvedValue({
-    mount(container: HTMLElement) {
-      container.textContent = "ready";
+    mountPage(root: HTMLElement) {
+      root.textContent = "ready";
     },
   });
 
@@ -254,24 +241,24 @@ it("reloads the plugin module with a new cache-bust token", async () => {
   expect(await screen.findByText("ready")).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Reload" }));
   await waitFor(() => expect(loadModule).toHaveBeenCalledTimes(2));
-  expect(loadModule).toHaveBeenNthCalledWith(2, "/plugin-assets/hello_plugin/hello-entry.js?v=1.0&r=1");
+  expect(loadModule).toHaveBeenNthCalledWith(2, "/plugin-assets/hello_plugin/controllers/hello.js?v=1.0&r=1");
 });
 
 it("isolates plugin cleanup failures during reload", async () => {
-  stubEnabledPlugin();
+  stubTemplatePlugin({ controller: "/plugin-assets/hello_plugin/controllers/hello.js" });
   const user = userEvent.setup();
   const loadModule = vi.fn()
     .mockResolvedValueOnce({
-      mount(container: HTMLElement) {
-        container.textContent = "first mount";
+      mountPage(root: HTMLElement) {
+        root.textContent = "first mount";
         return () => {
           throw new Error("cleanup failed");
         };
       },
     })
     .mockResolvedValueOnce({
-      mount(container: HTMLElement) {
-        container.textContent = "second mount";
+      mountPage(root: HTMLElement) {
+        root.textContent = "second mount";
       },
     });
 

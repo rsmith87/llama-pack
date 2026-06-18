@@ -10,7 +10,6 @@ import { usePluginNav } from "../../features/plugins/pluginNavContext";
 import "./styles.css";
 
 export type PluginFrontendModule = {
-  mount?: (container: HTMLElement, host: PluginHostApi) => void | (() => void);
   mountPage?: (root: HTMLElement, host: PluginHostApi) => void | (() => void);
 };
 
@@ -146,35 +145,11 @@ export function PluginHostPage({
         cleanupStyles();
       };
     }
-    const entry = plugin?.frontend?.entry;
-    if (!entry) {
-      setError(`Plugin ${page.pluginId} does not declare a frontend entry`);
-      return () => cleanupStyles();
-    }
-    setError(cleanupError);
-    let cancelled = false;
-    loadModule(cacheBustedEntry(entry, plugin.version, reloadCount)).then((module) => {
-      if (cancelled || !containerRef.current || typeof module.mount !== "function") {
-        if (!cancelled && typeof module.mount !== "function") {
-          setError(`Plugin ${page.pluginId} frontend does not export mount()`);
-        }
-        return;
-      }
-      const mountedCleanup = module.mount(containerRef.current, hostApi);
-      cleanupRef.current = typeof mountedCleanup === "function" ? mountedCleanup : null;
-    }).catch((err) => {
-      if (!cancelled) {
-        const loadError = errorMessage(err, "Plugin frontend unavailable");
-        setError(cleanupError ? `${cleanupError}; ${loadError}` : loadError);
-      }
-    });
+    setError(cleanupError ? `${cleanupError}; Plugin ${page.pluginId} does not declare a plugin page for ${location.pathname}` : `Plugin ${page.pluginId} does not declare a plugin page for ${location.pathname}`);
     return () => {
-      cancelled = true;
-      const cleanErr = cleanupPlugin();
-      if (cleanErr) pendingCleanupErrorRef.current = cleanErr;
       cleanupStyles();
     };
-  }, [page.pluginId, refreshKey, reloadCount, plugin, currentPluginPage, hostApi, loadModule, setError]);
+  }, [page.pluginId, refreshKey, reloadCount, plugin, currentPluginPage, hostApi, loadModule, setError, location.pathname]);
 
   return (
     <div className="plugin-host-page">

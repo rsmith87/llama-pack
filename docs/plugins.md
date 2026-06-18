@@ -303,34 +303,6 @@ export function mountPage(root, host) {
 }
 ```
 
-Legacy plugins may still use `frontend.entry`:
-
-```yaml
-frontend:
-  static_dir: hello_plugin/static
-  entry: hello-entry.js
-navigation:
-  - label: Hello
-    path: /ui/plugins/hello_plugin
-ui_routes:
-  - path: /ui/plugins/hello_plugin
-    label: Hello Plugin
-```
-
-For legacy plugin routes, the host loads `frontend.entry` as an ES module and
-calls its exported `mount(container, host)` function.
-
-Minimal plugin frontend module:
-
-```js
-export function mount(container, host) {
-  container.textContent = `Mounted ${host.pluginId}`;
-  return () => {
-    container.textContent = "";
-  };
-}
-```
-
 The `host` object exposes:
 
 - `pluginId`: current plugin id.
@@ -358,7 +330,7 @@ Core provides a small stable CSS class contract for plugin pages:
 
 Plugin assets are served with `Cache-Control: no-store`, and the React plugin
 host appends a version/reload query string when importing plugin controllers,
-styles, and legacy `frontend.entry` modules.
+and styles.
 During development, plugin frontend asset changes should only require a browser
 reload or the plugin page's Reload button. Core frontend rebuilds are only
 needed when the public host contract changes.

@@ -13,7 +13,6 @@ function mergePluginRows(enabled: EnabledPlugin[], status: PluginStatus | null, 
       name: metadata?.name || id,
       version: statusItem?.version || metadata?.version || "",
       status: statusItem?.status || metadata?.status || "unknown",
-      frontendEntry: metadata?.frontend?.entry || null,
       routes: metadata?.frontend?.pages?.length
         ? metadata.frontend.pages.map((item) => item.route)
         : [...(metadata?.navigation || []), ...(metadata?.ui_routes || [])]

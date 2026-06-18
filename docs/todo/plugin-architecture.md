@@ -198,8 +198,15 @@ Example response:
     "version": "1.0",
     "status": "enabled",
     "frontend": {
-      "entry": "/plugin-assets/llama_pack_business/business-entry.js",
-      "style": "/plugin-assets/llama_pack_business/business.css"
+      "style_entries": ["/plugin-assets/llama_pack_business/business.css"],
+      "pages": [
+        {
+          "route": "/ui/plugins/llama_pack_business",
+          "template": "/plugin-assets/llama_pack_business/templates/index.html",
+          "controller": "/plugin-assets/llama_pack_business/controllers/index.js",
+          "title": "Llama Pack Business"
+        }
+      ]
     },
     "navigation": [],
     "secondary_navigation": [],
@@ -282,7 +289,10 @@ plugins/llama_pack_business/
 |   `-- static/
 |       |-- manifest.json
 |       |-- assets/
-|       |-- business-entry.js
+|       |-- templates/
+|       |   `-- index.html
+|       |-- controllers/
+|       |   `-- index.js
 |       `-- business.css
 `-- frontend/
     |-- package.json
@@ -293,7 +303,8 @@ plugins/llama_pack_business/
 Core serves plugin assets through a stable route:
 
 ```text
-/plugin-assets/llama_pack_business/business-entry.js
+/plugin-assets/llama_pack_business/templates/index.html
+/plugin-assets/llama_pack_business/controllers/index.js
 /plugin-assets/llama_pack_business/business.css
 ```
 
@@ -306,17 +317,17 @@ the plugin output directory.
 
 ## Frontend Extension Host
 
-The core React app loads enabled plugin frontend modules dynamically from the
+The core React app loads enabled plugin page templates and controllers from the
 metadata returned by `/lm-api/v1/plugins/enabled`.
 
 Example dynamic import:
 
 ```ts
-const pluginModule = await import(/* @vite-ignore */ plugin.frontend.entry)
-pluginModule.registerPlugin(pluginFrontendContext)
+const controller = await import(/* @vite-ignore */ plugin.frontend.pages[0].controller)
+controller.mountPage(root, pluginHostContext)
 ```
 
-The plugin frontend module registers its own routes:
+The plugin frontend metadata declares its own routes:
 
 ```ts
 export function registerPlugin(app: PluginFrontendContext) {

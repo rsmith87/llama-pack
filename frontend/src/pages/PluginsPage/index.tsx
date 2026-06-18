@@ -114,7 +114,6 @@ export function PluginsPage() {
             <div><span className="muted">ID</span><strong>{selected.id}</strong></div>
             <div><span className="muted">Version</span><strong>{selected.version || "-"}</strong></div>
             <div><span className="muted">Status</span><StatusBadge tone={statusTone(selected.status)}>{selected.status}</StatusBadge></div>
-            <div><span className="muted">Frontend entry</span><strong>{selected.frontendEntry || "-"}</strong></div>
             <div><span className="muted">Routes</span><strong>{listText(selected.routes)}</strong></div>
             <div><span className="muted">Warnings</span><strong>{listText(selected.warnings)}</strong></div>
             <div><span className="muted">Errors</span><strong>{listText(selected.errors)}</strong></div>

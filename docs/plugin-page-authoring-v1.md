@@ -18,15 +18,12 @@ and dynamic behavior in focused controller modules.
 ## v1 Decisions
 
 - `frontend_api_version` remains `"1.0"`.
-- `frontend.pages` is the preferred source of plugin UI routes.
-- `frontend.pages` replaces author-facing `ui_routes`; legacy `ui_routes`
-  remains supported for existing plugins.
+- `frontend.pages` is the source of plugin UI routes.
+- `frontend.pages` replaces author-facing `ui_routes`.
 - Templates are HTML fragments, not full HTML documents.
 - Templates, controllers, and styles live under `frontend.static_dir` and are
   served through `/plugin-assets/{plugin_id}/...`.
 - Page controllers export `mountPage(root, host)`.
-- Legacy `frontend.entry` modules exporting `mount(container, host)` remain
-  supported.
 - The stable host CSS class contract uses the `lp-plugin-*` prefix.
 
 ## Manifest Schema
@@ -126,28 +123,6 @@ plugins/llama_pack_business_plugin/
             |-- knowledge-bases.js
             `-- documents.js
 ```
-
-## Backward Compatibility
-
-Existing plugin frontend modules remain valid:
-
-```yaml
-frontend:
-  static_dir: hello_plugin/static
-  entry: hello-entry.js
-```
-
-Legacy modules still export:
-
-```js
-export function mount(container, host) {
-  return () => {};
-}
-```
-
-A plugin can migrate one route at a time by adding `frontend.pages` while legacy
-plugins continue to use `frontend.entry`, `navigation`, `secondary_navigation`,
-and `ui_routes`.
 
 The checked-in `plugins/hello_plugin/` is the reference migrated sample: its
 manifest declares `frontend.pages` and `style_entries`, and its page structure,
