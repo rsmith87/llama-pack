@@ -7,6 +7,7 @@ from llama_pack.core.persistence.models.model_asset import (
     ModelProfileOrm,
 )
 from llama_pack.core.persistence.models.settings import SettingsEntryOrm
+from llama_pack.core.persistence.models.projects import ProjectNodeRootOrm, ProjectOrm
 from llama_pack.core.persistence.models.orchestration import (
     ArtifactOrm,
     ControllerLeaseOrm,
@@ -33,6 +34,8 @@ __all__ = [
     "NodeLeaseOrm",
     "ModelOrm",
     "ModelProfileOrm",
+    "ProjectNodeRootOrm",
+    "ProjectOrm",
     "SchemaMetaOrm",
     "SettingsEntryOrm",
 ]

@@ -235,6 +235,7 @@ class AppConfig(BaseModel):
     benchmarks_db_url: str | None = None
     models_db_url: str | None = None
     settings_db_url: str | None = None
+    projects_db_url: str | None = None
     controller_instance_id: str = "controller-default"
     controller_leader_lease_seconds: int = 30
     agent_worker_enabled: bool = False

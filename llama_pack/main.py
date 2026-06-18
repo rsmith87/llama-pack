@@ -31,6 +31,7 @@ from llama_pack.api.routes import (
     ollama_compat,
     openai_compat,
     plugins,
+    projects,
     quantizations,
     runtime,
     settings,
@@ -69,6 +70,7 @@ from llama_pack.core.persistence.db_infra import default_state_dir, resolve_pers
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
+from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
 from llama_pack.core.settings.runtime import RuntimeSettingsService
 from llama_pack.core.benchmarks.runner import BenchmarkRunner
 from llama_pack.core.app.auth_policy import (
@@ -337,6 +339,7 @@ def _configure_app_state(
         inventory_service=app.state.model_asset_inventory_service,
     )
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
+    app.state.project_store = ProjectStoreOrm(db_url=auth_urls.projects)
     if app_config.mode == "controller":
         app.state.benchmark_runner = BenchmarkRunner(app.state.benchmark_store, app.state.chat_proxy)
         app.state.memory_store = ChromaMemoryStore(app_config.memory)
@@ -395,6 +398,7 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
             app.state.plugin_routers_included.add((record.id, route_prefix))
     if app_config.mode == "controller":
         app.include_router(benchmarks.router, prefix=LM_API_PREFIX)
+        app.include_router(projects.router, prefix=LM_API_PREFIX)
         app.include_router(threads.router, prefix=LM_API_PREFIX)
         app.include_router(jobs.router, prefix=LM_API_PREFIX)
         app.include_router(node_work.router, prefix=LM_API_PREFIX)

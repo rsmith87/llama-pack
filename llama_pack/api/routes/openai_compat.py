@@ -16,7 +16,8 @@ from llama_pack.api.http_headers import (
     get_node_header,
     get_route_header,
 )
-from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_thread_service
+from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_project_store, get_thread_service
+from llama_pack.api.routes.projects import CreateProjectRequest
 from llama_pack.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_pack.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_pack.core.agent_tools.registry import ToolRegistry
@@ -33,6 +34,7 @@ from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.core.threads.service import ThreadService
 
@@ -147,6 +149,27 @@ async def openai_client_project_context(
     if action == "refresh_context_item":
         return _project_context_response(action, _refresh_context_item(body))
     return _project_context_response(action, _summarize_project(body))
+
+
+@router.get("/client/projects")
+async def openai_client_list_projects(
+    config: AppConfig = Depends(get_config),
+    store: ProjectStoreOrm = Depends(get_project_store),
+):
+    if config.mode != "controller":
+        raise HTTPException(status_code=404, detail="Projects are only available from controller mode")
+    return {"projects": store.list_projects(include_archived=False)}
+
+
+@router.post("/client/projects", status_code=201)
+async def openai_client_create_project(
+    body: CreateProjectRequest,
+    config: AppConfig = Depends(get_config),
+    store: ProjectStoreOrm = Depends(get_project_store),
+):
+    if config.mode != "controller":
+        raise HTTPException(status_code=404, detail="Projects are only available from controller mode")
+    return store.create_project(name=body.name.strip(), root_hint=_clean_optional_string(body.root_hint))
 
 
 @router.post("/client/diagnostics/chat")
@@ -420,6 +443,13 @@ def _project_payload(project: ProjectContextProject | None) -> dict[str, str | N
     if project is None:
         return None
     return {"name": project.name, "root": project.root}
+
+
+def _clean_optional_string(value: str | None) -> str | None:
+    if value is None:
+        return None
+    stripped = value.strip()
+    return stripped if stripped else None
 
 
 def _path_summary(selected_path: ProjectContextPath) -> dict[str, object]:

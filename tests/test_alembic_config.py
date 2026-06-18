@@ -40,6 +40,7 @@ def test_resolve_target_url_from_config_uses_overrides(tmp_path):
             "downloads_db_url": "sqlite+pysqlite:///tmp/downloads.db",
             "benchmarks_db_url": "sqlite+pysqlite:///tmp/benchmarks.db",
             "settings_db_url": "sqlite+pysqlite:///tmp/settings.db",
+            "projects_db_url": "sqlite+pysqlite:///tmp/projects.db",
         }
     )
 
@@ -50,6 +51,7 @@ def test_resolve_target_url_from_config_uses_overrides(tmp_path):
     assert resolve_target_url_from_config(config, "downloads") == "sqlite+pysqlite:///tmp/downloads.db"
     assert resolve_target_url_from_config(config, "benchmarks") == "sqlite+pysqlite:///tmp/benchmarks.db"
     assert resolve_target_url_from_config(config, "settings") == "sqlite+pysqlite:///tmp/settings.db"
+    assert resolve_target_url_from_config(config, "projects") == "sqlite+pysqlite:///tmp/projects.db"
 
 
 def test_base_metadata_uses_locked_naming_convention():
@@ -69,6 +71,7 @@ def test_version_locations_include_all_targets(tmp_path):
     assert str(Path(tmp_path) / "migrations" / "versions" / "benchmarks") in rendered
     assert str(Path(tmp_path) / "migrations" / "versions" / "models") in rendered
     assert str(Path(tmp_path) / "migrations" / "versions" / "settings") in rendered
+    assert str(Path(tmp_path) / "migrations" / "versions" / "projects") in rendered
 
 
 def test_alembic_ini_lists_models_version_location():
@@ -85,6 +88,14 @@ def test_alembic_ini_lists_settings_version_location():
     version_locations = parser.get("alembic", "version_locations", raw=True)
 
     assert "%(here)s/migrations/versions/settings" in version_locations
+
+
+def test_alembic_ini_lists_projects_version_location():
+    parser = configparser.ConfigParser()
+    parser.read("alembic.ini")
+    version_locations = parser.get("alembic", "version_locations", raw=True)
+
+    assert "%(here)s/migrations/versions/projects" in version_locations
 
 
 def test_target_metadata_for_returns_only_selected_target_tables():
@@ -107,6 +118,7 @@ def test_target_metadata_for_returns_only_selected_target_tables():
         "models",
     }
     assert set(target_metadata_for("settings").tables) == {"settings_entries"}
+    assert set(target_metadata_for("projects").tables) == {"project_node_roots", "projects"}
     assert set(target_metadata_for("controller").tables) == {
         "artifacts",
         "controller_leases",
@@ -127,6 +139,7 @@ def test_head_revision_for_returns_target_branch_head():
     assert head_revision_for("benchmarks") == "benchmarks@head"
     assert head_revision_for("models") == "models@head"
     assert head_revision_for("settings") == "settings@head"
+    assert head_revision_for("projects") == "projects@head"
 
 
 def test_settings_migrations_include_initial_revision():
@@ -142,6 +155,22 @@ def test_settings_migrations_include_initial_revision():
     spec.loader.exec_module(module)
 
     assert module.revision == "20260617_0001"
+
+
+def test_projects_migrations_include_initial_revision():
+    migration_path = Path("migrations/versions/projects/20260618_0001_create_projects.py")
+    assert migration_path.exists()
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("projects_initial", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "20260618_0001"
+
 
 def test_models_migrations_include_catalog_expansion_revision():
     migration_path = Path("migrations/versions/models/20260614_0002_expand_model_catalog_for_db_authority.py")

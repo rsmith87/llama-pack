@@ -39,6 +39,7 @@ log_dir: ./logs
 # downloads_db_url: sqlite+pysqlite:///./state/downloads.db
 # benchmarks_db_url: sqlite+pysqlite:///./state/benchmarks.db
 # models_db_url: sqlite+pysqlite:///./state/models.db
+# projects_db_url: sqlite+pysqlite:///./state/projects.db
 agent_worker_enabled: false
 agent_worker_poll_interval_seconds: 2
 agent_worker_max_jobs: 1

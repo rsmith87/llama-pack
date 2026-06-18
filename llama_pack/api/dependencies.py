@@ -23,6 +23,7 @@ if TYPE_CHECKING:
     from llama_pack.core.nodes.registry import NodeRegistry
     from llama_pack.core.orchestration.orchestrator import Orchestrator
     from llama_pack.core.persistence.benchmark_store_orm import BenchmarkStoreOrm
+    from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
     from llama_pack.core.runtime.process_manager import ProcessManager
     from llama_pack.core.settings.runtime import RuntimeSettingsService
     from llama_pack.core.threads.service import ThreadService
@@ -99,6 +100,10 @@ def get_benchmark_store(request: Request) -> BenchmarkStoreOrm:
 
 def get_benchmark_runner(request: Request) -> BenchmarkRunner:
     return request.app.state.benchmark_runner
+
+
+def get_project_store(request: Request) -> ProjectStoreOrm:
+    return request.app.state.project_store
 
 
 def get_thread_service(request: Request) -> ThreadService:

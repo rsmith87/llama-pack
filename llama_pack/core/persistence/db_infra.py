@@ -35,6 +35,7 @@ class PersistenceUrls:
     benchmarks: str
     models: str
     settings: str
+    projects: str
 
 
 def default_state_dir(config: AppConfig) -> Path:
@@ -54,6 +55,7 @@ def resolve_persistence_urls(config: AppConfig) -> PersistenceUrls:
         benchmarks=normalize_database_url(config.benchmarks_db_url or (state_dir / "benchmarks.db")),
         models=normalize_database_url(getattr(config, "models_db_url", None) or (state_dir / "models.db")),
         settings=normalize_database_url(config.settings_db_url or (state_dir / "settings.db")),
+        projects=normalize_database_url(config.projects_db_url or (state_dir / "projects.db")),
     )
 
 
