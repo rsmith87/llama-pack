@@ -437,7 +437,11 @@ class BenchmarkStoreOrm:
                 q = q.where(ToolLoopEvalRunOrm.status == status)
             q = q.limit(limit)
             rows = session.execute(q).scalars().all()
-        return [_tool_loop_run_to_dict(row) for row in rows]
+            case_ids_by_run_id = _tool_loop_case_ids_by_run_id(session, [row.id for row in rows])
+        return [
+            _tool_loop_run_to_dict(row, case_ids=case_ids_by_run_id.get(row.id, []))
+            for row in rows
+        ]
 
     def get_tool_loop_eval_run(self, run_id: str) -> dict[str, Any] | None:
         with session_scope(self.session_factory) as session:
@@ -453,6 +457,7 @@ class BenchmarkStoreOrm:
                 .order_by(ToolLoopEvalCaseOrm.case_index)
             ).scalars().all()
         result["cases"] = [_tool_loop_case_to_dict(case) for case in cases]
+        result["case_ids"] = [case["case_id"] for case in result["cases"]]
         return result
 
 
@@ -537,7 +542,21 @@ def _tool_loop_case_row(run_id: str, case_index: int, case: dict[str, Any]) -> T
     )
 
 
-def _tool_loop_run_to_dict(row: ToolLoopEvalRunOrm) -> dict[str, Any]:
+def _tool_loop_case_ids_by_run_id(session: Any, run_ids: list[str]) -> dict[str, list[str]]:
+    if not run_ids:
+        return {}
+    rows = session.execute(
+        select(ToolLoopEvalCaseOrm.run_id, ToolLoopEvalCaseOrm.case_id)
+        .where(ToolLoopEvalCaseOrm.run_id.in_(run_ids))
+        .order_by(ToolLoopEvalCaseOrm.run_id, ToolLoopEvalCaseOrm.case_index)
+    ).all()
+    case_ids_by_run_id: dict[str, list[str]] = {run_id: [] for run_id in run_ids}
+    for run_id, case_id in rows:
+        case_ids_by_run_id[str(run_id)].append(str(case_id))
+    return case_ids_by_run_id
+
+
+def _tool_loop_run_to_dict(row: ToolLoopEvalRunOrm, case_ids: list[str] | None = None) -> dict[str, Any]:
     return {
         "id": row.id,
         "generated_at": row.generated_at,
@@ -550,6 +569,7 @@ def _tool_loop_run_to_dict(row: ToolLoopEvalRunOrm) -> dict[str, Any]:
         "case_count": row.case_count,
         "passed_count": row.passed_count,
         "failed_count": row.failed_count,
+        "case_ids": list(case_ids or []),
         "error": row.error_detail,
         "created_at": row.created_at,
     }

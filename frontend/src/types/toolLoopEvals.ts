@@ -63,6 +63,7 @@ export type ToolLoopEvalSuite = {
   status?: string;
   case_count?: number;
   passed_count?: number;
+  partial_count?: number;
   failed_count?: number;
   average_score?: number;
   cases?: ToolLoopEvalCaseResult[];
@@ -88,7 +89,9 @@ export type ToolLoopEvalRunSummary = {
   average_score?: number;
   case_count?: number;
   passed_count?: number;
+  partial_count?: number;
   failed_count?: number;
+  case_ids?: string[];
   error?: string | null;
   created_at?: string;
 };

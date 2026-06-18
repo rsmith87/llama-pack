@@ -738,7 +738,9 @@ async def test_tool_loop_eval_suite_returns_app_ready_summary(tmp_path):
     assert suite["model"] == "gpt-oss-20b"
     assert suite["case_count"] == 2
     assert suite["passed_count"] == 1
-    assert suite["failed_count"] == 1
+    assert suite["partial_count"] == 1
+    assert suite["failed_count"] == 0
     assert suite["average_score"] == 0.875
     assert [case["case_id"] for case in suite["cases"]] == ["final-only", "missing-detail"]
-    assert suite["status"] == "failed"
+    assert suite["cases"][1]["status"] == "partial"
+    assert suite["status"] == "partial"

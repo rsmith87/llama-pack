@@ -45,6 +45,21 @@
   margin-top: var(--space-3, 1rem);
 }
 
+.tool-loop-evals-page .modal-panel {
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  width: min(1180px, calc(100vw - 32px));
+}
+
+.tool-loop-modal-content {
+  display: grid;
+  gap: var(--space-4, 1.5rem);
+}
+
+.tool-loop-modal-grid {
+  grid-template-columns: minmax(240px, 0.75fr) minmax(0, 1.25fr);
+}
+
 .tool-loop-summary strong,
 .tool-loop-path,
 .tool-loop-answer,
@@ -293,6 +308,7 @@
 
 @media (max-width: 900px) {
   .tool-loop-grid,
+  .tool-loop-modal-grid,
   .tool-loop-failure-buckets,
   .tool-loop-summary,
   .tool-loop-run-form {

@@ -64,6 +64,7 @@ afterEach(() => {
 });
 
 it("renders latest tool-loop eval summaries and selected case details", async () => {
+  const user = userEvent.setup();
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
       return Promise.resolve(okJson({
@@ -79,6 +80,7 @@ it("renders latest tool-loop eval summaries and selected case details", async ()
             case_count: 2,
             passed_count: 2,
             failed_count: 0,
+            case_ids: ["two-step-tool-synthesis", "avoid-unneeded-tools"],
           },
         ],
       }));
@@ -158,7 +160,8 @@ it("renders latest tool-loop eval summaries and selected case details", async ()
 
   expect(await screen.findByRole("heading", { name: "Tool Loop Evals" })).toBeInTheDocument();
   expect(await screen.findByText("Run History")).toBeInTheDocument();
-  expect(screen.getByText("mac-mini")).toBeInTheDocument();
+  expect(screen.getAllByText("Preset").length).toBeGreaterThan(0);
+  expect(screen.getByText("two-step-tool-synthesis +1")).toBeInTheDocument();
   expect(screen.getAllByText("gpt-oss-20b").length).toBeGreaterThan(0);
   expect(screen.getAllByText("2 / 2").length).toBeGreaterThan(0);
   expect(screen.getAllByText("100%").length).toBeGreaterThan(0);
@@ -168,6 +171,13 @@ it("renders latest tool-loop eval summaries and selected case details", async ()
   const checks = screen.getByLabelText("Case checks");
   expect(within(checks).getByText("completed")).toBeInTheDocument();
   expect(within(checks).getByText("no_tool_errors")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "View run gpt-oss-20b" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Tool-loop run details" });
+  expect(within(dialog).getAllByText("avoid-unneeded-tools").length).toBeGreaterThan(0);
+  expect(within(dialog).getByText("tool loop ready")).toBeInTheDocument();
+  expect(within(dialog).getAllByText("gpt-oss-20b").length).toBeGreaterThan(0);
 });
 
 it("renders an empty state when no latest tool-loop eval exists", async () => {
@@ -851,7 +861,7 @@ it("keeps the local run button disabled in agent mode until a model is selected"
   expect(screen.queryByLabelText("Node")).not.toBeInTheDocument();
 });
 
-it("renders local history targets", async () => {
+it("renders local history presets", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
     if (url === "/lm-api/v1/models") return Promise.resolve(okJson({ models: [{ name: "qwen-local" }] }));
     if (url === "/lm-api/v1/runtime/tool-loop-evals/runs?limit=50") {
@@ -868,6 +878,7 @@ it("renders local history targets", async () => {
             case_count: 1,
             passed_count: 1,
             failed_count: 0,
+            case_ids: ["live-config-migration-plan"],
           },
         ],
       }));
@@ -891,7 +902,7 @@ it("renders local history targets", async () => {
     </AppModeProvider>,
   );
 
-  expect(await screen.findByText("local")).toBeInTheDocument();
+  expect(await screen.findByText("live-config-migration-plan")).toBeInTheDocument();
 });
 
 it("exposes real-world scenario presets in the run form", async () => {

@@ -621,9 +621,17 @@ Current synthetic presets cover:
 
 Current real-world deterministic scenarios ask models to draft compact design
 documents from relevant project-like sources while avoiding unrelated scope.
-UI/API-triggered runs also include a live workspace scenario that uses actual
-workspace tools in a temporary seeded workspace and checks the generated
-artifact content.
+UI/API-triggered runs also include live workspace scenarios that use actual
+workspace tools in temporary seeded coding-agent workspaces and check the
+generated artifact content. Current live presets cover collaborative app
+design, CI failure triage, config migration planning, targeted bugfix planning,
+and PR review findings.
+
+Tool-loop case status can be `passed`, `partial`, or `failed`. `partial`
+means the model completed the loop, used the required tools, and produced the
+required artifact, but missed scoring details such as exact expected strings or
+artifact substrings. Missing required tools, tool errors, repeated tool calls,
+missing artifacts, and forbidden stale content remain `failed`.
 
 Run multiple models by repeating `--model`; route to a specific controller node
 with `--target node:<name>`; run a single built-in case with `--case <case-id>`.

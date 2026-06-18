@@ -4,8 +4,28 @@ import httpx
 from fastapi.testclient import TestClient
 
 from llama_pack.core.config import NodeConfig, load_config
+from llama_pack.api.routes.runtime import _merge_tool_loop_suites
 from llama_pack.main import create_app
 from tests.persistence_db_setup import prepare_all_persistence_dbs
+
+
+def test_merge_tool_loop_suites_preserves_partial_status():
+    suite = _merge_tool_loop_suites(
+        "qwen",
+        [
+            {
+                "cases": [
+                    {"case_id": "ok", "status": "passed", "score": 1.0},
+                    {"case_id": "almost", "status": "partial", "score": 0.875},
+                ]
+            }
+        ],
+    )
+
+    assert suite["status"] == "partial"
+    assert suite["passed_count"] == 1
+    assert suite["partial_count"] == 1
+    assert suite["failed_count"] == 0
 
 
 def test_runtime_overview_reports_agent_runtime_state(tmp_path):
@@ -836,7 +856,14 @@ def test_tool_loop_eval_runs_api_lists_persisted_history(tmp_path):
             "passed_count": 1,
             "failed_count": 0,
             "average_score": 1.0,
-            "cases": [],
+            "cases": [
+                {
+                    "case_id": "live-config-migration-plan",
+                    "status": "passed",
+                    "score": 1.0,
+                    "checks": {"completed": True},
+                }
+            ],
         },
     )
     client = TestClient(app)
@@ -849,6 +876,7 @@ def test_tool_loop_eval_runs_api_lists_persisted_history(tmp_path):
     assert body["runs"][0]["model"] == "gpt-oss-20b"
     assert body["runs"][0]["target_node"] == "mac-mini"
     assert body["runs"][0]["status"] == "passed"
+    assert body["runs"][0]["case_ids"] == ["live-config-migration-plan"]
     assert "cases" not in body["runs"][0]
 
 

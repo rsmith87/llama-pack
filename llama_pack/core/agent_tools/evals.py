@@ -161,7 +161,7 @@ class ToolLoopEvaluator:
             checks["no_repeated_calls"] = _max_repeated_calls(observed_tools) <= case.max_repeated_tool_calls
         score = _score(checks)
         missing_expected_tools, unexpected_tools = _tool_sequence_delta(observed_tools, case.expected_tool_sequence)
-        status = "passed" if score == 1.0 else "failed"
+        status = _case_status(checks, partial_checks={"expected_final_substrings"})
         self._emit(
             "case_scored",
             status=status,
@@ -208,23 +208,25 @@ class ToolLoopEvaluator:
             )
         results = [await self.run_case(model_name, case) for case in cases]
         passed_count = sum(1 for result in results if result["status"] == "passed")
-        failed_count = len(results) - passed_count
+        partial_count = sum(1 for result in results if result["status"] == "partial")
+        failed_count = len(results) - passed_count - partial_count
         average_score = round(
             sum(float(result["score"]) for result in results) / len(results),
             4,
         ) if results else 0.0
         suite = {
             "model": model_name,
-            "status": "passed" if failed_count == 0 else "failed",
+            "status": _suite_status(passed_count=passed_count, partial_count=partial_count, failed_count=failed_count),
             "case_count": len(results),
             "passed_count": passed_count,
+            "partial_count": partial_count,
             "failed_count": failed_count,
             "average_score": average_score,
             "cases": results,
         }
         if self.emit_suite_events:
             self._emit(
-                "run_completed" if failed_count == 0 else "run_failed",
+                "run_completed" if failed_count == 0 and partial_count == 0 else "run_failed",
                 status=suite["status"],
                 model=model_name,
                 title="Tool-loop eval run completed",
@@ -899,6 +901,23 @@ def _score(checks: dict[str, bool]) -> float:
         return 0.0
     passed = sum(1 for value in checks.values() if value)
     return round(passed / len(checks), 4)
+
+
+def _case_status(checks: dict[str, bool], partial_checks: set[str]) -> str:
+    failed_checks = {name for name, passed in checks.items() if not passed}
+    if not failed_checks:
+        return "passed"
+    if failed_checks.issubset(partial_checks):
+        return "partial"
+    return "failed"
+
+
+def _suite_status(*, passed_count: int, partial_count: int, failed_count: int) -> str:
+    if failed_count:
+        return "failed"
+    if partial_count:
+        return "partial"
+    return "passed" if passed_count else "passed"
 
 
 def _max_repeated_calls(observed: list[str]) -> int:

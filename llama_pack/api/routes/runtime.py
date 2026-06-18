@@ -663,13 +663,15 @@ def _select_tool_loop_workloads(case_ids: list[str] | None):
 def _merge_tool_loop_suites(model: str, suites: list[dict[str, Any]]) -> dict[str, Any]:
     cases = [case for suite in suites for case in suite.get("cases", []) if isinstance(case, dict)]
     passed_count = sum(1 for case in cases if case.get("status") == "passed")
-    failed_count = len(cases) - passed_count
+    partial_count = sum(1 for case in cases if case.get("status") == "partial")
+    failed_count = len(cases) - passed_count - partial_count
     average_score = round(sum(float(case.get("score") or 0.0) for case in cases) / len(cases), 4) if cases else 0.0
     return {
         "model": model,
-        "status": "passed" if failed_count == 0 else "failed",
+        "status": "failed" if failed_count else "partial" if partial_count else "passed",
         "case_count": len(cases),
         "passed_count": passed_count,
+        "partial_count": partial_count,
         "failed_count": failed_count,
         "average_score": average_score,
         "cases": cases,

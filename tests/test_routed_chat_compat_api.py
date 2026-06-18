@@ -449,6 +449,100 @@ def test_project_context_rejects_path_without_explicit_content_or_saved_metadata
     assert "selected_paths[0] must include explicit content or saved artifact metadata" in response.text
 
 
+def test_external_app_key_can_summarize_focused_project_path_from_explicit_content(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/project-context/summarize_path",
+        json={
+            "project": {"name": "Spitball", "root": "/workspace/spitball"},
+            "selected_paths": [
+                {"path": "packages/spitball/README.md", "content": "# Spitball\nA planning app."},
+                {
+                    "path": "packages/spitball/src/styles/app.css",
+                    "artifact_metadata": {"artifact_id": "style-context", "status": "saved"},
+                },
+            ],
+            "artifacts": [],
+            "focused_path": "packages/spitball/src/styles/app.css",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "summarize_path"
+    assert payload["policy"] == "explicit_user_selected_inputs_and_saved_artifact_metadata_only"
+    assert payload["summary"] == {
+        "project": {"name": "Spitball", "root": "/workspace/spitball"},
+        "path": {
+            "path": "packages/spitball/src/styles/app.css",
+            "artifactMetadata": {"artifact_id": "style-context", "status": "saved"},
+        },
+        "artifacts": [],
+    }
+
+
+def test_external_app_key_can_refresh_project_context_item_from_focused_path(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/project-context/refresh_context_item",
+        json={
+            "project": {"name": "Spitball", "root": "/workspace/spitball"},
+            "selected_paths": [
+                {"path": "packages/spitball/src/styles/app.css", "content": ".board { display: grid; }"}
+            ],
+            "artifacts": [
+                {
+                    "id": "style-context",
+                    "kind": "summary",
+                    "path": "artifacts/style-context.json",
+                    "title": "Style context",
+                    "metadata": {"source_path": "packages/spitball/src/styles/app.css"},
+                }
+            ],
+            "focused_path": "packages/spitball/src/styles/app.css",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "refresh_context_item"
+    assert payload["summary"] == {
+        "project": {"name": "Spitball", "root": "/workspace/spitball"},
+        "path": {"path": "packages/spitball/src/styles/app.css", "characters": 25},
+        "artifactCount": 1,
+    }
+
+
+def test_project_context_rejects_unknown_action(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/project-context/browse_project",
+        json={
+            "project": {"name": "Spitball", "root": "/workspace/spitball"},
+            "selected_paths": [
+                {"path": "packages/spitball/src/styles/app.css", "content": ".board { display: grid; }"}
+            ],
+            "artifacts": [],
+            "focused_path": "packages/spitball/src/styles/app.css",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "browse_project" in response.text
+
+
 def test_external_app_key_can_run_non_streaming_chat_diagnostics(tmp_path):
     app, calls, _ = _controller_app(tmp_path, chat_responses=["diagnostic ok"])
     created = app.state.auth_store.create_external_key("Home App", "https://home.local")

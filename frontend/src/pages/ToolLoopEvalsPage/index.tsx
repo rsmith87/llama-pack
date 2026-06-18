@@ -10,7 +10,7 @@ import {
   streamToolLoopEvalNodeRun,
   streamToolLoopEvalRun,
 } from "../../api/toolLoopEvals";
-import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField } from "../../components/ui";
+import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField, Modal } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { compareToolLoopRuns, type ToolLoopComparison } from "../../features/toolLoopEvals/comparisonAnalysis";
 import { analyzeToolLoopFailures } from "../../features/toolLoopEvals/failureAnalysis";
@@ -136,6 +136,12 @@ function firstCase(suite: ToolLoopEvalSuite | null): ToolLoopEvalCaseResult | nu
   return suite?.cases?.[0] || null;
 }
 
+function presetSummary(caseIds?: string[]): string {
+  if (!caseIds?.length) return "-";
+  if (caseIds.length === 1) return caseIds[0];
+  return `${caseIds[0]} +${caseIds.length - 1}`;
+}
+
 function presetGroupsWithAllOption(groups?: ToolLoopEvalPresetGroup[]): ToolLoopEvalPresetGroup[] {
   const validGroups = (groups || []).filter((group) => group.label && group.presets?.length);
   if (!validGroups.length) return [{ id: "all", label: "Presets", presets: [{ id: "all", label: "All presets" }] }];
@@ -222,6 +228,8 @@ export function ToolLoopEvalsPage() {
   const [selectedModel, setSelectedModel] = useState("");
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [selectedRun, setSelectedRun] = useState<ToolLoopEvalRunDetail | null>(null);
+  const [detailModalRun, setDetailModalRun] = useState<ToolLoopEvalRunDetail | null>(null);
+  const [detailModalCaseId, setDetailModalCaseId] = useState("");
   const [runLoading, setRunLoading] = useState(false);
   const [runError, setRunError] = useState("");
   const [runNode, setRunNode] = useState("");
@@ -263,7 +271,12 @@ export function ToolLoopEvalsPage() {
     if (!activeSuite) return null;
     return activeSuite.cases?.find((item) => item.case_id === selectedCaseId) || firstCase(activeSuite);
   }, [activeSuite, selectedCaseId]);
+  const detailModalCase = useMemo(() => {
+    if (!detailModalRun) return null;
+    return detailModalRun.cases?.find((item) => item.case_id === detailModalCaseId) || firstCase(detailModalRun);
+  }, [detailModalCaseId, detailModalRun]);
   const failureSummary = useMemo(() => analyzeToolLoopFailures(activeSuite as ToolLoopEvalRunDetail | null), [activeSuite]);
+  const detailModalFailureSummary = useMemo(() => analyzeToolLoopFailures(detailModalRun), [detailModalRun]);
   const comparison = useMemo(() => comparisonRuns.length >= 2 ? compareToolLoopRuns(comparisonRuns) : null, [comparisonRuns]);
 
   async function refreshAll() {
@@ -277,9 +290,8 @@ export function ToolLoopEvalsPage() {
     setRunError("");
     try {
       const detail = await getToolLoopEvalRun(row.id);
-      setSelectedRun(detail);
-      setSelectedModel(String(detail.model || row.model || ""));
-      setSelectedCaseId("");
+      setDetailModalRun(detail);
+      setDetailModalCaseId("");
     } catch (err) {
       setRunError(err instanceof Error ? err.message : "Request failed");
     } finally {
@@ -351,7 +363,9 @@ export function ToolLoopEvalsPage() {
         average_score: suite.average_score,
         case_count: suite.case_count,
         passed_count: suite.passed_count,
+        partial_count: suite.partial_count,
         failed_count: suite.failed_count,
+        case_ids: suite.cases?.map((item) => String(item.case_id || "")).filter(Boolean),
         cases: suite.cases,
       });
       setSelectedModel(String(suite.model || model));
@@ -444,7 +458,7 @@ export function ToolLoopEvalsPage() {
             },
             { key: "generated", header: "Generated", render: (row) => formatDate(row.generated_at) },
             { key: "model", header: "Model", render: (row) => String(row.model || "-") },
-            { key: "target", header: "Target", render: (row) => String(row.target_node || row.target_selector || "-") },
+            { key: "preset", header: "Preset", render: (row) => presetSummary(row.case_ids) },
             { key: "status", header: "Status", render: (row) => <StatusBadge tone={statusTone(row.status)}>{row.status || "-"}</StatusBadge> },
             { key: "score", header: "Score", render: (row) => scorePercent(row.average_score) },
             { key: "passed", header: "Passed", render: (row) => `${row.passed_count ?? 0} / ${row.case_count ?? 0}` },
@@ -533,59 +547,116 @@ export function ToolLoopEvalsPage() {
       {activeSuite ? (
         <div className="tool-loop-grid">
           <Panel title={activeSuite?.model || "Model"} eyebrow={selectedRun ? `Persisted run cases${runTargetLabel(activeSuite) ? ` · ${runTargetLabel(activeSuite)}` : ""}` : "Cases"}>
-            <div className="tool-loop-case-list">
-              {(activeSuite?.cases || []).map((item) => (
-                <button
-                  key={item.case_id}
-                  type="button"
-                  className={`tool-loop-case-button ${item.case_id === activeCase?.case_id ? "active" : ""}`}
-                  onClick={() => setSelectedCaseId(String(item.case_id || ""))}
-                >
-                  <span className="tool-loop-case-heading">
-                    <strong>{item.case_id || "-"}</strong>
-                    <StatusBadge tone={statusTone(item.status)}>{item.status || "-"}</StatusBadge>
-                  </span>
-                  <span className="muted">{scorePercent(item.score)} · {item.tool_call_count ?? 0} calls · {item.iteration_count ?? 0} turns</span>
-                  <span className="tool-loop-sequence">{sequenceText(item.observed_tool_sequence)}</span>
-                </button>
-              ))}
-            </div>
+            <ToolLoopCaseList suite={activeSuite} activeCase={activeCase} onSelect={setSelectedCaseId} />
           </Panel>
 
           <Panel title={activeCase?.case_id || "Case Detail"} eyebrow="Evaluation">
-            {activeCase ? (
-              <>
-                <div className="tool-loop-summary">
-                  <div><span className="muted">Score</span><strong>{scorePercent(activeCase.score)}</strong></div>
-                  <div><span className="muted">Tool calls</span><strong>{activeCase.tool_call_count ?? 0}</strong></div>
-                  <div><span className="muted">Iterations</span><strong>{activeCase.iteration_count ?? 0}</strong></div>
-                </div>
-                <p className="muted">Observed</p>
-                <p className="tool-loop-sequence">{sequenceText(activeCase.observed_tool_sequence)}</p>
-                <p className="muted">Required tools</p>
-                <p className="tool-loop-sequence">{sequenceText(activeCase.expected_tool_sequence)}</p>
-                <div className="tool-loop-checks" aria-label="Case checks">
-                  {checks(activeCase).map(([key, ok]) => (
-                    <StatusBadge key={key} tone={ok ? "success" : "danger"}>{key}</StatusBadge>
-                  ))}
-                </div>
-                {hasDiagnostics(activeCase) ? <ToolLoopDiagnostics result={activeCase} /> : null}
-                <ToolCallTimeline result={activeCase} />
-                <TraceReplayPanel
-                  events={traceEventsForCase(activeCase, liveTraceEvents)}
-                  autoPlayToken={replayToken}
-                />
-                {activeCase.error ? <ErrorBanner message={activeCase.error} /> : null}
-                <p className="muted">Final answer</p>
-                <pre className="tool-loop-answer">{activeCase.final_answer || "-"}</pre>
-              </>
-            ) : (
-              <p className="muted">No case selected.</p>
-            )}
+            <ToolLoopCaseDetail
+              activeCase={activeCase}
+              liveTraceEvents={liveTraceEvents}
+              replayToken={replayToken}
+            />
           </Panel>
         </div>
       ) : null}
+
+      <Modal
+        title="Tool-loop run details"
+        open={Boolean(detailModalRun)}
+        onClose={() => {
+          setDetailModalRun(null);
+          setDetailModalCaseId("");
+        }}
+      >
+        {detailModalRun ? (
+          <div className="tool-loop-modal-content">
+            <div className="tool-loop-summary">
+              <div><span className="muted">Model</span><strong>{detailModalRun.model || "-"}</strong></div>
+              <div><span className="muted">Status</span><strong>{detailModalRun.status || "-"}</strong></div>
+              <div><span className="muted">Preset</span><strong>{presetSummary(detailModalRun.case_ids)}</strong></div>
+            </div>
+            {detailModalFailureSummary.failedCaseCount > 0 ? <FailureSummaryPanel summary={detailModalFailureSummary} /> : null}
+            <div className="tool-loop-grid tool-loop-modal-grid">
+              <Panel title={detailModalRun.model || "Model"} eyebrow={`Persisted run cases${runTargetLabel(detailModalRun) ? ` · ${runTargetLabel(detailModalRun)}` : ""}`}>
+                <ToolLoopCaseList suite={detailModalRun} activeCase={detailModalCase} onSelect={setDetailModalCaseId} />
+              </Panel>
+              <Panel title={detailModalCase?.case_id || "Case Detail"} eyebrow="Evaluation">
+                <ToolLoopCaseDetail activeCase={detailModalCase} liveTraceEvents={[]} replayToken={0} />
+              </Panel>
+            </div>
+          </div>
+        ) : null}
+      </Modal>
     </div>
+  );
+}
+
+function ToolLoopCaseList({
+  suite,
+  activeCase,
+  onSelect,
+}: {
+  suite: ToolLoopEvalSuite;
+  activeCase: ToolLoopEvalCaseResult | null;
+  onSelect: (caseId: string) => void;
+}) {
+  return (
+    <div className="tool-loop-case-list">
+      {(suite.cases || []).map((item) => (
+        <button
+          key={item.case_id}
+          type="button"
+          className={`tool-loop-case-button ${item.case_id === activeCase?.case_id ? "active" : ""}`}
+          onClick={() => onSelect(String(item.case_id || ""))}
+        >
+          <span className="tool-loop-case-heading">
+            <strong>{item.case_id || "-"}</strong>
+            <StatusBadge tone={statusTone(item.status)}>{item.status || "-"}</StatusBadge>
+          </span>
+          <span className="muted">{scorePercent(item.score)} · {item.tool_call_count ?? 0} calls · {item.iteration_count ?? 0} turns</span>
+          <span className="tool-loop-sequence">{sequenceText(item.observed_tool_sequence)}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ToolLoopCaseDetail({
+  activeCase,
+  liveTraceEvents,
+  replayToken,
+}: {
+  activeCase: ToolLoopEvalCaseResult | null;
+  liveTraceEvents: TraceEvent[];
+  replayToken: number;
+}) {
+  if (!activeCase) return <p className="muted">No case selected.</p>;
+  return (
+    <>
+      <div className="tool-loop-summary">
+        <div><span className="muted">Score</span><strong>{scorePercent(activeCase.score)}</strong></div>
+        <div><span className="muted">Tool calls</span><strong>{activeCase.tool_call_count ?? 0}</strong></div>
+        <div><span className="muted">Iterations</span><strong>{activeCase.iteration_count ?? 0}</strong></div>
+      </div>
+      <p className="muted">Observed</p>
+      <p className="tool-loop-sequence">{sequenceText(activeCase.observed_tool_sequence)}</p>
+      <p className="muted">Required tools</p>
+      <p className="tool-loop-sequence">{sequenceText(activeCase.expected_tool_sequence)}</p>
+      <div className="tool-loop-checks" aria-label="Case checks">
+        {checks(activeCase).map(([key, ok]) => (
+          <StatusBadge key={key} tone={ok ? "success" : "danger"}>{key}</StatusBadge>
+        ))}
+      </div>
+      {hasDiagnostics(activeCase) ? <ToolLoopDiagnostics result={activeCase} /> : null}
+      <ToolCallTimeline result={activeCase} />
+      <TraceReplayPanel
+        events={traceEventsForCase(activeCase, liveTraceEvents)}
+        autoPlayToken={replayToken}
+      />
+      {activeCase.error ? <ErrorBanner message={activeCase.error} /> : null}
+      <p className="muted">Final answer</p>
+      <pre className="tool-loop-answer">{activeCase.final_answer || "-"}</pre>
+    </>
   );
 }
 

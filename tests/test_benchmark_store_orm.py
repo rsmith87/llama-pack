@@ -265,6 +265,7 @@ class TestToolLoopEvalRuns:
         listed = store.list_tool_loop_eval_runs(limit=10)
         assert [item["id"] for item in listed] == [run["id"]]
         assert "cases" not in listed[0]
+        assert listed[0]["case_ids"] == ["two-step-tool-synthesis", "avoid-unneeded-tools"]
 
         fetched = store.get_tool_loop_eval_run(run["id"])
         assert fetched is not None

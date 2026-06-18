@@ -52,6 +52,23 @@ def test_live_collaborative_notes_design_instructs_required_workspace_search():
     assert "before writing" in scenario.prompt.lower()
 
 
+def test_default_live_tool_loop_scenarios_include_coding_agent_presets():
+    scenarios = {scenario.id: scenario for scenario in default_live_tool_loop_scenarios()}
+
+    expected_ids = {
+        "live-collaborative-notes-design",
+        "live-ci-failure-triage",
+        "live-config-migration-plan",
+        "live-targeted-bugfix-plan",
+        "live-pr-review-findings",
+    }
+
+    assert expected_ids.issubset(scenarios)
+    assert scenarios["live-ci-failure-triage"].expected_artifacts == ["docs/ci-triage.md"]
+    assert scenarios["live-ci-failure-triage"].max_repeated_tool_calls == 1
+    assert "write_ci_triage_report" in scenarios["live-ci-failure-triage"].expected_tool_sequence
+
+
 @pytest.mark.asyncio
 async def test_live_collaborative_notes_design_uses_real_workspace_tools(tmp_path):
     scenario = default_live_tool_loop_scenarios()[0]
@@ -146,6 +163,32 @@ async def test_live_collaborative_notes_design_allows_negated_password_language(
 
 
 @pytest.mark.asyncio
+async def test_live_config_migration_allows_negated_stale_field_language(tmp_path):
+    scenario = next(scenario for scenario in default_live_tool_loop_scenarios() if scenario.id == "live-config-migration-plan")
+    plan = (
+        "Current state Migration steps Compatibility Verification "
+        "controller_db_url auth_db_url agent_tools "
+        "uv run pytest tests/test_persistence_db_infra.py tests/test_alembic_config.py -v "
+        "Ensure legacy_model_path is not present in the final configuration."
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("search_workspace", {"query": "controller_db_url"}),
+            ("read_workspace_file", {"path": "fixtures/migration-task7-existing-config.yaml"}),
+            ("read_workspace_file", {"path": "fixtures/migration-task7-config.yaml"}),
+            ("read_workspace_file", {"path": "docs/migration-notes.md"}),
+            ("write_config_migration_plan", {"content": plan}),
+        ],
+        final_answer="Migration plan written.",
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["no_forbidden_artifact_substrings"] is True
+
+
+@pytest.mark.asyncio
 async def test_live_collaborative_notes_design_reports_missing_artifact_substrings(tmp_path):
     scenario = default_live_tool_loop_scenarios()[0]
     proxy = ScriptedLiveProxy(
@@ -167,6 +210,7 @@ async def test_live_collaborative_notes_design_reports_missing_artifact_substrin
 
     result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
 
+    assert result["status"] == "partial"
     assert result["checks"]["expected_artifact_substrings"] is False
     assert result["missing_artifact_substrings"] == {
         "docs/notes-app-design.md": ["note_id", "registration"]
@@ -303,3 +347,114 @@ async def test_live_collaborative_notes_design_stops_on_malformed_tool_arguments
     assert result["error"] == "invalid tool arguments for write_notes_app_design"
     assert result["tool_results"][0]["ok"] is False
     assert result["tool_results"][0]["error"].startswith("invalid JSON arguments")
+
+
+@pytest.mark.asyncio
+async def test_live_ci_failure_triage_uses_real_workspace_tools(tmp_path):
+    scenario = next(scenario for scenario in default_live_tool_loop_scenarios() if scenario.id == "live-ci-failure-triage")
+    report = (
+        "## Root cause\n"
+        "The failing test is tests/test_api.py::test_create_run_requires_model because "
+        "llama_pack/api/routes/runs.py now returns 200 when model is missing.\n"
+        "## Minimal fix\n"
+        "Restore request validation in llama_pack/api/routes/runs.py for the model field.\n"
+        "## Verification\n"
+        "Run uv run pytest tests/test_api.py -v after the patch.\n"
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("search_workspace", {"query": "test_create_run_requires_model"}),
+            ("read_workspace_file", {"path": "logs/ci-failure.log"}),
+            ("read_workspace_file", {"path": "llama_pack/api/routes/runs.py"}),
+            ("read_workspace_file", {"path": "tests/test_api.py"}),
+            ("write_ci_triage_report", {"content": report}),
+        ],
+        final_answer="Created CI triage report.",
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["status"] == "passed"
+    assert result["checks"]["expected_tool_sequence"] is True
+    assert result["checks"]["expected_artifacts"] is True
+    assert result["checks"]["expected_artifact_substrings"] is True
+    assert result["artifacts"][0]["path"] == "docs/ci-triage.md"
+    assert "test_create_run_requires_model" in result["artifacts"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_live_ci_failure_triage_uses_scenario_specific_final_answer_check(tmp_path):
+    scenario = next(scenario for scenario in default_live_tool_loop_scenarios() if scenario.id == "live-ci-failure-triage")
+    report = (
+        "Root cause Minimal fix Verification "
+        "tests/test_api.py::test_create_run_requires_model "
+        "llama_pack/api/routes/runs.py "
+        "uv run pytest tests/test_api.py -v"
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("search_workspace", {"query": "test_create_run_requires_model"}),
+            ("read_workspace_file", {"path": "logs/ci-failure.log"}),
+            ("read_workspace_file", {"path": "llama_pack/api/routes/runs.py"}),
+            ("write_ci_triage_report", {"content": report}),
+        ],
+        final_answer="Triage report written.",
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["checks"]["expected_final_substrings"] is True
+
+
+@pytest.mark.asyncio
+async def test_live_tool_loop_suite_reports_partial_when_only_content_precision_misses(tmp_path):
+    scenario = next(scenario for scenario in default_live_tool_loop_scenarios() if scenario.id == "live-ci-failure-triage")
+    report = (
+        "Root cause Minimal fix Verification "
+        "tests/test_api.py::test_create_run_requires_model "
+        "llama_pack/api/routes/runs.py"
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("list_workspace", {}),
+            ("search_workspace", {"query": "test_create_run_requires_model"}),
+            ("read_workspace_file", {"path": "logs/ci-failure.log"}),
+            ("read_workspace_file", {"path": "llama_pack/api/routes/runs.py"}),
+            ("write_ci_triage_report", {"content": report}),
+        ],
+        final_answer="Triage report written.",
+    )
+
+    suite = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_suite("gpt-oss-20b", [scenario])
+
+    assert suite["status"] == "partial"
+    assert suite["passed_count"] == 0
+    assert suite["partial_count"] == 1
+    assert suite["failed_count"] == 0
+    assert suite["cases"][0]["status"] == "partial"
+
+
+@pytest.mark.asyncio
+async def test_live_tool_loop_reports_partial_when_only_workspace_listing_is_missing(tmp_path):
+    scenario = next(scenario for scenario in default_live_tool_loop_scenarios() if scenario.id == "live-targeted-bugfix-plan")
+    plan = (
+        "Bug Minimal patch Tests Risk parse_retry_after "
+        "llama_pack/core/runtime/retry.py tests/test_retry.py"
+    )
+    proxy = ScriptedLiveProxy(
+        [
+            ("search_workspace", {"query": "parse_retry_after"}),
+            ("read_workspace_file", {"path": "llama_pack/core/runtime/retry.py"}),
+            ("read_workspace_file", {"path": "tests/test_retry.py"}),
+            ("write_bugfix_plan", {"content": plan}),
+        ],
+        final_answer="Bugfix plan written.",
+    )
+
+    result = await LiveToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", scenario)
+
+    assert result["status"] == "partial"
+    assert result["missing_expected_tools"] == ["list_workspace"]
+    assert result["checks"]["expected_tool_sequence"] is False

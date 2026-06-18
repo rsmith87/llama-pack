@@ -21,8 +21,12 @@ class LiveToolLoopScenario:
     id: str
     prompt: str
     expected_tool_sequence: list[str]
+    expected_final_substrings: list[str]
     expected_artifacts: list[str]
     expected_artifact_substrings: dict[str, list[str]]
+    seed_files: dict[str, str]
+    write_tools: dict[str, str]
+    search_glob: str
     forbidden_artifact_substrings: dict[str, list[str]] = field(default_factory=dict)
     request_defaults: dict[str, Any] = field(default_factory=lambda: {"max_tokens": 1200})
     max_iterations: int = 8
@@ -48,8 +52,8 @@ class LiveToolLoopEvaluator:
         request_id = request_id or str(uuid4())
         with tempfile.TemporaryDirectory(prefix="llama-pack-live-tool-loop-") as tmpdir:
             workspace = Path(tmpdir)
-            _seed_notes_workspace(workspace)
-            live_config = _live_notes_config(self.config, workspace, scenario.max_iterations)
+            _seed_workspace(workspace, scenario.seed_files)
+            live_config = _live_workspace_config(self.config, workspace, scenario)
             tool_defs = ToolRegistry(live_config.agent_tools).openai_tools()
             executor = self.executor_factory(live_config, trace_recorder=self.trace_recorder)
             messages: list[dict[str, Any]] = [{"role": "user", "content": scenario.prompt}]
@@ -216,7 +220,7 @@ class LiveToolLoopEvaluator:
             checks = {
                 "completed": completed,
                 "expected_tool_sequence": _contains_required_tools(observed_tools, scenario.expected_tool_sequence),
-                "expected_final_substrings": _contains_all(final_answer, ["created", "notes"]),
+                "expected_final_substrings": _contains_all(final_answer, scenario.expected_final_substrings),
                 "no_tool_errors": all(bool(result.get("ok")) for result in tool_results),
                 "no_repeated_calls": _max_repeated_call_signatures(tool_results) <= scenario.max_repeated_tool_calls,
                 **artifact_checks,
@@ -224,7 +228,10 @@ class LiveToolLoopEvaluator:
             score = _score(checks)
             missing_expected_tools, unexpected_tools = _tool_sequence_delta(observed_tools, scenario.expected_tool_sequence)
             artifact_diagnostics = _artifact_diagnostics(workspace, scenario)
-            status = "passed" if score == 1.0 else "failed"
+            partial_checks = {"expected_final_substrings", "expected_artifact_substrings"}
+            if set(missing_expected_tools) == {"list_workspace"}:
+                partial_checks.add("expected_tool_sequence")
+            status = _case_status(checks, partial_checks=partial_checks)
             self._emit(
                 "case_scored",
                 status=status,
@@ -273,20 +280,22 @@ class LiveToolLoopEvaluator:
             )
         results = [await self.run_case(model_name, scenario) for scenario in scenarios]
         passed_count = sum(1 for result in results if result["status"] == "passed")
-        failed_count = len(results) - passed_count
+        partial_count = sum(1 for result in results if result["status"] == "partial")
+        failed_count = len(results) - passed_count - partial_count
         average_score = round(sum(float(result["score"]) for result in results) / len(results), 4) if results else 0.0
         suite = {
             "model": model_name,
-            "status": "passed" if failed_count == 0 else "failed",
+            "status": _suite_status(passed_count=passed_count, partial_count=partial_count, failed_count=failed_count),
             "case_count": len(results),
             "passed_count": passed_count,
+            "partial_count": partial_count,
             "failed_count": failed_count,
             "average_score": average_score,
             "cases": results,
         }
         if self.emit_suite_events:
             self._emit(
-                "run_completed" if failed_count == 0 else "run_failed",
+                "run_completed" if failed_count == 0 and partial_count == 0 else "run_failed",
                 status=suite["status"],
                 model=model_name,
                 title="Live tool-loop eval run completed",
@@ -319,6 +328,7 @@ def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:
                 "search_workspace",
                 "write_notes_app_design",
             ],
+            expected_final_substrings=["created", "notes"],
             expected_artifacts=["docs/notes-app-design.md"],
             expected_artifact_substrings={
                 "docs/notes-app-design.md": [
@@ -334,6 +344,23 @@ def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:
                     "registration",
                 ],
             },
+            seed_files={
+                "README.md": (
+                    "# Collaborative Notes App\n\n"
+                    "Create a notes app that allows collaboration between users. "
+                    "User account information and registration is not needed. "
+                    "Build with future relationships from notes to users using user_id and note_id respectively.\n"
+                ),
+                "schema-notes.md": (
+                    "Entities: users, notes, note_collaborators.\n"
+                    "Relationship constraints: notes.user_id, note_collaborators.user_id, note_collaborators.note_id.\n"
+                ),
+                "api-starter.md": (
+                    "Needed API areas: CRUD notes, list notes by user_id, share notes with collaborators, list collaborators by note_id.\n"
+                ),
+            },
+            write_tools={"write_notes_app_design": "docs/notes-app-design.md"},
+            search_glob="*.md",
             forbidden_artifact_substrings={
                 "docs/notes-app-design.md": [
                     "password",
@@ -341,52 +368,244 @@ def default_live_tool_loop_scenarios() -> list[LiveToolLoopScenario]:
                     "signup",
                 ],
             },
-        )
+        ),
+        LiveToolLoopScenario(
+            id="live-ci-failure-triage",
+            prompt=(
+                "Use the workspace tools to triage the failing CI run. Search for "
+                "test_create_run_requires_model, inspect the CI log, relevant source, and relevant test. "
+                "Write docs/ci-triage.md with Root cause, Minimal fix, and Verification sections. "
+                "Include the exact failing test name, relevant file path, and command to rerun the focused test. "
+                "Do not use unrelated package or frontend notes."
+            ),
+            expected_tool_sequence=[
+                "list_workspace",
+                "search_workspace",
+                "read_workspace_file",
+                "write_ci_triage_report",
+            ],
+            expected_final_substrings=["triage", "report"],
+            expected_artifacts=["docs/ci-triage.md"],
+            expected_artifact_substrings={
+                "docs/ci-triage.md": [
+                    "Root cause",
+                    "Minimal fix",
+                    "Verification",
+                    "tests/test_api.py::test_create_run_requires_model",
+                    "llama_pack/api/routes/runs.py",
+                    "uv run pytest tests/test_api.py -v",
+                ],
+            },
+            seed_files={
+                ".github/workflows/ci.yml": (
+                    "name: CI\n"
+                    "on: [push]\n"
+                    "jobs:\n"
+                    "  test:\n"
+                    "    runs-on: ubuntu-latest\n"
+                    "    steps:\n"
+                    "      - uses: actions/checkout@v4\n"
+                    "      - run: uv run pytest tests/test_api.py -v\n"
+                ),
+                "logs/ci-failure.log": (
+                    "FAILED tests/test_api.py::test_create_run_requires_model - AssertionError: expected 422, got 200\n"
+                    "request payload omitted model but route accepted it\n"
+                ),
+                "llama_pack/api/routes/runs.py": (
+                    "async def create_run(body):\n"
+                    "    model = body.get('model')\n"
+                    "    return {'status': 'queued', 'model': model}\n"
+                ),
+                "tests/test_api.py": (
+                    "def test_create_run_requires_model(client):\n"
+                    "    response = client.post('/lm-api/v1/runs', json={'prompt': 'hello'})\n"
+                    "    assert response.status_code == 422\n"
+                ),
+                "docs/frontend-notes.md": "Frontend bundle cache notes are unrelated to this API validation failure.\n",
+                "package-notes.md": "Package publishing notes mention test_create_run_requires_model only as stale migration history.\n",
+            },
+            write_tools={"write_ci_triage_report": "docs/ci-triage.md"},
+            search_glob="**/*",
+            forbidden_artifact_substrings={"docs/ci-triage.md": ["frontend bundle", "package publishing"]},
+            max_iterations=9,
+        ),
+        LiveToolLoopScenario(
+            id="live-config-migration-plan",
+            prompt=(
+                "Use the workspace tools to compare the existing and target YAML config fixtures. "
+                "Search for controller_db_url, read the existing config, target config, and migration notes. "
+                "Write docs/config-migration-plan.md with Current state, Migration steps, Compatibility, and Verification sections. "
+                "Preserve exact config key names and do not recommend stale legacy_model_path fields."
+            ),
+            expected_tool_sequence=[
+                "list_workspace",
+                "search_workspace",
+                "read_workspace_file",
+                "write_config_migration_plan",
+            ],
+            expected_final_substrings=["migration", "plan"],
+            expected_artifacts=["docs/config-migration-plan.md"],
+            expected_artifact_substrings={
+                "docs/config-migration-plan.md": [
+                    "Current state",
+                    "Migration steps",
+                    "Compatibility",
+                    "Verification",
+                    "controller_db_url",
+                    "auth_db_url",
+                    "agent_tools",
+                    "uv run pytest tests/test_persistence_db_infra.py tests/test_alembic_config.py -v",
+                ],
+            },
+            seed_files={
+                "fixtures/migration-task7-existing-config.yaml": (
+                    "mode: controller\n"
+                    "controller_db_url: sqlite:///logs/controller_state.db\n"
+                    "auth_db_url: sqlite:///logs/auth_store.db\n"
+                    "agent_tools:\n"
+                    "  enabled: true\n"
+                ),
+                "fixtures/migration-task7-config.yaml": (
+                    "mode: controller\n"
+                    "controller_db_url: sqlite:///data/controller_state.db\n"
+                    "auth_db_url: sqlite:///data/auth_store.db\n"
+                    "agent_tools:\n"
+                    "  enabled: true\n"
+                    "  max_iterations: 8\n"
+                ),
+                "docs/migration-notes.md": (
+                    "Keep controller_db_url and auth_db_url explicit. "
+                    "Validate with persistence and Alembic config tests. "
+                    "legacy_model_path was removed and must not be reintroduced.\n"
+                ),
+                "docs/stale-config.md": "Old examples mention legacy_model_path and should not be used.\n",
+            },
+            write_tools={"write_config_migration_plan": "docs/config-migration-plan.md"},
+            search_glob="**/*",
+            forbidden_artifact_substrings={"docs/config-migration-plan.md": ["legacy_model_path"]},
+            max_iterations=9,
+        ),
+        LiveToolLoopScenario(
+            id="live-targeted-bugfix-plan",
+            prompt=(
+                "Use the workspace tools to prepare a targeted bugfix plan. Search for parse_retry_after, "
+                "then inspect only the relevant source and test files. Write docs/bugfix-plan.md with "
+                "Bug, Minimal patch, Tests, and Risk sections. Avoid broad architecture notes."
+            ),
+            expected_tool_sequence=[
+                "list_workspace",
+                "search_workspace",
+                "read_workspace_file",
+                "write_bugfix_plan",
+            ],
+            expected_final_substrings=["bugfix", "plan"],
+            expected_artifacts=["docs/bugfix-plan.md"],
+            expected_artifact_substrings={
+                "docs/bugfix-plan.md": [
+                    "Bug",
+                    "Minimal patch",
+                    "Tests",
+                    "Risk",
+                    "parse_retry_after",
+                    "llama_pack/core/runtime/retry.py",
+                    "tests/test_retry.py",
+                ],
+            },
+            seed_files={
+                "llama_pack/core/runtime/retry.py": (
+                    "def parse_retry_after(value: str) -> int:\n"
+                    "    return int(value)\n"
+                ),
+                "tests/test_retry.py": (
+                    "def test_parse_retry_after_accepts_http_date():\n"
+                    "    assert parse_retry_after('Wed, 21 Oct 2015 07:28:00 GMT') >= 0\n"
+                ),
+                "docs/architecture.md": "Broad architecture notes are unrelated to this small parser fix.\n",
+                "docs/runtime-overview.md": "Runtime overview mentions retries but not parse_retry_after.\n",
+            },
+            write_tools={"write_bugfix_plan": "docs/bugfix-plan.md"},
+            search_glob="**/*",
+            forbidden_artifact_substrings={"docs/bugfix-plan.md": ["broad architecture", "rewrite runtime"]},
+            max_iterations=9,
+        ),
+        LiveToolLoopScenario(
+            id="live-pr-review-findings",
+            prompt=(
+                "Use the workspace tools to review the proposed change. Inspect the diff, touched source, "
+                "and tests. Write docs/pr-review.md with actionable findings ordered by severity. "
+                "Do not include style-only comments."
+            ),
+            expected_tool_sequence=[
+                "list_workspace",
+                "read_workspace_file",
+                "write_pr_review",
+            ],
+            expected_final_substrings=["review", "findings"],
+            expected_artifacts=["docs/pr-review.md"],
+            expected_artifact_substrings={
+                "docs/pr-review.md": [
+                    "P1",
+                    "api_key",
+                    "llama_pack/auth.py",
+                    "tests/test_auth.py",
+                    "unauthenticated",
+                ],
+            },
+            seed_files={
+                "review/diff.patch": (
+                    "diff --git a/llama_pack/auth.py b/llama_pack/auth.py\n"
+                    "-    if api_key is None: raise Unauthorized()\n"
+                    "+    if api_key is None: return AnonymousUser()\n"
+                ),
+                "llama_pack/auth.py": (
+                    "def require_api_key(api_key):\n"
+                    "    if api_key is None:\n"
+                    "        return AnonymousUser()\n"
+                    "    return validate_key(api_key)\n"
+                ),
+                "tests/test_auth.py": (
+                    "def test_missing_api_key_is_unauthenticated(client):\n"
+                    "    assert client.get('/lm-api/v1/runs').status_code == 401\n"
+                ),
+                "review/style-notes.md": "Line length and import ordering are not actionable for this review.\n",
+            },
+            write_tools={"write_pr_review": "docs/pr-review.md"},
+            search_glob="**/*",
+            forbidden_artifact_substrings={"docs/pr-review.md": ["line length", "import ordering", "style-only"]},
+            max_iterations=8,
+        ),
     ]
 
 
-def _seed_notes_workspace(workspace: Path) -> None:
-    (workspace / "docs").mkdir(parents=True, exist_ok=True)
-    (workspace / "README.md").write_text(
-        "# Collaborative Notes App\n\n"
-        "Create a notes app that allows collaboration between users. "
-        "User account information and registration is not needed. "
-        "Build with future relationships from notes to users using user_id and note_id respectively.\n",
-        encoding="utf-8",
-    )
-    (workspace / "schema-notes.md").write_text(
-        "Entities: users, notes, note_collaborators.\n"
-        "Relationship constraints: notes.user_id, note_collaborators.user_id, note_collaborators.note_id.\n",
-        encoding="utf-8",
-    )
-    (workspace / "api-starter.md").write_text(
-        "Needed API areas: CRUD notes, list notes by user_id, share notes with collaborators, list collaborators by note_id.\n",
-        encoding="utf-8",
-    )
+def _seed_workspace(workspace: Path, seed_files: dict[str, str]) -> None:
+    for relative_path, content in seed_files.items():
+        path = workspace / relative_path
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding="utf-8")
 
 
-def _live_notes_config(config: AppConfig, workspace: Path, max_iterations: int) -> AppConfig:
+def _live_workspace_config(config: AppConfig, workspace: Path, scenario: LiveToolLoopScenario) -> AppConfig:
     tools = {
         "list_workspace": AgentToolDefinitionConfig(
             type="directory_list",
-            description="List files in the live scenario workspace.",
+            description="List files in the live coding-agent scenario workspace.",
             path=workspace,
             recursive=True,
-            max_depth=2,
+            max_depth=6,
         ),
         "read_workspace_file": AgentToolDefinitionConfig(
             type="file_read_dynamic",
-            description="Read a relative file from the live scenario workspace.",
+            description="Read a relative file from the live coding-agent scenario workspace.",
             path=workspace,
         ),
         "search_workspace": AgentToolDefinitionConfig(
             type="text_search",
             description=(
-                "Search markdown files in the live scenario workspace. "
-                "For the notes app design eval, call this once with query user_id before writing."
+                "Search files in the live coding-agent scenario workspace. "
+                "Use specific identifiers from the task prompt as queries."
             ),
             path=workspace,
-            glob="*.md",
+            glob=scenario.search_glob,
             parameters={
                 "type": "object",
                 "properties": {
@@ -398,10 +617,12 @@ def _live_notes_config(config: AppConfig, workspace: Path, max_iterations: int) 
                 "required": ["query"],
             },
         ),
-        "write_notes_app_design": AgentToolDefinitionConfig(
+    }
+    for tool_name, relative_path in scenario.write_tools.items():
+        tools[tool_name] = AgentToolDefinitionConfig(
             type="file_write",
-            description="Write the collaborative notes app design document.",
-            path=workspace / "docs" / "notes-app-design.md",
+            description=f"Write the scenario artifact {relative_path}.",
+            path=workspace / relative_path,
             write_mode="write",
             max_write_bytes=65536,
             parameters={
@@ -409,18 +630,17 @@ def _live_notes_config(config: AppConfig, workspace: Path, max_iterations: int) 
                 "properties": {
                     "content": {
                         "type": "string",
-                        "description": "Markdown content for docs/notes-app-design.md.",
+                        "description": f"Markdown content for {relative_path}.",
                     }
                 },
                 "required": ["content"],
             },
-        ),
-    }
+        )
     return config.model_copy(
         update={
             "agent_tools": AgentToolsConfig(
                 enabled=True,
-                max_iterations=max_iterations,
+                max_iterations=scenario.max_iterations,
                 safe_roots=[workspace],
                 tools=tools,
             )
@@ -578,6 +798,20 @@ def _has_forbidden_substring(normalized_text: str, substring: str) -> bool:
         for phrase in allowed_negations:
             scrubbed = scrubbed.replace(phrase, "")
         return normalized_substring in scrubbed
+    if normalized_substring == "legacy_model_path":
+        allowed_negations = (
+            "legacy_model_path is not present",
+            "legacy_model_path is absent",
+            "legacy_model_path was removed",
+            "legacy_model_path must not be reintroduced",
+            "do not use legacy_model_path",
+            "do not recommend legacy_model_path",
+            "without legacy_model_path",
+        )
+        scrubbed = normalized_text
+        for phrase in allowed_negations:
+            scrubbed = scrubbed.replace(phrase, "")
+        return normalized_substring in scrubbed
     return normalized_substring in normalized_text
 
 
@@ -618,3 +852,20 @@ def _score(checks: dict[str, bool]) -> float:
         return 0.0
     passed = sum(1 for value in checks.values() if value)
     return round(passed / len(checks), 4)
+
+
+def _case_status(checks: dict[str, bool], partial_checks: set[str]) -> str:
+    failed_checks = {name for name, passed in checks.items() if not passed}
+    if not failed_checks:
+        return "passed"
+    if failed_checks.issubset(partial_checks):
+        return "partial"
+    return "failed"
+
+
+def _suite_status(*, passed_count: int, partial_count: int, failed_count: int) -> str:
+    if failed_count:
+        return "failed"
+    if partial_count:
+        return "partial"
+    return "passed" if passed_count else "passed"
