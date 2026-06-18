@@ -6,6 +6,7 @@ import json
 import httpx
 import pytest
 import ssl
+import subprocess
 from sqlalchemy import update
 
 import time
@@ -476,6 +477,25 @@ def test_agent_model_routes():
     assert client.post("/lm-api/v1/models/qwen/start").json()["running"] is True
     assert client.post("/lm-api/v1/models/qwen/stop").json()["running"] is False
     assert client.get("/lm-api/v1/logs/qwen").json()["text"] == "hello\n"
+
+
+def test_agent_model_stop_timeout_returns_gateway_timeout():
+    class TimeoutProcessManager(StubProcessManager):
+        def stop(self, name):
+            raise subprocess.TimeoutExpired("12345", 5)
+
+    app = create_app(
+        config=load_config({"mode": "agent", "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}}}),
+        process_manager=TimeoutProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.post("/lm-api/v1/models/qwen/stop")
+
+    assert response.status_code == 504
+    assert response.json()["detail"] == "Timed out stopping model qwen: process 12345 did not exit after 5 seconds."
 
 
 def test_profile_catalog_groups_local_profiles(tmp_path):

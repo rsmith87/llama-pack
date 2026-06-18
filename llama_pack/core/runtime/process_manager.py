@@ -44,6 +44,8 @@ class _AdoptedProcess:
     def poll(self) -> int | None:
         try:
             os.kill(self.pid, 0)
+            if _pid_is_zombie(self.pid):
+                return -1
             return None  # still running
         except ProcessLookupError:
             return -1
@@ -326,3 +328,17 @@ class ProcessManager:
         except OSError:
             pass
         return None
+
+
+def _pid_is_zombie(pid: int) -> bool:
+    try:
+        result = subprocess.run(
+            ["ps", "-o", "stat=", "-p", str(pid)],
+            capture_output=True,
+            text=True,
+        )
+    except OSError:
+        return False
+    if result.returncode != 0:
+        return False
+    return result.stdout.strip().startswith("Z")

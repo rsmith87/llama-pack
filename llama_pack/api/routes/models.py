@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import subprocess
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
@@ -95,6 +97,11 @@ def _call_manager(method, name: str):
         status = method(name)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except subprocess.TimeoutExpired as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"Timed out stopping model {name}: process {exc.cmd} did not exit after {exc.timeout} seconds.",
+        ) from exc
     if hasattr(status, "to_dict"):
         return status.to_dict()
     return status

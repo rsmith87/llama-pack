@@ -563,6 +563,19 @@ def test_adopted_process_poll_alive():
     assert proc.poll() is None
 
 
+def test_adopted_process_poll_treats_zombie_as_stopped():
+    class Result:
+        returncode = 0
+        stdout = "Z+\n"
+
+    proc = _AdoptedProcess(pid=12345)
+    with patch("llama_pack.core.runtime.process_manager.os.kill", return_value=None), patch(
+        "llama_pack.core.runtime.process_manager.subprocess.run",
+        return_value=Result(),
+    ):
+        assert proc.poll() == -1
+
+
 def test_process_manager_status_includes_mmproj_and_mtp_from_db(tmp_path):
     config, store, catalog = _catalog_config(tmp_path)
     _register_model(
