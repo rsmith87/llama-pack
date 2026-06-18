@@ -352,6 +352,26 @@
   border: 1px solid var(--warning);
 }
 
+.setup-security-warning {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--warning);
+  border-radius: 8px;
+  background: var(--warning-bg);
+}
+
+.setup-security-warning div {
+  display: grid;
+  gap: 4px;
+}
+
+.setup-security-warning span {
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .wizard-apply-actions {
   display: grid;
   gap: 6px;

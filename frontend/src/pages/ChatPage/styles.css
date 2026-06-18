@@ -213,6 +213,32 @@
   font-weight: 700;
 }
 
+.context-budget {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+}
+
+.context-budget strong {
+  font-size: 0.9rem;
+  font-weight: 650;
+}
+
+.context-budget small {
+  color: var(--muted);
+}
+
+.context-budget-near_limit,
+.context-budget-too_large {
+  border-color: var(--danger-line);
+}
+
+.context-budget-getting_full {
+  border-color: var(--warning);
+}
+
 .chat-controls-fieldset {
   margin: 0;
   border: 0;

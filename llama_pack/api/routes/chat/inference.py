@@ -10,6 +10,7 @@ from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_
 from llama_pack.api.routes.chat.common import (
     ChatRequestBody,
     EmbeddingsRequestBody,
+    raise_context_budget_exception,
     raise_proxy_http_exception,
     resolve_profile_model,
     track_model_if_local,
@@ -57,6 +58,21 @@ async def chat_inspect(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 
 
+@router.post("/{model_name}/context-budget")
+async def chat_context_budget(
+    model_name: str,
+    body: ChatRequestBody,
+    profile_activation: ProfileActivationService = Depends(get_profile_activation_service),
+    proxy: ChatProxy = Depends(get_chat_proxy),
+):
+    try:
+        request_payload = body.model_dump()
+        resolved_model, _ = resolve_profile_model(model_name, request_payload, profile_activation)
+        return proxy.context_budget(resolved_model, request_payload)
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @router.get("/capabilities/{model_name}")
 async def chat_capabilities(
     model_name: str,
@@ -87,6 +103,7 @@ async def chat(
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
+        raise_context_budget_exception(exc)
         raise_proxy_http_exception(exc)
 
 
@@ -112,6 +129,7 @@ async def chat_stream(
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
+        raise_context_budget_exception(exc)
         raise_proxy_http_exception(exc)
 
 

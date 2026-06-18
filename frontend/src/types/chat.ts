@@ -3,6 +3,20 @@ import type { Telemetry } from "./streaming";
 export type ChatRequest = Record<string, unknown>;
 export type ChatResponse = Record<string, unknown>;
 
+export type ContextBudget = {
+  model: string;
+  context_window_tokens: number;
+  prompt_tokens_estimated: number;
+  reserved_completion_tokens: number;
+  available_input_tokens: number;
+  remaining_context_tokens: number;
+  usage_ratio: number;
+  status: "comfortable" | "getting_full" | "near_limit" | "too_large";
+  estimation_method: string;
+  precision: string;
+  warnings: string[];
+};
+
 export type ChatContentBlock =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };

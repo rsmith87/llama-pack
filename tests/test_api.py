@@ -1717,6 +1717,78 @@ def test_chat_route_requires_running_model():
     assert response.status_code == 409
 
 
+def test_chat_context_budget_reports_remaining_window():
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081, "ctx": 64}},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/chat/qwen/context-budget",
+        json={
+            "messages": [{"role": "user", "content": "hello world"}],
+            "max_tokens": 16,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "model": "qwen",
+        "context_window_tokens": 64,
+        "prompt_tokens_estimated": 4,
+        "reserved_completion_tokens": 16,
+        "available_input_tokens": 48,
+        "remaining_context_tokens": 44,
+        "usage_ratio": 0.3125,
+        "status": "comfortable",
+        "estimation_method": "approx_chars_div_4",
+        "precision": "approximate",
+        "warnings": [],
+    }
+
+
+def test_chat_route_rejects_context_budget_overflow():
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "hello"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081, "ctx": 8}},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/chat/qwen",
+        json={
+            "messages": [{"role": "user", "content": "01234567890123456789012345678901"}],
+            "max_tokens": 4,
+        },
+    )
+
+    assert response.status_code == 413
+    assert response.json()["detail"]["status"] == "too_large"
+    assert calls == []
+
+
 def test_chat_route_proxies_to_llama_server():
     calls = []
 
@@ -4261,6 +4333,31 @@ def test_setup_status_reports_auth_bootstrap_required_without_keys():
     assert "secret-registration" not in response.text
     assert "config" not in payload
     assert "key" not in payload
+
+
+def test_health_and_setup_status_include_network_security_diagnostics():
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "nodes": {
+                    "mac-mini": {
+                        "url": "http://mac-mini.local:9137",
+                        "api_key": "node-secret",
+                    },
+                },
+            }
+        ),
+    )
+    client = RawTestClient(app)
+
+    health_payload = client.get("/lm-api/v1/health").json()
+    setup_payload = client.get("/lm-api/v1/setup/status").json()
+
+    assert health_payload["diagnostics"][0]["id"] == "controller_node_plaintext_api_key"
+    assert setup_payload["diagnostics"][0]["id"] == "controller_node_plaintext_api_key"
+    assert "node-secret" not in str(health_payload)
+    assert "node-secret" not in str(setup_payload)
 
 
 def test_setup_status_counts_registered_models_from_db(tmp_path):

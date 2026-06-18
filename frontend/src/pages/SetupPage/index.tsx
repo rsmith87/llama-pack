@@ -144,6 +144,18 @@ export function SetupPage() {
 
       <StepIndicator nav={nav} />
 
+      {status?.diagnostics?.length ? (
+        <section className="setup-security-warning" aria-label="Network security diagnostics">
+          {status.diagnostics.map((diagnostic) => (
+            <div key={`${diagnostic.id}-${diagnostic.evidence}`}>
+              <strong>{diagnostic.message}</strong>
+              <span>{diagnostic.evidence}</span>
+              <span>{diagnostic.action}</span>
+            </div>
+          ))}
+        </section>
+      ) : null}
+
       <div className="wizard-step-body">
         <StepRouter nav={nav} />
       </div>

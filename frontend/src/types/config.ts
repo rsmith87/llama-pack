@@ -1,10 +1,12 @@
 import type { CurrentConfigNode } from "./nodes";
+import type { RuntimeDiagnostic } from "./health";
 
 export type SetupStatus = {
   mode: string;
   auth_bootstrap_required: boolean;
   auth_enabled: boolean;
   setup_recommended: boolean;
+  diagnostics?: RuntimeDiagnostic[];
   models_count?: number;
   has_nodes?: boolean;
 };

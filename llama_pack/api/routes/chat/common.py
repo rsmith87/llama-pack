@@ -15,6 +15,7 @@ from llama_pack.api.http_headers import (
     LLAMA_PACK_RESOLVED_MODEL_HEADER,
 )
 from llama_pack.core.chat.profile_activation import ProfileActivationService
+from llama_pack.core.chat.context_budget import ContextBudgetExceededError
 from llama_pack.core.chat.proxy import ModelNotRunningError
 from llama_pack.core.runtime.process_manager import ProcessManager
 
@@ -118,6 +119,11 @@ def track_model_if_local(manager: ProcessManager, model_name: str):
     if track_active is None:
         return nullcontext()
     return track_active(model_name)
+
+
+def raise_context_budget_exception(exc: Exception) -> None:
+    if isinstance(exc, ContextBudgetExceededError):
+        raise HTTPException(status_code=413, detail=exc.budget.to_dict()) from exc
 
 
 def raise_proxy_http_exception(exc: Exception) -> None:

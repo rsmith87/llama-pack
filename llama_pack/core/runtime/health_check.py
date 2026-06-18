@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.catalog_service import ModelCatalogService
+from llama_pack.core.runtime.network_security import network_security_diagnostics
 from llama_pack.providers.system_metrics import get_system_metrics
 
 
@@ -33,6 +34,7 @@ def health_payload(config: AppConfig, catalog_service: ModelCatalogService | Non
         "mode": config.mode,
         "controller_url": config.controller_url if config.mode == "agent" else None,
         "config_source": config.config_source,
+        "diagnostics": [diagnostic.to_payload() for diagnostic in network_security_diagnostics(config)],
         "configured_models": models_count,
         "models_configured": models_count,
         "nodes_configured": len(config.nodes),

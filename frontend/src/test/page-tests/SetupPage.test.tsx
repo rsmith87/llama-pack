@@ -87,6 +87,25 @@ it("renders the setup wizard heading and mode selection cards", async () => {
   expect(screen.getByText("Standalone")).toBeInTheDocument();
 });
 
+it("shows network security diagnostics returned by setup status", async () => {
+  mockFetch({
+    diagnostics: [
+      {
+        id: "controller_node_plaintext_api_key",
+        severity: "warning",
+        message: "Controller sends the API key for node mac-mini over plaintext HTTP.",
+        evidence: "nodes.mac-mini.url is 'http://mac-mini.local:9137' and nodes.mac-mini.api_key is configured.",
+        action: "Use Caddy/local TLS with an https:// node URL, or keep direct HTTP limited to a trusted isolated LAN.",
+      },
+    ],
+  });
+  renderSetup();
+
+  expect(await screen.findByRole("region", { name: "Network security diagnostics" })).toBeInTheDocument();
+  expect(screen.getByText(/Controller sends the API key for node mac-mini over plaintext HTTP/i)).toBeInTheDocument();
+  expect(screen.getByText(/Use Caddy\/local TLS/i)).toBeInTheDocument();
+});
+
 it("advances past mode selection when a mode card is clicked", async () => {
   mockFetch();
   const user = userEvent.setup();

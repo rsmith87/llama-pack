@@ -1,9 +1,18 @@
 import type { LocalModel } from "./models";
 import type { NodeInventoryItem } from "./nodes";
 
+export type RuntimeDiagnostic = {
+  id: string;
+  severity: "warning" | "error" | string;
+  message: string;
+  evidence: string;
+  action: string;
+};
+
 export type HealthResponse = {
   mode?: string;
   controller_url?: string | null;
+  diagnostics?: RuntimeDiagnostic[];
   configured_models?: number;
   models_configured?: number;
   system?: {

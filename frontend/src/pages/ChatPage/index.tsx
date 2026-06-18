@@ -1,6 +1,6 @@
 import "./styles.css";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, inspectModel, listChatSessions, listKvSlots, saveChatSession } from "../../api/chat";
+import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, getContextBudget, inspectModel, listChatSessions, listKvSlots, saveChatSession } from "../../api/chat";
 import { getModelProfiles, listModels } from "../../api/models";
 import { getNodeModels } from "../../api/nodes";
 import { createThread, getThreadEvents, streamThreadMessage } from "../../api/threads";
@@ -12,7 +12,7 @@ import type { TelemetryChunk } from "../../types/streaming";
 import { buildThreadMetadata, threadEventsToChatMessages } from "../../features/chat/chatThreads";
 import type { ThreadEvent } from "../../types/threads";
 import type { LocalModel, ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
-import type { ChatMessage, ChatDefaults, AdvancedDefaults, ChatContentBlock } from "../../types/chat";
+import type { ChatMessage, ChatDefaults, AdvancedDefaults, ChatContentBlock, ContextBudget } from "../../types/chat";
 import { CHAT_CONSTANTS } from "../../constants"
 import { modelName } from "../../features/models";
 import { 
@@ -60,6 +60,16 @@ const ADVANCED_DEFAULTS: AdvancedDefaults = {
   grammarText: "",
 };
 
+function formatCompactTokenCount(value: number): string {
+  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
+  return String(value);
+}
+
+function contextBudgetSummary(budget: ContextBudget): string {
+  const used = budget.prompt_tokens_estimated + budget.reserved_completion_tokens;
+  return `Context: ${formatCompactTokenCount(used)} / ${formatCompactTokenCount(budget.context_window_tokens)} used · ${formatCompactTokenCount(budget.remaining_context_tokens)} left`;
+}
+
 export function ChatPage() {
   const [handoff] = useState(readChatHandoff);
   const [models, setModels] = useState<LocalModel[]>([]);
@@ -88,6 +98,8 @@ export function ChatPage() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
   const [advanced, setAdvanced] = useState<AdvancedDefaults>(ADVANCED_DEFAULTS);
   const [capabilities, setCapabilities] = useState<Record<string, unknown> | null>(null);
+  const [contextBudget, setContextBudget] = useState<ContextBudget | null>(null);
+  const [contextBudgetError, setContextBudgetError] = useState("");
   const [capabilityDetail, setCapabilityDetail] = useState("Capabilities unavailable.");
   const [inspectDetail, setInspectDetail] = useState("No prompt inspection yet.");
   const [kvDetail, setKvDetail] = useState("No KV slot data loaded.");
@@ -606,6 +618,40 @@ export function ChatPage() {
   const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
   const targetOptions = ["auto", "local", target, ...runningModels.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
 
+  useEffect(() => {
+    if (!selectedModel || noModelLoaded || pending || (!messages.length && !prompt.trim())) {
+      setContextBudget(null);
+      setContextBudgetError("");
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(() => {
+      const draftMessages = prompt.trim()
+        ? [...messages, { role: "user", content: prompt.trim(), requestContent: buildUserMessageContent(prompt.trim()) }]
+        : messages;
+      const built = buildChatPayload(draftMessages);
+      if (built.error) {
+        setContextBudget(null);
+        setContextBudgetError(built.error);
+        return;
+      }
+      getContextBudget(selectedModel, built.payload || {}, controller.signal)
+        .then((budget) => {
+          setContextBudget(budget);
+          setContextBudgetError("");
+        })
+        .catch((err) => {
+          if ((err as Error).name === "AbortError") return;
+          setContextBudget(null);
+          setContextBudgetError(err instanceof Error ? err.message : "Context budget unavailable.");
+        });
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      controller.abort();
+    };
+  }, [selectedModel, noModelLoaded, pending, messages, prompt, selectedImage, selectedModelSupportsVision, defaults, advanced, target, selectedFamily, selectedProfile]);
+
   return (
     <div className="chat-page-react">
       <div className="page-heading">
@@ -753,6 +799,14 @@ export function ChatPage() {
               </div>
             ) : null}
             <StatusBadge tone={pending ? "warning" : "success"}>{status}</StatusBadge>
+            {contextBudget ? (
+              <div className={`context-budget context-budget-${contextBudget.status}`} data-testid="context-budget-summary">
+                <strong>{contextBudgetSummary(contextBudget)}</strong>
+                <small>{contextBudget.precision === "approximate" ? "Approximate estimate" : "Tokenizer estimate"}</small>
+              </div>
+            ) : contextBudgetError ? (
+              <p className="muted" data-testid="context-budget-summary">{contextBudgetError}</p>
+            ) : null}
             <div className="thread-controls">
               <FormField label="Conversation ID"><input value={activeConversationId} onChange={(event) => setActiveConversationId(event.target.value)} placeholder="conversation id" /></FormField>
               <FormField label="Conversation App"><input value={conversationApp} onChange={(event) => setConversationApp(event.target.value)} /></FormField>

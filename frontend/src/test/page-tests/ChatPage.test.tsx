@@ -243,6 +243,41 @@ it("streams a conversation response and builds the request payload", async () =>
   }));
 });
 
+it("shows context budget while composing", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/chat/mistral/context-budget") {
+        return okJson({
+          model: "mistral",
+          context_window_tokens: 32768,
+          prompt_tokens_estimated: 14500,
+          reserved_completion_tokens: 1024,
+          available_input_tokens: 31744,
+          remaining_context_tokens: 17244,
+          usage_ratio: 0.4737,
+          status: "comfortable",
+          estimation_method: "approx_chars_div_4",
+          precision: "approximate",
+          warnings: [],
+        });
+      }
+      return okJson({});
+    }),
+  );
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+  await user.type(await screen.findByLabelText("Prompt"), "Budget this prompt");
+
+  await waitFor(() => {
+    expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("Context: 15.5k / 32.8k used");
+    expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("17.2k left");
+  });
+});
+
 it("shows image upload for vision models and sends image content blocks", async () => {
   vi.stubGlobal(
     "fetch",

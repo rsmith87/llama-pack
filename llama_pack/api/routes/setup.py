@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
+from llama_pack.core.runtime.network_security import network_security_diagnostics
 from llama_pack.core.setup import ActiveSetupRequest, SetupActionResult, apply_active_setup, preflight_active_setup
 
 
@@ -125,6 +126,7 @@ def setup_status(request: Request) -> dict[str, object]:
         "setup_recommended": not auth_enabled,
         "models_count": models_count,
         "has_nodes": has_nodes,
+        "diagnostics": [diagnostic.to_payload() for diagnostic in network_security_diagnostics(config)],
     }
 
 

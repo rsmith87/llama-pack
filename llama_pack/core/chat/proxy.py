@@ -7,6 +7,7 @@ from typing import Any
 import httpx
 
 from llama_pack.core.chat import CapabilityInspector, ModelNotRunningError, PromptTemplateAdapter, TargetResolver, TransportBuilder
+from llama_pack.core.chat.context_budget import ContextBudgetEstimator
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.runtime.process_manager import ProcessManager
@@ -26,6 +27,7 @@ class ChatProxy:
         self._resolver = TargetResolver(process_manager, node_registry, config)
         self._transport = TransportBuilder(node_registry)
         self._capabilities = CapabilityInspector(process_manager, config)
+        self._context_budget = ContextBudgetEstimator(process_manager, config)
         self._prompt_templates = PromptTemplateAdapter()
 
     async def chat(self, model_name: str, payload: dict[str, Any]) -> dict[str, Any]:
@@ -102,6 +104,9 @@ class ChatProxy:
     def capabilities(self, model_name: str) -> dict[str, Any]:
         return self._capabilities.capabilities(model_name)
 
+    def context_budget(self, model_name: str, payload: dict[str, Any]) -> dict[str, object]:
+        return self._context_budget.estimate(model_name, payload).to_dict()
+
     def inspect_prompt(self, model_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         messages = payload.get("messages", [])
         joined = []
@@ -121,6 +126,7 @@ class ChatProxy:
         }
 
     async def _build_request(self, model_name: str, payload: dict[str, Any], stream: bool) -> tuple[str, dict[str, Any], dict[str, str], bool, dict[str, str]]:
+        self._context_budget.require_fits(model_name, payload)
         request_payload = {
             "messages": payload["messages"],
             "temperature": payload.get("temperature", 0.7),

@@ -1,16 +1,19 @@
 .dashboard-health,
 .dashboard-cert-alerts,
+.dashboard-security-alerts,
 .quick-actions-panel,
 .dashboard-controller-nodes {
   grid-column: 1 / -1;
 }
 
-.dashboard-cert-alerts {
+.dashboard-cert-alerts,
+.dashboard-security-alerts {
   display: grid;
   gap: 8px;
 }
 
-.dashboard-cert-alert {
+.dashboard-cert-alert,
+.dashboard-security-alert {
   margin: 0;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -20,6 +23,18 @@
 
 .dashboard-cert-alert strong {
   margin-right: 6px;
+}
+
+.dashboard-security-alert {
+  display: grid;
+  gap: 4px;
+  border-color: color-mix(in srgb, var(--warning) 68%, var(--line));
+  background: color-mix(in srgb, var(--warning) 12%, var(--panel));
+}
+
+.dashboard-security-alert span {
+  color: var(--muted);
+  font-size: 13px;
 }
 
 .dashboard-cert-alert-danger {

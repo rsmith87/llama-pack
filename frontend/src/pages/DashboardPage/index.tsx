@@ -219,6 +219,18 @@ export function DashboardPage() {
         </div>
       </Panel>
 
+      {data.health?.diagnostics?.length ? (
+        <Panel className="dashboard-security-alerts" eyebrow="Security Diagnostics" title="Network Exposure">
+          {data.health.diagnostics.map((diagnostic) => (
+            <p key={`${diagnostic.id}-${diagnostic.evidence}`} className="dashboard-security-alert" role={diagnostic.severity === "error" ? "alert" : "status"}>
+              <strong>{diagnostic.message}</strong>
+              <span>{diagnostic.evidence}</span>
+              <span>{diagnostic.action}</span>
+            </p>
+          ))}
+        </Panel>
+      ) : null}
+
       {isController && (expiredCertNodes.length > 0 || expiringCertNodes.length > 0) ? (
         <Panel className="dashboard-cert-alerts" eyebrow="TLS Alerts" title="Node Certificates">
           {expiredCertNodes.length > 0 ? (
