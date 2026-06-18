@@ -1496,6 +1496,66 @@ def test_settings_runtime_patch_persists_database_value(tmp_path):
     assert reloaded.json()["settings"]["agent_worker_labels"] == {"gpu": "metal"}
 
 
+def test_settings_runtime_patch_updates_cors_preflight_without_restart(tmp_path):
+    origin = "http://127.0.0.1:5174"
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {
+        "username": "admin-user",
+        "role": "admin",
+    }
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/runtime",
+        json={"client_cors_origins": [origin]},
+        headers={"X-UI-Session": "admin-token"},
+    )
+    preflight = client.options(
+        "/lm-api/v1/chat/gemma-4-12b-it-Q4_K_M%3Adefault/context-budget",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-llama-pack-key",
+        },
+    )
+
+    assert response.status_code == 200
+    assert preflight.status_code == 200
+    assert preflight.headers["access-control-allow-origin"] == origin
+
+
+def test_cors_headers_are_applied_to_auth_middleware_response(tmp_path):
+    origin = "http://127.0.0.1:5174"
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "client_cors_origins": [origin],
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.auth_store.create_external_key("Spitball", "http://127.0.0.1:5174")
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/chat/gemma-4-12b-it-Q4_K_M%3Adefault/context-budget",
+        json={"messages": [{"role": "user", "content": "hello"}], "max_tokens": 1},
+        headers={"Origin": origin},
+    )
+
+    assert response.status_code == 404
+    assert response.headers["access-control-allow-origin"] == origin
+
+
 def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
     app = create_app(
         config=load_config(

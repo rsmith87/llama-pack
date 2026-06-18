@@ -65,6 +65,25 @@ def test_configured_client_cors_origin_can_preflight_discovery(tmp_path: Path):
     assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
 
 
+def test_configured_spitball_origin_can_preflight_context_budget(tmp_path: Path):
+    origin = "http://127.0.0.1:5174"
+    config = discovery_config(tmp_path, {"client_cors_origins": [origin]})
+    client = TestClient(create_app(config=config))
+
+    response = client.options(
+        "/lm-api/v1/chat/gemma-4-12b-it-Q4_K_M%3Adefault/context-budget",
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "content-type,x-llama-pack-key",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert "X-Llama-Pack-Key" in response.headers["access-control-allow-headers"]
+
+
 def test_client_discovery_does_not_advertise_missing_business_plugin(tmp_path: Path):
     config = discovery_config(tmp_path)
     client = TestClient(create_app(config=config))

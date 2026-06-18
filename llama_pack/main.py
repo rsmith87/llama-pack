@@ -9,8 +9,7 @@ from typing import Any
 
 from datetime import UTC, datetime
 from fastapi import FastAPI, Request
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse, Response
 
 from llama_pack.api.routes import (
     audit,
@@ -406,15 +405,23 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
 
 
 def _register_middleware(app: FastAPI) -> None:
-    if app.state.config.client_cors_origins:
-        app.add_middleware(
-            CORSMiddleware,
-            allow_origins=app.state.config.client_cors_origins,
-            allow_credentials=True,
-            allow_methods=["GET", "POST", "OPTIONS"],
-            allow_headers=["Content-Type", "X-UI-Session", *request_api_key_headers()],
-            expose_headers=response_route_headers(),
-        )
+    cors_methods = ["GET", "POST", "OPTIONS"]
+    cors_headers = ["Content-Type", "X-UI-Session", *request_api_key_headers()]
+    cors_exposed_headers = response_route_headers()
+
+    @app.middleware("http")
+    async def apply_dynamic_cors(request: Request, call_next):
+        origin = request.headers.get("origin")
+        allowed_origins = set(app.state.config.client_cors_origins)
+        if origin and origin in allowed_origins and request.method == "OPTIONS":
+            response = Response(status_code=200)
+            _apply_cors_headers(response, origin, cors_methods, cors_headers, cors_exposed_headers)
+            return response
+
+        response = await call_next(request)
+        if origin and origin in allowed_origins:
+            _apply_cors_headers(response, origin, cors_methods, cors_headers, cors_exposed_headers)
+        return response
 
     @app.middleware("http")
     async def enforce_plugin_activation(request: Request, call_next):
@@ -493,6 +500,28 @@ def _register_middleware(app: FastAPI) -> None:
         if not should_enforce_agent_key(app.state.config.mode, configured, path):
             return await call_next(request)
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+
+def _apply_cors_headers(
+    response: Response,
+    origin: str,
+    methods: list[str],
+    headers: list[str],
+    exposed_headers: list[str],
+) -> None:
+    response.headers["Access-Control-Allow-Origin"] = origin
+    response.headers["Access-Control-Allow-Credentials"] = "true"
+    response.headers["Access-Control-Allow-Methods"] = ", ".join(methods)
+    response.headers["Access-Control-Allow-Headers"] = ", ".join(headers)
+    response.headers["Access-Control-Expose-Headers"] = ", ".join(exposed_headers)
+    response.headers["Vary"] = _append_vary_origin(response.headers.get("Vary", ""))
+
+
+def _append_vary_origin(value: str) -> str:
+    parts = [part.strip() for part in value.split(",") if part.strip()]
+    if "Origin" not in parts:
+        parts.append("Origin")
+    return ", ".join(parts)
 
 
 def _register_lifespan(app: FastAPI) -> None:
