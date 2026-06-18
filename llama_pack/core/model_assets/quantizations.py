@@ -25,6 +25,10 @@ def is_quantized_gguf_filename(filename: str) -> bool:
     return QUANTIZED_GGUF_SUFFIX_RE.search(filename) is not None
 
 
+def is_mmproj_gguf_filename(filename: str) -> bool:
+    return "mmproj" in filename.lower() and filename.lower().endswith(".gguf")
+
+
 class QuantizationManager:
     supported_types = ["Q4_K_M", "Q5_K_M", "Q8_0", "Q6_K", "Q3_K_M", "Q2_K"]
 
@@ -133,7 +137,11 @@ class QuantizationManager:
         paths = []
         for root in self.config.model_roots:
             if root.exists():
-                paths.extend(path for path in root.glob("*/*.gguf") if not is_quantized_gguf_filename(path.name))
+                paths.extend(
+                    path
+                    for path in root.glob("*/*.gguf")
+                    if not is_quantized_gguf_filename(path.name) and not is_mmproj_gguf_filename(path.name)
+                )
         return sorted(paths, key=lambda item: str(item).lower())
 
     def _output_path(self, path: Path, quant_type: str) -> Path:

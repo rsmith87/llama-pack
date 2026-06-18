@@ -12,6 +12,13 @@ type NavSidebarProps = {
   onClose?: () => void;
 };
 
+function primaryNavPath(page: PageDefinition, configuredModels: number): string {
+  if (page.key === "models" && configuredModels > 0) {
+    return "/ui/gguf-library";
+  }
+  return page.path;
+}
+
 function loadCollapsed(mode: string | undefined): Set<string> {
   try {
     const raw = localStorage.getItem(`nav-collapsed-${mode || "default"}`);
@@ -21,7 +28,7 @@ function loadCollapsed(mode: string | undefined): Set<string> {
 }
 
 export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
-  const { appMode, controllerUrl, controllerReachable, agentNodes } = useGlobalStatus();
+  const { appMode, controllerUrl, controllerReachable, agentNodes, configuredModels } = useGlobalStatus();
   const { pluginPages } = usePluginNav();
   const { openLogs } = useLogModal();
   const visibleSections = pagesBySectionForMode(appMode, pluginPages);
@@ -73,7 +80,7 @@ export function NavSidebar({ activePage, onClose }: NavSidebarProps) {
               {section.pages.map((item) => (
                 <NavLink
                   key={item.key}
-                  to={item.path}
+                  to={primaryNavPath(item, configuredModels)}
                   className={({ isActive }) =>
                     `nav-button cursor-pointer ${isActive || (item.key === "models" && activePage.section === "models") ? "active" : ""}`
                   }

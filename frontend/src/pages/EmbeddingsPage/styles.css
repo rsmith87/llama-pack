@@ -1,1 +1,179 @@
-/* component styles */
+.embeddings-grid {
+  align-items: start;
+}
+
+.embedding-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-bottom: 1px solid var(--line);
+  margin: 0 0 16px;
+  overflow-x: auto;
+}
+
+.embedding-explainer {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(260px, 0.9fr);
+  gap: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  margin: 0 0 16px;
+  padding: 16px;
+}
+
+.embedding-explainer h3 {
+  margin: 4px 0 6px;
+  font-size: 1.05rem;
+}
+
+.embedding-explainer p,
+.embedding-example p,
+.embedding-tab-intro span {
+  color: var(--muted);
+  margin: 0;
+}
+
+.embedding-example {
+  display: grid;
+  gap: 6px;
+  border-left: 1px solid var(--line);
+  padding-left: 16px;
+}
+
+.embedding-example strong {
+  font-size: 0.95rem;
+}
+
+.embedding-tab-intro {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 14px;
+}
+
+.embedding-tabs button {
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font: inherit;
+  font-weight: 700;
+  padding: 10px 12px;
+  white-space: nowrap;
+}
+
+.embedding-tabs button:hover,
+.embedding-tabs button.active {
+  color: var(--ink);
+}
+
+.embedding-tabs button.active {
+  border-bottom-color: var(--accent);
+}
+
+.embeddings-tab-panel {
+  min-width: 0;
+}
+
+.embedding-status-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 0 16px;
+}
+
+.embedding-status-strip > div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--card);
+  min-width: 0;
+}
+
+.embedding-status-strip span,
+.embedding-status-strip strong {
+  display: block;
+}
+
+.embedding-status-strip strong {
+  overflow-wrap: anywhere;
+}
+
+.embedding-recommendation-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.embedding-recommendation-grid h3 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.embedding-card-grid {
+  display: grid;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.embedding-model-card {
+  display: grid;
+  gap: 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: var(--card);
+}
+
+.embedding-model-card > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.embedding-model-card p {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.embedding-model-card code {
+  display: block;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.controller-memory-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.memory-form {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+.memory-inline-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .embedding-status-strip,
+  .embedding-explainer,
+  .embedding-recommendation-grid,
+  .controller-memory-grid,
+  .memory-inline-fields {
+    grid-template-columns: 1fr;
+  }
+
+  .embedding-example {
+    border-left: 0;
+    border-top: 1px solid var(--line);
+    padding: 12px 0 0;
+  }
+}

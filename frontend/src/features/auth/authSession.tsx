@@ -1,10 +1,12 @@
 import { createContext, useContext, useEffect, useLayoutEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { IoLogOutOutline } from "react-icons/io5";
 import { currentUser, login, logout } from "../../api/auth";
 import { setAuthTokenProvider } from "../../api/client";
 import { getSetupStatus } from "../../api/setup";
 import { Button } from "../../components/ui";
 
 export const AUTH_TOKEN_STORAGE_KEY = "lm_ui_token";
+export const REMEMBERED_USERNAME_STORAGE_KEY = "lm_ui_remembered_username";
 
 export type AuthSessionContextValue = {
   authToken: string;
@@ -136,8 +138,9 @@ export function useAuthSession() {
 
 export function AuthLoginForm() {
   const { authUser, authRole, isAuthenticated, loginWithKey, logoutSession } = useAuthSession();
-  const [username, setUsername] = useState("");
+  const [username, setUsername] = useState(() => localStorage.getItem(REMEMBERED_USERNAME_STORAGE_KEY) || "");
   const [apiKey, setApiKey] = useState("");
+  const [rememberUsername, setRememberUsername] = useState(() => Boolean(localStorage.getItem(REMEMBERED_USERNAME_STORAGE_KEY)));
   const [error, setError] = useState("");
 
   async function onSubmit(event: FormEvent) {
@@ -145,6 +148,11 @@ export function AuthLoginForm() {
     setError("");
     try {
       await loginWithKey(username, apiKey);
+      if (rememberUsername) {
+        localStorage.setItem(REMEMBERED_USERNAME_STORAGE_KEY, username);
+      } else {
+        localStorage.removeItem(REMEMBERED_USERNAME_STORAGE_KEY);
+      }
       setApiKey("");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
@@ -155,10 +163,36 @@ export function AuthLoginForm() {
     <form className="auth-form" onSubmit={onSubmit}>
       <input value={username} onChange={(event) => setUsername(event.target.value)} type="text" placeholder="username" />
       <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} type="password" placeholder="api key" />
+      <label className="auth-remember">
+        <input
+          checked={rememberUsername}
+          onChange={(event) => setRememberUsername(event.target.checked)}
+          type="checkbox"
+        />
+        <span>Remember username</span>
+      </label>
       <Button type="submit">Login</Button>
       <Button type="button" onClick={() => void logoutSession()} disabled={!isAuthenticated}>Logout</Button>
       <span className="muted text-xs font-bold">{authUser ? `${authUser} (${authRole || "operator"})` : "Not logged in"}</span>
       {error ? <span className="error-text" role="alert">{error}</span> : null}
     </form>
+  );
+}
+
+export function AuthLogoutButton() {
+  const { authUser, authRole, isAuthenticated, logoutSession } = useAuthSession();
+  const title = authUser ? `Log out ${authUser} (${authRole || "operator"})` : "Log out";
+
+  return (
+    <Button
+      type="button"
+      onClick={() => void logoutSession()}
+      disabled={!isAuthenticated}
+      aria-label="Log out"
+      title={title}
+      className="auth-logout-button"
+    >
+      <IoLogOutOutline aria-hidden="true" />
+    </Button>
   );
 }

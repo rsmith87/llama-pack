@@ -2,7 +2,7 @@ import "./styles.css";
 import { useMemo, useState } from "react";
 import { listQuantizationFiles, startQuantization } from "../../api/quantizations";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
-import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
+import { DataTable, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import type { QuantizationFile } from "../../types/index";
 
 const DEFAULT_TYPES = ["Q4_K_M"];
@@ -26,8 +26,18 @@ function fileName(file: QuantizationFile) {
   return text(file, "filename", text(file, "name", fileId(file)));
 }
 
+function filePath(file: QuantizationFile) {
+  return text(file, "path", "-");
+}
+
 function isAlreadyQuantizedGguf(file: QuantizationFile) {
   return QUANTIZED_GGUF_SUFFIX.test(fileName(file));
+}
+
+function isMmprojGguf(file: QuantizationFile) {
+  const lowerName = fileName(file).toLowerCase();
+  const lowerPath = filePath(file).toLowerCase();
+  return (lowerName.includes("mmproj") || lowerPath.includes("mmproj")) && (lowerName.endsWith(".gguf") || lowerPath.endsWith(".gguf"));
 }
 
 function sizeGb(file: QuantizationFile) {
@@ -107,13 +117,14 @@ export function QuantizationPage() {
   const [latencyGoal, setLatencyGoal] = useState("balanced");
   const [qualityGoal, setQualityGoal] = useState("balanced");
   const [advisorOutput, setAdvisorOutput] = useState("Run the advisor after files load.");
+  const [advisorOpen, setAdvisorOpen] = useState(false);
 
   const rowTypes = useMemo(() => {
     const next: Record<string, string> = {};
     for (const file of files) next[fileId(file)] = selectedTypes[fileId(file)] || String(file.type || supportedTypes(file)[0]);
     return next;
   }, [files, selectedTypes]);
-  const sourceFiles = useMemo(() => files.filter((file) => !isAlreadyQuantizedGguf(file)), [files]);
+  const sourceFiles = useMemo(() => files.filter((file) => !isAlreadyQuantizedGguf(file) && !isMmprojGguf(file)), [files]);
 
   async function quantize(file: QuantizationFile) {
     await startQuantization(fileId(file), { type: rowTypes[fileId(file)] || supportedTypes(file)[0] });
@@ -124,22 +135,13 @@ export function QuantizationPage() {
     <div className="quantization-page-react">
       <div className="page-heading">
         <div><span className="eyebrow">Optimization</span><h2>Quantization</h2></div>
-        <Button type="button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh"}</Button>
+        <div className="quantization-heading-actions">
+          <Button type="button" onClick={() => setAdvisorOpen(true)}>Advisor</Button>
+          <Button type="button" onClick={refresh} disabled={loading}>{loading ? "Refreshing" : "Refresh"}</Button>
+        </div>
       </div>
       <ErrorBanner message={error} />
-      <div className="flex quantization-page-layout">
-        <Panel title="Advisor" eyebrow="Heuristic" className="side-panel">
-          <div className="stacked-controls">
-            <div className="recommendation-form">
-              <FormField label="Target VRAM (GB)"><input value={vramGb} onChange={(event) => setVramGb(Number(event.target.value || 0))} type="number" /></FormField>
-              <FormField label="Latency Goal"><select value={latencyGoal} onChange={(event) => setLatencyGoal(event.target.value)}><option value="low">Low</option><option value="balanced">Balanced</option><option value="throughput">Throughput</option></select></FormField>
-              <FormField label="Quality Goal"><select value={qualityGoal} onChange={(event) => setQualityGoal(event.target.value)}><option value="balanced">Balanced</option><option value="high">High</option><option value="max">Max</option></select></FormField>
-              <Button type="button" className="btn btn-primary" onClick={() => setAdvisorOutput(recommend(sourceFiles, vramGb, latencyGoal, qualityGoal))}>Recommend</Button>
-            </div>
-            <pre className="detail-json">{advisorOutput}</pre>
-          </div>
-        </Panel>
-
+      <div className="quantization-page-layout">
         <Panel title="Quantization Files" eyebrow="Source GGUFs">
           {sourceFiles.length === 0 && loading ? <EmptyState message="Loading quantization files..." /> : (
             <DataTable
@@ -147,8 +149,16 @@ export function QuantizationPage() {
               emptyMessage="No GGUF files found for quantization."
               getRowKey={(row, index) => fileId(row) || String(index)}
               columns={[
-                /*{ key: "model", header: "Model", render: (row) => <strong>{text(row, "model_dir")}</strong> },*/
-                { key: "file", header: "File", render: (row) => fileName(row) },
+                {
+                  key: "file",
+                  header: "File",
+                  render: (row) => (
+                    <div className="quantization-file-cell" title={filePath(row)}>
+                      <strong>{fileName(row)}</strong>
+                      <span>{filePath(row)}</span>
+                    </div>
+                  ),
+                },
                 { key: "size", header: "Size", render: (row) => formatGb(sizeGb(row)) },
                 { key: "type", header: "Type", render: (row) => {
                   const id = fileId(row);
@@ -156,7 +166,13 @@ export function QuantizationPage() {
                   return <select className="compact-select" aria-label={`Quant type for ${name}`} value={rowTypes[id] || supportedTypes(row)[0]} onChange={(event) => setSelectedTypes((current) => ({ ...current, [id]: event.target.value }))}>{supportedTypes(row).map((type) => <option key={type} value={type}>{type}</option>)}</select>;
                 } },
                 { key: "status", header: "Status", render: (row) => <StatusBadge tone={row.running ? "warning" : row.quantize_bin ? "success" : "danger"}>{statusText(row)}</StatusBadge> },
-                { key: "output", header: "Output", render: (row) => text(row, "output_path") },
+                {
+                  key: "output",
+                  header: "Output",
+                  render: (row) => (
+                    <span className="quantization-output-cell" title={text(row, "output_path")}>{text(row, "output_path")}</span>
+                  ),
+                },
                 { key: "actions", header: "Actions", render: (row) => {
                   const name = fileName(row);
                   return <button type="button" className="btn btn-primary" onClick={() => void quantize(row)} disabled={!row.quantize_bin || Boolean(row.running)} aria-label={`Quantize ${name}`}>Quantize</button>;
@@ -166,6 +182,17 @@ export function QuantizationPage() {
           )}
         </Panel>
       </div>
+      <Modal title="Quantization Advisor" open={advisorOpen} onClose={() => setAdvisorOpen(false)}>
+          <div className="stacked-controls">
+            <div className="recommendation-form">
+              <FormField label="Target VRAM (GB)"><input value={vramGb} onChange={(event) => setVramGb(Number(event.target.value || 0))} type="number" /></FormField>
+              <FormField label="Latency Goal"><select value={latencyGoal} onChange={(event) => setLatencyGoal(event.target.value)}><option value="low">Low</option><option value="balanced">Balanced</option><option value="throughput">Throughput</option></select></FormField>
+              <FormField label="Quality Goal"><select value={qualityGoal} onChange={(event) => setQualityGoal(event.target.value)}><option value="balanced">Balanced</option><option value="high">High</option><option value="max">Max</option></select></FormField>
+              <Button type="button" className="btn btn-primary" onClick={() => setAdvisorOutput(recommend(sourceFiles, vramGb, latencyGoal, qualityGoal))}>Recommend</Button>
+            </div>
+            <pre className="detail-json">{advisorOutput}</pre>
+          </div>
+      </Modal>
     </div>
   );
 }

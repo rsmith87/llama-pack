@@ -3113,6 +3113,396 @@ real domain such as \`controller.example.com\`.
     searchBody: "Caddy Local TLS Setup This is the operator checklist for running Llama Pack controller and agent nodes over local HTTPS with Caddy. You can run Llama Pack without this TLS setup by exposing uvicorn directly on the LAN: In that direct HTTP mode, controller and agent URLs use . That is simpler, but API keys, prompts, responses, and heartbeats travel in plaintext. For local TLS, change to , use URLs, and expose Caddy on . The target shape is: Llama Pack still uses API keys for authorization. Caddy adds transport encryption and keeps uvicorn off the LAN. Hostnames Use stable hostnames everywhere, not IP addresses: Role Hostname --- --- Controller Mac agent Linux agent The same hostname must be used in: - , mDNS, or LAN DNS - the certificate DNS SAN - the Caddy site block - , , and controller After changing , restart the affected Llama Pack process so long-lived HTTP clients do not keep stale resolution behavior. Public Controller, Private Agents For external user or mobile access, the best default topology is a public controller domain with private agents reachable only over a VPN/private network. In this topology: - The controller has a public DNS name and public HTTPS certificate, preferably from ACME/Let's Encrypt through Caddy. - Agents stay off the public internet. Their Caddy listeners are reachable only from the controller over Tailscale, WireGuard, a private subnet, or a private DNS/VPN name. - Public clients use only the controller URL. - The controller URLs use the private/VPN agent names. - Agents set to the public controller URL, because their heartbeat and work-claim traffic goes outbound to the controller. - Agents set to their private/VPN URL, because that is the URL the controller uses to call them. Example controller : Example Mac agent : Example Linux agent : Controller Caddy with a public ACME cert can be as simple as: Agent Caddy can still use private CA certs, Tailscale HTTPS certs, or any certificate trusted by the controller's Python runtime. If agent certs are private CA certs, the controller must still set and to the private CA chain bundle. Do not expose agent Caddy listeners publicly unless the controller cannot reach them privately. Public agents increase the attack surface and require tighter firewall, monitoring, and key-rotation discipline. Certificate Files The CA root and intermediate cert are created by on the CA machine. They are often under: If they are not there, ask Step where it keeps its files: Or search: Copy both CA certs to every machine and keep a local staging copy: On other nodes, copy it with or another trusted transfer method: Install the root into system trust. macOS: Debian, Ubuntu, and Raspberry Pi OS: System trust is not always enough for Python/httpx on every platform. Also point Llama Pack at the CA chain bundle in each node's : Use the local account path on each machine. On the Mac mini, for example: Issue Node Certificates only needs to be running when issuing or renewing certificates. Start it on the CA machine when needed: Issue each node certificate with the exact hostname clients will use. Controller: Mac agent: Linux agent: The example gives 30-day certs if the CA policy allows it. Shorter default certs work, but they need renewal sooner. Automatic Certificate Renewal Smallstep certificates are often short-lived. For this Caddy setup, renewal has three steps: 1. Renew the node leaf certificate with . 2. Rebuild the Caddy fullchain by appending the intermediate CA certificate. 3. Reload Caddy so it serves the renewed certificate. Use the repo helper for all three: For Linux agents, replace with the agent basename, such as . For macOS Homebrew Caddy, use the Homebrew cert directory and reload mode: Preview without changing anything: Linux/Pi systemd timer Copy the examples from : Edit for the local node's paths, hostname, and cert basename. Then enable the timer: Run once immediately: The timer assumes is reachable when renewal runs. If the CA server is not always running, either keep it available on the controller or schedule renewal windows when it is running. macOS scheduled renewal For Homebrew Caddy on macOS, use the dedicated wrapper: For scheduled runs, prefer over . Install the wrapper into a stable user path and point your LaunchAgent to it: LaunchAgent location: should execute: Install Certs For Caddy Caddy should serve a fullchain certificate: the node leaf certificate followed by the intermediate CA certificate. Without the intermediate, may still work in some environments while Python/httpx fails with . Linux and Raspberry Pi: The script builds from the user-writable leaf and intermediate files, then uses to write: - with mode - with mode - with mode - with owner and mode Use to preview the commands after building the local fullchain. For , replace with . macOS with Homebrew on Apple Silicon: Use to confirm . Intel Homebrew commonly uses . Caddyfiles Linux and Raspberry Pi use . Controller: Linux agent: macOS with Homebrew uses on Apple Silicon: Repo templates are also available under . Run Caddy As A Service Linux and Raspberry Pi: After Caddyfile changes: macOS Homebrew: If reports an error, run this to expose the real failure: If the error says is already in use, another Caddy process is already running. Stop the manual process, then restart the service: Lock Down Llama Pack Set uvicorn to loopback on every node: If using , add or update: Restart Llama Pack after changing : Switch Llama Pack URLs To HTTPS Controller : Mac agent : Linux agent : Controller node config should use HTTPS and keep TLS verification enabled: Verification Run from each machine: The TLS output should include: Local uvicorn should still work on the node itself: Direct remote uvicorn access should fail: Controller node visibility: Python/httpx trust from each node: Heartbeats flow from each agent to the controller. If shows stale heartbeats, test the controller URL from the agent process environment first: The controller also calls agents for model/status data, so the controller's Python environment must trust the same CA chain. Recovering From Expired Certificates only works while the cert is still valid. If a cert has already expired, renew is blocked and you must re-issue from scratch. Step 1 — Make sure is running on the Pi: Step 2 — Re-issue the cert on each node (run on the machine that owns the cert): Pi controller: Mac mini: Linux agent: The duration must be within the CA policy limit. If the CA rejects longer durations (e.g. 720h), use . With a 24h cert lifetime, cron must run at least twice a day to stay ahead of expiry — the schedule works. Step 3 — Install and reload Caddy using the renewal script with : Running step-ca As A Systemd Service does not create a systemd service automatically. Without it, the CA goes down on reboot and all renewal cron jobs fail. Create the service file on the Pi: Replace with the actual username. Find the binary path with if it is not at . The flag is required. Without it, tries to prompt for the key password interactively and fails with when run as a service. Create the password file: Enable and start: Verify the CA is reachable: Verifying Renewal Is Working Mac — check the cron log: Pi and Linux — check the systemd timer and service: Force a test run on any machine to confirm the full pipeline end-to-end: Mac: Pi: Linux agent: Expected output: . Verify the cert expiry after renewal: Verify the full chain is being served (want ): If , Caddy is serving the leaf cert only without the intermediate. Re-run the renewal script — the fullchain install step rebuilds from the leaf + intermediate. macOS scheduler gotchas - Use ( ) for better behavior across network transitions and wake/sleep. - Keep absolute paths in wrapper scripts and LaunchAgent . Troubleshooting Symptom Meaning Fix --- --- --- from Caddy TLS works, upstream Llama Pack is not reachable Check on that node and verify . Root CA is not trusted by the client Install into the client system trust store. in Python/httpx Missing intermediate chain or Python is not using system trust Serve from Caddy and set to . Hostname does not match the cert SAN Reissue the node cert with the exact hostname. Wrong binary or old CLI Install Smallstep , then check . on is not running Start or enable the systemd service. See Running step-ca As A Systemd Service. in step-ca service step-ca is prompting for a key password with no terminal Add to the line. in step-ca service systemd does not match the actual account Check on the Pi and update and in the service file. Cert already past expiry; is blocked Re-issue with , then re-run the renewal script. See Recovering From Expired Certificates. Another Caddy process is running Stop the manual process or restart the service cleanly. Caddy reload says cert/key permission denied Caddy service user cannot read Use , then , on the cert dir, on keys, and on certs. Pi can ping an agent but HTTPS hangs Firewall blocks TCP 443 Allow on the agent, for example . Admin API returns with Llama Pack does not use Bearer auth for admin APIs Send . Mobile App Note Private CA HTTPS is fine for LAN/VPN mobile testing only after the phone trusts the private root CA. For broader mobile access, prefer a public ACME cert on a real domain such as .",
   },
   {
+    id: "chat-slash-commands",
+    title: "Chat Slash Commands",
+    sourcePath: "docs/chat-slash-commands.md",
+    content: `# Chat Slash Commands
+
+Chat slash commands are explicit operator shortcuts typed into the chat
+composer. They should handle local UI or controller actions before a prompt is
+sent to the model. Commands are for actions the user intends to perform, not
+natural-language hints for the model to infer.
+
+Commands should be portable across Llama Pack chat and Spitball where the
+underlying capability exists. The parser, command metadata, usage text, and
+tests for command matching should be shared. Handlers should stay app-specific
+because Llama Pack and Spitball use different state, auth, storage, and backend
+capability checks.
+
+## Principles
+
+- Commands start with \`/\` and are parsed by the frontend before normal chat
+  submission.
+- Commands should not be sent to the LLM unless the command explicitly says so.
+- Successful commands should add a short system-style transcript message.
+- Failed commands should show a clear error in the transcript and page error
+  banner.
+- Commands should map to existing typed APIs where possible.
+- Destructive commands must require a confirmation step.
+- Command handlers should live in a small registry so \`/help\` can be generated
+  from command metadata later.
+- Command availability should be capability-gated. Unsupported commands should
+  return a clear message instead of silently falling back to normal chat.
+
+## Portability Model
+
+The command system should separate command recognition from command execution.
+
+\`\`\`text
+shared command parser and metadata
+  /remember
+  /recall
+  /context
+  /route
+  /target
+  /clear
+  /save
+        |
+        v
+Llama Pack handlers       Spitball handlers
+\`\`\`
+
+Shared pieces:
+
+- Exact command parsing.
+- Usage strings.
+- Descriptions.
+- \`/help\` metadata.
+- Parser tests.
+
+App-specific pieces:
+
+- API calls.
+- Auth headers and session handling.
+- Transcript updates.
+- Local or server-side persistence.
+- Capability checks.
+- UI state mutations such as selected target or selected model.
+
+Examples:
+
+- \`/clear\` can be supported in both apps because it only mutates local
+  transcript state.
+- \`/context\` can be supported in both apps because both chat flows already use
+  context budget APIs.
+- \`/remember\` should be enabled in Llama Pack when controller memory is
+  available. Spitball should enable it only when the connected backend exposes
+  memory endpoints and the current key can call them.
+- \`/save\` can be supported in both apps, but Llama Pack saves through the
+  server chat-session API while Spitball saves to local app storage.
+- \`/route\` should be capability-gated because not every connected backend or
+  app surface exposes route preview.
+
+## Current Commands
+
+### \`/remember <text>\`
+
+Save text to controller semantic memory.
+
+Behavior:
+
+- Trim the text after \`/remember\`.
+- Reject empty text with a usage error.
+- Write to \`/lm-api/v1/memory/write\`.
+- Use \`tier: "durable"\`, \`topic: "chat"\`, and \`tags: ["chat-command"]\`.
+- Add a user command message and a system confirmation message to the
+  transcript.
+- Do not send the command to the chat completion stream.
+
+Example:
+
+\`\`\`text
+/remember User prefers concise answers with code examples.
+\`\`\`
+
+### \`/recall <query>\`
+
+Search controller memory and show matching memories in the transcript. This is
+for debugging and intentional retrieval, not normal auto-injection.
+
+Behavior:
+
+- Call \`/lm-api/v1/memory/search\`.
+- Use \`top_k: 5\`.
+- Show result text, score, tier, and topic.
+- Do not send retrieved results to the LLM automatically.
+
+### \`/forget <query-or-id>\`
+
+Preview memory entries that may need deletion. This command is intentionally
+non-destructive until the backend exposes a delete API and the UI has a
+confirmation flow.
+
+Behavior:
+
+- Call \`/lm-api/v1/memory/search\`.
+- Use \`top_k: 5\`.
+- Show matching candidate memories.
+- Add a transcript note that no memories were deleted.
+
+### \`/context\`
+
+Show the current chat context status for the selected model.
+
+Behavior:
+
+- Reuse the existing context budget endpoint.
+- Show estimated prompt tokens, reserved completion tokens, remaining tokens,
+  context window, selected model, selected target, model family, and context
+  profile when available.
+- Do not send a chat message to the LLM.
+
+### \`/use <model-or-target>\`
+
+Switch the selected model or route target.
+
+Behavior:
+
+- Accept model names from the current running model list.
+- Accept route targets such as \`auto\`, \`local\`, or \`node:name\`.
+- Update the matching chat control.
+- Add a system transcript message confirming the switch.
+
+## Recommended Next Commands
+
+### \`/route <task>\`
+
+Preview router selection for a task without sending a chat message.
+
+Suggested behavior:
+
+- Reuse the runtime route preview endpoint.
+- Show selected node/model, reason, running/startup status, and rejected
+  candidates.
+- Do not start models automatically.
+
+### \`/target <auto|local|node:name>\`
+
+Switch the chat route target.
+
+Suggested behavior:
+
+- Validate the target against known local and node targets.
+- Update the chat target selector.
+- Add a system transcript message confirming the new target.
+
+### \`/clear\`
+
+Clear the visible transcript.
+
+Suggested behavior:
+
+- Run the same action as the Clear button.
+- Reject while a response is streaming.
+- Do not delete saved sessions or thread history.
+
+### \`/save [name]\`
+
+Save the current chat session.
+
+Suggested behavior:
+
+- If a name is provided, use it as the session name.
+- If no name is provided, use the current session name logic.
+- Reuse the existing chat session save API.
+
+## Later Commands
+
+### \`/forget confirm <id>\`
+
+Delete a specific memory entry after the preview step shows candidate IDs. This
+needs a backend delete API and explicit confirmation because deletion is
+destructive.
+
+### \`/embed <text>\`
+
+Generate an embedding for text and show model, dimensions, usage, and a short
+vector preview. This is mostly useful for education and debugging.
+
+### \`/similar <left> | <right>\`
+
+Embed two snippets and show cosine similarity. The separator should be explicit
+so parsing remains simple.
+
+### \`/models\`
+
+Show running chat-capable models and their targets.
+
+### \`/nodes\`
+
+Show reachable nodes and basic runtime capability status.
+
+### \`/capabilities\`
+
+Show selected model capabilities such as tools, embeddings, vision, KV slots,
+and structured output support.
+
+### \`/slots\`
+
+List KV slots for the selected model and target.
+
+### \`/slot clear <id>\`
+
+Clear one KV slot. This should require confirmation because it changes runtime
+state.
+
+### \`/eval <name>\`
+
+Run a named evaluation against the selected model/profile. This should integrate
+with the tool-loop evals workflow when that workflow exposes a stable API.
+
+## Registry Shape
+
+Command parsing should eventually move out of \`ChatPage\` and into a small
+frontend registry.
+
+\`\`\`ts
+type ChatSlashCommand = {
+  name: string;
+  usage: string;
+  description: string;
+  run: (args: string, context: ChatCommandContext) => Promise<void>;
+};
+\`\`\`
+
+The registry should support:
+
+- Exact command matching so \`/remembered\` does not trigger \`/remember\`.
+- A generated \`/help\` list.
+- Unit tests for command parsing separate from \`ChatPage\`.
+- Handler tests for side effects such as API calls, transcript messages, and
+  state updates.
+`,
+    headings: [
+      {
+        "level": 1,
+        "text": "Chat Slash Commands",
+        "anchor": "chat-slash-commands"
+      },
+      {
+        "level": 2,
+        "text": "Principles",
+        "anchor": "principles"
+      },
+      {
+        "level": 2,
+        "text": "Portability Model",
+        "anchor": "portability-model"
+      },
+      {
+        "level": 2,
+        "text": "Current Commands",
+        "anchor": "current-commands"
+      },
+      {
+        "level": 3,
+        "text": "`/remember <text>`",
+        "anchor": "remember-text"
+      },
+      {
+        "level": 3,
+        "text": "`/recall <query>`",
+        "anchor": "recall-query"
+      },
+      {
+        "level": 3,
+        "text": "`/forget <query-or-id>`",
+        "anchor": "forget-query-or-id"
+      },
+      {
+        "level": 3,
+        "text": "`/context`",
+        "anchor": "context"
+      },
+      {
+        "level": 3,
+        "text": "`/use <model-or-target>`",
+        "anchor": "use-model-or-target"
+      },
+      {
+        "level": 2,
+        "text": "Recommended Next Commands",
+        "anchor": "recommended-next-commands"
+      },
+      {
+        "level": 3,
+        "text": "`/route <task>`",
+        "anchor": "route-task"
+      },
+      {
+        "level": 3,
+        "text": "`/target <auto|local|node:name>`",
+        "anchor": "target-autolocalnodename"
+      },
+      {
+        "level": 3,
+        "text": "`/clear`",
+        "anchor": "clear"
+      },
+      {
+        "level": 3,
+        "text": "`/save [name]`",
+        "anchor": "save-name"
+      },
+      {
+        "level": 2,
+        "text": "Later Commands",
+        "anchor": "later-commands"
+      },
+      {
+        "level": 3,
+        "text": "`/forget confirm <id>`",
+        "anchor": "forget-confirm-id"
+      },
+      {
+        "level": 3,
+        "text": "`/embed <text>`",
+        "anchor": "embed-text"
+      },
+      {
+        "level": 3,
+        "text": "`/similar <left> | <right>`",
+        "anchor": "similar-left-right"
+      },
+      {
+        "level": 3,
+        "text": "`/models`",
+        "anchor": "models"
+      },
+      {
+        "level": 3,
+        "text": "`/nodes`",
+        "anchor": "nodes"
+      },
+      {
+        "level": 3,
+        "text": "`/capabilities`",
+        "anchor": "capabilities"
+      },
+      {
+        "level": 3,
+        "text": "`/slots`",
+        "anchor": "slots"
+      },
+      {
+        "level": 3,
+        "text": "`/slot clear <id>`",
+        "anchor": "slot-clear-id"
+      },
+      {
+        "level": 3,
+        "text": "`/eval <name>`",
+        "anchor": "eval-name"
+      },
+      {
+        "level": 2,
+        "text": "Registry Shape",
+        "anchor": "registry-shape"
+      }
+    ],
+    searchBody: "Chat Slash Commands Chat slash commands are explicit operator shortcuts typed into the chat composer. They should handle local UI or controller actions before a prompt is sent to the model. Commands are for actions the user intends to perform, not natural-language hints for the model to infer. Commands should be portable across Llama Pack chat and Spitball where the underlying capability exists. The parser, command metadata, usage text, and tests for command matching should be shared. Handlers should stay app-specific because Llama Pack and Spitball use different state, auth, storage, and backend capability checks. Principles - Commands start with and are parsed by the frontend before normal chat submission. - Commands should not be sent to the LLM unless the command explicitly says so. - Successful commands should add a short system-style transcript message. - Failed commands should show a clear error in the transcript and page error banner. - Commands should map to existing typed APIs where possible. - Destructive commands must require a confirmation step. - Command handlers should live in a small registry so can be generated from command metadata later. - Command availability should be capability-gated. Unsupported commands should return a clear message instead of silently falling back to normal chat. Portability Model The command system should separate command recognition from command execution. Shared pieces: - Exact command parsing. - Usage strings. - Descriptions. - metadata. - Parser tests. App-specific pieces: - API calls. - Auth headers and session handling. - Transcript updates. - Local or server-side persistence. - Capability checks. - UI state mutations such as selected target or selected model. Examples: - can be supported in both apps because it only mutates local transcript state. - can be supported in both apps because both chat flows already use context budget APIs. - should be enabled in Llama Pack when controller memory is available. Spitball should enable it only when the connected backend exposes memory endpoints and the current key can call them. - can be supported in both apps, but Llama Pack saves through the server chat-session API while Spitball saves to local app storage. - should be capability-gated because not every connected backend or app surface exposes route preview. Current Commands Save text to controller semantic memory. Behavior: - Trim the text after . - Reject empty text with a usage error. - Write to . - Use , , and . - Add a user command message and a system confirmation message to the transcript. - Do not send the command to the chat completion stream. Example: Search controller memory and show matching memories in the transcript. This is for debugging and intentional retrieval, not normal auto-injection. Behavior: - Call . - Use . - Show result text, score, tier, and topic. - Do not send retrieved results to the LLM automatically. Preview memory entries that may need deletion. This command is intentionally non-destructive until the backend exposes a delete API and the UI has a confirmation flow. Behavior: - Call . - Use . - Show matching candidate memories. - Add a transcript note that no memories were deleted. Show the current chat context status for the selected model. Behavior: - Reuse the existing context budget endpoint. - Show estimated prompt tokens, reserved completion tokens, remaining tokens, context window, selected model, selected target, model family, and context profile when available. - Do not send a chat message to the LLM. Switch the selected model or route target. Behavior: - Accept model names from the current running model list. - Accept route targets such as , , or . - Update the matching chat control. - Add a system transcript message confirming the switch. Recommended Next Commands Preview router selection for a task without sending a chat message. Suggested behavior: - Reuse the runtime route preview endpoint. - Show selected node/model, reason, running/startup status, and rejected candidates. - Do not start models automatically. Switch the chat route target. Suggested behavior: - Validate the target against known local and node targets. - Update the chat target selector. - Add a system transcript message confirming the new target. Clear the visible transcript. Suggested behavior: - Run the same action as the Clear button. - Reject while a response is streaming. - Do not delete saved sessions or thread history. Save the current chat session. Suggested behavior: - If a name is provided, use it as the session name. - If no name is provided, use the current session name logic. - Reuse the existing chat session save API. Later Commands Delete a specific memory entry after the preview step shows candidate IDs. This needs a backend delete API and explicit confirmation because deletion is destructive. Generate an embedding for text and show model, dimensions, usage, and a short vector preview. This is mostly useful for education and debugging. Embed two snippets and show cosine similarity. The separator should be explicit so parsing remains simple. Show running chat-capable models and their targets. Show reachable nodes and basic runtime capability status. Show selected model capabilities such as tools, embeddings, vision, KV slots, and structured output support. List KV slots for the selected model and target. Clear one KV slot. This should require confirmation because it changes runtime state. Run a named evaluation against the selected model/profile. This should integrate with the tool-loop evals workflow when that workflow exposes a stable API. Registry Shape Command parsing should eventually move out of and into a small frontend registry. The registry should support: - Exact command matching so does not trigger . - A generated list. - Unit tests for command parsing separate from . - Handler tests for side effects such as API calls, transcript messages, and state updates.",
+  },
+  {
     id: "configuration",
     title: "Configuration",
     sourcePath: "docs/configuration.md",
@@ -4139,6 +4529,40 @@ cd frontend
 npm run dev
 \`\`\`
 
+## Run The Electron Development Shell
+
+The desktop shell lives in \`desktop/\` and attaches to an already-running
+development stack. It does not start or stop the backend or the Vite frontend.
+
+Start the backend and frontend first:
+
+\`\`\`bash
+scripts/dev_fullstack.sh
+\`\`\`
+
+Then launch Electron in another terminal:
+
+\`\`\`bash
+cd desktop
+npm ci
+npm run dev
+\`\`\`
+
+By default, Electron loads:
+
+\`\`\`text
+http://127.0.0.1:5173/ui/
+\`\`\`
+
+Override the target URL when testing a different Vite host or port:
+
+\`\`\`bash
+LLAMA_PACK_DESKTOP_URL=http://127.0.0.1:6000/ui/ npm run dev
+\`\`\`
+
+If the target URL is unavailable, the shell shows a local error page with the
+command needed to start the development stack.
+
 ## Test
 
 Run frontend tests directly:
@@ -4266,6 +4690,11 @@ Core serves those files but does not bundle them into the core React build.
       },
       {
         "level": 2,
+        "text": "Run The Electron Development Shell",
+        "anchor": "run-the-electron-development-shell"
+      },
+      {
+        "level": 2,
         "text": "Test",
         "anchor": "test"
       },
@@ -4295,7 +4724,7 @@ Core serves those files but does not bundle them into the core React build.
         "anchor": "release-notes"
       }
     ],
-    searchBody: "Frontend Development The web UI lives in and is a Vite + React + TypeScript app. The production build is emitted into so FastAPI can serve it as static package data. Install Do not commit . Run The Backend Start FastAPI in another terminal: Use your normal controller or agent config instead of when testing real nodes and model workflows. The runtime scripts can also start the backend: For local development, start the backend and React dev site together: For agent-mode development, use the matching agent stack helper: Both stack helpers check their backend and frontend PID files first. If the whole stack is already running, they print a message and do not restart either process. If only one side is running, they start the missing side. You can also use the mode-detecting helper: auto-detects backend mode from your active config ( or ) and starts or accordingly. Set explicitly if you want to override this. Use or when you only want to start the backend. Run The Vite Dev Server Open: The script writes its PID to and logs to . Stop it with: The Vite dev server proxies API requests to by default. Override the backend target with: You can still run Vite directly when you want foreground logs: Test Run frontend tests directly: Run the Python integration wrapper that installs frontend dependencies and runs the same Vitest suite: Run UI static-serving checks: Build Build output is written to: FastAPI serves from when the React build exists. The generated files are content-hashed, so a rebuild may delete an old asset and add a new one. Project Layout - : typed API helpers by backend domain. - : shell, logs modal, and shared UI primitives. - : typed pure helpers migrated from the former vanilla frontend. - : routed React pages. - : canonical React navigation model. - : Vitest setup and app-level smoke coverage. Chat Conversations The frontend should present chat as conversation history. Avoid exposing as the primary user-facing term unless an operator/debug detail needs the backend identifier. Internally, an active conversation is backed by a durable backend thread. Any frontend state named or equivalent should store the backend . If the user sends a message without an active conversation, the chat UI should create the thread first and then append the message to that thread. The Chat page streams conversation turns through . After a stream completes, the UI may refresh thread events for route details, but it should preserve the visible streamed message state when that state includes client-side telemetry or reasoning display that is not present in the persisted event payload. The OpenAI-compatible and Ollama-compatible chat endpoints remain public API surfaces for external consumers. They should not be removed just because the frontend uses thread-backed conversations. Plugin Frontend Metadata Core loads enabled plugin metadata from . The React shell uses that metadata to add plugin primary navigation, scoped secondary navigation, and host pages for plugin UI routes. New plugin pages use : the shell fetches an HTML fragment template, imports the optional page controller, calls , and attaches declared . The shell also reads and shows a compact administrator-facing alert when plugins are failed, incompatible, or reporting health warnings/errors such as pending migration metadata. The built-in page lists configured plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. For the full plugin frontend metadata contract, see Plugin Author Guide. Plugin assets are served by FastAPI from each plugin's declared static directory under: Core serves those files but does not bundle them into the core React build. Release Notes - is the canonical frontend test/build package. - has been removed after parity coverage moved into . - is included in Python package data for release builds. - The former vanilla static console files under , , and have been removed; FastAPI serves the React build directly.",
+    searchBody: "Frontend Development The web UI lives in and is a Vite + React + TypeScript app. The production build is emitted into so FastAPI can serve it as static package data. Install Do not commit . Run The Backend Start FastAPI in another terminal: Use your normal controller or agent config instead of when testing real nodes and model workflows. The runtime scripts can also start the backend: For local development, start the backend and React dev site together: For agent-mode development, use the matching agent stack helper: Both stack helpers check their backend and frontend PID files first. If the whole stack is already running, they print a message and do not restart either process. If only one side is running, they start the missing side. You can also use the mode-detecting helper: auto-detects backend mode from your active config ( or ) and starts or accordingly. Set explicitly if you want to override this. Use or when you only want to start the backend. Run The Vite Dev Server Open: The script writes its PID to and logs to . Stop it with: The Vite dev server proxies API requests to by default. Override the backend target with: You can still run Vite directly when you want foreground logs: Run The Electron Development Shell The desktop shell lives in and attaches to an already-running development stack. It does not start or stop the backend or the Vite frontend. Start the backend and frontend first: Then launch Electron in another terminal: By default, Electron loads: Override the target URL when testing a different Vite host or port: If the target URL is unavailable, the shell shows a local error page with the command needed to start the development stack. Test Run frontend tests directly: Run the Python integration wrapper that installs frontend dependencies and runs the same Vitest suite: Run UI static-serving checks: Build Build output is written to: FastAPI serves from when the React build exists. The generated files are content-hashed, so a rebuild may delete an old asset and add a new one. Project Layout - : typed API helpers by backend domain. - : shell, logs modal, and shared UI primitives. - : typed pure helpers migrated from the former vanilla frontend. - : routed React pages. - : canonical React navigation model. - : Vitest setup and app-level smoke coverage. Chat Conversations The frontend should present chat as conversation history. Avoid exposing as the primary user-facing term unless an operator/debug detail needs the backend identifier. Internally, an active conversation is backed by a durable backend thread. Any frontend state named or equivalent should store the backend . If the user sends a message without an active conversation, the chat UI should create the thread first and then append the message to that thread. The Chat page streams conversation turns through . After a stream completes, the UI may refresh thread events for route details, but it should preserve the visible streamed message state when that state includes client-side telemetry or reasoning display that is not present in the persisted event payload. The OpenAI-compatible and Ollama-compatible chat endpoints remain public API surfaces for external consumers. They should not be removed just because the frontend uses thread-backed conversations. Plugin Frontend Metadata Core loads enabled plugin metadata from . The React shell uses that metadata to add plugin primary navigation, scoped secondary navigation, and host pages for plugin UI routes. New plugin pages use : the shell fetches an HTML fragment template, imports the optional page controller, calls , and attaches declared . The shell also reads and shows a compact administrator-facing alert when plugins are failed, incompatible, or reporting health warnings/errors such as pending migration metadata. The built-in page lists configured plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. For the full plugin frontend metadata contract, see Plugin Author Guide. Plugin assets are served by FastAPI from each plugin's declared static directory under: Core serves those files but does not bundle them into the core React build. Release Notes - is the canonical frontend test/build package. - has been removed after parity coverage moved into . - is included in Python package data for release builds. - The former vanilla static console files under , , and have been removed; FastAPI serves the React build directly.",
   },
   {
     id: "how-to-use",

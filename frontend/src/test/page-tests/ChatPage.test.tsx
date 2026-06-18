@@ -81,8 +81,123 @@ it("disables chat controls and warns when no model is loaded", async () => {
 
   expect(await screen.findByText("Load a model before using chat controls.")).toBeInTheDocument();
   expect(screen.getByLabelText("Model")).toBeDisabled();
-  expect(screen.getByLabelText("Prompt")).toBeDisabled();
+  expect(screen.getByLabelText("Prompt")).not.toBeDisabled();
   expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+});
+
+it("saves slash remember commands to controller memory without sending chat", async () => {
+  const fetchMock = stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/memory/write") return okJson({ ok: true, id: "mem-1" });
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"should not stream"}}]}\n\n']);
+    return okJson({});
+  });
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+
+  await screen.findByRole("option", { name: "mistral" });
+  await user.type(screen.getByLabelText("Prompt"), "/remember User prefers concise answers.");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/memory/write", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({
+      text: "User prefers concise answers.",
+      tier: "durable",
+      topic: "chat",
+      tags: ["chat-command"],
+    }),
+  })));
+  expect(fetchMock).not.toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.anything());
+  expect(await screen.findByText("Saved to controller memory (mem-1).")).toBeInTheDocument();
+});
+
+it("recalls controller memories from chat slash commands", async () => {
+  const fetchMock = stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/memory/search") {
+      return okJson({ ok: true, count: 1, results: [{ id: "mem-1", text: "User prefers concise answers.", tier: "durable", topic: "preferences", score: 0.94 }] });
+    }
+    return okJson({});
+  });
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+
+  await screen.findByRole("option", { name: "mistral" });
+  await user.type(screen.getByLabelText("Prompt"), "/recall answer style");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/memory/search", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ query: "answer style", top_k: 5 }),
+  })));
+  expect(await screen.findByText(/Memory recall found 1 result/)).toBeInTheDocument();
+  expect(screen.getByText(/0.9400 durable preferences User prefers concise answers./)).toBeInTheDocument();
+});
+
+it("previews forget matches without deleting memories", async () => {
+  const fetchMock = stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/memory/search") {
+      return okJson({ ok: true, count: 1, results: [{ id: "mem-old", text: "Old preference.", tier: "durable", topic: "preferences", score: 0.88 }] });
+    }
+    return okJson({});
+  });
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+
+  await screen.findByRole("option", { name: "mistral" });
+  await user.type(screen.getByLabelText("Prompt"), "/forget old preference");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/memory/search", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ query: "old preference", top_k: 5 }),
+  })));
+  expect(await screen.findByText(/Forget preview found 1 candidate/)).toBeInTheDocument();
+  expect(screen.getByText(/No memories were deleted./)).toBeInTheDocument();
+});
+
+it("shows context and switches model or target from slash commands", async () => {
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }, { name: "qwen", status: "running", node: "mac" }] });
+    if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+    if (url === "/lm-api/v1/chat/mistral/context-budget") {
+      return okJson({
+        model: "mistral",
+        context_window_tokens: 32768,
+        prompt_tokens_estimated: 1000,
+        reserved_completion_tokens: 1024,
+        available_input_tokens: 31744,
+        remaining_context_tokens: 30744,
+        usage_ratio: 0.061,
+        status: "comfortable",
+        estimation_method: "approx_chars_div_4",
+        precision: "approximate",
+        warnings: [],
+      });
+    }
+    return okJson({});
+  }));
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+
+  await screen.findByRole("option", { name: "mistral" });
+  await user.type(screen.getByLabelText("Prompt"), "/context");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  expect((await screen.findAllByText(/Context: 2.0k \/ 32.8k used/)).length).toBeGreaterThan(0);
+  expect(screen.getByText(/Model mistral/)).toBeInTheDocument();
+
+  await user.type(screen.getByLabelText("Prompt"), "/use qwen");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText("Using model qwen.")).toBeInTheDocument();
+  expect(screen.getByLabelText("Model")).toHaveValue("qwen");
+
+  await user.type(screen.getByLabelText("Prompt"), "/use node:mac");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+  expect(await screen.findByText("Using target node:mac.")).toBeInTheDocument();
+  expect(screen.getByLabelText("Target")).toHaveValue("node:mac");
 });
 
 it("renders model family and context profile selectors from catalog and sends them", async () => {

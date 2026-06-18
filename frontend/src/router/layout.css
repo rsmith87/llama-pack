@@ -3,27 +3,28 @@
 .app-shell {
   min-height: 100vh;
   display: grid;
-  grid-template-columns: 236px 1fr;
+  grid-template-columns: 248px minmax(0, 1fr);
   background:
-    linear-gradient(rgba(138, 174, 190, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(138, 174, 190, 0.035) 1px, transparent 1px),
-    radial-gradient(circle at top left, var(--page-glow), transparent 30%),
+    radial-gradient(circle at 18% 0%, var(--page-glow), transparent 28%),
+    linear-gradient(180deg, color-mix(in srgb, var(--page) 88%, var(--panel)), var(--page) 360px),
     var(--page);
-  background-size: 32px 32px, 32px 32px, auto, auto;
 }
 
 .app-sidebar {
-  border-right: 1px solid var(--line);
-  background: var(--sidebar);
+  border-right: 1px solid color-mix(in srgb, var(--line) 64%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--sidebar) 92%, var(--accent) 8%), var(--sidebar) 220px),
+    var(--sidebar);
   color: var(--sidebar-ink);
   flex-direction: column;
-  gap: 10px;
-  padding: 10px;
+  gap: 12px;
+  padding: 12px 10px;
   display: flex;
   position: sticky;
   height: 100vh;
   top: 0;
   overflow-y: auto;
+  box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04);
 }
 
 .mobile-menu-button,
@@ -48,19 +49,19 @@
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 4px 6px 12px;
+  padding: 4px 8px 14px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.11);
 }
 
 .brand-mark {
-  width: 40px;
-  height: 40px;
-  border-radius: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 9px;
   display: grid;
   place-items: center;
-  background: linear-gradient(145deg, #184d5b, #0b2730);
-  border: 1px solid rgba(117, 216, 231, 0.45);
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.24);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--accent) 34%, #16313a), #0b2027);
+  border: 1px solid color-mix(in srgb, var(--accent) 42%, rgba(255, 255, 255, 0.18));
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.22);
 }
 
 .brand-logo {
@@ -77,7 +78,7 @@
 }
 
 .brand-lockup h1 {
-  font-size: 15px;
+  font-size: 14px;
   line-height: 1.15;
   font-family: "Raleway";
 }
@@ -90,18 +91,19 @@
 
 .brand-lockup p {
   color: rgba(255, 249, 238, 0.62);
-  font-size: 12px;
+  font-size: 11px;
 }
 
 .app-nav {
   display: grid;
-  gap: 14px;
-  border-bottom: 1px solid dimgray;
-  padding-bottom: 20px;
+  gap: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding-bottom: 14px;
 }
 
 .nav-section {
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: 6px;
 }
 
@@ -116,6 +118,7 @@
   color: inherit;
   font: inherit;
   cursor: pointer;
+  min-height: 24px;
   border-radius: 6px;
   transition: background 140ms ease;
 }
@@ -125,7 +128,7 @@
 }
 
 .nav-section-label {
-  padding: 5px 10px;
+  padding: 4px 10px;
   color: rgba(255, 249, 238, 0.48);
   font-size: 10px;
   font-weight: 700;
@@ -168,9 +171,14 @@
 }
 
 .nav-button {
-  padding: 5px;
+  position: relative;
+  min-height: 34px;
+  border-radius: 7px;
+  padding: 7px 10px;
   background: transparent;
   font-size: 12px;
+  line-height: 1.2;
+  color: rgba(255, 249, 238, 0.78);
   text-decoration: none;
   display: flex;
   align-items: center;
@@ -187,7 +195,7 @@
 
 .nav-button.active {
   color: #f5fdff;
-  box-shadow: inset 3px 0 0 var(--accent), 0 0 18px rgba(24, 199, 214, 0.08);
+  box-shadow: inset 3px 0 0 var(--accent), 0 10px 24px rgba(0, 0, 0, 0.12);
 }
 
 .nav-button:hover {
@@ -195,9 +203,9 @@
 }
 
 .nav-icon {
-  width: 19px;
-  height: 19px;
-  flex: 0 0 19px;
+  width: 17px;
+  height: 17px;
+  flex: 0 0 17px;
   fill: none;
   stroke: currentColor;
   stroke-width: 2;
@@ -214,6 +222,8 @@
 }
 
 .sidebar-footer {
+  margin-top: auto;
+  padding-top: 2px;
   display: flex;
   gap: 8px;
   align-items: center;
@@ -238,7 +248,7 @@
 
 .sidebar-peer-link {
   border: 0;
-  border-radius: 8px;
+  border-radius: 7px;
   padding: 7px 10px;
   background: transparent;
   color: inherit;
@@ -331,30 +341,40 @@
 
 .app-main {
   min-width: 0;
+  height: 100vh;
+  overflow: auto;
 }
 
 .app-header {
-  min-height: 64px;
-  padding: 14px 20px;
+  min-height: 58px;
+  padding: 10px 18px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--line);
+  gap: 12px;
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  border-bottom: 1px solid color-mix(in srgb, var(--line) 74%, transparent);
+  background: color-mix(in srgb, var(--page) 84%, transparent);
+  backdrop-filter: blur(18px);
+  -webkit-app-region: drag;
 }
 
 .global-status {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
+  gap: 7px;
+  flex-wrap: nowrap;
   color: var(--muted);
-  font-size: 13px;
+  font-size: 12px;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
 }
 
 .status-dot {
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 10px;
   background: var(--muted);
 }
@@ -373,20 +393,35 @@
   /*justify-content: flex-end;*/
   gap: 12px;
   flex-wrap: nowrap;
+  -webkit-app-region: no-drag;
+}
+
+.auth-logout-button {
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+}
+
+.auth-logout-button svg {
+  width: 17px;
+  height: 17px;
 }
 
 .command-center {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 9px;
   color: var(--muted);
   min-width: 180px;
+  min-height: 36px;
+  -webkit-app-region: no-drag;
 }
 
 .command-icon {
-  width: 34px;
-  height: 34px;
-  border-radius: 10px;
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
   display: grid;
   place-items: center;
   color: #fff9ee;
@@ -394,17 +429,20 @@
 }
 
 .command-icon .brand-logo {
-  width: 25px;
-  height: 25px;
+  width: 23px;
+  height: 23px;
 }
 
 .command-copy {
   color: var(--ink);
   font-weight: 750;
+  font-size: 13px;
 }
 
 .layout {
-  padding: 18px 20px;
+  width: min(100%, 1480px);
+  margin: 0 auto;
+  padding: 18px 22px 30px;
 }
 
 .plugin-status-alert {
@@ -437,8 +475,8 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   padding: 14px;
-  background: var(--panel);
-  box-shadow: 0 20px 60px var(--shadow);
+  background: color-mix(in srgb, var(--panel) 92%, var(--page));
+  box-shadow: 0 14px 44px var(--shadow);
   margin-bottom: 10px;
 }
 
@@ -503,6 +541,7 @@
     background: var(--button);
     color: var(--ink);
     cursor: pointer;
+    -webkit-app-region: no-drag;
   }
 
   .mobile-menu-button .nav-icon {
@@ -540,11 +579,9 @@
   display: grid;
   place-items: center;
   background:
-    linear-gradient(rgba(138, 174, 190, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(138, 174, 190, 0.035) 1px, transparent 1px),
-    radial-gradient(circle at top left, var(--page-glow), transparent 30%),
+    radial-gradient(circle at 50% 0%, var(--page-glow), transparent 34%),
+    linear-gradient(180deg, color-mix(in srgb, var(--page) 88%, var(--panel)), var(--page) 420px),
     var(--page);
-  background-size: 32px 32px, 32px 32px, auto, auto;
 }
 
 .login-required-card {

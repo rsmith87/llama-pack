@@ -12,11 +12,27 @@ function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
 
+function controllerOverview() {
+  return {
+    mode: "controller",
+    memory: {
+      configured: true,
+      available: true,
+      path: "./logs/agent_memory",
+      embedding_model_path: "./models/embedding/all-MiniLM-L6-v2",
+      auto_inject: true,
+      top_k: 3,
+    },
+    nodes: { items: [{ name: "mac" }] },
+  };
+}
+
 it("runs batch embeddings from trimmed line items and renders each result", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn()
       .mockResolvedValueOnce(okJson({ models: [{ name: "nomic-embed" }, { name: "qwen" }] }))
+      .mockResolvedValueOnce(okJson(controllerOverview()))
       .mockResolvedValueOnce(okJson({
         model: "nomic-embed",
         usage: { prompt_tokens: 5, total_tokens: 5 },
@@ -29,6 +45,7 @@ it("runs batch embeddings from trimmed line items and renders each result", asyn
   const user = userEvent.setup();
 
   render(<EmbeddingsPage />);
+  expect(await screen.findByText("Embeddings make text searchable by meaning, not just matching words.")).toBeInTheDocument();
   await user.type(await screen.findByLabelText("Inputs"), " alpha \n\n beta ");
   await user.selectOptions(screen.getByLabelText("Route"), "node:mac");
   await user.click(screen.getByRole("button", { name: "Run" }));
@@ -49,6 +66,7 @@ it("computes similarity, nearest neighbors, and quick clusters from returned vec
     "fetch",
     vi.fn()
       .mockResolvedValueOnce(okJson([{ name: "embedder" }]))
+      .mockResolvedValueOnce(okJson(controllerOverview()))
       .mockResolvedValueOnce(okJson({
         model: "embedder",
         data: [
@@ -87,6 +105,7 @@ it("exports the last embeddings result as JSON and CSV", async () => {
     "fetch",
     vi.fn()
       .mockResolvedValueOnce(okJson([{ name: "embedder" }]))
+      .mockResolvedValueOnce(okJson(controllerOverview()))
       .mockResolvedValueOnce(okJson({ model: "embedder", usage: { prompt_tokens: 1, total_tokens: 1 }, data: [{ id: "emb-0", object: "embedding", embedding: [0.1, 0.2] }] })),
   );
   const user = userEvent.setup();
@@ -101,4 +120,42 @@ it("exports the last embeddings result as JSON and CSV", async () => {
 
   expect(createObjectURL).toHaveBeenCalledTimes(2);
   expect(revokeObjectURL).toHaveBeenCalledWith("blob:embeddings");
+});
+
+it("writes and searches controller memory when memory is available", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson([{ name: "embedder" }]))
+      .mockResolvedValueOnce(okJson(controllerOverview()))
+      .mockResolvedValueOnce(okJson({ ok: true, id: "mem-1" }))
+      .mockResolvedValueOnce(okJson({
+        ok: true,
+        count: 1,
+        results: [{ id: "mem-1", text: "User prefers concise answers.", tier: "durable", topic: "preferences", score: 0.94 }],
+      })),
+  );
+  const user = userEvent.setup();
+
+  render(<EmbeddingsPage />);
+  await user.click(await screen.findByRole("tab", { name: "Controller Memory" }));
+
+  await user.type(screen.getByLabelText("Memory text"), "User prefers concise answers.");
+  await user.type(screen.getByLabelText("Topic"), "preferences");
+  await user.type(screen.getByLabelText("Tags"), "style,brief");
+  await user.click(screen.getByRole("button", { name: "Write Memory" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/memory/write", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ text: "User prefers concise answers.", tier: "durable", topic: "preferences", tags: ["style", "brief"] }),
+  })));
+
+  await user.type(screen.getByLabelText("Search query"), "answer style");
+  await user.click(screen.getByRole("button", { name: "Search Memory" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/memory/search", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ query: "answer style", top_k: 5 }),
+  })));
+  expect(await screen.findByText("User prefers concise answers.")).toBeInTheDocument();
 });

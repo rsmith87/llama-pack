@@ -371,6 +371,20 @@
   color: var(--ink);
 }
 
+.auth-form .auth-remember {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.auth-form .auth-remember input {
+  padding: 0;
+}
+
 .auth-form button,
 .theme-toggle {
   border: 1px solid var(--line);

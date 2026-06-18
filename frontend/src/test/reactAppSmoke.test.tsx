@@ -1,10 +1,19 @@
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "../App";
 
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
+}
+
+function unauthorizedJson(payload: unknown) {
+  return {
+    ok: false,
+    status: 401,
+    statusText: "Unauthorized",
+    text: async () => JSON.stringify(payload),
+  };
 }
 
 afterEach(() => {
@@ -80,4 +89,24 @@ it("smoke tests migrated React pages and logs modal", async () => {
   expect(await screen.findByRole("heading", { name: "System Settings" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Logs" }));
   expect(screen.getByRole("dialog", { name: "Recent Logs" })).toBeInTheDocument();
+});
+
+it("shows the login screen when auth is enabled and protected requests return unauthorized", async () => {
+  window.history.pushState({}, "", "/ui/");
+  vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/setup/status") {
+      return Promise.resolve(okJson({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }));
+    }
+    if (url === "/lm-api/v1/health") {
+      return Promise.resolve(okJson({ mode: "controller", configured_models: 1, system: { cpu_percent: 10 } }));
+    }
+    return Promise.resolve(unauthorizedJson({ detail: "Unauthorized" }));
+  }));
+
+  render(<App />);
+
+  await waitFor(() => {
+    expect(screen.getByPlaceholderText("username")).toBeInTheDocument();
+    expect(screen.getByPlaceholderText("api key")).toBeInTheDocument();
+  });
 });

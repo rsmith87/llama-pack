@@ -2,7 +2,7 @@ import "./layout.css";
 import { useEffect, useMemo, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { AppModeProvider } from "../features/appMode/appModeContext";
-import { AuthLoginForm, useAuthSession } from "../features/auth/authSession";
+import { AuthLoginForm, AuthLogoutButton, useAuthSession } from "../features/auth/authSession";
 import { ThemeToggle } from "../features/theme/themeSession";
 import { useGlobalStatus } from "../features/globalStatus/globalStatusContext";
 import { usePluginNav } from "../features/plugins/pluginNavContext";
@@ -101,7 +101,7 @@ export function AppLayout() {
               </Button>
             </div>
             <div className="header-actions">
-              <AuthLoginForm />
+              {authRequired && isAuthenticated ? <AuthLogoutButton /> : null}
               <ThemeToggle />
             </div>
           </header>

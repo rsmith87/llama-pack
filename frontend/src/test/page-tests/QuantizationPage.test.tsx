@@ -40,6 +40,20 @@ it("hides already quantized GGUF files by filename suffix", async () => {
   expect(screen.queryByText("qwen.Q8_0.gguf")).not.toBeInTheDocument();
 });
 
+it("hides mmproj GGUF files from quantization sources", async () => {
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(okJson([
+    { id: "file-1", model_dir: "Qwen", filename: "qwen.gguf", path: "/models/qwen/qwen.gguf", size_gb: 12, quantize_bin: "/bin/llama-quantize" },
+    { id: "file-2", model_dir: "Qwen", filename: "mmproj-F16.gguf", path: "/models/qwen/mmproj-F16.gguf", size_gb: 1, quantize_bin: "/bin/llama-quantize" },
+    { id: "file-3", model_dir: "Qwen", filename: "projector.gguf", path: "/models/qwen/mmproj/projector.gguf", size_gb: 1, quantize_bin: "/bin/llama-quantize" },
+  ])));
+
+  render(<QuantizationPage />);
+
+  expect(await screen.findByText("qwen.gguf")).toBeInTheDocument();
+  expect(screen.queryByText("mmproj-F16.gguf")).not.toBeInTheDocument();
+  expect(screen.queryByText("projector.gguf")).not.toBeInTheDocument();
+});
+
 it("starts quantization with the selected type", async () => {
   vi.stubGlobal(
     "fetch",
@@ -69,6 +83,7 @@ it("recommends quantization candidates from local file data", async () => {
 
   render(<QuantizationPage />);
   await screen.findByText("qwen.gguf");
+  await user.click(screen.getByRole("button", { name: "Advisor" }));
   await user.clear(screen.getByLabelText("Target VRAM (GB)"));
   await user.type(screen.getByLabelText("Target VRAM (GB)"), "8");
   await user.click(screen.getByRole("button", { name: "Recommend" }));

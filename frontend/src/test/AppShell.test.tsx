@@ -105,6 +105,31 @@ it("routes to the tool-loop evals page from the runtime navigation", async () =>
   expect(screen.getByRole("link", { name: "Tool Loop Evals" })).toHaveClass("active");
 });
 
+it("routes the primary Models link to Library after models are configured", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
+      if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", configured_models: 1 }) });
+      if (url === "/lm-api/v1/models") return Promise.resolve({ ok: true, json: async () => ({ models: [{ name: "qwen" }] }) });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/library/ggufs") return Promise.resolve({ ok: true, json: async () => ({ files: [] }) });
+      if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
+      if (url === "/lm-api/v1/plugins/enabled") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/plugins/status") return Promise.resolve({ ok: true, json: async () => ({ plugins: [] }) });
+      return Promise.resolve({ ok: true, json: async () => ({ models: [], nodes: [], files: [] }) });
+    }),
+  );
+  const user = userEvent.setup();
+  render(<App />);
+
+  await user.click(await screen.findByRole("link", { name: "Models" }));
+
+  expect(await screen.findByRole("heading", { name: "GGUF Library" })).toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "Models" })).toHaveClass("active");
+  expect(window.location.pathname).toBe("/ui/gguf-library");
+});
+
 it("routes first-run users to setup when auth bootstrap is required", async () => {
   vi.stubGlobal(
     "fetch",
@@ -685,6 +710,7 @@ it("refreshes the active page after login so protected data reloads with the ses
     "fetch",
     vi.fn((url: string, init?: RequestInit) => {
       const token = (init?.headers as Record<string, string> | undefined)?.["X-UI-Session"];
+      if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }) });
       if (url === "/lm-api/v1/health" && token === "token-1") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
       if (url === "/lm-api/v1/models" && token === "token-1") return Promise.resolve({ ok: true, json: async () => ({ models: [{ name: "authorized-model" }] }) });
@@ -698,9 +724,9 @@ it("refreshes the active page after login so protected data reloads with the ses
   const user = userEvent.setup();
 
   render(<App />);
-  expect(await screen.findByText(/401 Unauthorized/)).toBeInTheDocument();
+  const usernameInput = await screen.findByPlaceholderText("username");
 
-  await user.type(screen.getByPlaceholderText("username"), "admin");
+  await user.type(usernameInput, "admin");
   await user.type(screen.getByPlaceholderText("api key"), "secret");
   await user.click(screen.getByRole("button", { name: "Login" }));
 

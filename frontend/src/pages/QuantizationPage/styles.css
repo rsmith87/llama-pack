@@ -1,47 +1,102 @@
-/* component styles */
+.quantization-page-react .quantization-heading-actions {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.quantization-page-react .quantization-page-layout {
+    min-width: 0;
+}
+
 .quantization-page-react .stacked-controls {
     display: flex;
     flex-wrap: wrap;
     align-items: flex-end;
+    gap: 12px;
 }
 
 .quantization-page-react .detail-json {
     flex-basis: 100%;
     margin-top: 0;
     margin-bottom: 0;
+    max-height: 360px;
+    overflow: auto;
 }
 
-.quantization-page-react .quantization-page-layout {
-    gap: 8px;
-    flex-wrap: nowrap;
+.quantization-page-react .table-wrap {
+    overflow-x: auto;
 }
 
 .quantization-page-react .recommendation-form {
     display: grid;
-    justify-content: space-between;
     width: 100%;
-    grid-template-columns: repeat(1, 1fr);
+    grid-template-columns: repeat(3, minmax(160px, 1fr)) auto;
+    gap: 10px;
+    align-items: end;
 }
 
 .quantization-page-react .recommendation-form .form-field {
-    grid-template-columns: repeat(auto-fit, minmax(268px, 1fr));
     gap: 4px;
 }
 
-.quantization-page-react .side-panel {
-    position: relative;
-    top: 0;
-    flex-basis: 20%;
+.quantization-page-react .data-table {
+    min-width: 980px;
+    table-layout: fixed;
+}
+
+.quantization-page-react .data-table th:nth-child(1),
+.quantization-page-react .data-table td:nth-child(1) {
+    width: 34%;
+}
+
+.quantization-page-react .data-table th:nth-child(2),
+.quantization-page-react .data-table td:nth-child(2) {
+    width: 90px;
+}
+
+.quantization-page-react .data-table th:nth-child(3),
+.quantization-page-react .data-table td:nth-child(3) {
+    width: 130px;
+}
+
+.quantization-page-react .data-table th:nth-child(4),
+.quantization-page-react .data-table td:nth-child(4) {
+    width: 140px;
+}
+
+.quantization-page-react .data-table th:nth-child(6),
+.quantization-page-react .data-table td:nth-child(6) {
+    width: 110px;
+}
+
+.quantization-page-react .quantization-file-cell {
+    display: grid;
+    gap: 2px;
+    min-width: 0;
+}
+
+.quantization-page-react .quantization-file-cell strong,
+.quantization-page-react .quantization-file-cell span,
+.quantization-page-react .quantization-output-cell {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.quantization-page-react .quantization-file-cell span,
+.quantization-page-react .quantization-output-cell {
+    display: block;
+    color: var(--muted);
+    font-size: 11px;
 }
 
 @media (max-width: 700px) {
-    .quantization-page-react section.side-panel,
-    .quantization-page-react section.panel {
-        flex-basis: 100%;
+    .quantization-page-react .quantization-heading-actions {
+        width: 100%;
+        justify-content: flex-start;
     }
 
-    .quantization-page-react .quantization-page-layout {
-        gap: 0;
-        flex-wrap: wrap;
+    .quantization-page-react .recommendation-form {
+        grid-template-columns: 1fr;
     }
 }

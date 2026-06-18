@@ -34,6 +34,7 @@ export type RuntimeOverview = {
     configured?: boolean;
     available?: boolean;
     path?: string;
+    embedding_model_path?: string | null;
     auto_inject?: boolean;
     top_k?: number;
   };

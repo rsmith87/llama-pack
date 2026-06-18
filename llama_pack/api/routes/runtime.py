@@ -52,6 +52,7 @@ async def runtime_overview(request: Request) -> dict[str, object]:
             "configured": bool(config.memory.enabled),
             "available": bool(memory_store is not None and not getattr(memory_store, "disabled", True)),
             "path": str(config.memory.path),
+            "embedding_model_path": str(config.memory.embedding_model_path) if config.memory.embedding_model_path else None,
             "auto_inject": bool(config.memory.auto_inject),
             "top_k": config.memory.top_k,
         },

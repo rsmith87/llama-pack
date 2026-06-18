@@ -7,6 +7,9 @@ import { Telemetry, TelemetryChunk } from "../../types";
 import { modelName } from "../models";
 import { parseStreamEvent } from "./chatStreaming";
 
+export { chatSlashCommands, parseSlashCommand } from "./slashCommands";
+export type { ChatSlashCommandDefinition, ChatSlashCommandName, ParsedSlashCommand } from "./slashCommands";
+
 export function asModels(payload: unknown): LocalModel[] {
   if (Array.isArray(payload)) return payload as LocalModel[];
   return (payload as { models?: LocalModel[] } | null)?.models || [];

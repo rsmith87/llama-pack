@@ -89,6 +89,40 @@ cd frontend
 npm run dev
 ```
 
+## Run The Electron Development Shell
+
+The desktop shell lives in `desktop/` and attaches to an already-running
+development stack. It does not start or stop the backend or the Vite frontend.
+
+Start the backend and frontend first:
+
+```bash
+scripts/dev_fullstack.sh
+```
+
+Then launch Electron in another terminal:
+
+```bash
+cd desktop
+npm ci
+npm run dev
+```
+
+By default, Electron loads:
+
+```text
+http://127.0.0.1:5173/ui/
+```
+
+Override the target URL when testing a different Vite host or port:
+
+```bash
+LLAMA_PACK_DESKTOP_URL=http://127.0.0.1:6000/ui/ npm run dev
+```
+
+If the target URL is unavailable, the shell shows a local error page with the
+command needed to start the development stack.
+
 ## Test
 
 Run frontend tests directly:

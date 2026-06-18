@@ -12,6 +12,7 @@ type GlobalStatusContextValue = {
   controllerUrl: string | null;
   controllerReachable: boolean | null;
   agentNodes: AgentNode[];
+  configuredModels: number;
   refreshKey: number;
   globalRefreshing: boolean;
   refreshGlobal: (refreshPage?: boolean) => Promise<void>;
@@ -23,6 +24,7 @@ const GlobalStatusContext = createContext<GlobalStatusContextValue>({
   controllerUrl: null,
   controllerReachable: null,
   agentNodes: [],
+  configuredModels: 0,
   refreshKey: 0,
   globalRefreshing: false,
   refreshGlobal: async () => {},
@@ -35,6 +37,7 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
   const [controllerUrl, setControllerUrl] = useState<string | null>(null);
   const [controllerReachable, setControllerReachable] = useState<boolean | null>(null);
   const [agentNodes, setAgentNodes] = useState<AgentNode[]>([]);
+  const [configuredModels, setConfiguredModels] = useState(0);
   const [refreshKey, setRefreshKey] = useState(0);
   const [globalRefreshing, setGlobalRefreshing] = useState(false);
 
@@ -43,8 +46,10 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
     try {
       const health = await getHealth();
       const mode = String(health.mode || "") as AppMode;
+      const configuredModelCount = typeof health.configured_models === "number" ? health.configured_models : 0;
       setAppMode(mode);
       setControllerUrl(typeof health.controller_url === "string" ? health.controller_url : null);
+      setConfiguredModels(configuredModelCount);
       setStatus("Backend online");
       if (mode === "controller") {
         try {
@@ -76,6 +81,7 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
       if (refreshPage) setRefreshKey((key) => key + 1);
     } catch {
       setStatus("Backend offline");
+      setConfiguredModels(0);
     } finally {
       setGlobalRefreshing(false);
     }
@@ -97,10 +103,11 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
     controllerUrl,
     controllerReachable,
     agentNodes,
+    configuredModels,
     refreshKey,
     globalRefreshing,
     refreshGlobal,
-  }), [appMode, status, controllerUrl, controllerReachable, agentNodes, refreshKey, globalRefreshing, refreshGlobal]);
+  }), [appMode, status, controllerUrl, controllerReachable, agentNodes, configuredModels, refreshKey, globalRefreshing, refreshGlobal]);
 
   return <GlobalStatusContext.Provider value={value}>{children}</GlobalStatusContext.Provider>;
 }

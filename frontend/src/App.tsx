@@ -40,6 +40,8 @@ export default function App() {
                   <Route element={<AuthGate />}>
                     <Route element={<AppLayout />}>
                       <Route path="/" element={<DashboardPage />} />
+                      <Route path="/ui" element={<DashboardPage />} />
+                      <Route path="/ui/" element={<DashboardPage />} />
                       <Route path="/ui/chat" element={<ChatPage />} />
                       <Route path="/ui/setup" element={<SetupPage />} />
                       <Route path="/ui/nodes" element={<NodesPage />} />

@@ -49,8 +49,13 @@
 }
 
 .chat-bubble-assistant,
+.chat-bubble-system,
 .chat-bubble-error {
   margin-right: min(12vw, 140px);
+}
+
+.chat-bubble-system {
+  background: var(--button);
 }
 
 .chat-bubble-error {

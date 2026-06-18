@@ -6,6 +6,7 @@ export * from "./downloads";
 export * from "./embeddings";
 export * from "./health";
 export * from "./library";
+export * from "./memory";
 export * from "./models";
 export * from "./nodes";
 export * from "./operations";

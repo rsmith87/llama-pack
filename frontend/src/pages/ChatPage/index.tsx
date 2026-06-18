@@ -1,12 +1,14 @@
 import "./styles.css";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
 import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, getContextBudget, inspectModel, listChatSessions, listKvSlots, saveChatSession } from "../../api/chat";
+import { searchMemory, writeMemory } from "../../api/memory";
 import { getModelProfiles, listModels } from "../../api/models";
 import { getNodeModels } from "../../api/nodes";
 import { createThread, getThreadEvents, streamThreadMessage } from "../../api/threads";
 import { EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
 import { buildChatSessionSavePayload, chooseChatSessionToResume, nextSelectedChatSessionId } from "../../features/chat/chatSessions";
 import type { ChatSession } from "../../types/chat";
+import type { MemorySearchResult } from "../../types/memory";
 import { applyTelemetryFromChunk, finalizeTelemetry } from "../../features/chat/chatTelemetry";
 import type { TelemetryChunk } from "../../types/streaming";
 import { buildThreadMetadata, threadEventsToChatMessages } from "../../features/chat/chatThreads";
@@ -38,6 +40,7 @@ import {
   readChatStream,
   routeDecisionToMeta,
   routeExplanationItems,
+  parseSlashCommand,
 } from "../../features/chat";
 
 const PRESETS: Record<string, ChatDefaults> = {
@@ -68,6 +71,11 @@ function formatCompactTokenCount(value: number): string {
 function contextBudgetSummary(budget: ContextBudget): string {
   const used = budget.prompt_tokens_estimated + budget.reserved_completion_tokens;
   return `Context: ${formatCompactTokenCount(used)} / ${formatCompactTokenCount(budget.context_window_tokens)} used · ${formatCompactTokenCount(budget.remaining_context_tokens)} left`;
+}
+
+function memoryResultLine(result: MemorySearchResult): string {
+  const score = result.score == null ? "-" : result.score.toFixed(4);
+  return `${score} ${result.tier || "-"} ${result.topic || "-"} ${result.text || "-"}`;
 }
 
 export function ChatPage() {
@@ -535,7 +543,29 @@ export function ChatPage() {
 
   async function submitPrompt(content: string) {
     const trimmed = content.trim();
-    if (pending || !trimmed || !selectedModel) return;
+    if (pending || !trimmed) return;
+    const command = parseSlashCommand(trimmed);
+    if (command?.name === "remember") {
+      await submitRememberCommand(command.args);
+      return;
+    }
+    if (command?.name === "recall") {
+      await submitMemorySearchCommand("recall", command.args);
+      return;
+    }
+    if (command?.name === "forget") {
+      await submitMemorySearchCommand("forget", command.args);
+      return;
+    }
+    if (command?.name === "context") {
+      await submitContextCommand();
+      return;
+    }
+    if (command?.name === "use") {
+      submitUseCommand(command.args);
+      return;
+    }
+    if (!selectedModel) return;
     const built = buildConversationMessagePayload(trimmed);
     if (built.error) {
       setError(built.error);
@@ -581,6 +611,149 @@ export function ChatPage() {
     }
   }
 
+  async function submitRememberCommand(memoryText: string) {
+    if (!memoryText) {
+      setError("Use /remember followed by the text to save.");
+      return;
+    }
+    setError("");
+    setPending(true);
+    setStatus("Saving memory...");
+    try {
+      const response = await writeMemory({
+        text: memoryText,
+        tier: "durable",
+        topic: "chat",
+        tags: ["chat-command"],
+      });
+      const savedId = response.id ? ` (${response.id})` : "";
+      const commandMessage: ChatMessage = { role: "user", content: `/remember ${memoryText}` };
+      const confirmationMessage: ChatMessage = { role: "system", content: `Saved to controller memory${savedId}.` };
+      setMessages((current) => [...current, commandMessage, confirmationMessage]);
+      setPrompt("");
+      setSelectedImage(null);
+      setLastPrompt("");
+      setStatus("Memory saved");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Failed to save memory.";
+      const commandMessage: ChatMessage = { role: "user", content: `/remember ${memoryText}` };
+      const errorMessage: ChatMessage = { role: "error", content: `Memory save failed: ${detail}` };
+      setMessages((current) => [...current, commandMessage, errorMessage]);
+      setError(`Memory save failed: ${detail}`);
+      setStatus("Ready");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitMemorySearchCommand(kind: "recall" | "forget", query: string) {
+    if (!query.trim()) {
+      setError(`Use /${kind} followed by a memory search query.`);
+      return;
+    }
+    setError("");
+    setPending(true);
+    setStatus(kind === "recall" ? "Searching memory..." : "Previewing memory matches...");
+    const commandMessage: ChatMessage = { role: "user", content: `/${kind} ${query}` };
+    try {
+      const response = await searchMemory({ query: query.trim(), top_k: 5 });
+      const lines = (response.results || []).map(memoryResultLine);
+      const prefix = kind === "recall"
+        ? `Memory recall found ${response.count} result${response.count === 1 ? "" : "s"}.`
+        : `Forget preview found ${response.count} candidate${response.count === 1 ? "" : "s"}. No memories were deleted.`;
+      const content = lines.length ? `${prefix}\n${lines.join("\n")}` : prefix;
+      setMessages((current) => [...current, commandMessage, { role: "system", content }]);
+      setPrompt("");
+      setSelectedImage(null);
+      setLastPrompt("");
+      setStatus(kind === "recall" ? "Memory recalled" : "Forget preview ready");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : `/${kind} failed.`;
+      setMessages((current) => [...current, commandMessage, { role: "error", content: `Memory search failed: ${detail}` }]);
+      setError(`Memory search failed: ${detail}`);
+      setStatus("Ready");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  async function submitContextCommand() {
+    if (!selectedModel) {
+      setError("Select a model before using /context.");
+      return;
+    }
+    setError("");
+    setPending(true);
+    setStatus("Checking context...");
+    const commandMessage: ChatMessage = { role: "user", content: "/context" };
+    try {
+      const draftMessages = messages.filter((message) => !message.pending && message.role !== "error");
+      const built = buildChatPayload(draftMessages);
+      if (built.error) throw new Error(built.error);
+      const budget = await getContextBudget(selectedModel, built.payload || {}, new AbortController().signal);
+      const content = [
+        contextBudgetSummary(budget),
+        `Model ${selectedModel}`,
+        `Target ${target}`,
+        selectedFamily ? `Family ${selectedFamily}` : "",
+        selectedProfile ? `Profile ${selectedProfile}` : "",
+      ].filter(Boolean).join("\n");
+      setMessages((current) => [...current, commandMessage, { role: "system", content }]);
+      setPrompt("");
+      setSelectedImage(null);
+      setLastPrompt("");
+      setContextBudget(budget);
+      setContextBudgetError("");
+      setStatus("Context ready");
+    } catch (err) {
+      const detail = err instanceof Error ? err.message : "Context unavailable.";
+      setMessages((current) => [...current, commandMessage, { role: "error", content: `Context unavailable: ${detail}` }]);
+      setError(`Context unavailable: ${detail}`);
+      setStatus("Ready");
+    } finally {
+      setPending(false);
+    }
+  }
+
+  function submitUseCommand(value: string) {
+    const wanted = value.trim();
+    if (!wanted) {
+      setError("Use /use followed by a model name or target.");
+      return;
+    }
+    setError("");
+    const commandMessage: ChatMessage = { role: "user", content: `/use ${wanted}` };
+    if (wanted === "auto" || wanted === "local" || wanted.startsWith("node:")) {
+      const knownTarget = targetOptions.includes(wanted) || wanted === "auto" || wanted === "local";
+      if (!knownTarget) {
+        setMessages((current) => [...current, commandMessage, { role: "error", content: `Unknown target ${wanted}.` }]);
+        setError(`Unknown target ${wanted}.`);
+        return;
+      }
+      setTarget(wanted);
+      setMessages((current) => [...current, commandMessage, { role: "system", content: `Using target ${wanted}.` }]);
+      setPrompt("");
+      setSelectedImage(null);
+      setLastPrompt("");
+      setStatus(`Target ${wanted}`);
+      return;
+    }
+
+    const match = runningModels.find((model) => modelName(model) === wanted);
+    if (!match) {
+      setMessages((current) => [...current, commandMessage, { role: "error", content: `Unknown model ${wanted}.` }]);
+      setError(`Unknown model ${wanted}.`);
+      return;
+    }
+    selectModel(wanted);
+    if (modelTarget(match)) setTarget(modelTarget(match));
+    setMessages((current) => [...current, commandMessage, { role: "system", content: `Using model ${wanted}.` }]);
+    setPrompt("");
+    setSelectedImage(null);
+    setLastPrompt("");
+    setStatus(`Model ${wanted}`);
+  }
+
   function onSubmit(event: FormEvent) {
     event.preventDefault();
     void submitPrompt(prompt);
@@ -613,13 +786,16 @@ export function ChatPage() {
   const selectedRunningModel = runningModels.find((model) => modelName(model) === selectedModel);
   const selectedModelSupportsVision = modelSupportsVision(selectedRunningModel);
   const showImageUpload = selectedModelSupportsVision;
-  const canSend = Boolean(!noModelLoaded && selectedModel && prompt.trim() && !pending);
   const profileFamilies = profileCatalog.families.filter((family) => family.family && family.profiles.length);
   const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
   const targetOptions = ["auto", "local", target, ...runningModels.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
+  const parsedCommand = parseSlashCommand(prompt);
+  const canSendCommand = Boolean(parsedCommand && prompt.trim() && !pending);
+  const canSendChat = Boolean(!noModelLoaded && selectedModel && prompt.trim() && !pending);
+  const canSend = canSendCommand || canSendChat;
 
   useEffect(() => {
-    if (!selectedModel || noModelLoaded || pending || (!messages.length && !prompt.trim())) {
+    if (!selectedModel || noModelLoaded || pending || parseSlashCommand(prompt.trim()) || (!messages.length && !prompt.trim())) {
       setContextBudget(null);
       setContextBudgetError("");
       return;
@@ -716,7 +892,7 @@ export function ChatPage() {
             </div>
             <form className="chat-composer" onSubmit={onSubmit}>
               <FormField label="Prompt">
-                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKeyDown} rows={4} disabled={noModelLoaded} />
+                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKeyDown} rows={4} disabled={pending} placeholder="/remember saves text to controller memory" />
               </FormField>
               {showImageUpload ? (
                 <div className="chat-image-upload">
