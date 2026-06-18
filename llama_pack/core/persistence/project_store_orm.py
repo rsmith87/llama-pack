@@ -5,8 +5,7 @@ import uuid
 
 from sqlalchemy import select
 
-from llama_pack.core.persistence.alembic_config import Base
-from llama_pack.core.persistence.db_infra import create_persistence_engine, create_session_factory, session_scope, sqlite_path_from_url
+from llama_pack.core.persistence.db_infra import create_persistence_engine, create_session_factory, require_sqlite_tables, session_scope, sqlite_path_from_url
 from llama_pack.core.persistence.models.projects import ProjectNodeRootOrm, ProjectOrm
 
 
@@ -15,8 +14,12 @@ class ProjectStoreOrm:
         sqlite_path = sqlite_path_from_url(db_url)
         if sqlite_path is not None:
             sqlite_path.parent.mkdir(parents=True, exist_ok=True)
+            require_sqlite_tables(
+                db_path=sqlite_path,
+                required_tables={"projects", "project_node_roots", "alembic_version"},
+                target_name="projects",
+            )
         self.engine = create_persistence_engine(db_url)
-        Base.metadata.create_all(self.engine, tables=[ProjectOrm.__table__, ProjectNodeRootOrm.__table__])
         self.session_factory = create_session_factory(self.engine)
 
     def list_projects(self, include_archived: bool) -> list[dict[str, object]]:

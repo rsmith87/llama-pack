@@ -1,10 +1,17 @@
 from __future__ import annotations
 
 from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
+from tests.persistence_db_setup import prepare_projects_db
+
+
+def _store(tmp_path) -> ProjectStoreOrm:
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    return ProjectStoreOrm(db_url=f"sqlite+pysqlite:///{db_path}")
 
 
 def test_project_store_creates_lists_and_loads_project_with_node_roots(tmp_path):
-    store = ProjectStoreOrm(db_url=f"sqlite+pysqlite:///{tmp_path / 'projects.db'}")
+    store = _store(tmp_path)
 
     project = store.create_project(name="Spitball", root_hint="/Users/robertsmith/Apps/llama-pack")
     root = store.upsert_node_root(
@@ -26,7 +33,7 @@ def test_project_store_creates_lists_and_loads_project_with_node_roots(tmp_path)
 
 
 def test_project_store_upserts_existing_node_root(tmp_path):
-    store = ProjectStoreOrm(db_url=f"sqlite+pysqlite:///{tmp_path / 'projects.db'}")
+    store = _store(tmp_path)
     project = store.create_project(name="Spitball", root_hint=None)
 
     first = store.upsert_node_root(
@@ -50,7 +57,7 @@ def test_project_store_upserts_existing_node_root(tmp_path):
 
 
 def test_project_store_hides_archived_projects_by_default(tmp_path):
-    store = ProjectStoreOrm(db_url=f"sqlite+pysqlite:///{tmp_path / 'projects.db'}")
+    store = _store(tmp_path)
     project = store.create_project(name="Spitball", root_hint=None)
 
     updated = store.update_project(project_id=str(project["id"]), name="Spitball", root_hint=None, archived=True)

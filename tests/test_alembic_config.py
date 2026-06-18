@@ -1,6 +1,11 @@
 from pathlib import Path
 import configparser
 import pytest
+from argparse import Namespace
+
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import create_engine, inspect
 
 from llama_pack.core.config import load_config
 from llama_pack.core.persistence.alembic_config import (
@@ -12,6 +17,7 @@ from llama_pack.core.persistence.alembic_config import (
     target_metadata_for,
     version_locations,
 )
+from llama_pack.core.persistence.models.projects import ProjectNodeRootOrm, ProjectOrm
 from llama_pack.core.persistence import models as _models  # noqa: F401
 
 
@@ -170,6 +176,30 @@ def test_projects_migrations_include_initial_revision():
     spec.loader.exec_module(module)
 
     assert module.revision == "20260618_0001"
+
+
+def test_projects_migration_stamps_existing_bootstrap_tables(tmp_path, monkeypatch):
+    db_path = tmp_path / "projects.db"
+    engine = create_engine(f"sqlite+pysqlite:///{db_path}", future=True)
+    ProjectOrm.__table__.create(engine)
+    ProjectNodeRootOrm.__table__.create(engine)
+    engine.dispose()
+    config_path = tmp_path / "config.yaml"
+    config_path.write_text(f"mode: controller\nprojects_db_url: sqlite+pysqlite:///{db_path}\n", encoding="utf-8")
+    monkeypatch.setenv("LLAMA_PACK_CONFIG", str(config_path))
+
+    alembic_cfg = Config("alembic.ini")
+    alembic_cfg.cmd_opts = Namespace(x=["db=projects"])
+    command.upgrade(alembic_cfg, "projects@head")
+
+    engine = create_engine(f"sqlite+pysqlite:///{db_path}", future=True)
+    try:
+        assert "alembic_version" in inspect(engine).get_table_names()
+        with engine.connect() as connection:
+            version = connection.exec_driver_sql("select version_num from alembic_version").scalar_one()
+    finally:
+        engine.dispose()
+    assert version == "20260618_0001"
 
 
 def test_models_migrations_include_catalog_expansion_revision():
