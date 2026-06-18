@@ -62,7 +62,11 @@ def is_external_key_forbidden(path: str, role: str) -> bool:
     """External API keys (role='external') may only call consumer chat endpoints."""
     if role != "external":
         return False
-    return not (path.startswith("/v1/") or path == "/api/chat")
+    if path.startswith("/v1/") or path == "/api/chat":
+        return False
+    if path.startswith(f"{LM_API_PREFIX}/chat/") and path.endswith("/context-budget"):
+        return False
+    return True
 
 
 def is_test_chat_key_forbidden(path: str, method: str) -> bool:

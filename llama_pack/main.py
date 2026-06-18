@@ -410,20 +410,6 @@ def _register_middleware(app: FastAPI) -> None:
     cors_exposed_headers = response_route_headers()
 
     @app.middleware("http")
-    async def apply_dynamic_cors(request: Request, call_next):
-        origin = request.headers.get("origin")
-        allowed_origins = set(app.state.config.client_cors_origins)
-        if origin and origin in allowed_origins and request.method == "OPTIONS":
-            response = Response(status_code=200)
-            _apply_cors_headers(response, origin, cors_methods, cors_headers, cors_exposed_headers)
-            return response
-
-        response = await call_next(request)
-        if origin and origin in allowed_origins:
-            _apply_cors_headers(response, origin, cors_methods, cors_headers, cors_exposed_headers)
-        return response
-
-    @app.middleware("http")
     async def enforce_plugin_activation(request: Request, call_next):
         path = request.url.path
         prefix = f"{LM_API_PREFIX}/plugins/"
@@ -500,6 +486,20 @@ def _register_middleware(app: FastAPI) -> None:
         if not should_enforce_agent_key(app.state.config.mode, configured, path):
             return await call_next(request)
         return JSONResponse(status_code=401, content={"detail": "Unauthorized"})
+
+    @app.middleware("http")
+    async def apply_dynamic_cors(request: Request, call_next):
+        origin = request.headers.get("origin")
+        allowed_origins = set(app.state.config.client_cors_origins)
+        if origin and origin in allowed_origins and request.method == "OPTIONS":
+            response = Response(status_code=200)
+            _apply_cors_headers(response, origin, cors_methods, cors_headers, cors_exposed_headers)
+            return response
+
+        response = await call_next(request)
+        if origin and origin in allowed_origins:
+            _apply_cors_headers(response, origin, cors_methods, cors_headers, cors_exposed_headers)
+        return response
 
 
 def _apply_cors_headers(

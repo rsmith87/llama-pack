@@ -1556,6 +1556,52 @@ def test_cors_headers_are_applied_to_auth_middleware_response(tmp_path):
     assert response.headers["access-control-allow-origin"] == origin
 
 
+def test_cors_headers_are_applied_to_missing_session_response(tmp_path):
+    origin = "http://127.0.0.1:5174"
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "client_cors_origins": [origin],
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.auth_store.create_external_key("Spitball", "http://127.0.0.1:5174")
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/runtime",
+        json={"routing_fanout_max": 4},
+        headers={"Origin": origin},
+    )
+
+    assert response.status_code == 401
+    assert response.headers["access-control-allow-origin"] == origin
+
+
+def test_external_key_can_request_context_budget(tmp_path):
+    app = create_app(
+        config=load_config({"mode": "agent", "log_dir": str(tmp_path / "logs")}),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    key = app.state.auth_store.create_external_key("Spitball", "http://127.0.0.1:5174")["key"]
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/chat/gemma-4-12b-it-Q4_K_M%3Adefault/context-budget",
+        json={"messages": [{"role": "user", "content": "hello"}], "max_tokens": 1},
+        headers={"X-Llama-Pack-Key": key},
+    )
+
+    assert response.status_code == 404
+
+
 def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
     app = create_app(
         config=load_config(
