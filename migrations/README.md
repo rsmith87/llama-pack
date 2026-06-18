@@ -47,6 +47,7 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
 alembic -x db=models upgrade models@head
+alembic -x db=settings upgrade settings@head
 
 # Downgrade one step for chat sessions target
 alembic -x db=chat_sessions downgrade -1

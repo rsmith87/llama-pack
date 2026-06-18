@@ -1,6 +1,9 @@
 # Configuration
 
-Set `LLAMA_PACK_CONFIG` to a YAML file path. Set `LLAMA_PACK_MODE` to override the mode without editing the file.
+Set `LLAMA_PACK_CONFIG` to a YAML file path. Set `LLAMA_PACK_MODE` to override
+the mode without editing the file. Valid backend modes are `agent` and
+`controller`. The setup UI's Standalone option writes an `agent` config for a
+single-machine install; it is not a `mode:` value.
 
 ## Network Exposure
 
@@ -129,6 +132,7 @@ chat_sessions_db_url: sqlite+pysqlite:///./logs/chat_sessions.db
 downloads_db_url: sqlite+pysqlite:///./logs/downloads.db
 benchmarks_db_url: sqlite+pysqlite:///./logs/benchmarks.db
 models_db_url: sqlite+pysqlite:///./logs/models.db
+settings_db_url: sqlite+pysqlite:///./logs/settings.db
 controller_retention_days: 30
 controller_archive_retention_days: 90
 controller_archive_dir: ./logs/archive
@@ -452,6 +456,7 @@ For the current Raspberry Pi controller topology and smoke checks, see
 
 - `controller_db_url`: optional SQLite URL/path override for controller orchestration state.
 - `models_db_url`: optional SQLite URL/path override for model asset and model catalog state.
+- `settings_db_url`: optional SQLite URL/path override for durable runtime settings and the tool catalog.
 - `controller_instance_id`: identifier used for controller leader leases.
 - `controller_leader_lease_seconds`: lease duration for the controller sweeper.
 - `controller_retention_days`: active job/event retention window.
@@ -462,6 +467,17 @@ For the current Raspberry Pi controller topology and smoke checks, see
 
 - `agent_worker_enabled`: opt in to background work claiming from `controller_url`.
 - `agent_worker_poll_interval_seconds`: polling interval when enabled.
+
+## Optional Runtime Settings Fields
+
+The Settings UI and `/lm-api/v1/settings/runtime` can persist selected runtime
+settings in the `settings` database target. This lets operators adjust
+supported settings without hand-editing YAML. Unsupported keys are rejected
+rather than silently ignored.
+
+The agent tool catalog is exposed separately at
+`/lm-api/v1/settings/tool-catalog`. Patches require an admin session and update
+the effective in-process config after they are written.
 
 ## Controller Memory Subsystem
 
@@ -567,9 +583,9 @@ Optional chat capability hint fields per model:
 ## Agent-Local Tool Calling
 
 Agent mode can run a managed tool loop for direct local testing. Tools are
-disabled by default and must be named explicitly in YAML. V1 supports fixed
-`shell`, `file_read`, `file_read_dynamic`, `directory_list`, and `http` tools only; it does not
-expose arbitrary commands, paths, or URLs from model output.
+disabled by default and must be named explicitly in YAML or enabled through the
+runtime settings tool catalog. V1 supports fixed tool adapters only; it does
+not expose arbitrary commands, paths, or URLs from model output.
 
 ```yaml
 mode: agent
@@ -610,8 +626,11 @@ agent_tools:
       url: http://127.0.0.1:9137/health
 ```
 
-Tool names must match `^[A-Za-z_][A-Za-z0-9_]{0,63}$`. `file_read` and
-`directory_list` paths must resolve under `agent_tools.safe_roots`.
+Additional supported adapters include `file_write`, `file_search`,
+`text_search`, `git_status`, `git_diff`, `git_log`, `process_status`,
+`http_json`, `log_tail`, `web_fetch`, `sqlite_query`, `memory_write`, and
+`memory_search`. Tool names must match `^[A-Za-z_][A-Za-z0-9_]{0,63}$`.
+Filesystem and git-backed tools must resolve under `agent_tools.safe_roots`.
 
 To test on an agent, tail the trace log and send a non-streaming OpenAI chat
 request with `tool_runtime: "agent"`:

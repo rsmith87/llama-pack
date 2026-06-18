@@ -116,6 +116,8 @@ External chat-only keys can call:
   capabilities, and usable model list.
 - `POST /v1/client/diagnostics/chat` to verify auth, route resolution, and
   non-streaming or streaming chat for setup flows.
+- `POST /v1/client/project-context/{action}` for supported client project
+  context actions.
 
 These routes intentionally avoid admin/runtime details from `/lm-api/v1/models`.
 For standalone end-user chat apps, prefer external app keys with the
@@ -218,9 +220,24 @@ curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \
 - `GET /quantizations/{file_id}/logs/stream?lines=200`
 - `GET /runtime/overview`
 - `POST /runtime/route-preview`
+- `GET /runtime/tool-loop-evals/latest`
+- `GET /runtime/tool-loop-evals/presets`
+- `GET /runtime/tool-loop-evals/runs`
+- `GET /runtime/tool-loop-evals/runs/{run_id}`
+- `POST /runtime/tool-loop-evals/run`
+- `POST /runtime/tool-loop-evals/run/stream`
+- `POST /runtime/tool-loop-evals/node-run`
+- `POST /runtime/tool-loop-evals/node-run/stream`
+- `POST /runtime/tool-loop-evals/node-chat`
 - `GET /setup/status`
 - `POST /setup/bootstrap-admin`
 - `GET /setup/current-config`
+- `GET /settings/disks`
+- `GET /settings/node-auth`
+- `GET /settings/tool-catalog`
+- `PATCH /settings/tool-catalog`
+- `GET /settings/runtime`
+- `PATCH /settings/runtime`
 - `POST /settings/api-keys/generate`
 - `GET /audit/events`
 - `POST /audit/events`
@@ -299,6 +316,7 @@ cancellation, and recommendations behavior.
 - `GET /nodes/status`
 - `GET /nodes/models`
 - `GET /nodes/models/profiles`
+- `GET /nodes/ggufs`
 - `POST /nodes/register`
 - `PUT /nodes/{node}`
 - `POST /nodes/{node}/heartbeat`

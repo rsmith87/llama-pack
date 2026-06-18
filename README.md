@@ -5,18 +5,20 @@ Llama Pack is a secure local/private LLM gateway with an operations console.
 It gives your apps one stable private AI backend while giving you an operator UI
 for the machines, models, keys, routing, logs, and jobs behind it.
 
-The app can run in three modes:
+The backend runs in two persisted modes:
 
-- `standalone`: runs on one machine as a self-contained local gateway and
-  operations console for that host's models.
 - `agent`: runs on each model host and manages local `llama-server` processes.
 - `controller`: runs on a central host, routes app traffic, and aggregates
   operations across known agents.
 
-Standalone is the simplest single-machine setup. In a multi-machine deployment,
-the controller is the gateway and operations surface. Agents provide local
-compute, model lifecycle control, and the foundation for a private agent
-runtime.
+The setup wizard also offers a **Standalone** choice for the simplest
+single-machine setup. That choice writes an `agent` config with local models
+and starts the same operations UI on that host; there is no separate
+`mode: standalone` value in `config.yaml`.
+
+In a multi-machine deployment, the controller is the gateway and operations
+surface. Agents provide local compute, model lifecycle control, and the
+foundation for a private agent runtime.
 
 ## Quick Start
 

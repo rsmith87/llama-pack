@@ -12,8 +12,10 @@ scripts/setup_llama_pack.sh
 ```
 
 The wizard asks whether the machine is a controller, agent, or single-machine
-setup. It then runs dependency sync, onboarding, optional llama.cpp setup for
-agents, and optional service startup.
+setup. The single-machine option is a setup shortcut that writes `mode: agent`
+with local model paths; the backend config accepts `agent` and `controller` as
+runtime modes. The wizard then runs dependency sync, onboarding, optional
+llama.cpp setup for agents, and optional service startup.
 
 Repeatable non-interactive controller setup:
 
@@ -88,8 +90,7 @@ The onboarding scripts write local secrets to `.llama_pack.env`, which is
 ignored by git. The start/stop helper scripts source that file automatically.
 For encrypted controller/agent traffic, set up Caddy before switching
 `LLAMA_PACK_CONTROLLER_URL` and `LLAMA_PACK_AGENT_URL` to HTTPS; see
-`docs/caddy-local-tls.md` for the operator checklist and
-`docs/tls-caddy-plan.md` for the design rationale.
+`docs/caddy-local-tls.md` for the operator checklist.
 
 Two network exposure modes are supported:
 
@@ -260,7 +261,7 @@ Linux agent smoke test for the `linux-2080ti` setup:
 ```bash
 export LLAMA_PACK_AGENT_API_KEY=...
 export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=...
-# Required if the controller protects GET /nodes with an admin/API key:
+# Required if the controller protects GET /lm-api/v1/nodes with an admin/API key:
 export LLAMA_PACK_CONTROLLER_API_KEY=...
 scripts/linux_agent_smoke.py --config linux-agent.config.example.yaml
 ```
@@ -282,6 +283,8 @@ Alembic is scaffolded with multiple DB targets:
 - `chat_sessions`
 - `downloads`
 - `benchmarks`
+- `models`
+- `settings`
 
 Select a target via `-x db=<target>`.
 
@@ -294,10 +297,19 @@ alembic -x db=audit upgrade audit@head
 alembic -x db=chat_sessions downgrade -1
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
+alembic -x db=models upgrade models@head
+alembic -x db=settings upgrade settings@head
 alembic -x db=controller stamp controller@head
 ```
 
 If `-x db=` is omitted, target defaults to `controller`. Use target-qualified heads such as `auth@head`; unqualified `head` is ambiguous because each database target has its own Alembic branch.
+
+For normal maintenance, prefer the project wrapper because it upgrades every
+current target:
+
+```bash
+uv run python scripts/migrate_all.py --config config.yaml
+```
 
 ## Testing
 

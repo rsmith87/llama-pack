@@ -28,7 +28,8 @@ Prefer `uv sync` on macOS and Linux because it uses the checked-in `uv.lock`.
 For pip-based installs, use an explicit supported interpreter and invoke pip as
 `python -m pip` from the activated environment.
 
-For a Windows-only checklist and troubleshooting flow, see [Windows Install And Troubleshooting](windows-install.md).
+Windows support is currently limited to manual Python environment setup and
+agent-style operation. There is no separate Windows checklist in this docs set.
 
 ## 2. Script-First Setup
 
@@ -131,6 +132,10 @@ hf_models_dir: /Volumes/4TB/HFModels
 
 If `hf_models_dirs` is present, it is used instead of the legacy single-root field.
 
+The setup UI's **Standalone** choice uses this same backend mode. It is a
+single-machine setup preset, not a third `mode:` value; do not write
+`mode: standalone` in `config.yaml`.
+
 ## 4. Manual Admin Key
 
 Before creating admin keys or starting the service, apply migrations:
@@ -219,15 +224,15 @@ The Chat UI supports:
 
 Useful chat endpoints:
 
-- `POST /chat/{model}`
-- `POST /chat/{model}/stream`
-- `GET /chat/capabilities/{model}`
-- `POST /chat/{model}/inspect`
-- `POST /chat/{model}/embeddings`
-- `GET /chat/{model}/kv/slots`
-- `POST /chat/{model}/kv/slots/{slot_id}`
-- `GET /chat/{model}/kv/capabilities`
-- `GET|POST|DELETE /chat/sessions...`
+- `POST /lm-api/v1/chat/{model}`
+- `POST /lm-api/v1/chat/{model}/stream`
+- `GET /lm-api/v1/chat/capabilities/{model}`
+- `POST /lm-api/v1/chat/{model}/inspect`
+- `POST /lm-api/v1/chat/{model}/embeddings`
+- `GET /lm-api/v1/chat/{model}/kv/slots`
+- `POST /lm-api/v1/chat/{model}/kv/slots/{slot_id}`
+- `GET /lm-api/v1/chat/{model}/kv/capabilities`
+- `GET|POST|DELETE /lm-api/v1/chat/sessions...`
 
 ## 8. Add Existing GGUFs As Runnable Models
 
@@ -331,7 +336,11 @@ The React dev site runs at `http://127.0.0.1:5173/ui/react/`. See
 [Frontend Development](frontend.md) for frontend-only start, stop, test, and
 build commands.
 
-Controller endpoints include node inventory/proxy plus orchestration (`/jobs`, node `/work/*`, stats, retention, archive export). In the UI, use the Nodes page to inspect registered agents, heartbeat freshness, reported models, and remote model Start/Stop/Restart/Logs actions.
+Controller endpoints include node inventory/proxy plus orchestration
+(`/lm-api/v1/jobs`, node `/lm-api/v1/nodes/{node}/work/*`, stats, retention,
+archive export). In the UI, use the Nodes page to inspect registered agents,
+heartbeat freshness, reported models, GGUF libraries, and remote model
+Start/Stop/Restart/Logs actions.
 
 ## 12. Run The Controller On A Raspberry Pi
 
@@ -386,7 +395,9 @@ nodes:
     verify_tls: true
 ```
 
-Worker APIs fail closed: the controller only accepts `/nodes/{node}/work/*` requests for registered nodes that have an `api_key`, and the request must send that key in `X-Llama-Pack-Key`.
+Worker APIs fail closed: the controller only accepts
+`/lm-api/v1/nodes/{node}/work/*` requests for registered nodes that have an
+`api_key`, and the request must send that key in `X-Llama-Pack-Key`.
 
 Agent config:
 
@@ -414,7 +425,7 @@ in `.llama_pack.env`, not in the tracked agent config.
 Create a typed generation job on the controller:
 
 ```bash
-curl -X POST http://127.0.0.1:9100/jobs \
+curl -X POST http://127.0.0.1:9100/lm-api/v1/jobs \
   -H "Content-Type: application/json" \
   -d '{
     "type": "llm.generate",
@@ -437,19 +448,19 @@ curl -X POST http://127.0.0.1:9100/jobs \
 Watch durable events:
 
 ```bash
-curl http://127.0.0.1:9100/jobs/{job_id}/events
+curl http://127.0.0.1:9100/lm-api/v1/jobs/{job_id}/events
 ```
 
 Watch live events with SSE:
 
 ```bash
-curl -N http://127.0.0.1:9100/jobs/{job_id}/events/stream
+curl -N http://127.0.0.1:9100/lm-api/v1/jobs/{job_id}/events/stream
 ```
 
 Cancel cooperatively:
 
 ```bash
-curl -X POST http://127.0.0.1:9100/jobs/{job_id}/cancel
+curl -X POST http://127.0.0.1:9100/lm-api/v1/jobs/{job_id}/cancel
 ```
 
 Queued jobs cancel immediately. Assigned or running jobs move to `cancel_requested`; workers check before and after local model execution and then report a terminal state.
@@ -495,7 +506,33 @@ Frontend development workflow:
 
 - `docs/frontend.md`
 
-## 15. Alembic-Managed Persistence
+## 15. Runtime, Settings, And Tool-Loop Evals
+
+The Runtime page summarizes the active mode, local tools, memory, worker
+status, jobs, threads, running models, and downloads:
+
+```bash
+curl http://127.0.0.1:9137/lm-api/v1/runtime/overview
+curl -X POST http://127.0.0.1:9137/lm-api/v1/runtime/route-preview \
+  -H "Content-Type: application/json" \
+  -d '{"model":"qwen-coder","request_type":"coding","target":"auto"}'
+```
+
+The Settings page reads and writes durable runtime settings through
+`/lm-api/v1/settings/runtime`, and manages the agent tool catalog through
+`/lm-api/v1/settings/tool-catalog`. Settings are stored in the `settings`
+database target.
+
+Tool-loop evals are available from the Runtime section of the UI. Agent mode
+runs local evals at `/lm-api/v1/runtime/tool-loop-evals/run`; controller mode
+runs node evals at `/lm-api/v1/runtime/tool-loop-evals/node-run`. Results are
+persisted in the benchmarks database and can be listed with:
+
+```bash
+curl http://127.0.0.1:9137/lm-api/v1/runtime/tool-loop-evals/runs?limit=50
+```
+
+## 16. Alembic-Managed Persistence
 
 Legacy sqlite store code paths were removed after migration parity validation.
 The app now always uses SQLAlchemy-managed persistence implementations across
