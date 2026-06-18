@@ -15,6 +15,7 @@ class ClientCapabilities(BaseModel):
     openaiChatCompletions: bool = True
     streaming: bool = True
     localChatSessions: bool = False
+    projectContext: bool = True
     businessPlugin: bool = False
 
 
@@ -29,6 +30,7 @@ class ClientEndpointDiscovery(BaseModel):
     openaiModels: str = "/v1/models"
     clientSession: str = "/v1/client/session"
     clientChatDiagnostics: str = "/v1/client/diagnostics/chat"
+    clientProjectContext: str = "/v1/client/project-context/{action}"
     models: str = "/lm-api/v1/models"
     pluginsStatus: str = "/lm-api/v1/plugins/status"
     docs: str = "/ui/docs"

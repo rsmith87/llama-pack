@@ -1012,6 +1012,73 @@ def test_threads_stream_api_returns_text_event_stream_with_route_and_deltas(tmp_
     assert "[DONE]" in body
 
 
+def test_threads_stream_api_persists_assistant_and_forwards_generation_params(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    captured_payloads = []
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+
+    async def fake_stream(model_name, payload):
+        captured_payloads.append({"model_name": model_name, "payload": payload})
+
+        async def _stream():
+            yield b'data: {"choices":[{"delta":{"reasoning_content":"thinking "}}]}\n\n'
+            yield b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        return _stream(), {"route": payload["target"]}
+
+    app.state.chat_proxy.stream_with_meta = fake_stream
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"metadata": {"request_type": "coding"}},
+    ).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages/stream",
+        json={
+            "role": "user",
+            "content": "Hello",
+            "model": "qwen",
+            "target": "auto",
+            "temperature": 0.2,
+            "max_tokens": 64,
+            "top_p": 0.8,
+            "reasoning": True,
+            "metadata": {"request_type": "coding"},
+        },
+    )
+
+    assert response.status_code == 200
+    assert '"type": "route"' in response.text
+    assert '"node": "linux-2080ti"' in response.text
+    assert "hello" in response.text
+    assert captured_payloads[0]["model_name"] == "qwen"
+    assert captured_payloads[0]["payload"]["temperature"] == 0.2
+    assert captured_payloads[0]["payload"]["max_tokens"] == 64
+    assert captured_payloads[0]["payload"]["top_p"] == 0.8
+    assert captured_payloads[0]["payload"]["reasoning"] is True
+    events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
+    assert [event["event_type"] for event in events] == ["user_message", "assistant_message"]
+    assert events[1]["content"]["text"] == "hello"
+    assert events[1]["content"]["reasoning_text"] == "thinking "
+
+
 # ---------------------------------------------------------------------------
 # Ticket 10.2 — Workflow Thread Type
 # ---------------------------------------------------------------------------

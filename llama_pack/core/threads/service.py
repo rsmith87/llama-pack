@@ -175,7 +175,7 @@ class ThreadService:
         self,
         thread_id: str,
         role: str,
-        content: str,
+        content: Any,
         model: str | None,
         target: str,
         metadata: dict[str, Any] | None,
@@ -199,7 +199,7 @@ class ThreadService:
         self,
         thread_id: str,
         role: str,
-        content: str,
+        content: Any,
         model: str | None,
         model_family: str | None,
         context_profile: str | None,
@@ -220,6 +220,7 @@ class ThreadService:
         request_type = request_metadata.get("request_type") or "general"
         previous_route = self._previous_route(thread_id, model_family=model_family, context_profile=context_profile)
         requested_model = self._requested_model(model, model_family, context_profile)
+        display_text = self._message_display_text(content)
         messages = [
             *self._public_messages(thread_id),
             {"role": "user", "content": content},
@@ -230,7 +231,7 @@ class ThreadService:
             thread_id=thread_id,
             event_type="user_message",
             role="user",
-            content={"text": content, "metadata": request_metadata},
+            content={"text": display_text, "request_content": self._json_content(content), "metadata": request_metadata},
             public=True,
             turn_id=turn_id,
         )
@@ -282,12 +283,13 @@ class ThreadService:
         self,
         thread_id: str,
         role: str,
-        content: str,
+        content: Any,
         model: str | None,
         target: str,
         metadata: dict[str, Any] | None,
         model_family: str | None = None,
         context_profile: str | None = None,
+        generation_payload: dict[str, object] | None = None,
     ) -> dict[str, Any]:
         prepared = await self._prepare_message_route(
             thread_id=thread_id,
@@ -318,6 +320,7 @@ class ThreadService:
                 decision.model,
                 {
                     "messages": messages,
+                    **(generation_payload or {}),
                     "target": f"node:{decision.node}",
                     **self._profile_payload(prepared),
                 },
@@ -353,12 +356,13 @@ class ThreadService:
         self,
         thread_id: str,
         role: str,
-        content: str,
+        content: Any,
         model: str | None,
         target: str,
         metadata: dict[str, Any] | None,
         model_family: str | None = None,
         context_profile: str | None = None,
+        generation_payload: dict[str, object] | None = None,
     ) -> tuple[AsyncIterator[bytes], dict[str, Any]]:
         """Route a user message and return an SSE stream plus the route dict.
 
@@ -391,7 +395,12 @@ class ThreadService:
         try:
             upstream_stream, _ = await self.chat_proxy.stream_with_meta(
                 decision.model,
-                {"messages": messages, "target": f"node:{decision.node}", **self._profile_payload(prepared)},
+                {
+                    "messages": messages,
+                    **(generation_payload or {}),
+                    "target": f"node:{decision.node}",
+                    **self._profile_payload(prepared),
+                },
             )
         except Exception as exc:
             self._append_error(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
@@ -548,6 +557,27 @@ class ThreadService:
         if isinstance(context_profile, str) and context_profile:
             payload["context_profile"] = context_profile
         return payload
+
+    def _message_display_text(self, content: Any) -> str:
+        if isinstance(content, str):
+            return content
+        if isinstance(content, list):
+            text_parts: list[str] = []
+            for block in content:
+                block_payload = self._json_content(block)
+                if isinstance(block_payload, dict) and block_payload.get("type") == "text":
+                    text = block_payload.get("text")
+                    if isinstance(text, str):
+                        text_parts.append(text)
+            return "\n".join(text_parts)
+        return str(content)
+
+    def _json_content(self, content: Any) -> Any:
+        if hasattr(content, "model_dump"):
+            return content.model_dump()
+        if isinstance(content, list):
+            return [self._json_content(item) for item in content]
+        return content
 
     def _previous_route(
         self,

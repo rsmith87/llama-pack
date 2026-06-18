@@ -31,3 +31,44 @@
   flex-direction: row;
   margin-bottom: 10px;
 }
+
+.node-visibility-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.node-visibility-grid div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  background: color-mix(in srgb, var(--card) 94%, var(--accent) 6%);
+}
+
+.node-visibility-grid span {
+  display: block;
+  margin-bottom: 4px;
+  color: var(--muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+
+.node-visibility-grid strong {
+  display: block;
+  color: var(--ink);
+  font-size: 13px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.node-visibility-grid .node-visibility-error {
+  grid-column: 1 / -1;
+}
+
+@media (max-width: 720px) {
+  .nodes-page-react .node-header {
+    flex-direction: column;
+  }
+}

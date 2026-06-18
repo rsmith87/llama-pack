@@ -6,6 +6,7 @@ import {
   nodeSummary,
   nodeEditFormDefaults,
   nodeEditMarkup,
+  nodeVisibilityDetails,
   receivedBadgeText,
   sortModelsForDisplay,
   suggestedGgufModelName,
@@ -41,6 +42,48 @@ describe("nodes view helpers", () => {
 
   it("summarizes reachable nodes and model count", () => {
     expect(nodeSummary(nodes)).toEqual({ reachable: 1, total: 2, models: 2 });
+  });
+
+  it("explains reachable node visibility with heartbeat, TLS, model source, and action target", () => {
+    expect(
+      nodeVisibilityDetails({
+        name: "mac-agent",
+        reachable: true,
+        heartbeat_fresh: true,
+        heartbeat_age_seconds: 42,
+        cert_expires_in_seconds: 60 * 60 * 24 * 12,
+        models: [{ name: "qwen" }],
+        models_source: "agent",
+      }),
+    ).toEqual({
+      reachability: "Controller can reach this agent.",
+      heartbeat: "Heartbeat fresh, 42s old.",
+      cert: "TLS certificate valid for 12d.",
+      placement: "1 model reported by agent.",
+      actionTarget: "Actions run on mac-agent through the controller.",
+      error: "",
+    });
+  });
+
+  it("explains offline node visibility with stale heartbeat and explicit error", () => {
+    expect(
+      nodeVisibilityDetails({
+        name: "win-agent",
+        reachable: false,
+        heartbeat_fresh: false,
+        heartbeat_age_seconds: 3700,
+        cert_expires_in_seconds: -10,
+        models: [],
+        error: "ConnectError: refused",
+      }),
+    ).toEqual({
+      reachability: "Controller cannot reach this agent.",
+      heartbeat: "Heartbeat stale, 62m old.",
+      cert: "TLS certificate expired.",
+      placement: "No models reported.",
+      actionTarget: "Actions are unavailable until win-agent is reachable.",
+      error: "ConnectError: refused",
+    });
   });
 
   it("merges configured inventory with aggregate model status", () => {

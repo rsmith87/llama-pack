@@ -74,6 +74,57 @@ export function completionText(payload: Record<string, unknown>) {
   return choice?.message?.content || choice?.text || "";
 }
 
+export function routeDecisionToMeta(route: Record<string, unknown> | undefined | null): ChatMessage["routeMeta"] {
+  if (!route) return { target: "controller" };
+  const node = String(route.node || "");
+  const meta: ChatMessage["routeMeta"] = {
+    model: String(route.model || ""),
+    target: node ? `node:${node}` : "controller",
+    resolved: node,
+    reason: String(route.reason || ""),
+  };
+  const strategy = String(route.strategy || "");
+  const startup = String(route.startup_decision || "");
+  const candidates = routeCandidateLabels(route.candidates);
+  if (strategy) meta.strategy = strategy;
+  if (startup) meta.startup = startup;
+  if (candidates.length) meta.candidates = candidates;
+  return meta;
+}
+
+export function routeExplanationItems(message: Pick<ChatMessage, "route" | "routeMeta">): string[] {
+  const items: string[] = [];
+  const meta = message.routeMeta;
+  if (!meta) return message.route ? [`Resolved route ${message.route}`] : items;
+  if (meta.target) items.push(`Target ${meta.target}`);
+  if (meta.resolved) items.push(`Resolved agent ${meta.resolved}`);
+  if (meta.model) items.push(`Model ${meta.model}`);
+  if (meta.strategy) items.push(`Strategy ${meta.strategy}`);
+  if (meta.reason) items.push(`Reason ${meta.reason}`);
+  if (meta.startup) items.push(`Startup ${meta.startup}`);
+  for (const candidate of meta.candidates || []) {
+    items.push(`Candidate ${candidate}`);
+  }
+  if (!items.length && message.route) items.push(`Resolved route ${message.route}`);
+  return items;
+}
+
+function routeCandidateLabels(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((candidate) => candidate && typeof candidate === "object").map((candidate) => routeCandidateLabel(candidate as Record<string, unknown>));
+}
+
+function routeCandidateLabel(candidate: Record<string, unknown>): string {
+  const node = String(candidate.node || "-");
+  const model = String(candidate.model || "-");
+  const details = [
+    candidate.priority != null ? `priority ${String(candidate.priority)}` : "",
+    candidate.model_running != null ? `running ${candidate.model_running ? "yes" : "no"}` : "",
+    candidate.artifact_state ? `artifact ${String(candidate.artifact_state)}` : "",
+  ].filter(Boolean);
+  return details.length ? `${node}/${model} ${details.join(", ")}` : `${node}/${model}`;
+}
+
 export function asChatSessions(payload: unknown): ChatSession[] {
   if (Array.isArray(payload)) return payload as ChatSession[];
   return (payload as { sessions?: ChatSession[] } | null)?.sessions || [];

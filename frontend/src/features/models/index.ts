@@ -3,6 +3,12 @@ import { TIMERS } from "../../constants";
 
 type CertTone = "success" | "warning" | "danger" | "muted";
 
+export type ModelActionTargetInput = {
+  resolvedNode: string | null | undefined;
+  hasControllerAction: boolean;
+  reachable: boolean;
+};
+
 export function modelName(model: { name?: string; id?: string; model?: string; path?: string }): string {
   return model.name || model.id || model.model || model.path || "unnamed model";
 }
@@ -33,6 +39,62 @@ export function modelNode(model: LocalModel, data: DashboardData): string | null
   if (directNode) return directNode;
   const matchingNode = data.nodes.find((node) => node.models?.some((nodeModel) => modelName(nodeModel) === modelName(model)));
   return (matchingNode?.name || matchingNode?.node_id || null);
+}
+
+export function modelActionTargetLabel(input: ModelActionTargetInput): string {
+  const node = String(input.resolvedNode || "").trim();
+  if (!node) return "Actions run on local runtime.";
+  if (!input.reachable) return `Actions unavailable until agent ${node} is reachable.`;
+  if (input.hasControllerAction) return `Actions run on agent ${node} through the controller.`;
+  return `Actions run on agent ${node}.`;
+}
+
+export function modelPlacementDetails(model: Record<string, unknown>): string[] {
+  return [
+    configuredPlacement(model),
+    ggufPlacement(model),
+    deploymentPlacement(model),
+    runtimePlacement(model),
+  ];
+}
+
+function configuredPlacement(model: Record<string, unknown>): string {
+  if (Boolean(model.registered)) {
+    const name = String(model.registered_as || model.name || model.model || "").trim();
+    return name ? `Configured as ${name}.` : "Configured as a runnable model.";
+  }
+  return "Not configured as a runnable model.";
+}
+
+function ggufPlacement(model: Record<string, unknown>): string {
+  const fileId = String(model.file_id || model.id || "").trim();
+  const path = String(model.path || model.model_path || model.filename || "").trim().toLowerCase();
+  if (!fileId && !path.endsWith(".gguf")) return "GGUF file not reported.";
+  return fileId ? `GGUF file present: ${fileId}.` : "GGUF file present.";
+}
+
+function deploymentPlacement(model: Record<string, unknown>): string {
+  const deployments = Array.isArray(model.model_deployments) ? model.model_deployments : [];
+  const deployment = deployments.find((item) => item && typeof item === "object" && (item as Record<string, unknown>).enabled !== false) as Record<string, unknown> | undefined;
+  if (!deployment) return "No deployment registered.";
+  const node = String(deployment.node_name || "").trim();
+  const host = String(deployment.host || "").trim();
+  const port = typeof deployment.port === "number" ? deployment.port : null;
+  const profile = String(deployment.profile_key || "").trim();
+  const endpoint = host && port !== null ? `${host}:${port}` : host || (port !== null ? `port ${port}` : "");
+  const prefix = node ? `${node} ` : "";
+  const suffix = profile ? ` (${profile})` : "";
+  return endpoint ? `Deployment ${prefix}${endpoint}${suffix}.` : `Deployment ${prefix || "registered"}${suffix}.`;
+}
+
+function runtimePlacement(model: Record<string, unknown>): string {
+  const status = String(model.status || "").toLowerCase();
+  const running = status === "running" || status === "loaded" || status === "ready";
+  if (!running) return "No running process reported.";
+  const port = typeof model.port === "number" ? model.port : null;
+  const pid = typeof model.pid === "number" ? model.pid : null;
+  const parts = [port !== null ? `port ${port}` : "", pid !== null ? `pid ${pid}` : ""].filter(Boolean);
+  return parts.length ? `Running process on ${parts.join(", ")}.` : "Running process reported.";
 }
 
 export function modelForNode(node: DashboardData["nodes"][number], nodeModel: LocalModel, data: DashboardData): LocalModel {

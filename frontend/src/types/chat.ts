@@ -42,7 +42,15 @@ export type ChatMessage = {
   pending?: boolean;
   stopped?: boolean;
   route?: string;
-  routeMeta?: { model?: string; target?: string; resolved?: string; reason?: string };
+  routeMeta?: {
+    model?: string;
+    target?: string;
+    resolved?: string;
+    reason?: string;
+    strategy?: string;
+    startup?: string;
+    candidates?: string[];
+  };
   threadEventType?: string;
   startedAtMs?: number;
   firstTokenAtMs?: number;

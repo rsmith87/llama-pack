@@ -371,7 +371,82 @@ def test_external_app_key_can_read_client_session_capabilities(tmp_path):
     assert payload["capabilities"]["openaiChatCompletions"] is True
     assert payload["capabilities"]["streaming"] is True
     assert payload["capabilities"]["serverHistory"] is False
+    assert payload["capabilities"]["projectContext"] is True
+    assert payload["projectContext"] == {
+        "actions": ["summarize_project", "summarize_path", "refresh_context_item"],
+        "endpoint": "/v1/client/project-context/{action}",
+        "inputPolicy": "explicit_user_selected_inputs_and_saved_artifact_metadata_only",
+    }
     assert [model["id"] for model in payload["models"]] == ["gemma", "qwen"]
+
+
+def test_external_app_key_can_summarize_project_context_from_selected_inputs(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/project-context/summarize_project",
+        json={
+            "project": {"name": "Spitball", "root": "/workspace/spitball"},
+            "selected_paths": [
+                {"path": "packages/spitball/src/styles/app.css", "content": ".board { display: grid; }"},
+                {"path": "packages/spitball/README.md", "content": "# Spitball\nA planning app."},
+            ],
+            "artifacts": [
+                {
+                    "id": "wireframe-1",
+                    "kind": "design",
+                    "path": "artifacts/wireframe.md",
+                    "title": "Board wireframe",
+                    "metadata": {"status": "saved"},
+                }
+            ],
+            "focused_path": None,
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["action"] == "summarize_project"
+    assert payload["policy"] == "explicit_user_selected_inputs_and_saved_artifact_metadata_only"
+    assert payload["summary"]["project"] == {"name": "Spitball", "root": "/workspace/spitball"}
+    assert payload["summary"]["selectedPathCount"] == 2
+    assert payload["summary"]["artifactCount"] == 1
+    assert payload["summary"]["paths"] == [
+        {"path": "packages/spitball/src/styles/app.css", "characters": 25},
+        {"path": "packages/spitball/README.md", "characters": 26},
+    ]
+    assert payload["summary"]["artifacts"] == [
+        {
+            "id": "wireframe-1",
+            "kind": "design",
+            "path": "artifacts/wireframe.md",
+            "title": "Board wireframe",
+            "metadata": {"status": "saved"},
+        }
+    ]
+
+
+def test_project_context_rejects_path_without_explicit_content_or_saved_metadata(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/project-context/summarize_path",
+        json={
+            "project": None,
+            "selected_paths": [{"path": "packages/spitball/src/styles/app.css"}],
+            "artifacts": [],
+            "focused_path": "packages/spitball/src/styles/app.css",
+        },
+    )
+
+    assert response.status_code == 422
+    assert "selected_paths[0] must include explicit content or saved artifact metadata" in response.text
 
 
 def test_external_app_key_can_run_non_streaming_chat_diagnostics(tmp_path):

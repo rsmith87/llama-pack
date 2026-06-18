@@ -12,7 +12,7 @@ import { ModelCarousel } from "../../components/ModelCarousel";
 import { useLogModal } from "../../features/logs/logModalContext";
 import type { DashboardData, LocalModel } from "../../types/index";
 import { useNavigateToPage } from "../../hooks/useNavigateToPage";
-import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
+import { nodeVisibilityDetails, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
@@ -21,6 +21,7 @@ import { librarySelectionSearch } from "../../features/ggufLibrary";
 import { TIMERS } from "../../constants";
 import { 
   percent,
+  modelActionTargetLabel,
   modelFileId,
   modelNode,
   modelForNode,
@@ -158,12 +159,18 @@ export function DashboardPage() {
   function renderModelCard(model: LocalModel, key: string) {
     const name = modelName(model);
     const resolvedNode = modelNode(model, data);
+    const nodeRecord = resolvedNode ? nodeRecords.find((node) => node.name === resolvedNode) : undefined;
     return (
       <ModelCard
         key={key}
         model={model}
         resolvedNode={resolvedNode}
         actingModel={actingModel}
+        actionTargetLabel={modelActionTargetLabel({
+          resolvedNode,
+          hasControllerAction: Boolean(resolvedNode),
+          reachable: nodeRecord?.reachable !== false,
+        })}
         onOpen={() => navigateToPage("gguf-library", {
           search: librarySelectionSearch(name, resolvedNode || "", String(model.file_id || "")),
         })}
@@ -242,6 +249,7 @@ export function DashboardPage() {
               const nodeStatus = node.reachable === false ? "offline" : node.status || "reachable";
               const nodeTone = node.reachable === false ? "danger" : statusTone(node.status || "reachable");
               const cert = certBadge(node.cert_expires_in_seconds);
+              const visibility = nodeVisibilityDetails(node);
               return (
                 <NodeCard
                   key={`${name}-${index}`}
@@ -251,6 +259,13 @@ export function DashboardPage() {
                   certLabel={cert.label}
                   certTone={cert.tone}
                   modelCount={models.length}
+                  details={[
+                    visibility.reachability,
+                    visibility.heartbeat,
+                    visibility.cert,
+                    visibility.placement,
+                    visibility.actionTarget,
+                  ]}
                   onOpenNode={() => navigateToPage("nodes")}
                   emptyMessage="No models reported for this node."
                  >

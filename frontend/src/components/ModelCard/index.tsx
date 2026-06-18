@@ -98,6 +98,9 @@ export type ModelCardProps = {
   /** Optional suffix appended to action aria-labels. */
   actionLabelSuffix?: string;
 
+  /** Visible explanation of where this card's actions execute. */
+  actionTargetLabel?: string;
+
   // -- open / inspect --
   onOpen?: () => void;
 
@@ -131,6 +134,7 @@ export function ModelCard({
   resolvedNode,
   actingModel = "",
   actionLabelSuffix = "",
+  actionTargetLabel = "",
   onOpen,
   onStart,
   onStop,
@@ -350,6 +354,10 @@ export function ModelCard({
       ) : null}
 
       {children}
+
+      {hasActions && actionTargetLabel ? (
+        <p className="model-action-target">{actionTargetLabel}</p>
+      ) : null}
 
       {actions()}
 

@@ -1,10 +1,10 @@
 export type { ThreadEvent } from "../../types/threads";
+import type { ChatMessage } from "../../types/chat";
 import type { ThreadEvent } from "../../types/threads";
 
-export function threadEventToChatMessage(event: ThreadEvent) {
+export function threadEventToChatMessage(event: ThreadEvent): ChatMessage {
   const content = event?.content || {};
   const text = typeof content.text === "string" ? content.text : "";
-  const route = event?.route || {};
   if (event?.event_type === "user_message") {
     return {
       role: "user",
@@ -13,35 +13,29 @@ export function threadEventToChatMessage(event: ThreadEvent) {
     };
   }
   if (event?.event_type === "assistant_message") {
-    return {
+    const message = {
       role: "assistant",
       content: text,
       threadEventType: event.event_type,
-      routeMeta: {
-        model: event.model || String(route.model || ""),
-        target: event.agent_node ? `node:${event.agent_node}` : "",
-        resolved: event.agent_node || String(route.node || ""),
-        reason: String(route.reason || ""),
-      },
+      routeMeta: eventToRouteMeta(event),
     };
+    if (typeof content.reasoning_text === "string") {
+      return { ...message, reasoningContent: content.reasoning_text };
+    }
+    return message;
   }
   if (event?.event_type === "routing_decision") {
     return {
       role: "internal",
       content: formatRoutingDecision(event),
       threadEventType: event.event_type,
-      routeMeta: {
-        model: event.model || String(route.model || ""),
-        target: event.agent_node ? `node:${event.agent_node}` : "",
-        resolved: event.agent_node || String(route.node || ""),
-        reason: String(route.reason || ""),
-      },
+      routeMeta: eventToRouteMeta(event),
     };
   }
   if (event?.event_type === "error") {
     return {
       role: "error",
-      content: event.error_detail || text || "Thread request failed",
+      content: event.error_detail || text || "Conversation request failed",
       threadEventType: event.event_type,
     };
   }
@@ -68,6 +62,16 @@ export function buildThreadMetadata({ app, purpose, priority, requestType }: { a
 function normalizeOptional(value: unknown) {
   const trimmed = String(value || "").trim();
   return trimmed || null;
+}
+
+function eventToRouteMeta(event: ThreadEvent) {
+  const route = event.route || {};
+  return {
+    model: event.model || String(route.model || ""),
+    target: event.agent_node ? `node:${event.agent_node}` : "",
+    resolved: event.agent_node || String(route.node || ""),
+    reason: String(route.reason || ""),
+  };
 }
 
 function formatRoutingDecision(event: ThreadEvent) {

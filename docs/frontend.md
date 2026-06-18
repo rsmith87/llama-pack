@@ -134,6 +134,28 @@ FastAPI serves `/` from `llama_pack/ui/react/index.html` when the React build ex
 - `src/routes/pages.ts`: canonical React navigation model.
 - `src/test/`: Vitest setup and app-level smoke coverage.
 
+## Chat Conversations
+
+The frontend should present chat as conversation history. Avoid exposing
+`thread` as the primary user-facing term unless an operator/debug detail needs
+the backend identifier.
+
+Internally, an active conversation is backed by a durable backend thread. Any
+frontend state named `activeConversationId` or equivalent should store the
+backend `thread_id`. If the user sends a message without an active
+conversation, the chat UI should create the thread first and then append the
+message to that thread.
+
+The Chat page streams conversation turns through
+`/lm-api/v1/threads/{thread_id}/messages/stream`. After a stream completes, the
+UI may refresh thread events for route details, but it should preserve the
+visible streamed message state when that state includes client-side telemetry
+or reasoning display that is not present in the persisted event payload.
+
+The OpenAI-compatible and Ollama-compatible chat endpoints remain public API
+surfaces for external consumers. They should not be removed just because the
+frontend uses thread-backed conversations.
+
 ## Plugin Frontend Metadata
 
 Core loads enabled plugin metadata from `/lm-api/v1/plugins/enabled`.

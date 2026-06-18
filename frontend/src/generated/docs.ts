@@ -4134,6 +4134,28 @@ FastAPI serves \`/\` from \`llama_pack/ui/react/index.html\` when the React buil
 - \`src/routes/pages.ts\`: canonical React navigation model.
 - \`src/test/\`: Vitest setup and app-level smoke coverage.
 
+## Chat Conversations
+
+The frontend should present chat as conversation history. Avoid exposing
+\`thread\` as the primary user-facing term unless an operator/debug detail needs
+the backend identifier.
+
+Internally, an active conversation is backed by a durable backend thread. Any
+frontend state named \`activeConversationId\` or equivalent should store the
+backend \`thread_id\`. If the user sends a message without an active
+conversation, the chat UI should create the thread first and then append the
+message to that thread.
+
+The Chat page streams conversation turns through
+\`/lm-api/v1/threads/{thread_id}/messages/stream\`. After a stream completes, the
+UI may refresh thread events for route details, but it should preserve the
+visible streamed message state when that state includes client-side telemetry
+or reasoning display that is not present in the persisted event payload.
+
+The OpenAI-compatible and Ollama-compatible chat endpoints remain public API
+surfaces for external consumers. They should not be removed just because the
+frontend uses thread-backed conversations.
+
 ## Plugin Frontend Metadata
 
 Core loads enabled plugin metadata from \`/lm-api/v1/plugins/enabled\`.
@@ -4210,6 +4232,11 @@ Core serves those files but does not bundle them into the core React build.
       },
       {
         "level": 2,
+        "text": "Chat Conversations",
+        "anchor": "chat-conversations"
+      },
+      {
+        "level": 2,
         "text": "Plugin Frontend Metadata",
         "anchor": "plugin-frontend-metadata"
       },
@@ -4219,7 +4246,7 @@ Core serves those files but does not bundle them into the core React build.
         "anchor": "release-notes"
       }
     ],
-    searchBody: "Frontend Development The web UI lives in and is a Vite + React + TypeScript app. The production build is emitted into so FastAPI can serve it as static package data. Install Do not commit . Run The Backend Start FastAPI in another terminal: Use your normal controller or agent config instead of when testing real nodes and model workflows. The runtime scripts can also start the backend: For local development, start the backend and React dev site together: For agent-mode development, use the matching agent stack helper: Both stack helpers check their backend and frontend PID files first. If the whole stack is already running, they print a message and do not restart either process. If only one side is running, they start the missing side. You can also use the mode-detecting helper: auto-detects backend mode from your active config ( or ) and starts or accordingly. Set explicitly if you want to override this. Use or when you only want to start the backend. Run The Vite Dev Server Open: The script writes its PID to and logs to . Stop it with: The Vite dev server proxies API requests to by default. Override the backend target with: You can still run Vite directly when you want foreground logs: Test Run frontend tests directly: Run the Python integration wrapper that installs frontend dependencies and runs the same Vitest suite: Run UI static-serving checks: Build Build output is written to: FastAPI serves from when the React build exists. The generated files are content-hashed, so a rebuild may delete an old asset and add a new one. Project Layout - : typed API helpers by backend domain. - : shell, logs modal, and shared UI primitives. - : typed pure helpers migrated from the former vanilla frontend. - : routed React pages. - : canonical React navigation model. - : Vitest setup and app-level smoke coverage. Plugin Frontend Metadata Core loads enabled plugin metadata from . The React shell uses that metadata to add plugin primary navigation, scoped secondary navigation, and host pages for plugin UI routes. New plugin pages use : the shell fetches an HTML fragment template, imports the optional page controller, calls , and attaches declared . Legacy modules remain supported for existing plugins. The shell also reads and shows a compact administrator-facing alert when plugins are failed, incompatible, or reporting health warnings/errors such as pending migration metadata. The built-in page lists configured plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. For the full plugin frontend metadata contract, see Plugin Author Guide. Plugin assets are served by FastAPI from each plugin's declared static directory under: Core serves those files but does not bundle them into the core React build. Release Notes - is the canonical frontend test/build package. - has been removed after parity coverage moved into . - is included in Python package data for release builds. - The former vanilla static console files under , , and have been removed; FastAPI serves the React build directly.",
+    searchBody: "Frontend Development The web UI lives in and is a Vite + React + TypeScript app. The production build is emitted into so FastAPI can serve it as static package data. Install Do not commit . Run The Backend Start FastAPI in another terminal: Use your normal controller or agent config instead of when testing real nodes and model workflows. The runtime scripts can also start the backend: For local development, start the backend and React dev site together: For agent-mode development, use the matching agent stack helper: Both stack helpers check their backend and frontend PID files first. If the whole stack is already running, they print a message and do not restart either process. If only one side is running, they start the missing side. You can also use the mode-detecting helper: auto-detects backend mode from your active config ( or ) and starts or accordingly. Set explicitly if you want to override this. Use or when you only want to start the backend. Run The Vite Dev Server Open: The script writes its PID to and logs to . Stop it with: The Vite dev server proxies API requests to by default. Override the backend target with: You can still run Vite directly when you want foreground logs: Test Run frontend tests directly: Run the Python integration wrapper that installs frontend dependencies and runs the same Vitest suite: Run UI static-serving checks: Build Build output is written to: FastAPI serves from when the React build exists. The generated files are content-hashed, so a rebuild may delete an old asset and add a new one. Project Layout - : typed API helpers by backend domain. - : shell, logs modal, and shared UI primitives. - : typed pure helpers migrated from the former vanilla frontend. - : routed React pages. - : canonical React navigation model. - : Vitest setup and app-level smoke coverage. Chat Conversations The frontend should present chat as conversation history. Avoid exposing as the primary user-facing term unless an operator/debug detail needs the backend identifier. Internally, an active conversation is backed by a durable backend thread. Any frontend state named or equivalent should store the backend . If the user sends a message without an active conversation, the chat UI should create the thread first and then append the message to that thread. The Chat page streams conversation turns through . After a stream completes, the UI may refresh thread events for route details, but it should preserve the visible streamed message state when that state includes client-side telemetry or reasoning display that is not present in the persisted event payload. The OpenAI-compatible and Ollama-compatible chat endpoints remain public API surfaces for external consumers. They should not be removed just because the frontend uses thread-backed conversations. Plugin Frontend Metadata Core loads enabled plugin metadata from . The React shell uses that metadata to add plugin primary navigation, scoped secondary navigation, and host pages for plugin UI routes. New plugin pages use : the shell fetches an HTML fragment template, imports the optional page controller, calls , and attaches declared . Legacy modules remain supported for existing plugins. The shell also reads and shows a compact administrator-facing alert when plugins are failed, incompatible, or reporting health warnings/errors such as pending migration metadata. The built-in page lists configured plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. For the full plugin frontend metadata contract, see Plugin Author Guide. Plugin assets are served by FastAPI from each plugin's declared static directory under: Core serves those files but does not bundle them into the core React build. Release Notes - is the canonical frontend test/build package. - has been removed after parity coverage moved into . - is included in Python package data for release builds. - The former vanilla static console files under , , and have been removed; FastAPI serves the React build directly.",
   },
   {
     id: "how-to-use",

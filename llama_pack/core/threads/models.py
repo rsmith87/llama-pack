@@ -33,14 +33,66 @@ class CreateThreadRequest(BaseModel):
     metadata: ThreadMetadata = Field(default_factory=ThreadMetadata)
 
 
+class ThreadTextContentBlock(BaseModel):
+    type: Literal["text"]
+    text: str
+
+
+class ThreadImageUrl(BaseModel):
+    url: str
+
+
+class ThreadImageContentBlock(BaseModel):
+    type: Literal["image_url"]
+    image_url: ThreadImageUrl
+
+
+ThreadMessageContent = str | list[ThreadTextContentBlock | ThreadImageContentBlock]
+
+
 class ThreadMessageRequest(BaseModel):
     role: Literal["user"] = "user"
-    content: str
+    content: ThreadMessageContent
     model: str | None = None
     model_family: str | None = None
     context_profile: str | None = None
     target: str = "auto"
     metadata: ThreadMetadata | None = None
+    temperature: float | None = Field(default=None, ge=0.0, le=2.0)
+    max_tokens: int | None = Field(default=None, ge=1, le=32768)
+    top_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    top_k: int | None = Field(default=None, ge=0)
+    min_p: float | None = Field(default=None, ge=0.0, le=1.0)
+    repeat_penalty: float | None = Field(default=None, ge=0.0)
+    seed: int | None = None
+    stop: str | list[str] | None = None
+    json_schema: dict[str, object] | None = None
+    grammar: str | None = None
+    reasoning: bool = False
+    cache_prompt: bool | None = None
+    slot_id: int | None = None
+
+    def generation_payload(self) -> dict[str, object]:
+        payload: dict[str, object] = {}
+        for key in (
+            "temperature",
+            "max_tokens",
+            "top_p",
+            "top_k",
+            "min_p",
+            "repeat_penalty",
+            "seed",
+            "stop",
+            "json_schema",
+            "grammar",
+            "reasoning",
+            "cache_prompt",
+            "slot_id",
+        ):
+            value = getattr(self, key)
+            if value is not None:
+                payload[key] = value
+        return payload
 
 
 class WorkflowStep(BaseModel):

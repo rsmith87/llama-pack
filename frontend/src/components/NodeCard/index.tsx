@@ -9,6 +9,7 @@ type NodeCardProps = {
   certLabel?: string;
   certTone?: Tone;
   modelCount: number;
+  details?: string[];
   onOpenNode?: () => void;
   emptyMessage?: string;
   children?: ReactNode;
@@ -21,6 +22,7 @@ export function NodeCard({
   certLabel,
   certTone = "muted",
   modelCount,
+  details,
   onOpenNode,
   emptyMessage,
   children,
@@ -41,6 +43,13 @@ export function NodeCard({
         <span>{modelCount} models</span>
         {onOpenNode ? <Button type="button" onClick={onOpenNode}>Open Node</Button> : null}
       </div>
+      {details && details.length > 0 ? (
+        <ul className="controller-node-card-details">
+          {details.map((detail) => (
+            <li key={detail}>{detail}</li>
+          ))}
+        </ul>
+      ) : null}
       <div className="node-model-cards">
         {modelCount === 0 ? <EmptyState message={emptyMessage ?? "No models for this node."} /> : null}
         {children}

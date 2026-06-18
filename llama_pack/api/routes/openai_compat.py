@@ -7,7 +7,7 @@ from collections.abc import AsyncIterator
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from llama_pack.api.http_headers import (
     LEGACY_LLAMA_MANAGER_ROUTE_HEADER,
@@ -76,6 +76,47 @@ class ClientChatDiagnosticsRequest(BaseModel):
     target: str = "auto"
 
 
+class ProjectContextProject(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    name: str = Field(min_length=1)
+    root: str | None = None
+
+
+class ProjectContextPath(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    path: str = Field(min_length=1)
+    content: str | None = None
+    artifact_metadata: dict[str, str | int | float | bool | None] | None = None
+
+
+class ProjectContextArtifact(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: str = Field(min_length=1)
+    kind: str = Field(min_length=1)
+    path: str | None = None
+    title: str | None = None
+    metadata: dict[str, str | int | float | bool | None] = Field(default_factory=dict)
+
+
+class ProjectContextRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project: ProjectContextProject | None = None
+    selected_paths: list[ProjectContextPath] = Field(default_factory=list)
+    artifacts: list[ProjectContextArtifact] = Field(default_factory=list)
+    focused_path: str | None = None
+
+    @model_validator(mode="after")
+    def require_supplied_context(self) -> "ProjectContextRequest":
+        for index, selected_path in enumerate(self.selected_paths):
+            if selected_path.content is None and selected_path.artifact_metadata is None:
+                raise ValueError(f"selected_paths[{index}] must include explicit content or saved artifact metadata")
+        return self
+
+
 @router.get("/models")
 async def openai_models(request: Request, registry: NodeRegistry = Depends(get_node_registry)):
     return {"object": "list", "data": await _client_safe_models(request, registry)}
@@ -89,9 +130,23 @@ async def openai_client_session(request: Request, registry: NodeRegistry = Depen
             "openaiChatCompletions": True,
             "streaming": True,
             "serverHistory": False,
+            "projectContext": True,
         },
+        "projectContext": _project_context_metadata(),
         "models": await _client_safe_models(request, registry),
     }
+
+
+@router.post("/client/project-context/{action}")
+async def openai_client_project_context(
+    action: Literal["summarize_project", "summarize_path", "refresh_context_item"],
+    body: ProjectContextRequest,
+):
+    if action == "summarize_path":
+        return _project_context_response(action, _summarize_path(body))
+    if action == "refresh_context_item":
+        return _project_context_response(action, _refresh_context_item(body))
+    return _project_context_response(action, _summarize_project(body))
 
 
 @router.post("/client/diagnostics/chat")
@@ -315,6 +370,86 @@ async def _agent_tool_detection_stream(stream: AsyncIterator[bytes]) -> AsyncIte
                 yield b"data: [DONE]\n\n"
                 return
         yield chunk
+
+
+def _project_context_metadata() -> dict[str, object]:
+    return {
+        "actions": ["summarize_project", "summarize_path", "refresh_context_item"],
+        "endpoint": "/v1/client/project-context/{action}",
+        "inputPolicy": "explicit_user_selected_inputs_and_saved_artifact_metadata_only",
+    }
+
+
+def _project_context_response(action: str, summary: dict[str, object]) -> dict[str, object]:
+    return {
+        "action": action,
+        "policy": "explicit_user_selected_inputs_and_saved_artifact_metadata_only",
+        "summary": summary,
+    }
+
+
+def _summarize_project(body: ProjectContextRequest) -> dict[str, object]:
+    return {
+        "project": _project_payload(body.project),
+        "selectedPathCount": len(body.selected_paths),
+        "artifactCount": len(body.artifacts),
+        "paths": [_path_summary(item) for item in body.selected_paths],
+        "artifacts": [_artifact_payload(item) for item in body.artifacts],
+    }
+
+
+def _summarize_path(body: ProjectContextRequest) -> dict[str, object]:
+    selected_path = _focused_or_first_path(body)
+    return {
+        "project": _project_payload(body.project),
+        "path": _path_summary(selected_path),
+        "artifacts": [_artifact_payload(item) for item in body.artifacts],
+    }
+
+
+def _refresh_context_item(body: ProjectContextRequest) -> dict[str, object]:
+    selected_path = _focused_or_first_path(body)
+    return {
+        "project": _project_payload(body.project),
+        "path": _path_summary(selected_path),
+        "artifactCount": len(body.artifacts),
+    }
+
+
+def _project_payload(project: ProjectContextProject | None) -> dict[str, str | None] | None:
+    if project is None:
+        return None
+    return {"name": project.name, "root": project.root}
+
+
+def _path_summary(selected_path: ProjectContextPath) -> dict[str, object]:
+    payload: dict[str, object] = {"path": selected_path.path}
+    if selected_path.content is not None:
+        payload["characters"] = len(selected_path.content)
+    if selected_path.artifact_metadata is not None:
+        payload["artifactMetadata"] = dict(selected_path.artifact_metadata)
+    return payload
+
+
+def _artifact_payload(artifact: ProjectContextArtifact) -> dict[str, object]:
+    return {
+        "id": artifact.id,
+        "kind": artifact.kind,
+        "path": artifact.path,
+        "title": artifact.title,
+        "metadata": dict(artifact.metadata),
+    }
+
+
+def _focused_or_first_path(body: ProjectContextRequest) -> ProjectContextPath:
+    if not body.selected_paths:
+        raise HTTPException(status_code=422, detail="selected_paths must include at least one explicit context item")
+    if body.focused_path is None:
+        return body.selected_paths[0]
+    for selected_path in body.selected_paths:
+        if selected_path.path == body.focused_path:
+            return selected_path
+    raise HTTPException(status_code=422, detail=f"focused_path is not present in selected_paths: {body.focused_path}")
 
 
 def _client_auth_payload(request: Request) -> dict[str, str]:

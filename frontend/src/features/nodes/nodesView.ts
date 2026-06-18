@@ -1,6 +1,15 @@
 export type { NodeRecord } from "../../types/nodes";
 import type { NodeRecord } from "../../types/nodes";
 
+export type NodeVisibilityDetails = {
+  reachability: string;
+  heartbeat: string;
+  cert: string;
+  placement: string;
+  actionTarget: string;
+  error: string;
+};
+
 export function nodeSearchText(node: NodeRecord) {
   return [node.name, node.url, node.agent_config_source, node.controller_config_source]
     .filter(Boolean)
@@ -22,6 +31,51 @@ export function nodeSummary(nodes: NodeRecord[]) {
   const reachable = nodes.filter((node) => node.reachable).length;
   const models = nodes.reduce((sum, node) => sum + (Array.isArray(node.models) ? node.models.length : 0), 0);
   return { reachable, total: nodes.length, models };
+}
+
+export function nodeVisibilityDetails(node: NodeRecord): NodeVisibilityDetails {
+  const name = String(node.name || "this node");
+  const modelCount = Array.isArray(node.models) ? node.models.length : 0;
+  const modelsSource = String(node.models_source || "").trim();
+
+  return {
+    reachability: node.reachable ? "Controller can reach this agent." : "Controller cannot reach this agent.",
+    heartbeat: heartbeatText(node.heartbeat_fresh, node.heartbeat_age_seconds),
+    cert: certText(node.cert_expires_in_seconds),
+    placement: placementText(modelCount, modelsSource),
+    actionTarget: node.reachable
+      ? `Actions run on ${name} through the controller.`
+      : `Actions are unavailable until ${name} is reachable.`,
+    error: String(node.error || ""),
+  };
+}
+
+function heartbeatText(fresh: boolean | undefined, ageSeconds: number | null | undefined): string {
+  const prefix = fresh === false ? "Heartbeat stale" : "Heartbeat fresh";
+  if (typeof ageSeconds !== "number" || Number.isNaN(ageSeconds)) return `${prefix}.`;
+  return `${prefix}, ${durationText(ageSeconds)} old.`;
+}
+
+function certText(expiresInSeconds: number | null | undefined): string {
+  if (typeof expiresInSeconds !== "number" || Number.isNaN(expiresInSeconds)) return "TLS certificate status unknown.";
+  if (expiresInSeconds <= 0) return "TLS certificate expired.";
+  return `TLS certificate valid for ${durationText(expiresInSeconds)}.`;
+}
+
+function placementText(modelCount: number, modelsSource: string): string {
+  if (modelCount === 0) return "No models reported.";
+  const noun = modelCount === 1 ? "model" : "models";
+  const source = modelsSource ? ` by ${modelsSource}` : "";
+  return `${modelCount} ${noun} reported${source}.`;
+}
+
+function durationText(seconds: number): string {
+  if (seconds < 60) return `${Math.max(0, Math.round(seconds))}s`;
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 120) return `${minutes}m`;
+  const hours = Math.round(seconds / 3600);
+  if (hours < 48) return `${hours}h`;
+  return `${Math.round(seconds / 86400)}d`;
 }
 
 export function mergeNodeInventory(nodes: NodeRecord[], nodeModels: NodeRecord[]) {

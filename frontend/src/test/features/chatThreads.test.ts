@@ -56,6 +56,23 @@ describe("thread event transcript mapping", () => {
     expect(message.content).toBe("routing_decision node=linux model=qwen reason=request_type candidates=2");
     expect(message.routeMeta?.resolved).toBe("linux");
   });
+
+  it("maps routing decisions without user-facing thread wording", () => {
+    const [message] = threadEventsToChatMessages([
+      {
+        event_type: "routing_decision",
+        public: false,
+        route: { node: "linux", model: "qwen", reason: "request_type:coding" },
+        content: { candidates: [{ node: "linux", model: "qwen" }] },
+      },
+    ]);
+
+    expect(message.role).toBe("internal");
+    expect(message.content).toContain("routing_decision");
+    expect(message.content).not.toContain("Thread");
+    expect(message.routeMeta?.resolved).toBe("linux");
+    expect(message.routeMeta?.model).toBe("qwen");
+  });
 });
 
 describe("thread metadata payloads", () => {

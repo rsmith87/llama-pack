@@ -1,9 +1,9 @@
 import "./styles.css";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, inspectModel, listChatSessions, listKvSlots, saveChatSession, sendChat, sendOpenAIChatCompletion } from "../../api/chat";
+import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, inspectModel, listChatSessions, listKvSlots, saveChatSession } from "../../api/chat";
 import { getModelProfiles, listModels } from "../../api/models";
 import { getNodeModels } from "../../api/nodes";
-import { createThread, getThreadEvents, postThreadMessage } from "../../api/threads";
+import { createThread, getThreadEvents, streamThreadMessage } from "../../api/threads";
 import { EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
 import { buildChatSessionSavePayload, chooseChatSessionToResume, nextSelectedChatSessionId } from "../../features/chat/chatSessions";
 import type { ChatSession } from "../../types/chat";
@@ -25,7 +25,6 @@ import {
   modelSupportsVision,
   readFileAsDataUrl,
   telemetryChips,
-  completionText,
   asChatSessions,
   asProfileCatalog,
   firstProfileForFamily,
@@ -37,6 +36,8 @@ import {
   explainChatError,
   structuredPayload,
   readChatStream,
+  routeDecisionToMeta,
+  routeExplanationItems,
 } from "../../features/chat";
 
 const PRESETS: Record<string, ChatDefaults> = {
@@ -67,16 +68,14 @@ export function ChatPage() {
   const [selectedProfile, setSelectedProfile] = useState("");
   const [selectedModel, setSelectedModel] = useState(handoff.model);
   const [target, setTarget] = useState(handoff.target || "auto");
-  const [chatMode, setChatMode] = useState(handoff.chatMode || "direct");
-  const [threadId, setThreadId] = useState("");
-  const [threadApp, setThreadApp] = useState(handoff.source || "ui");
-  const [threadPurpose, setThreadPurpose] = useState("chat");
-  const [threadPriority, setThreadPriority] = useState("medium");
-  const [threadRequestType, setThreadRequestType] = useState("general");
+  const [activeConversationId, setActiveConversationId] = useState("");
+  const [conversationApp, setConversationApp] = useState(handoff.source || "ui");
+  const [conversationPurpose, setConversationPurpose] = useState("chat");
+  const [conversationPriority, setConversationPriority] = useState("medium");
+  const [conversationRequestType, setConversationRequestType] = useState("general");
   const [includeInternal, setIncludeInternal] = useState(false);
   const [enterToSend, setEnterToSend] = useState(false);
-  const [agentToolsEnabled, setAgentToolsEnabled] = useState(false);
-  const [threadRouteDetail, setThreadRouteDetail] = useState("No thread created.");
+  const [threadRouteDetail, setThreadRouteDetail] = useState("No conversation created.");
   const [prompt, setPrompt] = useState("");
   const [selectedImage, setSelectedImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -148,7 +147,9 @@ export function ChatPage() {
   useEffect(() => {
     const el = transcriptRef.current;
     if (!el) return;
-    el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (typeof el.scrollTo === "function") {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
   }, [messages]);
 
   function updateAdvanced<K extends keyof AdvancedDefaults>(key: K, value: AdvancedDefaults[K]) {
@@ -274,7 +275,6 @@ export function ChatPage() {
     const targetSelector = typeof payload.target_selector === "string" ? payload.target_selector : "auto";
     const requestDefaults = (payload.request_defaults || {}) as Partial<ChatDefaults> & {
       advanced?: Partial<AdvancedDefaults>;
-      chat_mode?: string;
       model_family?: string;
       context_profile?: string;
       thread_id?: string;
@@ -292,19 +292,16 @@ export function ChatPage() {
     if (requestDefaults.advanced && typeof requestDefaults.advanced === "object") {
       setAdvanced((current) => ({ ...current, ...requestDefaults.advanced }));
     }
-    if (requestDefaults.chat_mode === "direct" || requestDefaults.chat_mode === "thread") {
-      setChatMode(requestDefaults.chat_mode);
-    }
     if (typeof requestDefaults.model_family === "string") setSelectedFamily(requestDefaults.model_family);
     if (typeof requestDefaults.context_profile === "string") setSelectedProfile(requestDefaults.context_profile);
-    if (typeof requestDefaults.thread_id === "string") setThreadId(requestDefaults.thread_id);
+    if (typeof requestDefaults.thread_id === "string") setActiveConversationId(requestDefaults.thread_id);
     if (typeof requestDefaults.include_internal === "boolean") setIncludeInternal(requestDefaults.include_internal);
     const threadMetadata = requestDefaults.thread_metadata;
     if (threadMetadata && typeof threadMetadata === "object") {
-      setThreadApp(String(threadMetadata.app || "ui"));
-      setThreadPurpose(String(threadMetadata.purpose || "chat"));
-      setThreadPriority(threadMetadata.priority || "medium");
-      setThreadRequestType(threadMetadata.request_type || "general");
+      setConversationApp(String(threadMetadata.app || "ui"));
+      setConversationPurpose(String(threadMetadata.purpose || "chat"));
+      setConversationPriority(threadMetadata.priority || "medium");
+      setConversationRequestType(threadMetadata.request_type || "general");
     }
     setMessages(sessionMessages(payload));
     setSessionName(String(payload.name || ""));
@@ -395,17 +392,16 @@ export function ChatPage() {
     }));
   }
 
-  function currentThreadMetadata() {
-    return buildThreadMetadata({ app: threadApp, purpose: threadPurpose, priority: threadPriority, requestType: threadRequestType });
+  function currentConversationMetadata() {
+    return buildThreadMetadata({ app: conversationApp, purpose: conversationPurpose, priority: conversationPriority, requestType: conversationRequestType });
   }
 
   function sessionRequestDefaults() {
     return {
       ...defaults,
       advanced,
-      chat_mode: chatMode,
-      thread_id: threadId,
-      thread_metadata: currentThreadMetadata(),
+      thread_id: activeConversationId,
+      thread_metadata: currentConversationMetadata(),
       include_internal: includeInternal,
       model_family: selectedFamily || undefined,
       context_profile: selectedProfile || undefined,
@@ -423,30 +419,21 @@ export function ChatPage() {
     return item;
   }
 
-  function routeDecisionToMeta(route: Record<string, unknown> | undefined | null) {
-    if (!route) return { target: "controller" };
-    return {
-      model: String(route.model || ""),
-      target: route.node ? `node:${String(route.node)}` : "controller",
-      resolved: String(route.node || ""),
-      reason: String(route.reason || ""),
-    };
-  }
-
   function threadMessagesFromEvents(events: unknown): ChatMessage[] {
     const eventList = Array.isArray(events) ? events : (events as { events?: ThreadEvent[] } | null)?.events || [];
     return threadEventsToChatMessages(eventList as ThreadEvent[]) as ChatMessage[];
   }
 
-  function renderThreadRouteDetail(events: unknown, activeThreadId = threadId) {
+  function renderThreadRouteDetail(events: unknown, activeConversation = activeConversationId) {
     const eventList = Array.isArray(events) ? events : (events as { events?: ThreadEvent[] } | null)?.events || [];
     const lastRouted = [...eventList].reverse().find((event) => event.route || event.event_type === "routing_decision");
     if (!lastRouted) {
-      setThreadRouteDetail(activeThreadId ? `Thread ${activeThreadId}` : "No thread created.");
+      setThreadRouteDetail(activeConversation ? `Conversation ${activeConversation}` : "No conversation created.");
       return;
     }
     setThreadRouteDetail(JSON.stringify({
-      thread_id: activeThreadId,
+      conversation_id: activeConversation,
+      thread_id: activeConversation,
       event_type: lastRouted.event_type,
       route: lastRouted.route,
       node: lastRouted.agent_node,
@@ -454,62 +441,27 @@ export function ChatPage() {
     }, null, 2));
   }
 
-  async function createThreadFromUi() {
+  async function createConversationFromUi() {
     if (pending) return "";
     const thread = await createThread({
-      title: null,
+      title: sessionName.trim() || null,
       default_model: selectedModel || null,
-      metadata: currentThreadMetadata(),
+      metadata: currentConversationMetadata(),
     });
     const id = String(thread.id || "");
-    setThreadId(id);
+    setActiveConversationId(id);
     setMessages([]);
-    setStatus("Thread ready");
-    setThreadRouteDetail(JSON.stringify({ id, metadata: thread.metadata, default_model: thread.default_model }, null, 2));
+    setStatus("Conversation ready");
+    setThreadRouteDetail(JSON.stringify({ conversation_id: id, thread_id: id, metadata: thread.metadata, default_model: thread.default_model }, null, 2));
     return id;
   }
 
-  async function refreshThreadEvents(activeThreadId = threadId) {
-    if (!activeThreadId) return;
+  async function refreshConversationEvents(activeConversation = activeConversationId, replaceMessages = true) {
+    if (!activeConversation) return;
     const query = includeInternal ? "?include_internal=true" : "";
-    const payload = await getThreadEvents(activeThreadId, query);
-    setMessages(threadMessagesFromEvents(payload));
-    renderThreadRouteDetail(payload, activeThreadId);
-  }
-
-  async function submitThreadPrompt(content: string) {
-    const trimmed = content.trim();
-    if (pending || !trimmed) return;
-    const activeThreadId = threadId || await createThreadFromUi();
-    if (!activeThreadId) return;
-    const userMessage: ChatMessage = { role: "user", content: trimmed, threadEventType: "user_message" };
-    const assistantMessage: ChatMessage = { role: "assistant", content: "", pending: true, routeMeta: { target: "controller" } };
-    setMessages((current) => [...current, userMessage, assistantMessage]);
-    setPrompt("");
-    setLastPrompt(trimmed);
-    setPending(true);
-    setStatus("Routing through controller...");
-    try {
-      const response = await postThreadMessage(activeThreadId, {
-        role: "user",
-        content: trimmed,
-        model: selectedModel || null,
-        model_family: selectedFamily || undefined,
-        context_profile: selectedProfile || undefined,
-        target,
-        metadata: currentThreadMetadata(),
-      });
-      const routeMeta = routeDecisionToMeta(response.route as Record<string, unknown> | undefined);
-      setMessages((current) => current.map((message) => message.pending ? { ...message, content: String((response.message as { content?: string } | undefined)?.content || "(empty response)"), pending: false, routeMeta } : message));
-      await refreshThreadEvents(activeThreadId);
-    } catch (err) {
-      const friendlyError = explainChatError(err);
-      setMessages((current) => current.map((message) => message.pending ? { ...message, role: "error", content: friendlyError, pending: false } : message));
-      setError(friendlyError);
-    } finally {
-      setPending(false);
-      setStatus(activeThreadId ? `Thread ${activeThreadId.slice(0, 8)}` : "Ready");
-    }
+    const payload = await getThreadEvents(activeConversation, query);
+    if (replaceMessages) setMessages(threadMessagesFromEvents(payload));
+    renderThreadRouteDetail(payload, activeConversation);
   }
 
   async function onImageChange(event: ChangeEvent<HTMLInputElement>) {
@@ -531,82 +483,62 @@ export function ChatPage() {
 
   function buildUserMessageContent(content: string): string | ChatContentBlock[] {
     const trimmed = content.trim();
-    if (!selectedImage || !selectedModelSupportsVision || isThreadMode) return trimmed;
+    if (!selectedImage || !selectedModelSupportsVision) return trimmed;
     return [
       { type: "text", text: trimmed },
       { type: "image_url", image_url: { url: selectedImage.dataUrl } },
     ];
   }
 
-  async function requestCompletion(model: string, requestMessages: ChatMessage[], assistantIndex: number, controller: AbortController) {
-    const built = buildChatPayload(requestMessages);
-    if (built.error) throw new Error(built.error);
-    const payload = built.payload || {};
-    if (agentToolsEnabled) {
-      setStatus("Running agent tools...");
-      const body = await sendOpenAIChatCompletion(
-        {
-          ...payload,
-          model,
-          tool_runtime: "agent",
-          stream: false,
-        },
-        controller.signal,
-      );
-      const patch: ChatMessage = { role: "assistant", content: completionText(body), pending: false };
-      applyTelemetryFromChunk(body as TelemetryChunk, patch);
-      finalizeTelemetry(patch);
-      updateAssistant(assistantIndex, patch);
-      return;
-    }
-    const authToken = localStorage.getItem(CHAT_CONSTANTS.AUTH_TOKEN_STORAGE_KEY) || "";
-    const response = await fetch(`/lm-api/v1/chat/${encodeURIComponent(model)}/stream`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        ...(authToken ? { "X-UI-Session": authToken } : {}),
+  function buildConversationMessagePayload(content: string) {
+    const requestContent = buildUserMessageContent(content);
+    const userMessage: ChatMessage = { role: "user", content, requestContent };
+    const built = buildChatPayload([...messages, userMessage]);
+    if (built.error) return { error: built.error };
+    return {
+      payload: {
+        ...(built.payload || {}),
+        role: "user",
+        content: requestContent,
+        model: selectedModel || null,
+        model_family: selectedFamily || undefined,
+        context_profile: selectedProfile || undefined,
+        target,
+        metadata: currentConversationMetadata(),
       },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
+    };
+  }
+
+  async function requestConversationCompletion(activeConversation: string, payload: Record<string, unknown>, assistantIndex: number, controller: AbortController) {
+    const reader = await streamThreadMessage(activeConversation, payload, controller.signal);
+    await readChatStream(reader, (delta, chunk, reasoningDelta) => {
+      if ((chunk as { type?: string } | undefined)?.type === "route") {
+        updateAssistant(assistantIndex, { routeMeta: routeDecisionToMeta((chunk as { route?: Record<string, unknown> }).route) });
+        return;
+      }
+      appendAssistant(assistantIndex, delta, chunk, reasoningDelta);
     });
-    if (!response.ok) {
-      if (response.status !== 404) throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
-      setStatus("Streaming unavailable; using standard response...");
-      const body = await sendChat(model, payload);
-      const patch: ChatMessage = { role: "assistant", content: completionText(body), pending: false };
-      applyTelemetryFromChunk(body as TelemetryChunk, patch);
-      finalizeTelemetry(patch);
-      updateAssistant(assistantIndex, patch);
-      return;
-    }
-    const route = response.headers.get("X-Llama-Pack-Route") || response.headers.get("X-Llama-Manager-Route");
-    if (route) updateAssistant(assistantIndex, { route });
-    if (!response.body) throw new Error("Response did not include a readable stream");
-    await readChatStream(response.body.getReader(), (delta, chunk, reasoningDelta) => appendAssistant(assistantIndex, delta, chunk, reasoningDelta));
     finalizeAssistant(assistantIndex);
   }
 
   async function submitPrompt(content: string) {
-    if (chatMode === "thread") {
-      await submitThreadPrompt(content);
-      return;
-    }
     const trimmed = content.trim();
     if (pending || !trimmed || !selectedModel) return;
+    const built = buildConversationMessagePayload(trimmed);
+    if (built.error) {
+      setError(built.error);
+      return;
+    }
+    setError("");
+    const activeConversation = activeConversationId || await createConversationFromUi();
+    if (!activeConversation) return;
     const requestContent = buildUserMessageContent(trimmed);
     const userMessage: ChatMessage = {
       role: "user",
       content: trimmed,
       requestContent,
-      imageName: selectedModelSupportsVision && !isThreadMode ? selectedImage?.name : undefined,
+      imageName: selectedModelSupportsVision ? selectedImage?.name : undefined,
     };
-    const validation = buildChatPayload([...messages, userMessage]);
-    if (validation.error) {
-      setError(validation.error);
-      return;
-    }
-    setError("");
     const assistantMessage: ChatMessage = { role: "assistant", content: "", pending: true, startedAtMs: performance.now() };
     const nextMessages = [...messages, userMessage, assistantMessage];
     const assistantIndex = nextMessages.length - 1;
@@ -615,12 +547,13 @@ export function ChatPage() {
     setSelectedImage(null);
     setLastPrompt(trimmed);
     setPending(true);
-    setStatus(agentToolsEnabled ? "Running agent tools..." : "Streaming response...");
+    setStatus("Streaming response...");
     const controller = new AbortController();
     abortRef.current = controller;
     try {
-      await requestCompletion(selectedModel, nextMessages, assistantIndex, controller);
+      await requestConversationCompletion(activeConversation, built.payload || {}, assistantIndex, controller);
       updateAssistant(assistantIndex, { pending: false });
+      await refreshConversationEvents(activeConversation, false);
     } catch (err) {
       if ((err as Error).name === "AbortError") {
         updateAssistant(assistantIndex, { content: "(stopped)", pending: false, stopped: true });
@@ -632,7 +565,7 @@ export function ChatPage() {
     } finally {
       abortRef.current = null;
       setPending(false);
-      setStatus("Ready");
+      setStatus(activeConversation ? `Conversation ${activeConversation.slice(0, 8)}` : "Ready");
     }
   }
 
@@ -667,10 +600,8 @@ export function ChatPage() {
   const noModelLoaded = runningModels.length === 0;
   const selectedRunningModel = runningModels.find((model) => modelName(model) === selectedModel);
   const selectedModelSupportsVision = modelSupportsVision(selectedRunningModel);
-  const isThreadMode = chatMode === "thread";
-  const showImageUpload = selectedModelSupportsVision && !isThreadMode;
+  const showImageUpload = selectedModelSupportsVision;
   const canSend = Boolean(!noModelLoaded && selectedModel && prompt.trim() && !pending);
-  const canSendThread = Boolean(!noModelLoaded && prompt.trim() && !pending);
   const profileFamilies = profileCatalog.families.filter((family) => family.family && family.profiles.length);
   const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
   const targetOptions = ["auto", "local", target, ...runningModels.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
@@ -678,13 +609,13 @@ export function ChatPage() {
   return (
     <div className="chat-page-react">
       <div className="page-heading">
-        <div><span className="eyebrow">{isThreadMode ? "Thread mode" : "Direct mode"}</span><h2>Chat</h2></div>
+        <div><span className="eyebrow">Conversation</span><h2>Chat</h2></div>
         <Button type="button" onClick={refreshModels}>Refresh Models</Button>
       </div>
       <ErrorBanner message={error} />
       <div className="chat-layout">
         <div className="chat-main-column">
-          <Panel title="Sessions" eyebrow="Save and resume" className="chat-sessions-panel">
+          <Panel title="Conversation History" eyebrow="Save and resume" className="chat-sessions-panel">
             <div className="chat-session-panel chat-session-panel-top">
               <FormField label="Session name"><input value={sessionName} onChange={(event) => setSessionName(event.target.value)} placeholder="Session name" /></FormField>
               <FormField label="Saved sessions">
@@ -706,28 +637,36 @@ export function ChatPage() {
 
           <Panel title="Transcript" eyebrow="Streaming response" className="chat-workbench-panel">
             <div ref={transcriptRef} className="chat-transcript" aria-live="polite">
-              {messages.length ? messages.map((message, index) => (
-                <article className={`chat-bubble chat-bubble-${message.role}`} key={`${message.role}-${index}`}>
-                  <span className="chat-role">{message.role}</span>
-                  {telemetryChips(message).length ? (
-                    <div className="chat-chips">
-                      {telemetryChips(message).map((chip) => <span className="chat-chip" key={chip}>{chip}</span>)}
-                    </div>
-                  ) : null}
-                  {message.reasoningContent ? (
-                    <details className="chat-reasoning" open={message.pending ? true : undefined}>
-                      <summary>{message.pending ? "Reasoning (streaming...)" : "Reasoning"}</summary>
-                      <pre>{message.reasoningContent}</pre>
-                    </details>
-                  ) : null}
-                  <p>{message.content || (message.pending ? "..." : "(empty response)")}</p>
-                  {message.imageName ? <small>image: {message.imageName}</small> : null}
-                  {message.route ? <small>resolved: {message.route}</small> : null}
-                  {message.routeMeta?.resolved ? <small>resolved: {message.routeMeta.resolved}</small> : null}
-                  {message.routeMeta?.reason ? <small>reason: {message.routeMeta.reason}</small> : null}
-                  {message.stopped ? <small>stopped</small> : null}
-                </article>
-              )) : <EmptyState message="Start a running model, choose it here, and send a test prompt." />}
+              {messages.length ? messages.map((message, index) => {
+                const routeItems = routeExplanationItems(message);
+                return (
+                  <article className={`chat-bubble chat-bubble-${message.role}`} key={`${message.role}-${index}`}>
+                    <span className="chat-role">{message.role}</span>
+                    {telemetryChips(message).length ? (
+                      <div className="chat-chips">
+                        {telemetryChips(message).map((chip) => <span className="chat-chip" key={chip}>{chip}</span>)}
+                      </div>
+                    ) : null}
+                    {message.reasoningContent ? (
+                      <details className="chat-reasoning" open={message.pending ? true : undefined}>
+                        <summary>{message.pending ? "Reasoning (streaming...)" : "Reasoning"}</summary>
+                        <pre>{message.reasoningContent}</pre>
+                      </details>
+                    ) : null}
+                    <p>{message.content || (message.pending ? "..." : "(empty response)")}</p>
+                    {message.imageName ? <small>image: {message.imageName}</small> : null}
+                    {routeItems.length ? (
+                      <details className="chat-route-detail">
+                        <summary>Route</summary>
+                        <ul>
+                          {routeItems.map((item) => <li key={item}>{item}</li>)}
+                        </ul>
+                      </details>
+                    ) : null}
+                    {message.stopped ? <small>stopped</small> : null}
+                  </article>
+                );
+              }) : <EmptyState message="Start a running model, choose it here, and send a test prompt." />}
             </div>
             <form className="chat-composer" onSubmit={onSubmit}>
               <FormField label="Prompt">
@@ -749,7 +688,7 @@ export function ChatPage() {
               ) : null}
               <div className="modal-actions">
                 <label className="checkbox-label"><input type="checkbox" checked={enterToSend} onChange={(event) => setEnterToSend(event.target.checked)} />Enter to send</label>
-                <Button type="submit" disabled={isThreadMode ? !canSendThread : !canSend}>Send</Button>
+                <Button type="submit" disabled={!canSend}>Send</Button>
                 <Button type="button" onClick={stop} disabled={!pending}>Stop</Button>
                 <Button type="button" onClick={() => void submitPrompt(lastPrompt)} disabled={pending || !lastPrompt}>Regenerate</Button>
                 <Button type="button" onClick={clear} disabled={pending}>Clear</Button>
@@ -779,8 +718,6 @@ export function ChatPage() {
               </>
             ) : null}
             <FormField label="Target"><select value={target} onChange={(event) => setTarget(event.target.value)}>{targetOptions.map((option) => <option key={option} value={option}>{option === "auto" ? "Auto" : option === "local" ? "Local" : option}</option>)}</select></FormField>
-            <FormField label="Chat Mode"><select value={chatMode} onChange={(event) => setChatMode(event.target.value)}><option value="direct">Direct</option><option value="thread">Thread</option></select></FormField>
-            {!isThreadMode ? <label className="checkbox-label"><input type="checkbox" checked={agentToolsEnabled} onChange={(event) => setAgentToolsEnabled(event.target.checked)} />Agent tools</label> : null}
             <FormField label="Preset"><select value={preset} onChange={(event) => applyPreset(event.target.value)}><option value="balanced">Balanced</option><option value="precise">Precise</option><option value="creative">Creative</option></select></FormField>
             <FormField label="Temperature"><input type="number" step="0.05" value={defaults.temperature} onChange={(event) => setDefaults((current) => ({ ...current, temperature: Number(event.target.value || 0) }))} /></FormField>
             <FormField label="Max tokens"><input type="number" value={defaults.max_tokens} onChange={(event) => setDefaults((current) => ({ ...current, max_tokens: Number(event.target.value || 0) }))} /></FormField>
@@ -816,21 +753,19 @@ export function ChatPage() {
               </div>
             ) : null}
             <StatusBadge tone={pending ? "warning" : "success"}>{status}</StatusBadge>
-            {isThreadMode ? (
-              <div className="thread-controls">
-                <FormField label="Thread ID"><input value={threadId} onChange={(event) => setThreadId(event.target.value)} placeholder="thread id" /></FormField>
-                <FormField label="Thread App"><input value={threadApp} onChange={(event) => setThreadApp(event.target.value)} /></FormField>
-                <FormField label="Thread Purpose"><input value={threadPurpose} onChange={(event) => setThreadPurpose(event.target.value)} /></FormField>
-                <FormField label="Thread Priority"><select value={threadPriority} onChange={(event) => setThreadPriority(event.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></FormField>
-                <FormField label="Thread Request Type"><select value={threadRequestType} onChange={(event) => setThreadRequestType(event.target.value)}><option value="general">General</option><option value="coding">Coding</option><option value="analysis">Analysis</option></select></FormField>
-                <label className="checkbox-label"><input type="checkbox" checked={includeInternal} onChange={(event) => setIncludeInternal(event.target.checked)} />Include internal events</label>
-                <div className="modal-actions">
-                  <Button type="button" onClick={() => void createThreadFromUi()} disabled={pending}>New Thread</Button>
-                  <Button type="button" onClick={() => void refreshThreadEvents()} disabled={pending || !threadId}>Refresh Thread</Button>
-                </div>
-                <pre className="detail-json">{threadRouteDetail}</pre>
+            <div className="thread-controls">
+              <FormField label="Conversation ID"><input value={activeConversationId} onChange={(event) => setActiveConversationId(event.target.value)} placeholder="conversation id" /></FormField>
+              <FormField label="Conversation App"><input value={conversationApp} onChange={(event) => setConversationApp(event.target.value)} /></FormField>
+              <FormField label="Conversation Purpose"><input value={conversationPurpose} onChange={(event) => setConversationPurpose(event.target.value)} /></FormField>
+              <FormField label="Conversation Priority"><select value={conversationPriority} onChange={(event) => setConversationPriority(event.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></FormField>
+              <FormField label="Conversation Request Type"><select value={conversationRequestType} onChange={(event) => setConversationRequestType(event.target.value)}><option value="general">General</option><option value="coding">Coding</option><option value="analysis">Analysis</option></select></FormField>
+              <label className="checkbox-label"><input type="checkbox" checked={includeInternal} onChange={(event) => setIncludeInternal(event.target.checked)} />Include internal events</label>
+              <div className="modal-actions">
+                <Button type="button" onClick={() => void createConversationFromUi()} disabled={pending}>New Conversation</Button>
+                <Button type="button" onClick={() => void refreshConversationEvents()} disabled={pending || !activeConversationId}>Refresh Conversation</Button>
               </div>
-            ) : null}
+              <pre className="detail-json">{threadRouteDetail}</pre>
+            </div>
           </fieldset>
         </Panel>
       </div>

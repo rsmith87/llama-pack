@@ -8,6 +8,7 @@ import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge }
 import { ModelCard } from "../../components/ModelCard";
 import { ModelNavigator } from "../../components/ModelNavigator";
 import { NodeNavigator, type NodeNavigatorNode } from "../../components/NodeNavigator";
+import { modelActionTargetLabel } from "../../features/models";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { buildModelNavigatorLines, type ModelNavigatorQuant } from "../../features/models/modelNavigator";
 import { receivedBadgeText, sortModelsForDisplay, suggestedGgufModelName, suggestedPromptTemplate, type NodeRecord } from "../../features/nodes/nodesView";
@@ -394,6 +395,11 @@ export function GgufLibraryPage() {
         onChat={file.registered ? () => navigate(`/ui/chat?${chatSearch(name)}`) : undefined}
         onTransfer={file.registered && canTransferBetweenNodes ? () => { setSelected(file); void openTransferModal(); } : undefined}
         onDelete={file.registered ? () => void removeFile(file) : undefined}
+        actionTargetLabel={modelActionTargetLabel({
+          resolvedNode: "",
+          hasControllerAction: false,
+          reachable: true,
+        })}
       >
         {badge ? <StatusBadge tone="warning">{badge}</StatusBadge> : null}
       </ModelCard>
@@ -464,6 +470,11 @@ export function GgufLibraryPage() {
                     <ModelCard
                       model={nodeGgufModel}
                       resolvedNode={nodeName}
+                      actionTargetLabel={modelActionTargetLabel({
+                        resolvedNode: nodeName,
+                        hasControllerAction: true,
+                        reachable: true,
+                      })}
                       onOpen={() => openNodeGgufDetail(nodeName, selectedQuant.file)}
                       onTransfer={() => { openNodeGgufDetail(nodeName, selectedQuant.file); void openTransferModal(nodeName); }}
                     />

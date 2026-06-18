@@ -38,6 +38,33 @@
   flex: 0 0 auto;
 }
 
+.controller-node-card-details {
+  display: grid;
+  gap: 6px;
+  margin: -2px 0 0;
+  padding: 0;
+  list-style: none;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.controller-node-card-details li {
+  position: relative;
+  padding-left: 12px;
+}
+
+.controller-node-card-details li::before {
+  content: "";
+  position: absolute;
+  top: 0.55em;
+  left: 0;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--accent);
+}
+
 .node-model-cards {
   display: flex;
   gap: 5px;

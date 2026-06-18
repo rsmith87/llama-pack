@@ -29,10 +29,29 @@ function streamResponse(chunks: string[], headers = new Headers()) {
   return { ok: true, headers, body: { getReader: () => streamReader(chunks) } };
 }
 
+function conversationCreate(id = "thread-1") {
+  return okJson({ id, metadata: { app: "ui", purpose: "chat", priority: "medium", request_type: "general" } });
+}
+
+function conversationEvents(userContent = "prompt", assistantContent = "reply", id = "thread-1") {
+  return okJson({ events: [
+    { event_type: "user_message", content: { text: userContent } },
+    {
+      event_type: "assistant_message",
+      content: { text: assistantContent },
+      route: { node: "local", model: "mistral", reason: "test" },
+      agent_node: "local",
+      model: "mistral",
+    },
+  ], id });
+}
+
 function stubChatPageFetch(handler: (url: string, init?: RequestInit) => unknown) {
   const fetchMock = vi.fn((url: string, init?: RequestInit) => {
     if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
     if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+    if (url === "/lm-api/v1/threads") return conversationCreate();
+    if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents();
     return handler(url, init);
   });
   vi.stubGlobal("fetch", fetchMock);
@@ -81,7 +100,9 @@ it("renders model family and context profile selectors from catalog and sends th
         }],
       });
     }
-    if (url === "/lm-api/v1/chat/gemma/stream") return stream;
+    if (url === "/lm-api/v1/threads") return conversationCreate();
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") return stream;
+    if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Use profile", "profile reply");
     return okJson({});
   }));
   const user = userEvent.setup();
@@ -96,11 +117,11 @@ it("renders model family and context profile selectors from catalog and sends th
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   expect(await screen.findByText("profile reply")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/chat/gemma/stream", expect.objectContaining({
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"model_family":"gemma"'),
   }));
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/chat/gemma/stream", expect.objectContaining({
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"context_profile":"long"'),
   }));
@@ -117,8 +138,8 @@ it("preselects model and route target from chat handoff query parameters", async
 
   expect(await screen.findByLabelText("Model")).toHaveValue("mistral");
   expect(screen.getByLabelText("Target")).toHaveValue("node:mac-mini");
-  expect(screen.getByLabelText("Chat Mode")).toHaveValue("thread");
-  expect(screen.getByLabelText("Thread App")).toHaveValue("dashboard");
+  expect(screen.queryByLabelText("Chat Mode")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Conversation App")).toHaveValue("dashboard");
 });
 
 it("preselects the matching model family and default profile from a model card handoff", async () => {
@@ -157,11 +178,13 @@ it("loads controller node models into chat controls and sends to the selected no
         { name: "mac-agent", reachable: true, models: [{ name: "qwen", status: "running" }] },
       ]);
       if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
-      if (url === "/lm-api/v1/chat/qwen/stream") {
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
         return streamResponse([
           'data: {"choices":[{"delta":{"content":"node reply"}}]}\n\n',
         ], new Headers({ "X-Llama-Pack-Route": "node:mac-agent" }));
       }
+      if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Hello remote model", "node reply");
       return okJson({});
     }),
   );
@@ -176,7 +199,7 @@ it("loads controller node models into chat controls and sends to the selected no
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   expect(await screen.findByText("node reply")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/chat/qwen/stream", expect.objectContaining({
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"target":"node:mac-agent"'),
   }));
@@ -195,10 +218,11 @@ it("renders session controls above the transcript", async () => {
   expect(transcriptHeading.compareDocumentPosition(controlsHeading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 });
 
-it("streams a direct chat response and builds the request payload", async () => {
+it("streams a conversation response and builds the request payload", async () => {
   stubChatPageFetch((url) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") {
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
       return streamResponse([
+        'data: {"type":"route","route":{"node":"local","model":"mistral","reason":"test"}}\n\n',
         'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n',
         'data: {"choices":[{"delta":{"content":"lo"},"finish_reason":"stop"}]}\n\n',
       ], new Headers({ "X-Llama-Pack-Route": "local:mistral" }));
@@ -212,8 +236,8 @@ it("streams a direct chat response and builds the request payload", async () => 
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   await waitFor(() => expect(screen.getByText("Hello")).toBeInTheDocument());
-  expect(screen.getByText("resolved: local:mistral")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/chat/mistral/stream", expect.objectContaining({
+  expect(screen.getByText("Resolved agent local")).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"content":"Say hello"'),
   }));
@@ -230,9 +254,11 @@ it("shows image upload for vision models and sends image content blocks", async 
         ] });
       }
       if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
-      if (url === "/lm-api/v1/chat/llava/stream") {
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
         return streamResponse(['data: {"choices":[{"delta":{"content":"image reply"}}]}\n\n']);
       }
+      if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Describe it", "image reply");
       return okJson({});
     }),
   );
@@ -250,56 +276,45 @@ it("shows image upload for vision models and sends image content blocks", async 
 
   expect(await screen.findByText("image reply")).toBeInTheDocument();
   expect(screen.getByText("image: sample.png")).toBeInTheDocument();
-  const streamCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(([url]) => url === "/lm-api/v1/chat/llava/stream");
+  const streamCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find(([url]) => url === "/lm-api/v1/threads/thread-1/messages/stream");
   const body = JSON.parse(String(streamCall?.[1]?.body));
-  expect(body.messages[0].content).toMatchObject([
+  expect(body.content).toMatchObject([
     { type: "text", text: "Describe it" },
     { type: "image_url", image_url: { url: expect.stringMatching(/^data:image\/png;base64,/) } },
   ]);
 });
 
-it("sends direct chat through the agent tool runtime when enabled", async () => {
+it("does not expose direct agent tool runtime controls in conversation chat", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "gemma-4-E2B-it:fast", status: "running" }] });
       if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
-      if (url === "/v1/chat/completions") {
-        return okJson({
-          choices: [{ message: { role: "assistant", content: "tool summary" } }],
-        });
-      }
       return okJson({});
     }),
   );
-  const user = userEvent.setup();
 
   render(<ChatPage />);
-  await user.click(await screen.findByLabelText("Agent tools"));
-  await user.type(screen.getByLabelText("Prompt"), "Use list_runtime_status");
-  await user.click(screen.getByRole("button", { name: "Send" }));
 
-  expect(await screen.findByText("tool summary")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/v1/chat/completions", expect.objectContaining({
-    method: "POST",
-    body: expect.stringContaining('"tool_runtime":"agent"'),
-  }));
-  expect(fetch).toHaveBeenCalledWith("/v1/chat/completions", expect.objectContaining({
-    method: "POST",
-    body: expect.stringContaining('"stream":false'),
-  }));
-  expect(fetch).not.toHaveBeenCalledWith("/lm-api/v1/chat/gemma-4-E2B-it:fast/stream", expect.anything());
+  expect(await screen.findByRole("option", { name: "gemma-4-E2B-it:fast" })).toBeInTheDocument();
+  expect(screen.queryByLabelText("Agent tools")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Chat Mode")).not.toBeInTheDocument();
 });
 
 it("streams reasoning deltas before assistant content", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(streamResponse([
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") return streamResponse([
         'data: {"choices":[{"delta":{"reasoning_content":"thinking..."}}]}\n\n',
         'data: {"choices":[{"delta":{"content":"answer"}}]}\n\n',
-      ])),
+      ]);
+      if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Think first", "answer");
+      return okJson({});
+    }),
   );
   const user = userEvent.setup();
 
@@ -318,9 +333,11 @@ it("sends the prompt with Enter only when the checkbox is enabled", async () => 
     vi.fn((url: string) => {
       if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
       if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
-      if (url === "/lm-api/v1/chat/mistral/stream") {
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
         return streamResponse(['data: {"choices":[{"delta":{"content":"enter reply"}}]}\n\n']);
       }
+      if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Do not send\nSend now", "enter reply");
       return okJson({});
     }),
   );
@@ -331,13 +348,13 @@ it("sends the prompt with Enter only when the checkbox is enabled", async () => 
   expect(screen.getByLabelText("Enter to send")).not.toBeChecked();
 
   await user.type(promptInput, "Do not send{Enter}");
-  expect(fetch).not.toHaveBeenCalledWith("/lm-api/v1/chat/mistral/stream", expect.anything());
+  expect(fetch).not.toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.anything());
 
   await user.click(screen.getByLabelText("Enter to send"));
   await user.type(promptInput, "Send now{Enter}");
 
   expect(await screen.findByText("enter reply")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/chat/mistral/stream", expect.objectContaining({
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"content":"Do not send\\nSend now"'),
   }));
@@ -356,9 +373,11 @@ it("sends advanced sampling, structured JSON schema, cache prompt, reasoning, an
           supports_grammar: true,
         });
       }
-      if (url === "/lm-api/v1/chat/mistral/stream") {
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
         return streamResponse(['data: {"choices":[{"delta":{"content":"ok"}}]}\n\n']);
       }
+      if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Return JSON", "ok");
       return okJson({});
     }),
   );
@@ -386,7 +405,7 @@ it("sends advanced sampling, structured JSON schema, cache prompt, reasoning, an
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   await screen.findByText("ok");
-  const streamCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find((call) => call[0] === "/lm-api/v1/chat/mistral/stream");
+  const streamCall = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls.find((call) => call[0] === "/lm-api/v1/threads/thread-1/messages/stream");
   const body = JSON.parse(String(streamCall?.[1]?.body));
   expect(body).toMatchObject({
     top_k: 50,
@@ -458,7 +477,8 @@ it("shows capabilities, copies capability JSON, inspects prompts, and clears KV 
 
 it("saves the current chat session and remembers the saved session id", async () => {
   stubChatPageFetch((url) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"saved reply"}}]}\n\n']);
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"saved reply"}}]}\n\n']);
+    if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Save this", "saved reply");
     if (url === "/lm-api/v1/chat/sessions") return okJson({ id: "session-1", name: "Work session", messages: [] });
     return okJson({});
   });
@@ -490,7 +510,7 @@ it("saves the current chat session and remembers the saved session id", async ()
     temperature: 0.7,
     max_tokens: 1024,
     top_p: 1,
-    chat_mode: "direct",
+    thread_id: "thread-1",
     thread_metadata: { app: "ui", purpose: "chat", priority: "medium", request_type: "general" },
   });
 });
@@ -498,7 +518,8 @@ it("saves the current chat session and remembers the saved session id", async ()
 it("saves a selected session as new without reusing the old session id", async () => {
   localStorage.setItem("lm_active_chat_session_id", "session-old");
   stubChatPageFetch((url) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"new reply"}}]}\n\n']);
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") return streamResponse(['data: {"choices":[{"delta":{"content":"new reply"}}]}\n\n']);
+    if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Fork this", "new reply");
     if (url === "/lm-api/v1/chat/sessions") return okJson({ id: "session-new", name: "Forked session", messages: [] });
     return okJson({});
   });
@@ -558,7 +579,6 @@ it("lists, loads, deletes, and resumes chat sessions", async () => {
             max_tokens: 256,
             top_p: 0.9,
             advanced: { top_k: 55, reasoning: true, stop: "END" },
-            chat_mode: "thread",
             thread_id: "thread-loaded",
             thread_metadata: { app: "codex", purpose: "support", priority: "high", request_type: "analysis" },
             include_internal: true,
@@ -591,12 +611,12 @@ it("lists, loads, deletes, and resumes chat sessions", async () => {
   expect(screen.getByLabelText("Model")).toHaveValue("qwen");
   expect(screen.getByLabelText("Target")).toHaveValue("local");
   expect(screen.getByLabelText("Temperature")).toHaveValue(0.2);
-  expect(screen.getByLabelText("Chat Mode")).toHaveValue("thread");
-  expect(screen.getByLabelText("Thread ID")).toHaveValue("thread-loaded");
-  expect(screen.getByLabelText("Thread App")).toHaveValue("codex");
-  expect(screen.getByLabelText("Thread Purpose")).toHaveValue("support");
-  expect(screen.getByLabelText("Thread Priority")).toHaveValue("high");
-  expect(screen.getByLabelText("Thread Request Type")).toHaveValue("analysis");
+  expect(screen.queryByLabelText("Chat Mode")).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Conversation ID")).toHaveValue("thread-loaded");
+  expect(screen.getByLabelText("Conversation App")).toHaveValue("codex");
+  expect(screen.getByLabelText("Conversation Purpose")).toHaveValue("support");
+  expect(screen.getByLabelText("Conversation Priority")).toHaveValue("high");
+  expect(screen.getByLabelText("Conversation Request Type")).toHaveValue("analysis");
   expect(screen.getByLabelText("Include internal events")).toBeChecked();
   expect(localStorage.getItem("lm_active_chat_session_id")).toBe("session-2");
 
@@ -617,11 +637,12 @@ it("renders telemetry chips from streamed chunks after finalization", async () =
     .mockReturnValueOnce(160)
     .mockReturnValueOnce(500);
   stubChatPageFetch((url) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") {
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
       return streamResponse([
         'data: {"choices":[{"delta":{"content":"Hi"}}],"usage":{"prompt_tokens":4,"completion_tokens":8},"timings":{"prompt_ms":20,"predicted_ms":200,"predicted_n":10}}\n\n',
       ]);
     }
+    if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Telemetry", "Hi");
     return okJson({});
   });
   const user = userEvent.setup();
@@ -638,19 +659,10 @@ it("renders telemetry chips from streamed chunks after finalization", async () =
   expect(screen.getByText("gen_toks: 8")).toBeInTheDocument();
 });
 
-it("renders telemetry chips from fallback chat responses", async () => {
-  vi.spyOn(performance, "now")
-    .mockReturnValueOnce(100)
-    .mockReturnValueOnce(350);
+it("shows a clear error when conversation streaming is unavailable", async () => {
   stubChatPageFetch((url) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") {
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
       return { ok: false, status: 404, statusText: "Not Found", text: async () => "missing stream" };
-    }
-    if (url === "/lm-api/v1/chat/mistral") {
-      return okJson({
-        choices: [{ message: { role: "assistant", content: "fallback reply" } }],
-        usage: { completion_tokens: 5, completion_time_ms: 100 },
-      });
     }
     return okJson({});
   });
@@ -660,18 +672,13 @@ it("renders telemetry chips from fallback chat responses", async () => {
   await user.type(await screen.findByLabelText("Prompt"), "Use fallback");
   await user.click(screen.getByRole("button", { name: "Send" }));
 
-  expect(await screen.findByText("fallback reply")).toBeInTheDocument();
-  expect(screen.getByText("tok/s: 50.00")).toBeInTheDocument();
-  expect(screen.getByText(/total: \d+ms/)).toBeInTheDocument();
+  expect(await screen.findByRole("alert")).toHaveTextContent("404 Not Found");
 });
 
-it("falls back to standard chat when streaming is unavailable", async () => {
+it("does not fall back to direct chat when conversation streaming is unavailable", async () => {
   stubChatPageFetch((url) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") {
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
       return { ok: false, status: 404, statusText: "Not Found", text: async () => "missing stream" };
-    }
-    if (url === "/lm-api/v1/chat/mistral") {
-      return okJson({ choices: [{ message: { role: "assistant", content: "fallback reply" } }] });
     }
     return okJson({});
   });
@@ -681,14 +688,14 @@ it("falls back to standard chat when streaming is unavailable", async () => {
   await user.type(await screen.findByLabelText("Prompt"), "Use fallback");
   await user.click(screen.getByRole("button", { name: "Send" }));
 
-  expect(await screen.findByText("fallback reply")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/chat/mistral", expect.objectContaining({ method: "POST" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("404 Not Found");
+  expect(fetch).not.toHaveBeenCalledWith("/lm-api/v1/chat/mistral", expect.objectContaining({ method: "POST" }));
 });
 
 it("stops an active stream and marks the assistant response stopped", async () => {
   let aborted = false;
   stubChatPageFetch((url, init) => {
-    if (url === "/lm-api/v1/chat/mistral/stream") {
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
       init?.signal?.addEventListener("abort", () => {
         aborted = true;
       });
@@ -708,12 +715,20 @@ it("stops an active stream and marks the assistant response stopped", async () =
 });
 
 it("regenerates the last prompt", async () => {
+  let streamCount = 0;
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(streamResponse(['data: {"choices":[{"delta":{"content":"first"}}]}\n\n']))
-      .mockResolvedValueOnce(streamResponse(['data: {"choices":[{"delta":{"content":"second"}}]}\n\n'])),
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
+        streamCount += 1;
+        return streamResponse([`data: {"choices":[{"delta":{"content":"${streamCount === 1 ? "first" : "second"}"}}]}\n\n`]);
+      }
+      if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Again", streamCount === 1 ? "first" : "second");
+      return okJson({});
+    }),
   );
   const user = userEvent.setup();
 
@@ -725,7 +740,7 @@ it("regenerates the last prompt", async () => {
   await user.click(screen.getByRole("button", { name: "Regenerate" }));
 
   expect(await screen.findByText("second")).toBeInTheDocument();
-  expect(fetch).toHaveBeenLastCalledWith("/lm-api/v1/chat/mistral/stream", expect.objectContaining({
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     body: expect.stringContaining('"content":"Again"'),
   }));
 });
@@ -734,12 +749,16 @@ it("aborts an active stream on unmount", async () => {
   let aborted = false;
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockImplementationOnce((_path, init: RequestInit) => {
-        init.signal?.addEventListener("abort", () => { aborted = true; });
+    vi.fn((url: string, init?: RequestInit) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/threads") return conversationCreate();
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
+        init?.signal?.addEventListener("abort", () => { aborted = true; });
         return new Promise(() => undefined);
-      }),
+      }
+      return okJson({});
+    }),
   );
   const user = userEvent.setup();
 
@@ -751,7 +770,7 @@ it("aborts an active stream on unmount", async () => {
   expect(aborted).toBe(true);
 });
 
-it("creates a thread with metadata and shows route detail", async () => {
+it("creates a conversation with metadata and shows route detail", async () => {
   stubChatPageFetch((url) => {
     if (url === "/lm-api/v1/threads") {
       return okJson({ id: "thread-1", default_model: "mistral", metadata: { app: "codex", purpose: "chat", priority: "high", request_type: "coding" } });
@@ -761,45 +780,53 @@ it("creates a thread with metadata and shows route detail", async () => {
   const user = userEvent.setup();
 
   render(<ChatPage />);
-  await user.selectOptions(await screen.findByLabelText("Chat Mode"), "thread");
-  await user.clear(screen.getByLabelText("Thread App"));
-  await user.type(screen.getByLabelText("Thread App"), "codex");
-  await user.selectOptions(screen.getByLabelText("Thread Priority"), "high");
-  await user.selectOptions(screen.getByLabelText("Thread Request Type"), "coding");
-  await user.click(screen.getByRole("button", { name: "New Thread" }));
+  await screen.findByRole("option", { name: "mistral" });
+  await user.clear(screen.getByLabelText("Conversation App"));
+  await user.type(screen.getByLabelText("Conversation App"), "codex");
+  await user.selectOptions(screen.getByLabelText("Conversation Priority"), "high");
+  await user.selectOptions(screen.getByLabelText("Conversation Request Type"), "coding");
+  await user.click(screen.getByRole("button", { name: "New Conversation" }));
 
   expect(await screen.findByDisplayValue("thread-1")).toBeInTheDocument();
-  expect(screen.getByText(/"id": "thread-1"/)).toBeInTheDocument();
+  expect(screen.getByText(/"thread_id": "thread-1"/)).toBeInTheDocument();
   expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"app":"codex"'),
   }));
 });
 
-it("sends thread messages and refreshes transcript events", async () => {
+it("sends conversation messages and refreshes transcript events", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(okJson({ id: "thread-1", default_model: "mistral", metadata: {} }))
-      .mockResolvedValueOnce(okJson({ message: { content: "controller reply" }, route: { node: "linux", model: "mistral", reason: "request_type" } }))
-      .mockResolvedValueOnce(okJson({ events: [
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/threads") return okJson({ id: "thread-1", default_model: "mistral", metadata: {} });
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
+        return streamResponse([
+          'data: {"type":"route","route":{"node":"linux","model":"mistral","reason":"request_type"}}\n\n',
+          'data: {"choices":[{"delta":{"content":"controller reply"}}]}\n\n',
+        ]);
+      }
+      if (url === "/lm-api/v1/threads/thread-1/events") return okJson({ events: [
         { event_type: "user_message", content: { text: "Route this" }, public: true },
         { event_type: "assistant_message", content: { text: "controller reply" }, public: true, route: { node: "linux", model: "mistral", reason: "request_type" }, agent_node: "linux", model: "mistral" },
-      ] }))
-      .mockResolvedValueOnce(okJson({ id: "session-thread", name: "Thread save", messages: [] })),
+      ] });
+      if (url === "/lm-api/v1/chat/sessions") return okJson({ id: "session-thread", name: "Thread save", messages: [] });
+      return okJson({});
+    }),
   );
   const user = userEvent.setup();
 
   render(<ChatPage />);
-  await user.selectOptions(await screen.findByLabelText("Chat Mode"), "thread");
-  await user.click(screen.getByRole("button", { name: "New Thread" }));
+  await screen.findByRole("option", { name: "mistral" });
+  await user.click(screen.getByRole("button", { name: "New Conversation" }));
   await user.type(screen.getByLabelText("Prompt"), "Route this");
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   expect(await screen.findByText("controller reply")).toBeInTheDocument();
-  expect(screen.getByText("resolved: linux")).toBeInTheDocument();
-  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages", expect.objectContaining({
+  expect(screen.getByText("Resolved agent linux")).toBeInTheDocument();
+  expect(fetch).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.objectContaining({
     method: "POST",
     body: expect.stringContaining('"content":"Route this"'),
   }));
@@ -812,35 +839,36 @@ it("sends thread messages and refreshes transcript events", async () => {
   );
   const body = JSON.parse(String(saveCall?.[1]?.body));
   expect(body.request_defaults).toMatchObject({
-    chat_mode: "thread",
     thread_id: "thread-1",
     thread_metadata: { app: "ui", purpose: "chat", priority: "medium", request_type: "general" },
   });
-  expect(body.messages[0]).toMatchObject({ role: "user", content: "Route this", thread_event_type: "user_message" });
+  expect(body.messages[0]).toMatchObject({ role: "user", content: "Route this" });
   expect(body.messages[1]).toMatchObject({
     role: "assistant",
     content: "controller reply",
-    thread_event_type: "assistant_message",
     route_meta: { resolved: "linux", reason: "request_type" },
   });
 });
 
-it("refreshes thread events with the internal event toggle", async () => {
+it("refreshes conversation events with the internal event toggle", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(okJson({ events: [
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/threads/thread-1/events?include_internal=true") return okJson({ events: [
         { event_type: "routing_decision", public: false, content: { candidates: [{ node: "linux" }] }, route: { node: "linux", model: "mistral", reason: "policy" }, agent_node: "linux", model: "mistral" },
-      ] })),
+      ] });
+      return okJson({});
+    }),
   );
   const user = userEvent.setup();
 
   render(<ChatPage />);
-  await user.selectOptions(await screen.findByLabelText("Chat Mode"), "thread");
-  await user.type(screen.getByLabelText("Thread ID"), "thread-1");
+  await screen.findByRole("option", { name: "mistral" });
+  await user.type(screen.getByLabelText("Conversation ID"), "thread-1");
   await user.click(screen.getByLabelText("Include internal events"));
-  await user.click(screen.getByRole("button", { name: "Refresh Thread" }));
+  await user.click(screen.getByRole("button", { name: "Refresh Conversation" }));
 
   expect(await screen.findByText(/routing_decision node=linux/)).toBeInTheDocument();
   expect(screen.getByText(/"thread_id": "thread-1"/)).toHaveTextContent("routing_decision");

@@ -55,6 +55,7 @@ async def post_message(
 ):
     lock = await service.acquire_turn_lock(thread_id)
     try:
+        generation_payload = body.generation_payload()
         return await service.post_message_async(
             thread_id=thread_id,
             role=body.role,
@@ -64,6 +65,7 @@ async def post_message(
             context_profile=body.context_profile,
             target=body.target,
             metadata=body.metadata.model_dump() if body.metadata is not None else None,
+            generation_payload=generation_payload,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -81,6 +83,7 @@ async def post_message_stream(
 ):
     lock = await service.acquire_turn_lock(thread_id)
     try:
+        generation_payload = body.generation_payload()
         stream, _route = await service.stream_message_async(
             thread_id=thread_id,
             role=body.role,
@@ -90,6 +93,7 @@ async def post_message_stream(
             context_profile=body.context_profile,
             target=body.target,
             metadata=body.metadata.model_dump() if body.metadata is not None else None,
+            generation_payload=generation_payload,
         )
     except KeyError as exc:
         lock.release()

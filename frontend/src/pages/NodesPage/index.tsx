@@ -6,10 +6,10 @@ import { getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel
 import { EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
 import { useLogModal } from "../../features/logs/logModalContext";
-import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
+import { filterNodes, mergeNodeInventory, nodeEditFormDefaults, nodeSummary, nodeVisibilityDetails, sortModelsForDisplay, transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
-import { modelName, modelFileId } from "../../features/models";
+import { modelActionTargetLabel, modelName, modelFileId } from "../../features/models";
 import { useNavigateToPage } from "../../hooks/useNavigateToPage";
 import { librarySelectionSearch } from "../../features/ggufLibrary";
 
@@ -160,49 +160,66 @@ export function NodesPage() {
         <ErrorBanner message={error} />
         {!error && filteredNodes.length === 0 ? <EmptyState message={loading ? "Loading nodes..." : "No nodes match the current filters."} /> : null}
         <div className="nodes-page-list">
-          {filteredNodes.map((node) => (
-            <article className="node node-full" key={node.name || node.url}>
-              <div className="node-header">
-                <div>
-                  <strong>{node.name || "unnamed node"}</strong>
-                  <div className="node-url">{node.url || "-"}</div>
+          {filteredNodes.map((node) => {
+            const visibility = nodeVisibilityDetails(node);
+            return (
+              <article className="node node-full" key={node.name || node.url}>
+                <div className="node-header">
+                  <div>
+                    <strong>{node.name || "unnamed node"}</strong>
+                    <div className="node-url">{node.url || "-"}</div>
+                  </div>
+                  <div className="node-header-actions">
+                    <StatusBadge tone={node.reachable ? "success" : "danger"}>{node.reachable ? "reachable" : "offline"}</StatusBadge>
+                    <StatusBadge tone={!node.heartbeat_fresh ? "danger": "success"}>{!node.heartbeat_fresh ? "stale" : "fresh"}</StatusBadge>
+                    <Button type="button" onClick={() => openEdit(node)} aria-label={`Edit ${node.name}`}>Edit Node</Button>
+                  </div>
                 </div>
-                <div className="node-header-actions">
-                  <StatusBadge tone={node.reachable ? "success" : "danger"}>{node.reachable ? "reachable" : "offline"}</StatusBadge>
-                  <StatusBadge tone={!node.heartbeat_fresh ? "danger": "success"}>{!node.heartbeat_fresh ? "stale" : "fresh"}</StatusBadge>
-                  <Button type="button" onClick={() => openEdit(node)} aria-label={`Edit ${node.name}`}>Edit Node</Button>
-                </div>
-              </div>
 
-              <div className="model-cards">
-                {node.models?.length ? sortModelsForDisplay(node.models).map((model) => {
-                  const name = modelName(model);
-                  return (
-                    <ModelCard
-                      key={name}
-                      model={model}
-                      resolvedNode={node.name || ""}
-                      actingModel={actingModel}
-                      actionLabelSuffix={`on ${node.name || "unknown node"}`}
-                      onOpen={() => navigateToPage("gguf-library", {
-                        search: librarySelectionSearch(name, node.name || "", modelFileId(model)),
-                      })}
-                      onStart={() => void runModelAction(node.name || "", name, "start")}
-                      onStop={() => void runModelAction(node.name || "", name, "stop")}
-                      onRestart={() => void runModelAction(node.name || "", name, "restart")}
-                      onLogs={() => openLogs({
-                        source: "node-model",
-                        identifier: name,
-                        node: node.name || "",
-                        autoLoad: true,
-                      })}
-                      onTransfer={isSendableGgufModel(node, model) ? () => openTransfer(node, model) : undefined}
-                    />
-                  );
-                }) : <EmptyState message={String(node.error || "No models reported.")} />}
-              </div>
-            </article>
-          ))}
+                <div className="node-visibility-grid">
+                  <div><span>Reachability</span><strong>{visibility.reachability}</strong></div>
+                  <div><span>Heartbeat</span><strong>{visibility.heartbeat}</strong></div>
+                  <div><span>TLS</span><strong>{visibility.cert}</strong></div>
+                  <div><span>Placement</span><strong>{visibility.placement}</strong></div>
+                  <div><span>Actions</span><strong>{visibility.actionTarget}</strong></div>
+                  {visibility.error ? <div className="node-visibility-error"><span>Last error</span><strong>{visibility.error}</strong></div> : null}
+                </div>
+
+                <div className="model-cards">
+                  {node.models?.length ? sortModelsForDisplay(node.models).map((model) => {
+                    const name = modelName(model);
+                    return (
+                      <ModelCard
+                        key={name}
+                        model={model}
+                        resolvedNode={node.name || ""}
+                        actingModel={actingModel}
+                        actionLabelSuffix={`on ${node.name || "unknown node"}`}
+                        actionTargetLabel={modelActionTargetLabel({
+                          resolvedNode: node.name || "",
+                          hasControllerAction: true,
+                          reachable: node.reachable !== false,
+                        })}
+                        onOpen={() => navigateToPage("gguf-library", {
+                          search: librarySelectionSearch(name, node.name || "", modelFileId(model)),
+                        })}
+                        onStart={() => void runModelAction(node.name || "", name, "start")}
+                        onStop={() => void runModelAction(node.name || "", name, "stop")}
+                        onRestart={() => void runModelAction(node.name || "", name, "restart")}
+                        onLogs={() => openLogs({
+                          source: "node-model",
+                          identifier: name,
+                          node: node.name || "",
+                          autoLoad: true,
+                        })}
+                        onTransfer={isSendableGgufModel(node, model) ? () => openTransfer(node, model) : undefined}
+                      />
+                    );
+                  }) : <EmptyState message={String(node.error || "No models reported.")} />}
+                </div>
+              </article>
+            );
+          })}
         </div>
       </Panel>
 
