@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from collections.abc import AsyncIterator
 
 from llama_pack.api.http_headers import LEGACY_LLAMA_MANAGER_ROUTE_HEADER, LLAMA_PACK_ROUTE_HEADER
-from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_process_manager, get_profile_activation_service
+from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_thread_service
 from llama_pack.api.routes.chat.common import (
     ChatRequestBody,
     EmbeddingsRequestBody,
@@ -15,10 +15,14 @@ from llama_pack.api.routes.chat.common import (
     resolve_profile_model,
     track_model_if_local,
 )
+from llama_pack.api.routes.compat_chat import compatibility_headers
 from llama_pack.core.chat.profile_activation import ProfileActivationService
 from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
+from llama_pack.core.config import AppConfig
+from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.runtime.process_manager import ProcessManager
+from llama_pack.core.threads.service import ThreadChatError, ThreadService
 
 
 router = APIRouter(prefix="/chat")
@@ -62,13 +66,40 @@ async def chat_inspect(
 async def chat_context_budget(
     model_name: str,
     body: ChatRequestBody,
+    request: Request,
+    config: AppConfig = Depends(get_config),
+    node_registry: NodeRegistry = Depends(get_node_registry),
     profile_activation: ProfileActivationService = Depends(get_profile_activation_service),
     proxy: ChatProxy = Depends(get_chat_proxy),
+    thread_service: ThreadService = Depends(get_thread_service),
 ):
     try:
         request_payload = body.model_dump()
+        if config.mode == "controller":
+            compat = await thread_service.prepare_compat_chat_async(
+                thread_id=None,
+                messages=[message.model_dump() for message in body.messages],
+                model=model_name,
+                model_family=body.model_family,
+                context_profile=body.context_profile,
+                target=body.target,
+                metadata={"request_type": body.request_type} if body.request_type else {},
+                created_by=getattr(request.state, "ui_user", None),
+            )
+            upstream_payload = {**request_payload, "target": compat["target"]}
+            return JSONResponse(
+                content=await node_registry.request_node(
+                    str(compat["route"]["node"]),
+                    "POST",
+                    f"/lm-api/v1/chat/{compat['model']}/context-budget",
+                    upstream_payload,
+                ),
+                headers=compatibility_headers(compat["thread_id"], compat["route"]),
+            )
         resolved_model, _ = resolve_profile_model(model_name, request_payload, profile_activation)
         return proxy.context_budget(resolved_model, request_payload)
+    except ThreadChatError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
 

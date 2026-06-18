@@ -222,13 +222,49 @@
   border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
-  gap: 4px;
+  gap: 7px;
   padding: 10px 12px;
+}
+
+.context-budget-header {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  justify-content: space-between;
 }
 
 .context-budget strong {
   font-size: 0.9rem;
   font-weight: 650;
+}
+
+.context-budget-header span {
+  color: var(--muted);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.context-budget-meter {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--button);
+}
+
+.context-budget-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 160ms ease;
+}
+
+.context-budget-breakdown {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--muted);
+  font-size: 0.78rem;
 }
 
 .context-budget small {
@@ -242,6 +278,15 @@
 
 .context-budget-getting_full {
   border-color: var(--warning);
+}
+
+.context-budget-getting_full .context-budget-meter span {
+  background: var(--warning);
+}
+
+.context-budget-near_limit .context-budget-meter span,
+.context-budget-too_large .context-budget-meter span {
+  background: var(--danger);
 }
 
 .chat-controls-fieldset {

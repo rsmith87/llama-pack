@@ -44,6 +44,7 @@ class ChatRequestBody(BaseModel):
     slot_id: int | None = None
     model_family: str | None = None
     context_profile: str | None = None
+    request_type: str | None = None
 
     @model_validator(mode="after")
     def normalize_fields(self) -> "ChatRequestBody":

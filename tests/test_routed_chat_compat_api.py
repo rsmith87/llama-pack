@@ -262,6 +262,47 @@ def test_external_app_key_can_call_consumer_chat_apis_but_not_admin_routes(tmp_p
     assert client.get("/lm-api/v1/nodes").status_code == 403
 
 
+def test_controller_context_budget_proxies_to_routed_agent_model(tmp_path):
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        assert method == "POST"
+        assert url == "http://linux/lm-api/v1/chat/qwen/context-budget"
+        assert json_body["request_type"] == "coding"
+        assert json_body["target"] == "node:linux-2080ti"
+        return {
+            "model": "qwen",
+            "context_window_tokens": 32768,
+            "prompt_tokens_estimated": 4,
+            "reserved_completion_tokens": 512,
+            "available_input_tokens": 32256,
+            "remaining_context_tokens": 32252,
+            "usage_ratio": 0.0157470703125,
+            "status": "comfortable",
+            "estimation_method": "approx_chars_div_4",
+            "precision": "approximate",
+            "warnings": [],
+        }
+
+    app, _, _ = _controller_app(tmp_path, controller_request=fake_request)
+    raw_key = app.state.auth_store.create_external_key("Home App", "https://home.local")["key"]
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": raw_key})
+
+    response = client.post(
+        "/lm-api/v1/chat/qwen/context-budget",
+        json={
+            "messages": [{"role": "user", "content": "hello"}],
+            "request_type": "coding",
+            "max_tokens": 512,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["remaining_context_tokens"] == 32252
+    assert response.headers["X-Llama-Pack-Route"] == "node:linux-2080ti"
+    assert response.headers["X-Llama-Pack-Node"] == "linux-2080ti"
+    assert response.headers["X-Llama-Pack-Model"] == "qwen"
+
+
 def test_external_app_key_can_list_client_safe_models(tmp_path):
     app, _, _ = _controller_app(tmp_path)
     raw_key = app.state.auth_store.create_external_key("Home App", "https://home.local")["key"]

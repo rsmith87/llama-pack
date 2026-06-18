@@ -73,6 +73,10 @@ function contextBudgetSummary(budget: ContextBudget): string {
   return `Context: ${formatCompactTokenCount(used)} / ${formatCompactTokenCount(budget.context_window_tokens)} used · ${formatCompactTokenCount(budget.remaining_context_tokens)} left`;
 }
 
+function contextBudgetPercent(budget: ContextBudget): number {
+  return Math.min(100, Math.max(0, Math.round(budget.usage_ratio * 100)));
+}
+
 function memoryResultLine(result: MemorySearchResult): string {
   const score = result.score == null ? "-" : result.score.toFixed(4);
   return `${score} ${result.tier || "-"} ${result.topic || "-"} ${result.text || "-"}`;
@@ -977,7 +981,24 @@ export function ChatPage() {
             <StatusBadge tone={pending ? "warning" : "success"}>{status}</StatusBadge>
             {contextBudget ? (
               <div className={`context-budget context-budget-${contextBudget.status}`} data-testid="context-budget-summary">
-                <strong>{contextBudgetSummary(contextBudget)}</strong>
+                <div className="context-budget-header">
+                  <strong>{contextBudgetSummary(contextBudget)}</strong>
+                  <span>{contextBudgetPercent(contextBudget)}%</span>
+                </div>
+                <div
+                  className="context-budget-meter"
+                  role="progressbar"
+                  aria-label="Context used"
+                  aria-valuemin={0}
+                  aria-valuemax={100}
+                  aria-valuenow={contextBudgetPercent(contextBudget)}
+                >
+                  <span style={{ width: `${contextBudgetPercent(contextBudget)}%` }} />
+                </div>
+                <div className="context-budget-breakdown">
+                  <span>Prompt {formatCompactTokenCount(contextBudget.prompt_tokens_estimated)}</span>
+                  <span>Reserved output {formatCompactTokenCount(contextBudget.reserved_completion_tokens)}</span>
+                </div>
                 <small>{contextBudget.precision === "approximate" ? "Approximate estimate" : "Tokenizer estimate"}</small>
               </div>
             ) : contextBudgetError ? (

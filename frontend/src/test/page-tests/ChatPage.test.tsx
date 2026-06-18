@@ -390,7 +390,11 @@ it("shows context budget while composing", async () => {
   await waitFor(() => {
     expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("Context: 15.5k / 32.8k used");
     expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("17.2k left");
+    expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("47%");
+    expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("Prompt 14.5k");
+    expect(screen.getByTestId("context-budget-summary")).toHaveTextContent("Reserved output 1.0k");
   });
+  expect(screen.getByRole("progressbar", { name: "Context used" })).toHaveAttribute("aria-valuenow", "47");
 });
 
 it("shows image upload for vision models and sends image content blocks", async () => {
