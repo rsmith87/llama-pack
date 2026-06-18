@@ -100,6 +100,7 @@ rtk scripts/start_agent.sh
 rtk scripts/start_controller_stack.sh
 rtk scripts/start_agent_stack.sh
 rtk scripts/dev_fullstack.sh
+rtk scripts/kill_apps.sh --dry-run
 rtk python scripts/backfill_models_db.py --config config.yaml
 ```
 

@@ -351,3 +351,5 @@ Frontend development workflow:
   backend and the React Vite dev server together for local development.
 - `scripts/start_frontend.sh` starts only the React Vite dev server when a
   backend is already running.
+- `scripts/kill_apps.sh --dry-run` lists local listeners on common Llama Pack,
+  Spitball, and model dev ports; run `scripts/kill_apps.sh` to stop them.

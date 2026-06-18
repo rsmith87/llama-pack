@@ -76,6 +76,15 @@ The script writes its PID to `.llama_pack_frontend.pid` and logs to
 scripts/stop_frontend.sh
 ```
 
+When local dev ports are wedged, inspect listeners with:
+
+```bash
+scripts/kill_apps.sh --dry-run
+```
+
+Run `scripts/kill_apps.sh` to stop listeners on the common backend, frontend,
+Spitball, and example model ports.
+
 The Vite dev server proxies API requests to `http://127.0.0.1:9137` by default. Override the backend target with:
 
 ```bash

@@ -105,6 +105,7 @@ uv sync
 scripts/start_controller.sh
 scripts/start_agent.sh
 scripts/stop_server.sh
+scripts/kill_apps.sh --dry-run
 scripts/regenerate_key.sh --type controller-registration
 scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
 uv run pytest -v
