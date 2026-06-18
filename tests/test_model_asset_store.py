@@ -228,7 +228,7 @@ def test_model_asset_store_crud_and_model_linking(tmp_path: Path):
 
 
 def test_model_asset_store_requires_models_schema(tmp_path: Path):
-    with pytest.raises(RuntimeError, match="Run migrations first: alembic -x db=models upgrade models@head"):
+    with pytest.raises(RuntimeError, match="uv run python scripts/migrate_all.py --config <config.yaml>"):
         ModelAssetStoreOrm(db_path=tmp_path / "models.db")
 
 

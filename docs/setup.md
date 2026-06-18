@@ -105,13 +105,7 @@ Manual setup remains available:
 uv sync
 cp config.example.yaml config.yaml
 export LLAMA_PACK_CONFIG=config.yaml
-alembic -x db=controller upgrade controller@head
-alembic -x db=auth upgrade auth@head
-alembic -x db=audit upgrade audit@head
-alembic -x db=chat_sessions upgrade chat_sessions@head
-alembic -x db=downloads upgrade downloads@head
-alembic -x db=benchmarks upgrade benchmarks@head
-alembic -x db=models upgrade models@head
+uv run python scripts/migrate_all.py --config config.yaml
 uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 LLAMA_PACK_CONFIG=config.yaml uvicorn llama_pack.main:app --host 127.0.0.1 --port 9000
 ```

@@ -4670,6 +4670,7 @@ def test_create_app_fails_when_migrations_not_applied(tmp_path):
         )
 
     message = str(exc.value)
+    assert "uv run python scripts/migrate_all.py --config <config.yaml>" in message
     assert "alembic -x db=chat_sessions upgrade chat_sessions@head" in message
 
 

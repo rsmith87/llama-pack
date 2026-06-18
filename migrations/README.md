@@ -10,6 +10,7 @@ Targets:
 - `downloads`
 - `benchmarks`
 - `models`
+- `settings`
 
 Baseline branches:
 - `controller@head` -> `20260513_0001` controller baseline
@@ -19,8 +20,16 @@ Baseline branches:
 - `downloads@head` -> `20260523_0001` downloads baseline
 - `benchmarks@head` -> `20260611_0004` benchmark runs plus tool-loop eval history
 - `models@head` -> `20260613_0001` model asset and model catalog baseline
+- `settings@head` -> `20260617_0001` durable settings baseline
 
-Choose a target with `-x db=<target>`.
+For normal maintenance, upgrade every target with:
+
+```bash
+uv run python scripts/migrate_all.py --config config.yaml
+```
+
+Choose a target with `-x db=<target>` only for target-specific inspection,
+revision creation, or debugging.
 
 Examples:
 
@@ -57,9 +66,13 @@ scripts/onboard_controller.sh
 ```
 
 That script runs all fresh-install migration targets before creating the first
-admin API key. Run the commands below only when handling migrations manually.
+admin API key. To run only migrations manually, use:
 
-Run this once per target database:
+```bash
+uv run python scripts/migrate_all.py --config config.yaml
+```
+
+Run per-target commands only when debugging or repairing a specific target:
 
 ```bash
 alembic -x db=controller upgrade controller@head
@@ -69,6 +82,7 @@ alembic -x db=chat_sessions upgrade chat_sessions@head
 alembic -x db=downloads upgrade downloads@head
 alembic -x db=benchmarks upgrade benchmarks@head
 alembic -x db=models upgrade models@head
+alembic -x db=settings upgrade settings@head
 ```
 
 ## Existing install workflow
@@ -83,12 +97,7 @@ alembic -x db=chat_sessions stamp chat_sessions@head
 alembic -x db=downloads stamp downloads@head
 alembic -x db=benchmarks stamp benchmarks@head
 alembic -x db=models stamp models@head
+alembic -x db=settings stamp settings@head
 
-alembic -x db=controller upgrade controller@head
-alembic -x db=auth upgrade auth@head
-alembic -x db=audit upgrade audit@head
-alembic -x db=chat_sessions upgrade chat_sessions@head
-alembic -x db=downloads upgrade downloads@head
-alembic -x db=benchmarks upgrade benchmarks@head
-alembic -x db=models upgrade models@head
+uv run python scripts/migrate_all.py --config config.yaml
 ```

@@ -53,13 +53,7 @@ PY
 
 if [[ "$RUN_MIGRATIONS" != "0" ]]; then
   echo "Running controller migrations..."
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=controller upgrade controller@head
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=auth upgrade auth@head
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=audit upgrade audit@head
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=chat_sessions upgrade chat_sessions@head
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=downloads upgrade downloads@head
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=benchmarks upgrade benchmarks@head
-  LLAMA_PACK_CONFIG="$CONFIG" "$PYTHON" -m alembic -x db=models upgrade models@head
+  "$PYTHON" "$ROOT_DIR/scripts/migrate_all.py" --config "$CONFIG"
 fi
 
 LLAMA_PACK_CONFIG="$CONFIG" LLAMA_PACK_MODE=controller nohup "$PYTHON" -m uvicorn llama_pack.main:app \

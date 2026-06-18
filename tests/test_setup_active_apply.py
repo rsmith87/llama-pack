@@ -404,7 +404,9 @@ def test_run_setup_migrations_creates_all_persistence_schemas(
         "downloads",
         "benchmarks",
         "models",
+        "settings",
     ]
     assert all(step.ok for step in result), [step.model_dump() for step in result]
     assert (tmp_path / "fresh-logs" / "state" / "controller_state.db").exists()
     assert (tmp_path / "fresh-logs" / "state" / "models.db").exists()
+    assert (tmp_path / "fresh-logs" / "state" / "settings.db").exists()

@@ -136,11 +136,7 @@ If `hf_models_dirs` is present, it is used instead of the legacy single-root fie
 Before creating admin keys or starting the service, apply migrations:
 
 ```bash
-export LLAMA_PACK_CONFIG=config.yaml
-alembic -x db=controller upgrade controller@head
-alembic -x db=auth upgrade auth@head
-alembic -x db=audit upgrade audit@head
-alembic -x db=chat_sessions upgrade chat_sessions@head
+uv run python scripts/migrate_all.py --config config.yaml
 ```
 
 Before using the UI or protected API routes, create an admin key:
@@ -509,10 +505,7 @@ Safe startup procedure when not using `scripts/onboard_controller.sh`:
 
 1. Run migrations for all targets:
 ```bash
-alembic -x db=controller upgrade controller@head
-alembic -x db=auth upgrade auth@head
-alembic -x db=audit upgrade audit@head
-alembic -x db=chat_sessions upgrade chat_sessions@head
+uv run python scripts/migrate_all.py --config config.yaml
 ```
 2. Start the app normally, or use `scripts/start_controller.sh` if
    `.llama_pack.env` points at the right config.

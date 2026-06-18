@@ -273,7 +273,8 @@ def _configure_app_state(
     except Exception as exc:
         raise RuntimeError(
             "DB-authoritative model persistence requires a working database and migrated schema. "
-            "Run migrations first: alembic -x db=models upgrade models@head"
+            "Run migrations first: uv run python scripts/migrate_all.py --config <config.yaml>. "
+            "For target-specific repair, run: alembic -x db=models upgrade models@head"
         ) from exc
     app.state.process_manager = process_manager or ProcessManager(
         app_config,

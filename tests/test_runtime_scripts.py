@@ -54,6 +54,17 @@ def test_start_controller_script_uses_controller_specific_runtime_defaults() -> 
     assert "Expected controller config" in contents
     assert "LLAMA_PACK_START_FRONTEND" in contents
     assert 'start_frontend.sh' in contents
+    assert "scripts/migrate_all.py" in contents
+
+
+def test_migrate_all_script_is_executable_and_uses_setup_migrations() -> None:
+    script = ROOT_DIR / "scripts" / "migrate_all.py"
+    contents = script.read_text(encoding="utf-8")
+
+    assert script.exists()
+    assert script.stat().st_mode & S_IXUSR
+    assert "run_setup_migrations" in contents
+    assert "--config" in contents
 
 
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:

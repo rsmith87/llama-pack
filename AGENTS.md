@@ -246,18 +246,19 @@ Configured database URLs:
 | `chat_sessions_db_url` | `logs/chat_sessions.db` | `chat_sessions` | durable chat sessions |
 | `downloads_db_url` | `logs/downloads.db` | `downloads` | model download records |
 | `benchmarks_db_url` | `logs/benchmarks.db` | `benchmarks` | benchmark definitions, runs, and samples |
+| `models_db_url` | `logs/models.db` | `models` | model catalog, assets, profiles, and deployments |
+| `settings_db_url` | `logs/settings.db` | `settings` | durable application settings |
 
-Migration branches live in `migrations/versions/<target>/`. Always target the
-branch explicitly:
+For normal maintenance, run every migration target with the single project
+command:
 
 ```bash
-rtk uv run alembic -x db=controller upgrade controller@head
-rtk uv run alembic -x db=auth upgrade auth@head
-rtk uv run alembic -x db=audit upgrade audit@head
-rtk uv run alembic -x db=chat_sessions upgrade chat_sessions@head
-rtk uv run alembic -x db=downloads upgrade downloads@head
-rtk uv run alembic -x db=benchmarks upgrade benchmarks@head
+rtk uv run python scripts/migrate_all.py --config config.yaml
 ```
+
+Migration branches live in `migrations/versions/<target>/`. When debugging or
+creating a target-specific migration manually, always target the branch
+explicitly.
 
 If `-x db=` is omitted, Alembic defaults to `controller`. Avoid unqualified
 `head` because this project has multiple migration branches.

@@ -115,7 +115,8 @@ def require_sqlite_tables(
         raise RuntimeError(
             f"Missing database for '{target_name}' at {db_path}. "
             f"Expected migrated schema tables: {missing}. "
-            f"Run migrations first: alembic -x db={target_name} upgrade {target_name}@head"
+            "Run migrations first: uv run python scripts/migrate_all.py --config <config.yaml>. "
+            f"For target-specific repair, run: alembic -x db={target_name} upgrade {target_name}@head"
         )
 
     try:
@@ -135,5 +136,6 @@ def require_sqlite_tables(
         raise RuntimeError(
             f"Database schema for '{target_name}' is not migrated at {db_path}. "
             f"Missing tables: {missing}. "
-            f"Run migrations first: alembic -x db={target_name} upgrade {target_name}@head"
+            "Run migrations first: uv run python scripts/migrate_all.py --config <config.yaml>. "
+            f"For target-specific repair, run: alembic -x db={target_name} upgrade {target_name}@head"
         )
