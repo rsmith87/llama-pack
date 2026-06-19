@@ -2,10 +2,13 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import {
   createProject,
+  getProjectGraphStatus,
+  indexProjectGraph,
   listProjectNodeRoots,
   listProjects,
   updateProject,
   upsertProjectNodeRoot,
+  type ProjectGraphStatus,
   type ProjectNodeRootRecord,
   type ProjectNodeRootSafeStatus,
   type ProjectRecord,
@@ -38,6 +41,13 @@ function statusTone(status: ProjectNodeRootSafeStatus): "success" | "warning" | 
   return "muted";
 }
 
+function graphStatusTone(status: string | undefined): "success" | "warning" | "danger" | "muted" {
+  if (status === "ready") return "success";
+  if (status === "queued" || status === "running" || status === "not_indexed") return "warning";
+  if (status === "failed") return "danger";
+  return "muted";
+}
+
 async function loadProjectsData(): Promise<ProjectsData> {
   const payload = await listProjects(false);
   return { projects: payload.projects };
@@ -53,7 +63,9 @@ export function ProjectsPage() {
   );
 
   const [nodeRoots, setNodeRoots] = useState<ProjectNodeRootRecord[]>([]);
+  const [graphStatus, setGraphStatus] = useState<ProjectGraphStatus | null>(null);
   const [rootsLoading, setRootsLoading] = useState(false);
+  const [ingesting, setIngesting] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
   const [newRootHint, setNewRootHint] = useState("");
@@ -67,6 +79,7 @@ export function ProjectsPage() {
       setEditName("");
       setEditRootHint("");
       setNodeRoots([]);
+      setGraphStatus(null);
       setRootForm(emptyRootForm(null));
       return;
     }
@@ -81,12 +94,18 @@ export function ProjectsPage() {
     let active = true;
     setRootsLoading(true);
     setError("");
-    listProjectNodeRoots(selectedProject.id)
-      .then((payload) => {
-        if (active) setNodeRoots(payload.node_roots);
+    Promise.all([
+      listProjectNodeRoots(selectedProject.id),
+      getProjectGraphStatus(selectedProject.id),
+    ])
+      .then(([rootsPayload, statusPayload]) => {
+        if (active) {
+          setNodeRoots(rootsPayload.node_roots);
+          setGraphStatus(statusPayload);
+        }
       })
       .catch((err: unknown) => {
-        if (active) setError(err instanceof Error ? err.message : "Failed to load project node roots");
+        if (active) setError(err instanceof Error ? err.message : "Failed to load project graph data");
       })
       .finally(() => {
         if (active) setRootsLoading(false);
@@ -99,6 +118,10 @@ export function ProjectsPage() {
   async function reloadNodeRoots(projectId: string): Promise<void> {
     const payload = await listProjectNodeRoots(projectId);
     setNodeRoots(payload.node_roots);
+  }
+
+  async function reloadGraphStatus(projectId: string): Promise<void> {
+    setGraphStatus(await getProjectGraphStatus(projectId));
   }
 
   async function handleCreateProject(): Promise<void> {
@@ -150,6 +173,26 @@ export function ProjectsPage() {
     });
     await reloadNodeRoots(selectedProject.id);
     setSaveMessage("Node root saved.");
+  }
+
+  async function handleIngestCodebase(force: boolean): Promise<void> {
+    if (!selectedProject) return;
+    setSaveMessage("");
+    setError("");
+    const nodeName = rootForm.nodeName.trim();
+    const rootPath = rootForm.rootPath.trim();
+    if (!nodeName || !rootPath) {
+      setError("Select or enter a node root before ingesting a codebase.");
+      return;
+    }
+    setIngesting(true);
+    try {
+      await indexProjectGraph(selectedProject.id, { node_name: nodeName, root_path: rootPath, force });
+      await reloadGraphStatus(selectedProject.id);
+      setSaveMessage(force ? "Codebase reindex queued." : "Codebase ingest queued.");
+    } finally {
+      setIngesting(false);
+    }
   }
 
   function editRoot(root: ProjectNodeRootRecord): void {
@@ -243,6 +286,35 @@ export function ProjectsPage() {
                   { key: "actions", header: "Actions", render: (root) => <Button type="button" onClick={() => editRoot(root)}>Edit</Button> },
                 ]}
               />
+
+              <Panel title="Code Graph" eyebrow="Ingest">
+                <div className="projects-graph-panel">
+                  <div className="projects-graph-status">
+                    <span className="label">Graph Status</span>
+                    <StatusBadge tone={graphStatusTone(graphStatus?.status)}>{graphStatus?.status || "unknown"}</StatusBadge>
+                    {graphStatus?.snapshot_id || graphStatus?.active_snapshot_id ? (
+                      <span className="muted">snapshot={graphStatus.snapshot_id || graphStatus.active_snapshot_id}</span>
+                    ) : null}
+                  </div>
+                  <div className="projects-graph-actions">
+                    <Button
+                      type="button"
+                      variant="primary"
+                      onClick={() => void handleIngestCodebase(false)}
+                      disabled={ingesting || rootForm.safeRootStatus !== "allowed"}
+                    >
+                      {ingesting ? "Queueing" : "Ingest Codebase"}
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => void handleIngestCodebase(true)}
+                      disabled={ingesting || rootForm.safeRootStatus !== "allowed"}
+                    >
+                      Force Reindex
+                    </Button>
+                  </div>
+                </div>
+              </Panel>
             </div>
           ) : (
             <p className="muted">Create a project before registering node roots.</p>

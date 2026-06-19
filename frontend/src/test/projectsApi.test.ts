@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProject, listProjectNodeRoots, updateProject, upsertProjectNodeRoot } from "../api/projects";
+import { createProject, getProjectGraphStatus, indexProjectGraph, listProjectNodeRoots, updateProject, upsertProjectNodeRoot } from "../api/projects";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -47,6 +47,24 @@ describe("projects api", () => {
     expect(fetch).toHaveBeenNthCalledWith(2, "/lm-api/v1/projects/project-1/node-roots", expect.objectContaining({
       method: "PUT",
       body: JSON.stringify({ node_name: "mac-mini", root_path: "/repo", safe_root_status: "allowed" }),
+    }));
+  });
+
+  it("loads graph status and indexes a project graph", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn()
+        .mockResolvedValueOnce(okJson({ project_id: "project-1", status: "not_indexed" }))
+        .mockResolvedValueOnce(okJson({ id: "job-1", type: "project.graph.index" })),
+    );
+
+    await getProjectGraphStatus("project-1");
+    await indexProjectGraph("project-1", { node_name: "mac-mini", root_path: "/repo", force: false });
+
+    expect(fetch).toHaveBeenNthCalledWith(1, "/lm-api/v1/projects/project-1/graph/status", expect.objectContaining({ method: "GET" }));
+    expect(fetch).toHaveBeenNthCalledWith(2, "/lm-api/v1/projects/project-1/graph/index", expect.objectContaining({
+      method: "POST",
+      body: JSON.stringify({ node_name: "mac-mini", root_path: "/repo", force: false }),
     }));
   });
 });

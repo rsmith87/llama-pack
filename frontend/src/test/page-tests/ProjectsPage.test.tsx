@@ -36,6 +36,9 @@ it("creates projects and upserts safe node roots", async () => {
         ],
       }));
     }
+    if (url === "/lm-api/v1/projects/project-1/graph/status" && options?.method === "GET") {
+      return Promise.resolve(okJson({ project_id: "project-1", status: "not_indexed", snapshot_id: null }));
+    }
     if (url === "/lm-api/v1/projects" && options?.method === "POST") {
       return Promise.resolve(okJson({ id: "project-2", name: "New Project", root_hint: "/workspace", archived: false }));
     }
@@ -49,6 +52,9 @@ it("creates projects and upserts safe node roots", async () => {
         created_at: "2026-06-18T12:00:00Z",
         updated_at: "2026-06-18T12:01:00Z",
       }));
+    }
+    if (url === "/lm-api/v1/projects/project-1/graph/index" && options?.method === "POST") {
+      return Promise.resolve(okJson({ id: "job-1", type: "project.graph.index" }));
     }
     return Promise.resolve(okJson({}));
   });
@@ -78,5 +84,12 @@ it("creates projects and upserts safe node roots", async () => {
   await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/projects/project-1/node-roots", expect.objectContaining({
     method: "PUT",
     body: JSON.stringify({ node_name: "mac-mini", root_path: "/repo", safe_root_status: "allowed" }),
+  })));
+
+  await user.click(screen.getByRole("button", { name: "Ingest Codebase" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/projects/project-1/graph/index", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ node_name: "mac-mini", root_path: "/repo", force: false }),
   })));
 });

@@ -38,6 +38,22 @@
   gap: 12px;
 }
 
+.projects-graph-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.projects-graph-status,
+.projects-graph-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .projects-save-message {
   margin: 0;
   color: var(--success);
