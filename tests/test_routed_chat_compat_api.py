@@ -221,7 +221,11 @@ def test_openai_chat_completions_appends_to_existing_thread(tmp_path):
     assert second.json()["choices"][0]["message"]["content"] == "second"
     assert [call["payload"]["messages"] for call in calls] == [
         [{"role": "user", "content": "first"}],
-        [{"role": "user", "content": "second"}],
+        [
+            {"role": "user", "content": "first"},
+            {"role": "assistant", "content": "first"},
+            {"role": "user", "content": "second"},
+        ],
     ]
     events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [event["event_type"] for event in events] == [

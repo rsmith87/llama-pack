@@ -6,6 +6,7 @@ from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
 
+from llama_pack.core.chat.context_budget import estimate_prompt_tokens
 from llama_pack.core.config.models import AppConfig
 from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
@@ -145,6 +146,12 @@ class ThreadService:
             "model": decision.model,
             "target": f"node:{decision.node}",
             "route": route,
+            "messages": self._compact_thread_messages(
+                thread_id=thread_id,
+                turn_id=turn_id,
+                messages=self._public_messages(thread_id),
+                model=decision.model,
+            ),
         }
 
     def record_compat_assistant(
@@ -276,6 +283,12 @@ class ThreadService:
             turn_id=turn_id,
             route=route,
             agent_node=decision.node,
+            model=decision.model,
+        )
+        messages = self._compact_thread_messages(
+            thread_id=thread_id,
+            turn_id=turn_id,
+            messages=messages,
             model=decision.model,
         )
 
@@ -641,6 +654,58 @@ class ThreadService:
                 messages.append({"role": role, "content": text})
         return messages
 
+    def _compact_thread_messages(
+        self,
+        thread_id: str,
+        turn_id: str,
+        messages: list[dict[str, Any]],
+        model: str,
+    ) -> list[dict[str, Any]]:
+        if not self.config.thread_history_compaction_enabled:
+            return list(messages)
+        recent_message_count = self.config.thread_history_recent_messages
+        if len(messages) <= recent_message_count + 1:
+            return list(messages)
+        prompt_tokens = estimate_prompt_tokens({"messages": messages})
+        token_budget = self._history_prompt_token_budget(model)
+        if prompt_tokens <= token_budget:
+            return list(messages)
+
+        recent_messages = messages[-recent_message_count:]
+        older_messages = messages[:-recent_message_count]
+        summary_content = _history_summary_content(
+            messages=older_messages,
+            max_chars=self.config.thread_history_summary_max_chars,
+            item_max_chars=self.config.thread_history_summary_item_max_chars,
+        )
+        self.store.append_event(
+            thread_id=thread_id,
+            event_type="history_compaction",
+            role=None,
+            content={
+                "summary": summary_content,
+                "prompt_tokens_estimated": prompt_tokens,
+                "token_budget": token_budget,
+                "older_message_count": len(older_messages),
+                "recent_message_count": len(recent_messages),
+                "model": model,
+            },
+            public=False,
+            turn_id=turn_id,
+            model=model,
+        )
+        compacted_messages: list[dict[str, Any]] = [{"role": "system", "content": summary_content}]
+        compacted_messages.extend(recent_messages)
+        return compacted_messages
+
+    def _history_prompt_token_budget(self, model: str) -> int:
+        try:
+            context_window = self.config.effective_model_config(model).ctx
+        except KeyError:
+            return self.config.thread_history_min_prompt_tokens
+        ratio_budget = int(context_window * self.config.thread_history_context_ratio)
+        return min(self.config.thread_history_min_prompt_tokens, ratio_budget)
+
     def _append_agent_request(
         self,
         thread_id: str,
@@ -831,3 +896,24 @@ class ThreadService:
             "route": route,
             "workflow_steps": step_results,
         }
+
+
+def _history_summary_content(messages: list[dict[str, Any]], max_chars: int, item_max_chars: int) -> str:
+    lines: list[str] = ["Earlier thread history summary:"]
+    for message in messages:
+        role = str(message.get("role") or "message")
+        content = _history_summary_text(message.get("content", ""), item_max_chars)
+        if not content:
+            continue
+        lines.append(f"- {role}: {content}")
+    summary = "\n".join(lines)
+    return summary[:max_chars]
+
+
+def _history_summary_text(content: Any, max_chars: int) -> str:
+    if isinstance(content, str):
+        text = content
+    else:
+        text = str(content)
+    collapsed = " ".join(text.split())
+    return collapsed[:max_chars]

@@ -879,7 +879,16 @@ export function ChatPage() {
                         <pre>{message.reasoningContent}</pre>
                       </details>
                     ) : null}
-                    <p>{message.content || (message.pending ? "..." : "(empty response)")}</p>
+                    {message.content ? (
+                      <p>{message.content}</p>
+                    ) : message.pending ? (
+                      <div className="chat-activity" data-testid="assistant-activity-indicator" role="status">
+                        <span className="chat-activity-dots" aria-hidden="true"><span /> <span /> <span /></span>
+                        <span>Agent is responding</span>
+                      </div>
+                    ) : (
+                      <p>(empty response)</p>
+                    )}
                     {message.imageName ? <small>image: {message.imageName}</small> : null}
                     {routeItems.length ? (
                       <details className="chat-route-detail">

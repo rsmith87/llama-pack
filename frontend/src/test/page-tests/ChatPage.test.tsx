@@ -1004,6 +1004,41 @@ it("sends conversation messages and refreshes transcript events", async () => {
   });
 });
 
+it("shows an assistant activity indicator while waiting for the first streamed token", async () => {
+  let releaseStream: (() => void) | undefined;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/threads") return okJson({ id: "thread-1", default_model: "mistral", metadata: {} });
+      if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
+        return new Promise((resolve) => {
+          releaseStream = () => resolve(streamResponse([
+            'data: {"choices":[{"delta":{"content":"done"}}]}\n\n',
+          ]));
+        });
+      }
+      if (url === "/lm-api/v1/threads/thread-1/events") return okJson({ events: [
+        { event_type: "user_message", content: { text: "Wait for it" }, public: true },
+        { event_type: "assistant_message", content: { text: "done" }, public: true, agent_node: "local", model: "mistral" },
+      ] });
+      return okJson({});
+    }),
+  );
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+  await screen.findByRole("option", { name: "mistral" });
+  await user.type(screen.getByLabelText("Prompt"), "Wait for it");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  expect(await screen.findByTestId("assistant-activity-indicator")).toHaveTextContent("Agent is responding");
+
+  releaseStream?.();
+  expect(await screen.findByText("done")).toBeInTheDocument();
+});
+
 it("refreshes conversation events with the internal event toggle", async () => {
   vi.stubGlobal(
     "fetch",

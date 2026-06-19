@@ -190,6 +190,78 @@ async def test_post_message_async_sends_prior_public_messages_plus_current_user_
 
 
 @pytest.mark.asyncio
+async def test_post_message_async_compacts_long_history_before_current_user_message(tmp_path):
+    chat_proxy = RecordingChatProxy(responses=["first reply", "second reply", "third reply", "final reply"])
+    config = load_config(
+        {
+            "mode": "controller",
+            "models": {"qwen": {"path": "qwen.gguf", "port": 8080, "ctx": 220}},
+            "nodes": {
+                "linux-2080ti": {
+                    "url": "http://linux",
+                    "default_model": "qwen",
+                    "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                },
+            },
+        }
+    )
+    service = ThreadService(
+        config=config,
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    await service.post_message_async(
+        thread_id=thread["id"],
+        role="user",
+        content="First question " + ("alpha " * 80),
+        model=None,
+        target="auto",
+        metadata=None,
+    )
+    await service.post_message_async(
+        thread_id=thread["id"],
+        role="user",
+        content="Second question " + ("bravo " * 80),
+        model=None,
+        target="auto",
+        metadata=None,
+    )
+    await service.post_message_async(
+        thread_id=thread["id"],
+        role="user",
+        content="Third question",
+        model=None,
+        target="auto",
+        metadata=None,
+    )
+    await service.post_message_async(
+        thread_id=thread["id"],
+        role="user",
+        content="Fourth question",
+        model=None,
+        target="auto",
+        metadata=None,
+    )
+
+    messages = chat_proxy.calls[3]["payload"]["messages"]
+    assert messages[0]["role"] == "system"
+    assert "Earlier thread history summary:" in messages[0]["content"]
+    assert "user: First question" in messages[0]["content"]
+    assert {"role": "user", "content": "Third question"} in messages
+    assert {"role": "assistant", "content": "third reply"} in messages
+    assert messages[-1] == {"role": "user", "content": "Fourth question"}
+    assert not any(message["role"] == "user" and message["content"].startswith("First question") for message in messages[1:])
+    internal_events = service.list_events(thread["id"], include_internal=True)
+    compaction_event = next(event for event in internal_events if event["event_type"] == "history_compaction")
+    assert compaction_event["content"]["model"] == "qwen"
+    assert compaction_event["content"]["older_message_count"] > 0
+    assert compaction_event["content"]["prompt_tokens_estimated"] > compaction_event["content"]["token_budget"]
+
+
+@pytest.mark.asyncio
 async def test_thread_message_resolves_context_profile_and_records_route(tmp_path):
     chat_proxy = RecordingChatProxy(responses=["profile reply"])
     service = _service(

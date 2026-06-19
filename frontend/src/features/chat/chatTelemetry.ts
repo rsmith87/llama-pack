@@ -34,12 +34,7 @@ export function finalizeTelemetry(pendingMessage: PendingMessage, nowMs?: number
   const now = typeof nowMs === "number" ? nowMs : performance.now();
   const start = pendingMessage.startedAtMs || now;
   const totalMs = now - start;
-  const hasOutput = Boolean(pendingMessage.content || pendingMessage.reasoningContent);
-  const ttftMs = pendingMessage.firstTokenAtMs
-    ? pendingMessage.firstTokenAtMs - start
-    : hasOutput
-      ? totalMs
-      : null;
+  const ttftMs = pendingMessage.firstTokenAtMs ? pendingMessage.firstTokenAtMs - start : null;
 
   pendingMessage.telemetry = {
     ...(pendingMessage.telemetry || {}),

@@ -107,6 +107,10 @@ class ContextBudgetEstimator:
         return configured_model.ctx
 
 
+def estimate_prompt_tokens(payload: dict[str, object]) -> int:
+    return _estimate_prompt_tokens(payload)
+
+
 def _reserved_completion_tokens(payload: dict[str, object]) -> int:
     n_predict = payload.get("n_predict")
     if isinstance(n_predict, int) and n_predict > 0:

@@ -48,13 +48,13 @@ describe("chat telemetry", () => {
     expect(message.telemetry.tokensPerSecond).toBe(60);
   });
 
-  it("finalizeTelemetry falls back ttft to total when output exists", () => {
+  it("keeps ttft absent when no streamed first token was observed", () => {
     const message: any = {
       startedAtMs: 100,
       content: "hello",
     };
     finalizeTelemetry(message, 450);
-    expect(message.telemetry.ttftMs).toBe(350);
+    expect(message.telemetry.ttftMs).toBeUndefined();
     expect(message.telemetry.totalMs).toBe(350);
   });
 

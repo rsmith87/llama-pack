@@ -254,6 +254,12 @@ class AppConfig(BaseModel):
     chat_max_active_per_session: int = Field(default=1, ge=1, le=32)
     chat_max_queue_per_session: int = Field(default=4, ge=0, le=1000)
     chat_admission_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
+    thread_history_compaction_enabled: bool = True
+    thread_history_context_ratio: float = Field(default=0.55, gt=0, le=1)
+    thread_history_min_prompt_tokens: int = Field(default=6000, ge=1)
+    thread_history_recent_messages: int = Field(default=4, ge=1, le=100)
+    thread_history_summary_max_chars: int = Field(default=2000, ge=100)
+    thread_history_summary_item_max_chars: int = Field(default=240, ge=20)
     agent_tools: AgentToolsConfig = Field(default_factory=AgentToolsConfig)
     memory: MemoryConfig = Field(default_factory=MemoryConfig)
     config_source: str = "(defaults)"
