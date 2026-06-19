@@ -384,6 +384,34 @@ async def test_agent_worker_completes_project_graph_index_job():
         raise AssertionError(f"unexpected request: {method} {url}")
 
     class FakeGraphIndexer:
+        def export_snapshot_graph(self, snapshot_id):
+            assert snapshot_id == "snapshot-1"
+            return {
+                "snapshot": {
+                    "id": "snapshot-1",
+                    "project_id": "project-1",
+                    "node_name": "agent-a",
+                    "root_path": "/repo",
+                    "git_commit": None,
+                    "status": "ready",
+                },
+                "files": [
+                    {
+                        "id": "file-api",
+                        "path": "api.py",
+                        "language": "python",
+                        "content_hash": "hash-api",
+                        "size_bytes": 100,
+                        "mtime_ns": 1,
+                        "parse_status": "parsed",
+                        "parse_error": None,
+                    }
+                ],
+                "symbols": [],
+                "imports": [],
+                "relations": [],
+            }
+
         def index(self, payload, progress, is_cancel_requested):
             assert payload.project_id == "project-1"
             assert is_cancel_requested() is False
@@ -435,7 +463,103 @@ async def test_agent_worker_completes_project_graph_index_job():
     assert progress_payload["phase"] == "completed"
     complete_payload = next(call[2] for call in calls if call[1].endswith("/complete"))
     assert complete_payload["result"]["snapshot_id"] == "snapshot-1"
+    assert complete_payload["result"]["graph_snapshot"]["files"][0]["path"] == "api.py"
     assert complete_payload["artifacts"][0]["kind"] == "project_graph_snapshot"
+
+
+def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):
+    app = _create_controller_app(tmp_path, worker_nodes("agent-a"))
+    client = TestClient(app)
+    job = client.post(
+        "/lm-api/v1/jobs",
+        json={
+            "type": "project.graph.index",
+            "target": "node:agent-a",
+            "payload": {
+                "project_id": "project-1",
+                "node_name": "agent-a",
+                "root_path": "/repo",
+                "include_globs": ["**/*.py"],
+                "overview_files": [],
+                "exclude_dirs": [],
+                "max_file_bytes": 1024,
+                "force": False,
+            },
+        },
+    ).json()
+    claim = client.post(
+        "/lm-api/v1/nodes/agent-a/work/claim",
+        json={"max_jobs": 1, "capacity": {"project_graph_index": True}},
+        headers=WORKER_HEADERS,
+    ).json()
+
+    response = client.post(
+        f"/lm-api/v1/nodes/agent-a/work/{claim[0]['attempt_id']}/complete",
+        json={
+            "result": {
+                "project_id": "project-1",
+                "snapshot_id": "snapshot-1",
+                "status": "ready",
+                "root_path": "/repo",
+                "node_name": "agent-a",
+                "git_commit": None,
+                "file_count": 1,
+                "symbol_count": 1,
+                "relation_count": 0,
+                "failed_file_count": 0,
+                "duration_ms": 12,
+                "warnings": [],
+                "graph_snapshot": {
+                    "snapshot": {
+                        "id": "snapshot-1",
+                        "project_id": "project-1",
+                        "node_name": "agent-a",
+                        "root_path": "/repo",
+                        "git_commit": None,
+                    },
+                    "files": [
+                        {
+                            "id": "file-api",
+                            "path": "api.py",
+                            "language": "python",
+                            "content_hash": "hash-api",
+                            "size_bytes": 100,
+                            "mtime_ns": 1,
+                            "parse_status": "parsed",
+                            "parse_error": None,
+                        }
+                    ],
+                    "symbols": [
+                        {
+                            "id": "sym-run",
+                            "file_id": "file-api",
+                            "qualified_name": "api.run",
+                            "name": "run",
+                            "kind": "function",
+                            "language": "python",
+                            "start_line": 1,
+                            "end_line": 2,
+                            "signature": "def run()",
+                            "doc_summary": None,
+                            "exported": True,
+                            "confidence": 1.0,
+                        }
+                    ],
+                    "imports": [],
+                    "relations": [],
+                },
+            }
+        },
+        headers=WORKER_HEADERS,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["id"] == job["id"]
+    status = app.state.project_graph_store.status("project-1")
+    assert status["status"] == "ready"
+    assert status["snapshot_id"] == "snapshot-1"
+    assert status["file_count"] == 1
+    assert app.state.project_graph_store.find_symbols(project_id="project-1", query="run", kind=None)[0]["id"] == "sym-run"
 
 
 @pytest.mark.asyncio
@@ -468,6 +592,10 @@ async def test_agent_worker_accepts_controller_created_project_graph_index_defau
         raise AssertionError(f"unexpected request: {method} {url}")
 
     class FakeGraphIndexer:
+        def export_snapshot_graph(self, snapshot_id):
+            assert snapshot_id == "snapshot-1"
+            return {"snapshot": {"id": "snapshot-1", "project_id": "project-1", "node_name": "agent-a", "root_path": "/repo"}, "files": [], "symbols": [], "imports": [], "relations": []}
+
         def index(self, payload, progress, is_cancel_requested):
             assert payload.include_globs == ["**/*.py", "**/*.ts", "**/*.tsx"]
             assert payload.overview_files == ["README.md", "AGENTS.md", "package.json", "pyproject.toml"]

@@ -238,6 +238,9 @@ class ProjectGraphIndexer:
         if is_cancel_requested():
             raise ProjectGraphIndexCanceled("Project graph indexing was canceled")
 
+    def export_snapshot_graph(self, snapshot_id: str) -> dict[str, object]:
+        return self.graph_store.export_snapshot_graph(snapshot_id)
+
 
 class _GraphRecords:
     def __init__(

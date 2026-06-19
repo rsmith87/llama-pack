@@ -452,12 +452,14 @@ class AgentWorker:
 
             progress_events: list[dict[str, Any]] = []
             result = self._project_graph_indexer.index(payload=payload, progress=progress, is_cancel_requested=is_cancel_requested)
+            graph_snapshot = self._project_graph_indexer.export_snapshot_graph(result.snapshot_id)
             for event in progress_events:
                 await self._progress(attempt_id, event)
             await self._complete(
                 attempt_id,
                 {
                     **result.model_dump(mode="json"),
+                    "graph_snapshot": graph_snapshot,
                     "worker_node": self.config.node_name,
                     "completed_at": datetime.now(timezone.utc).isoformat(),
                 },

@@ -130,6 +130,58 @@ def test_project_graph_store_queries_symbols_and_relations(tmp_path):
     assert relations[0]["target_symbol"]["id"] == "sym-helper"
 
 
+def test_project_graph_store_replaces_prior_project_snapshot_graph_with_stable_ids(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project = _create_project(db_path)
+    store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    graph = {
+        "files": [
+            {
+                "id": "file-api",
+                "path": "api.py",
+                "language": "python",
+                "content_hash": "hash-api",
+                "size_bytes": 100,
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        "symbols": [
+            {
+                "id": "sym-run",
+                "file_id": "file-api",
+                "qualified_name": "api.run",
+                "name": "run",
+                "kind": "function",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 2,
+                "signature": "def run()",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        "imports": [],
+        "relations": [],
+    }
+
+    first = store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit="a1")
+    store.replace_snapshot_graph(snapshot_id=str(first["id"]), **graph)
+    store.activate_snapshot(str(first["id"]))
+    second = store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit="a2")
+    store.replace_snapshot_graph(snapshot_id=str(second["id"]), **graph)
+    store.activate_snapshot(str(second["id"]))
+
+    active = store.get_active_snapshot(str(project["id"]))
+    assert active is not None
+    assert active["id"] == second["id"]
+    assert active["file_count"] == 1
+    assert store.find_symbols(project_id=str(project["id"]), query="run", kind=None)[0]["id"] == "sym-run"
+
+
 def test_project_graph_store_upserts_context_artifact_metadata(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)

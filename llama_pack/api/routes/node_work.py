@@ -5,9 +5,10 @@ import secrets
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, Field
 
-from llama_pack.api.dependencies import get_orchestrator
+from llama_pack.api.dependencies import get_orchestrator, get_project_graph_store
 from llama_pack.api.http_headers import get_request_api_key
 from llama_pack.core.orchestration.orchestrator import Orchestrator
+from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
 
 
 router = APIRouter()
@@ -106,10 +107,14 @@ def complete_work(
     body: CompleteRequest,
     request: Request,
     orchestrator: Orchestrator = Depends(get_orchestrator),
+    project_graph_store: ProjectGraphStoreOrm = Depends(get_project_graph_store),
 ):
     _enforce_node_work_auth(request, node)
     try:
-        return orchestrator.complete(node_name=node, attempt_id=attempt_id, result=body.result, artifacts=body.artifacts)
+        _import_project_graph_snapshot(body.result, project_graph_store)
+        result = dict(body.result)
+        result.pop("graph_snapshot", None)
+        return orchestrator.complete(node_name=node, attempt_id=attempt_id, result=result, artifacts=body.artifacts)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
@@ -137,3 +142,33 @@ def fail_work(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+def _import_project_graph_snapshot(result: dict, project_graph_store: ProjectGraphStoreOrm) -> None:
+    if result.get("status") != "ready":
+        return
+    graph_snapshot = result.get("graph_snapshot")
+    if not isinstance(graph_snapshot, dict):
+        return
+    snapshot = graph_snapshot.get("snapshot")
+    files = graph_snapshot.get("files")
+    symbols = graph_snapshot.get("symbols")
+    imports = graph_snapshot.get("imports")
+    relations = graph_snapshot.get("relations")
+    if not isinstance(snapshot, dict):
+        raise ValueError("Project graph completion result graph_snapshot.snapshot must be an object")
+    if not isinstance(files, list):
+        raise ValueError("Project graph completion result graph_snapshot.files must be a list")
+    if not isinstance(symbols, list):
+        raise ValueError("Project graph completion result graph_snapshot.symbols must be a list")
+    if not isinstance(imports, list):
+        raise ValueError("Project graph completion result graph_snapshot.imports must be a list")
+    if not isinstance(relations, list):
+        raise ValueError("Project graph completion result graph_snapshot.relations must be a list")
+    project_graph_store.import_snapshot_graph(
+        snapshot=snapshot,
+        files=files,
+        symbols=symbols,
+        imports=imports,
+        relations=relations,
+    )
