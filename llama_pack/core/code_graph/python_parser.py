@@ -136,7 +136,16 @@ class _PythonGraphVisitor(ast.NodeVisitor):
             current_symbol_id = _id("symbol", current_qualified_name)
             self.relations.append(
                 GraphRelationRecord(
-                    id=_id("relation", current_symbol_id, "calls_best_effort", name, str(node.lineno), str(node.col_offset)),
+                    id=_id(
+                        "relation",
+                        current_symbol_id,
+                        "calls_best_effort",
+                        name,
+                        str(node.lineno),
+                        str(node.col_offset),
+                        str(getattr(node, "end_lineno", node.lineno)),
+                        str(getattr(node, "end_col_offset", node.col_offset)),
+                    ),
                     source_symbol_id=current_symbol_id,
                     target_symbol_id=self._symbol_ids_by_name.get(name),
                     source_file_id=self.file_id,

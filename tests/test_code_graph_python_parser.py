@@ -49,3 +49,18 @@ def test_python_parser_extracts_class_method_import_and_inheritance(tmp_path):
     assert any(record.module == "os" and record.alias == "operating_system" for record in parsed.imports)
     assert any(record.module == "pathlib" and record.imported_name == "Path" for record in parsed.imports)
     assert any(relation.relation_type == "inherits" for relation in parsed.relations)
+
+
+def test_python_parser_generates_unique_call_relation_ids_for_chained_calls(tmp_path):
+    path = tmp_path / "factory.py"
+    path.write_text(
+        "def build_manager():\n"
+        "    return type('PM', (), {'status': lambda self: 'ok'})()\n",
+        encoding="utf-8",
+    )
+
+    parsed = parse_python_file(path, root=tmp_path)
+
+    relation_ids = [relation.id for relation in parsed.relations if relation.relation_type == "calls_best_effort"]
+    assert len(relation_ids) == 2
+    assert len(set(relation_ids)) == 2
