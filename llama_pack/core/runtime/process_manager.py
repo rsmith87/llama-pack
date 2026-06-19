@@ -80,6 +80,7 @@ class ModelStatus:
     name: str
     running: bool
     pid: int | None
+    process_state: str
     port: int
     model_path: str
     log_path: str
@@ -128,6 +129,7 @@ class ProcessManager:
         self.catalog_service = catalog_service
         self._popen = popen
         self._processes: dict[str, _ManagedProcess] = {}
+        self._adopted_processes: set[str] = set()
         self._log_handles: dict[str, IO[bytes]] = {}
         self._active_requests: dict[str, int] = {}
         self.config.log_dir.mkdir(parents=True, exist_ok=True)
@@ -140,15 +142,20 @@ class ProcessManager:
         profile_metadata = self._profile_metadata(name)
         model_catalog, model_profiles, model_deployments = self._catalog_payload(name)
         process = self._process_for_status(name, model)
+        stale_pid: int | None = None
         running = process is not None and process.poll() is None
         if process is not None and not running:
+            stale_pid = process.pid
             self._processes.pop(name, None)
+            self._adopted_processes.discard(name)
             self._close_log(name)
             process = None
+        process_state = self._process_state(name, running, stale_pid)
         return ModelStatus(
             name=name,
             running=running,
-            pid=process.pid if running and process is not None else None,
+            pid=process.pid if running and process is not None else stale_pid,
+            process_state=process_state,
             port=model.port,
             model_path=model.path,
             log_path=str(self._log_path(name)),
@@ -193,6 +200,7 @@ class ProcessManager:
         command = build_llama_server_command(self.config.llama_server_bin, model)
         process = self._popen(command, stdout=log_handle, stderr=log_handle, cwd=None)
         self._processes[name] = process
+        self._adopted_processes.discard(name)
         self._log_handles[name] = log_handle
         return self.status(name)
 
@@ -207,6 +215,7 @@ class ProcessManager:
                 process.kill()
                 process.wait(timeout=5)
         self._processes.pop(name, None)
+        self._adopted_processes.discard(name)
         self._close_log(name)
         return self.status(name)
 
@@ -262,7 +271,17 @@ class ProcessManager:
             return None
         process = _AdoptedProcess(existing_pid)
         self._processes[name] = process
+        self._adopted_processes.add(name)
         return process
+
+    def _process_state(self, name: str, running: bool, stale_pid: int | None) -> str:
+        if stale_pid is not None:
+            return "stale"
+        if not running:
+            return "stopped"
+        if name in self._adopted_processes:
+            return "adopted"
+        return "managed"
 
     def _log_path(self, name: str) -> Path:
         return self.config.log_dir / f"{self._safe_identity(name)}.log"

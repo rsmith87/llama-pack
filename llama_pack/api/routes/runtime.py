@@ -829,6 +829,8 @@ def _running_models_summary(process_manager, mode: str) -> dict[str, object]:
             {
                 "name": s.get("name"),
                 "port": s.get("port"),
+                "pid": s.get("pid"),
+                "process_state": s.get("process_state"),
                 "profile_label": s.get("profile_label"),
                 "profile_kind": s.get("profile_kind"),
                 "resource_tier": s.get("resource_tier"),

@@ -156,6 +156,7 @@ export function ModelCard({
   const active = isActiveModel(model as Parameters<typeof isActiveModel>[0]);
   const loading = isLoadingModel(model as Parameters<typeof isLoadingModel>[0]);
   const status = str(raw, "status", "status") || "available";
+  const processState = str(raw, "process_state", "process_state");
   const port = num(raw, "port", "model_port");
   const pid = num(raw, "pid", "pid");
   const ctx = num(raw, "ctx", "model_ctx");
@@ -197,6 +198,7 @@ export function ModelCard({
   const details: Array<[string, string]> = [];
   if (port !== undefined) details.push(["Port", String(port)]);
   if (pid !== undefined) details.push(["PID", String(pid)]);
+  if (processState) details.push(["Process", processState]);
   if (ctx !== undefined) details.push(["Context", numberLabel(ctx)]);
   if (capacityCtx !== undefined) details.push(["Max Context", numberLabel(capacityCtx)]);
   if (gpuLayers !== undefined) details.push(["GPU Layers", String(gpuLayers)]);

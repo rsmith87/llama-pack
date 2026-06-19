@@ -159,6 +159,7 @@ class StubProcessManager:
                 "name": "qwen",
                 "running": self.running,
                 "pid": 123 if self.running else None,
+                "process_state": "adopted" if self.running else "stopped",
                 "port": 8081,
                 "model_path": "/models/qwen.gguf",
                 "log_path": "/tmp/qwen.log",
@@ -170,6 +171,7 @@ class StubProcessManager:
             "name": name,
             "running": True,
             "pid": 123,
+            "process_state": "managed",
             "port": 8081,
             "model_path": "/models/qwen.gguf",
             "log_path": "/tmp/qwen.log",
@@ -180,6 +182,7 @@ class StubProcessManager:
             "name": name,
             "running": False,
             "pid": None,
+            "process_state": "stopped",
             "port": 8081,
             "model_path": "/models/qwen.gguf",
             "log_path": "/tmp/qwen.log",
@@ -473,10 +476,41 @@ def test_agent_model_routes():
     health = client.get("/lm-api/v1/health").json()
     assert health["mode"] == "agent"
     assert "config_source" in health
-    assert client.get("/lm-api/v1/models").json()[0]["name"] == "qwen"
+    model = client.get("/lm-api/v1/models").json()[0]
+    assert model["name"] == "qwen"
+    assert model["process_state"] == "stopped"
     assert client.post("/lm-api/v1/models/qwen/start").json()["running"] is True
     assert client.post("/lm-api/v1/models/qwen/stop").json()["running"] is False
     assert client.get("/lm-api/v1/logs/qwen").json()["text"] == "hello\n"
+
+
+def test_runtime_overview_exposes_running_model_process_state():
+    config = load_config(
+        {
+            "mode": "agent",
+            "models": {
+                "qwen": {
+                    "path": "/models/qwen.gguf",
+                    "port": 8081,
+                }
+            },
+        }
+    )
+    app = create_app(
+        config=config,
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/runtime/overview")
+
+    assert response.status_code == 200
+    [model] = response.json()["running_models"]["items"]
+    assert model["name"] == "qwen"
+    assert model["pid"] == 123
+    assert model["process_state"] == "adopted"
 
 
 def test_agent_model_stop_timeout_returns_gateway_timeout():

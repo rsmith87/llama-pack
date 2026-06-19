@@ -562,6 +562,51 @@ def test_external_app_key_can_refresh_project_context_item_from_focused_path(tmp
     }
 
 
+def test_external_app_key_can_refresh_and_reuse_persisted_project_context_artifact(tmp_path):
+    app, _, _ = _controller_app(tmp_path)
+    created = app.state.auth_store.create_external_key("Home App", "https://home.local")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+    project = client.post("/v1/client/projects", json={"name": "Spitball", "root_hint": "/workspace/spitball"}).json()
+
+    refresh_response = client.post(
+        "/v1/client/project-context/refresh_context_item",
+        json={
+            "project_id": project["id"],
+            "project": {"name": "Spitball", "root": "/workspace/spitball"},
+            "selected_paths": [
+                {"path": "packages/spitball/src/styles/app.css", "content": ".board { display: grid; }"}
+            ],
+            "artifacts": [],
+            "focused_path": "packages/spitball/src/styles/app.css",
+        },
+    )
+    artifact_metadata = refresh_response.json()["summary"]["artifactMetadata"]
+    summarize_response = client.post(
+        "/v1/client/project-context/summarize_path",
+        json={
+            "project_id": project["id"],
+            "project": {"name": "Spitball", "root": "/workspace/spitball"},
+            "selected_paths": [
+                {
+                    "path": "packages/spitball/src/styles/app.css",
+                    "artifact_metadata": artifact_metadata,
+                }
+            ],
+            "artifacts": [],
+            "focused_path": "packages/spitball/src/styles/app.css",
+        },
+    )
+
+    assert refresh_response.status_code == 200
+    assert artifact_metadata["kind"] == "path_summary"
+    assert artifact_metadata["path"] == "packages/spitball/src/styles/app.css"
+    assert artifact_metadata["size_bytes"] == 25
+    assert "content_hash" in artifact_metadata
+    assert summarize_response.status_code == 200
+    assert summarize_response.json()["summary"]["path"]["artifactMetadata"] == artifact_metadata
+
+
 def test_project_context_rejects_unknown_action(tmp_path):
     app, _, _ = _controller_app(tmp_path)
     created = app.state.auth_store.create_external_key("Home App", "https://home.local")

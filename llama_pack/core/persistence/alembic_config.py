@@ -51,6 +51,7 @@ TARGET_TABLES: dict[str, tuple[str, ...]] = {
     "projects": (
         "projects",
         "project_node_roots",
+        "project_context_artifacts",
         "project_graph_snapshots",
         "project_graph_files",
         "project_graph_symbols",

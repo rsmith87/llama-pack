@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+import hashlib
 import json
 import uuid
 from typing import Any
@@ -10,6 +11,7 @@ from sqlalchemy import delete, select, update
 from llama_pack.core.code_graph.models import GraphFileRecord, GraphImportRecord, GraphRelationRecord, GraphSymbolRecord
 from llama_pack.core.persistence.db_infra import create_persistence_engine, create_session_factory, require_sqlite_tables, session_scope, sqlite_path_from_url
 from llama_pack.core.persistence.models.projects import (
+    ProjectContextArtifactOrm,
     ProjectGraphFileOrm,
     ProjectGraphImportOrm,
     ProjectGraphRelationOrm,
@@ -21,6 +23,7 @@ from llama_pack.core.persistence.models.projects import (
 GRAPH_TABLES = {
     "projects",
     "project_node_roots",
+    "project_context_artifacts",
     "project_graph_snapshots",
     "project_graph_files",
     "project_graph_symbols",
@@ -203,6 +206,67 @@ class ProjectGraphStoreOrm:
             ).scalar_one_or_none()
             return self._snapshot_payload(row) if row is not None else None
 
+    def upsert_context_artifact(
+        self,
+        project_id: str,
+        path: str,
+        kind: str,
+        title: str | None,
+        content: str,
+        metadata: dict[str, str | int | float | bool | None],
+    ) -> dict[str, object]:
+        now = self._now()
+        content_bytes = content.encode("utf-8")
+        content_hash = hashlib.sha256(content_bytes).hexdigest()
+        metadata_json = json.dumps(metadata, sort_keys=True)
+        with session_scope(self.session_factory) as session:
+            existing = session.execute(
+                select(ProjectContextArtifactOrm).where(
+                    ProjectContextArtifactOrm.project_id == project_id,
+                    ProjectContextArtifactOrm.path == path,
+                    ProjectContextArtifactOrm.kind == kind,
+                )
+            ).scalar_one_or_none()
+            if existing is None:
+                existing = ProjectContextArtifactOrm(
+                    id=str(uuid.uuid4()),
+                    project_id=project_id,
+                    path=path,
+                    kind=kind,
+                    title=title,
+                    content_hash=content_hash,
+                    size_bytes=len(content_bytes),
+                    metadata_json=metadata_json,
+                    created_at=now,
+                    updated_at=now,
+                )
+                session.add(existing)
+            else:
+                existing.title = title
+                existing.content_hash = content_hash
+                existing.size_bytes = len(content_bytes)
+                existing.metadata_json = metadata_json
+                existing.updated_at = now
+            artifact_id = existing.id
+        loaded = self.get_context_artifact(artifact_id)
+        if loaded is None:
+            raise RuntimeError(f"Saved context artifact {artifact_id} could not be loaded")
+        return loaded
+
+    def get_context_artifact(self, artifact_id: str) -> dict[str, object] | None:
+        with session_scope(self.session_factory) as session:
+            row = session.get(ProjectContextArtifactOrm, artifact_id)
+            return self._context_artifact_payload(row) if row is not None else None
+
+    def list_context_artifacts(self, project_id: str) -> list[dict[str, object]]:
+        with session_scope(self.session_factory) as session:
+            rows = session.execute(
+                select(ProjectContextArtifactOrm)
+                .where(ProjectContextArtifactOrm.project_id == project_id)
+                .order_by(ProjectContextArtifactOrm.updated_at.desc())
+            ).scalars().all()
+            return [self._context_artifact_payload(row) for row in rows]
+
     def status(self, project_id: str) -> dict[str, object]:
         active = self.get_active_snapshot(project_id)
         if active is None:
@@ -301,6 +365,20 @@ class ProjectGraphStoreOrm:
             "relation_count": row.relation_count,
             "active": bool(row.active),
             "created_at": row.created_at,
+        }
+
+    def _context_artifact_payload(self, row: ProjectContextArtifactOrm) -> dict[str, object]:
+        return {
+            "id": row.id,
+            "project_id": row.project_id,
+            "path": row.path,
+            "kind": row.kind,
+            "title": row.title,
+            "content_hash": row.content_hash,
+            "size_bytes": row.size_bytes,
+            "metadata": json.loads(row.metadata_json),
+            "created_at": row.created_at,
+            "updated_at": row.updated_at,
         }
 
     def _file_payload(self, row: ProjectGraphFileOrm) -> dict[str, object]:

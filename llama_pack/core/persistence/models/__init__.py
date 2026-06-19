@@ -8,6 +8,7 @@ from llama_pack.core.persistence.models.model_asset import (
 )
 from llama_pack.core.persistence.models.settings import SettingsEntryOrm
 from llama_pack.core.persistence.models.projects import (
+    ProjectContextArtifactOrm,
     ProjectGraphFileOrm,
     ProjectGraphImportOrm,
     ProjectGraphRelationOrm,
@@ -43,6 +44,7 @@ __all__ = [
     "ModelOrm",
     "ModelProfileOrm",
     "ProjectGraphFileOrm",
+    "ProjectContextArtifactOrm",
     "ProjectGraphImportOrm",
     "ProjectGraphRelationOrm",
     "ProjectGraphSnapshotOrm",

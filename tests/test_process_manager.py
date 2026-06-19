@@ -456,6 +456,7 @@ def test_start_adopts_existing_process_on_port(tmp_path):
 
     assert result.running is True
     assert result.pid == live_pid
+    assert result.process_state == "adopted"
     # The adopted process should be tracked so a second start() is a no-op
     with patch.object(manager, "_find_pid_on_port", return_value=live_pid):
         result2 = manager.start("qwen")
@@ -476,6 +477,7 @@ def test_status_adopts_existing_process_on_port(tmp_path):
     find_pid.assert_called_once_with(8081)
     assert result.running is True
     assert result.pid == live_pid
+    assert result.process_state == "adopted"
 
 
 def test_list_statuses_adopts_existing_process_on_port(tmp_path):
@@ -490,6 +492,22 @@ def test_list_statuses_adopts_existing_process_on_port(tmp_path):
 
     assert result["running"] is True
     assert result["pid"] == live_pid
+    assert result["process_state"] == "adopted"
+
+
+def test_status_reports_stale_process_when_tracked_process_is_dead(tmp_path):
+    config, catalog = _agent_config(tmp_path)
+    manager = ProcessManager(config, catalog_service=catalog)
+    process = FakeProcess(pid=2468)
+    process._returncode = -9
+    manager._processes["qwen"] = process
+
+    with patch.object(manager, "_find_pid_on_port", return_value=None):
+        result = manager.status("qwen")
+
+    assert result.running is False
+    assert result.pid == 2468
+    assert result.process_state == "stale"
 
 
 def test_status_profile_adopts_existing_process_on_effective_port(tmp_path):

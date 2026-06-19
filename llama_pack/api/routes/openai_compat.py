@@ -17,7 +17,12 @@ from llama_pack.api.http_headers import (
     get_route_header,
 )
 from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_project_graph_store, get_project_store, get_thread_service
-from llama_pack.api.routes.projects import CreateProjectRequest
+from llama_pack.api.routes.projects import (
+    SAFE_ROOT_STATUSES,
+    CreateProjectRequest,
+    UpdateProjectRequest,
+    UpsertProjectNodeRootRequest,
+)
 from llama_pack.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_pack.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_pack.core.agent_tools.registry import ToolRegistry
@@ -109,6 +114,7 @@ class ProjectContextArtifact(BaseModel):
 class ProjectContextRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    project_id: str | None = None
     project: ProjectContextProject | None = None
     selected_paths: list[ProjectContextPath] = Field(default_factory=list)
     artifacts: list[ProjectContextArtifact] = Field(default_factory=list)
@@ -146,11 +152,14 @@ async def openai_client_session(request: Request, registry: NodeRegistry = Depen
 async def openai_client_project_context(
     action: Literal["summarize_project", "summarize_path", "refresh_context_item"],
     body: ProjectContextRequest,
+    config: AppConfig = Depends(get_config),
+    project_store: ProjectStoreOrm = Depends(get_project_store),
+    project_graph_store: ProjectGraphStoreOrm = Depends(get_project_graph_store),
 ):
     if action == "summarize_path":
         return _project_context_response(action, _summarize_path(body))
     if action == "refresh_context_item":
-        return _project_context_response(action, _refresh_context_item(body))
+        return _project_context_response(action, _refresh_context_item(body, config, project_store, project_graph_store))
     return _project_context_response(action, _summarize_project(body))
 
 
@@ -159,8 +168,7 @@ async def openai_client_list_projects(
     config: AppConfig = Depends(get_config),
     store: ProjectStoreOrm = Depends(get_project_store),
 ):
-    if config.mode != "controller":
-        raise HTTPException(status_code=404, detail="Projects are only available from controller mode")
+    _require_controller_projects(config)
     return {"projects": store.list_projects(include_archived=False)}
 
 
@@ -170,9 +178,60 @@ async def openai_client_create_project(
     config: AppConfig = Depends(get_config),
     store: ProjectStoreOrm = Depends(get_project_store),
 ):
-    if config.mode != "controller":
-        raise HTTPException(status_code=404, detail="Projects are only available from controller mode")
+    _require_controller_projects(config)
     return store.create_project(name=body.name.strip(), root_hint=_clean_optional_string(body.root_hint))
+
+
+@router.patch("/client/projects/{project_id}")
+async def openai_client_update_project(
+    project_id: str,
+    body: UpdateProjectRequest,
+    config: AppConfig = Depends(get_config),
+    store: ProjectStoreOrm = Depends(get_project_store),
+):
+    _require_controller_projects(config)
+    project = store.update_project(
+        project_id=project_id,
+        name=body.name.strip(),
+        root_hint=_clean_optional_string(body.root_hint),
+        archived=body.archived,
+    )
+    if project is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return project
+
+
+@router.get("/client/projects/{project_id}/node-roots")
+async def openai_client_list_project_node_roots(
+    project_id: str,
+    config: AppConfig = Depends(get_config),
+    store: ProjectStoreOrm = Depends(get_project_store),
+):
+    _require_controller_projects(config)
+    roots = store.list_node_roots(project_id)
+    if roots is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return {"node_roots": roots}
+
+
+@router.put("/client/projects/{project_id}/node-roots")
+async def openai_client_upsert_project_node_root(
+    project_id: str,
+    body: UpsertProjectNodeRootRequest,
+    config: AppConfig = Depends(get_config),
+    store: ProjectStoreOrm = Depends(get_project_store),
+):
+    _require_controller_projects(config)
+    status = _validated_safe_root_status(body.safe_root_status)
+    root = store.upsert_node_root(
+        project_id=project_id,
+        node_name=body.node_name.strip(),
+        root_path=body.root_path.strip(),
+        safe_root_status=status,
+    )
+    if root is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    return root
 
 
 @router.post("/client/diagnostics/chat")
@@ -457,13 +516,35 @@ def _summarize_path(body: ProjectContextRequest) -> dict[str, object]:
     }
 
 
-def _refresh_context_item(body: ProjectContextRequest) -> dict[str, object]:
+def _refresh_context_item(
+    body: ProjectContextRequest,
+    config: AppConfig,
+    project_store: ProjectStoreOrm,
+    project_graph_store: ProjectGraphStoreOrm,
+) -> dict[str, object]:
     selected_path = _focused_or_first_path(body)
-    return {
+    summary = {
         "project": _project_payload(body.project),
         "path": _path_summary(selected_path),
         "artifactCount": len(body.artifacts),
     }
+    if body.project_id is None:
+        return summary
+    if selected_path.content is None:
+        raise HTTPException(status_code=422, detail="refresh_context_item requires explicit content when project_id is provided")
+    _require_controller_projects(config)
+    if project_store.get_project(body.project_id) is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    artifact = project_graph_store.upsert_context_artifact(
+        project_id=body.project_id,
+        path=selected_path.path,
+        kind="path_summary",
+        title=_context_artifact_title(body.artifacts, selected_path.path),
+        content=selected_path.content,
+        metadata={"source_path": selected_path.path},
+    )
+    summary["artifactMetadata"] = _context_artifact_metadata_payload(artifact)
+    return summary
 
 
 def _project_payload(project: ProjectContextProject | None) -> dict[str, str | None] | None:
@@ -477,6 +558,19 @@ def _clean_optional_string(value: str | None) -> str | None:
         return None
     stripped = value.strip()
     return stripped if stripped else None
+
+
+def _require_controller_projects(config: AppConfig) -> None:
+    if config.mode != "controller":
+        raise HTTPException(status_code=404, detail="Projects are only available from controller mode")
+
+
+def _validated_safe_root_status(value: str) -> str:
+    status = value.strip()
+    if status not in SAFE_ROOT_STATUSES:
+        expected = ", ".join(sorted(SAFE_ROOT_STATUSES))
+        raise HTTPException(status_code=422, detail=f"safe_root_status must be one of: {expected}")
+    return status
 
 
 def _path_summary(selected_path: ProjectContextPath) -> dict[str, object]:
@@ -495,6 +589,26 @@ def _artifact_payload(artifact: ProjectContextArtifact) -> dict[str, object]:
         "path": artifact.path,
         "title": artifact.title,
         "metadata": dict(artifact.metadata),
+    }
+
+
+def _context_artifact_title(artifacts: list[ProjectContextArtifact], path: str) -> str | None:
+    for artifact in artifacts:
+        if artifact.path == path or artifact.metadata.get("source_path") == path:
+            return artifact.title
+    return None
+
+
+def _context_artifact_metadata_payload(artifact: dict[str, object]) -> dict[str, object]:
+    return {
+        "artifact_id": artifact["id"],
+        "project_id": artifact["project_id"],
+        "path": artifact["path"],
+        "kind": artifact["kind"],
+        "title": artifact["title"],
+        "content_hash": artifact["content_hash"],
+        "size_bytes": artifact["size_bytes"],
+        "updated_at": artifact["updated_at"],
     }
 
 

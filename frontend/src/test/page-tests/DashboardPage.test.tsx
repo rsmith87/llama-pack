@@ -142,6 +142,7 @@ it("renders rich model card runtime and configuration details", async () => {
         path: "/models/qwen-coder.gguf",
         port: 8081,
         pid: 4321,
+        process_state: "adopted",
         ctx: 16384,
         gpu_layers: 999,
         host: "127.0.0.1",
@@ -162,6 +163,8 @@ it("renders rich model card runtime and configuration details", async () => {
   expect(screen.getByText("8081")).toBeInTheDocument();
   expect(screen.getByText("PID")).toBeInTheDocument();
   expect(screen.getByText("4321")).toBeInTheDocument();
+  expect(screen.getByText("Process")).toBeInTheDocument();
+  expect(screen.getByText("adopted")).toBeInTheDocument();
   expect(screen.getByText("Context")).toBeInTheDocument();
   expect(screen.getByText("16,384")).toBeInTheDocument();
   expect(screen.getByText("GPU Layers")).toBeInTheDocument();

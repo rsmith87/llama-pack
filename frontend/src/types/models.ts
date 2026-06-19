@@ -63,6 +63,7 @@ export type LocalModel = {
   node_name?: string;
   port?: number;
   pid?: number | null;
+  process_state?: string | null;
   ctx?: number;
   capacity_ctx?: number | null;
   gpu_layers?: number;

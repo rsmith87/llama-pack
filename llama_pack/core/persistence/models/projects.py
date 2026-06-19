@@ -40,6 +40,27 @@ class ProjectNodeRootOrm(Base):
     )
 
 
+class ProjectContextArtifactOrm(Base):
+    __tablename__ = "project_context_artifacts"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id"), nullable=False)
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str | None] = mapped_column(Text, nullable=True)
+    content_hash: Mapped[str] = mapped_column(Text, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    metadata_json: Mapped[str] = mapped_column("metadata", Text, nullable=False)
+    created_at: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[str] = mapped_column(Text, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("project_id", "path", "kind", name="uq_project_context_artifacts_project_path_kind"),
+        Index("idx_project_context_artifacts_project", "project_id"),
+        Index("idx_project_context_artifacts_updated", "updated_at"),
+    )
+
+
 class ProjectGraphSnapshotOrm(Base):
     __tablename__ = "project_graph_snapshots"
 

@@ -132,6 +132,76 @@ def test_external_app_key_can_create_and_list_client_projects(tmp_path):
     assert list_response.json()["projects"][0]["id"] == create_response.json()["id"]
 
 
+def test_external_app_key_can_update_client_project(tmp_path):
+    app = _controller_app(tmp_path)
+    created_key = app.state.auth_store.create_external_key("Spitball", "https://spitball.local")
+    with TestClient(app) as client:
+        client.headers.update({"X-Llama-Pack-Key": created_key["key"]})
+        project = client.post("/v1/client/projects", json={"name": "Spitball", "root_hint": "/repo"}).json()
+        response = client.patch(
+            f"/v1/client/projects/{project['id']}",
+            json={"name": "Renamed", "root_hint": "  /workspace  ", "archived": False},
+        )
+        list_response = client.get("/v1/client/projects")
+
+    assert response.status_code == 200
+    assert response.json()["name"] == "Renamed"
+    assert response.json()["root_hint"] == "/workspace"
+    assert list_response.json()["projects"][0]["id"] == project["id"]
+    assert list_response.json()["projects"][0]["name"] == "Renamed"
+
+
+def test_external_app_key_can_upsert_client_project_node_root(tmp_path):
+    app = _controller_app(tmp_path)
+    created_key = app.state.auth_store.create_external_key("Spitball", "https://spitball.local")
+    with TestClient(app) as client:
+        client.headers.update({"X-Llama-Pack-Key": created_key["key"]})
+        project = client.post("/v1/client/projects", json={"name": "Spitball", "root_hint": "/repo"}).json()
+        first_response = client.put(
+            f"/v1/client/projects/{project['id']}/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "unknown"},
+        )
+        second_response = client.put(
+            f"/v1/client/projects/{project['id']}/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "allowed"},
+        )
+        list_response = client.get(f"/v1/client/projects/{project['id']}/node-roots")
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert second_response.json()["id"] == first_response.json()["id"]
+    assert second_response.json()["safe_root_status"] == "allowed"
+    assert list_response.json()["node_roots"] == [second_response.json()]
+
+
+def test_external_client_node_root_rejects_invalid_safe_root_status(tmp_path):
+    app = _controller_app(tmp_path)
+    created_key = app.state.auth_store.create_external_key("Spitball", "https://spitball.local")
+    with TestClient(app) as client:
+        client.headers.update({"X-Llama-Pack-Key": created_key["key"]})
+        project = client.post("/v1/client/projects", json={"name": "Spitball", "root_hint": "/repo"}).json()
+        response = client.put(
+            f"/v1/client/projects/{project['id']}/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "trusted"},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "safe_root_status must be one of: allowed, blocked, unknown"
+
+
+def test_external_client_project_routes_are_controller_only(tmp_path):
+    app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
+    with TestClient(app) as client:
+        update_response = client.patch("/v1/client/projects/project-1", json={"name": "Spitball", "root_hint": None, "archived": False})
+        root_response = client.put(
+            "/v1/client/projects/project-1/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "allowed"},
+        )
+
+    assert update_response.status_code == 404
+    assert root_response.status_code == 404
+
+
 def test_project_routes_are_controller_only(tmp_path):
     app = create_app(config=load_config({"mode": "agent", "log_dir": str(tmp_path)}))
     with TestClient(app) as client:

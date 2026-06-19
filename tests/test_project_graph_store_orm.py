@@ -128,3 +128,35 @@ def test_project_graph_store_queries_symbols_and_relations(tmp_path):
     assert context["file"]["path"] == "llama_pack/api/routes/projects.py"
     relations = store.relations(project_id=str(project["id"]), symbol_id="sym-route", relation_type="calls_best_effort", direction="out", depth=1)
     assert relations[0]["target_symbol"]["id"] == "sym-helper"
+
+
+def test_project_graph_store_upserts_context_artifact_metadata(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project = _create_project(db_path)
+    store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+
+    first = store.upsert_context_artifact(
+        project_id=str(project["id"]),
+        path="packages/spitball/src/styles/app.css",
+        kind="path_summary",
+        title="Style context",
+        content=".board { display: grid; }",
+        metadata={"source": "client"},
+    )
+    second = store.upsert_context_artifact(
+        project_id=str(project["id"]),
+        path="packages/spitball/src/styles/app.css",
+        kind="path_summary",
+        title="Updated style context",
+        content=".board { display: flex; }",
+        metadata={"source": "client", "revision": "2"},
+    )
+
+    assert second["id"] == first["id"]
+    assert second["title"] == "Updated style context"
+    assert second["content_hash"] != first["content_hash"]
+    assert second["size_bytes"] == 25
+    assert second["metadata"] == {"source": "client", "revision": "2"}
+    assert "content" not in second
+    assert store.list_context_artifacts(str(project["id"])) == [second]
