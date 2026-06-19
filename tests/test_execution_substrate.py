@@ -439,6 +439,74 @@ async def test_agent_worker_completes_project_graph_index_job():
 
 
 @pytest.mark.asyncio
+async def test_agent_worker_accepts_controller_created_project_graph_index_defaults():
+    calls = []
+
+    async def request(method, url, payload=None, headers=None):
+        calls.append((method, url, payload))
+        if url.endswith("/nodes/agent-a/work/claim"):
+            return [
+                {
+                    "attempt_id": "attempt-graph",
+                    "job": {
+                        "id": "job-graph",
+                        "type": "project.graph.index",
+                        "status": "assigned",
+                        "payload": {
+                            "project_id": "project-1",
+                            "node_name": "agent-a",
+                            "root_path": "/repo",
+                            "force": False,
+                        },
+                    },
+                }
+            ]
+        if url.endswith("/nodes/agent-a/work/jobs/job-graph/cancellation"):
+            return {"id": "job-graph", "cancellation_requested": False}
+        if url.endswith("/nodes/agent-a/work/attempt-graph/complete"):
+            return {"id": "job-graph", "status": "completed"}
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    class FakeGraphIndexer:
+        def index(self, payload, progress, is_cancel_requested):
+            assert payload.include_globs == ["**/*.py", "**/*.ts", "**/*.tsx"]
+            assert payload.overview_files == ["README.md", "AGENTS.md", "package.json", "pyproject.toml"]
+            assert payload.exclude_dirs == [".git", ".venv", "node_modules", "dist", "build", ".pytest_cache", "llama_pack/ui/react"]
+            assert payload.max_file_bytes == 524288
+            return GraphIndexResult(
+                project_id="project-1",
+                snapshot_id="snapshot-1",
+                status="ready",
+                root_path="/repo",
+                node_name="agent-a",
+                git_commit=None,
+                file_count=0,
+                symbol_count=0,
+                relation_count=0,
+                failed_file_count=0,
+                duration_ms=1,
+                warnings=[],
+            )
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+        project_graph_indexer=FakeGraphIndexer(),
+    )
+
+    assert await worker.run_once() == 1
+    complete_payload = next(call[2] for call in calls if call[1].endswith("/complete"))
+    assert complete_payload["result"]["snapshot_id"] == "snapshot-1"
+
+
+@pytest.mark.asyncio
 async def test_agent_worker_completes_llm_embed_job():
     calls = []
 

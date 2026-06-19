@@ -7,6 +7,13 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from llama_pack.core.code_graph.models import (
+    DEFAULT_PROJECT_GRAPH_MAX_FILE_BYTES,
+    default_project_graph_exclude_dirs,
+    default_project_graph_include_globs,
+    default_project_graph_overview_files,
+)
+
 
 REPO_ID_PATTERN = re.compile(r"^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$")
 
@@ -186,10 +193,10 @@ class ProjectGraphIndexJobPayload(BaseModel):
     project_id: str = Field(min_length=1)
     node_name: str = Field(min_length=1)
     root_path: str = Field(min_length=1)
-    include_globs: list[str] = Field(default_factory=lambda: ["**/*.py", "**/*.ts", "**/*.tsx"])
-    overview_files: list[str] = Field(default_factory=lambda: ["README.md", "AGENTS.md", "package.json", "pyproject.toml"])
-    exclude_dirs: list[str] = Field(default_factory=lambda: [".git", ".venv", "node_modules", "dist", "build", ".pytest_cache", "llama_pack/ui/react"])
-    max_file_bytes: int = Field(default=524288, ge=1)
+    include_globs: list[str] = Field(default_factory=default_project_graph_include_globs)
+    overview_files: list[str] = Field(default_factory=default_project_graph_overview_files)
+    exclude_dirs: list[str] = Field(default_factory=default_project_graph_exclude_dirs)
+    max_file_bytes: int = Field(default=DEFAULT_PROJECT_GRAPH_MAX_FILE_BYTES, ge=1)
     force: bool = False
     requirements: JobRequirements = Field(default_factory=lambda: JobRequirements(capacity={"project_graph_index": True}))
 

@@ -160,3 +160,21 @@ def test_project_graph_store_upserts_context_artifact_metadata(tmp_path):
     assert second["metadata"] == {"source": "client", "revision": "2"}
     assert "content" not in second
     assert store.list_context_artifacts(str(project["id"])) == [second]
+
+
+def test_project_graph_store_creates_local_project_mirror_for_remote_snapshot(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+
+    snapshot = store.create_snapshot(project_id="controller-project-1", node_name="mac-mini", root_path="/repo", git_commit=None)
+
+    assert snapshot["project_id"] == "controller-project-1"
+    project_store = ProjectStoreOrm(sqlite_url_for_path(db_path))
+    try:
+        project = project_store.get_project("controller-project-1")
+    finally:
+        project_store.close()
+    assert project is not None
+    assert project["name"] == "controller-project-1"
+    assert project["root_hint"] == "/repo"

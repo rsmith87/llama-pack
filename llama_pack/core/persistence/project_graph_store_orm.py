@@ -7,6 +7,7 @@ import uuid
 from typing import Any
 
 from sqlalchemy import delete, select, update
+from sqlalchemy.orm import Session
 
 from llama_pack.core.code_graph.models import GraphFileRecord, GraphImportRecord, GraphRelationRecord, GraphSymbolRecord
 from llama_pack.core.persistence.db_infra import create_persistence_engine, create_session_factory, require_sqlite_tables, session_scope, sqlite_path_from_url
@@ -17,6 +18,7 @@ from llama_pack.core.persistence.models.projects import (
     ProjectGraphRelationOrm,
     ProjectGraphSnapshotOrm,
     ProjectGraphSymbolOrm,
+    ProjectOrm,
 )
 
 
@@ -61,11 +63,28 @@ class ProjectGraphStoreOrm:
             created_at=now,
         )
         with session_scope(self.session_factory) as session:
+            if self._ensure_local_project(session, project_id=project_id, root_path=root_path, now=now):
+                session.flush()
             session.add(snapshot)
         loaded = self.get_snapshot(snapshot.id)
         if loaded is None:
             raise RuntimeError(f"Created graph snapshot {snapshot.id} could not be loaded")
         return loaded
+
+    def _ensure_local_project(self, session: Session, project_id: str, root_path: str, now: str) -> bool:
+        if session.get(ProjectOrm, project_id) is not None:
+            return False
+        session.add(
+            ProjectOrm(
+                id=project_id,
+                name=project_id,
+                root_hint=root_path,
+                created_at=now,
+                updated_at=now,
+                archived=0,
+            )
+        )
+        return True
 
     def get_snapshot(self, snapshot_id: str) -> dict[str, object] | None:
         with session_scope(self.session_factory) as session:

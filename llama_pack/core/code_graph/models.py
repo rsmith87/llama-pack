@@ -4,6 +4,23 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+DEFAULT_PROJECT_GRAPH_EXCLUDE_DIRS = [".git", ".venv", "node_modules", "dist", "build", ".pytest_cache", "llama_pack/ui/react"]
+DEFAULT_PROJECT_GRAPH_INCLUDE_GLOBS = ["**/*.py", "**/*.ts", "**/*.tsx"]
+DEFAULT_PROJECT_GRAPH_MAX_FILE_BYTES = 524288
+DEFAULT_PROJECT_GRAPH_OVERVIEW_FILES = ["README.md", "AGENTS.md", "package.json", "pyproject.toml"]
+
+
+def default_project_graph_exclude_dirs() -> list[str]:
+    return list(DEFAULT_PROJECT_GRAPH_EXCLUDE_DIRS)
+
+
+def default_project_graph_include_globs() -> list[str]:
+    return list(DEFAULT_PROJECT_GRAPH_INCLUDE_GLOBS)
+
+
+def default_project_graph_overview_files() -> list[str]:
+    return list(DEFAULT_PROJECT_GRAPH_OVERVIEW_FILES)
+
 
 class GraphFileRecord(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -101,11 +118,11 @@ class ProjectGraphIndexPayload(BaseModel):
     project_id: str = Field(min_length=1)
     node_name: str = Field(min_length=1)
     root_path: str = Field(min_length=1)
-    include_globs: list[str] = Field(min_length=1)
-    overview_files: list[str]
-    exclude_dirs: list[str]
-    max_file_bytes: int = Field(ge=1)
-    force: bool
+    include_globs: list[str] = Field(default_factory=default_project_graph_include_globs, min_length=1)
+    overview_files: list[str] = Field(default_factory=default_project_graph_overview_files)
+    exclude_dirs: list[str] = Field(default_factory=default_project_graph_exclude_dirs)
+    max_file_bytes: int = Field(default=DEFAULT_PROJECT_GRAPH_MAX_FILE_BYTES, ge=1)
+    force: bool = False
 
 
 class ParsedGraphFile(BaseModel):
