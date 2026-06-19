@@ -154,7 +154,7 @@ function recordJsxRelations(sourceFile, fileId, relative, symbols, relations) {
         const span = lineSpan(sourceFile, node);
         const sourceName = enclosingNamedSymbol(node);
         relations.push({
-          id: stableId("relation", relative, "component_uses", tag, String(span.startLine)),
+          id: stableId("relation", relative, "component_uses", tag, String(span.startLine), String(node.getStart(sourceFile))),
           source_symbol_id: sourceName ? symbolIdsByName.get(sourceName) ?? null : null,
           target_symbol_id: symbolIdsByName.get(tag) ?? null,
           source_file_id: fileId,
