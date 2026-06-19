@@ -31,7 +31,15 @@ from llama_pack.core.persistence.models.orchestration import (
     SchemaMetaOrm,
 )
 from llama_pack.core.persistence.models.settings import SettingsEntryOrm
-from llama_pack.core.persistence.models.projects import ProjectNodeRootOrm, ProjectOrm
+from llama_pack.core.persistence.models.projects import (
+    ProjectGraphFileOrm,
+    ProjectGraphImportOrm,
+    ProjectGraphRelationOrm,
+    ProjectGraphSnapshotOrm,
+    ProjectGraphSymbolOrm,
+    ProjectNodeRootOrm,
+    ProjectOrm,
+)
 
 
 TARGET_REVISIONS = {
@@ -43,7 +51,7 @@ TARGET_REVISIONS = {
     "benchmarks": "20260612_0006",
     "models": "20260614_0002",
     "settings": "20260617_0001",
-    "projects": "20260618_0001",
+    "projects": "20260619_0002",
 }
 LATEST_REVISION = TARGET_REVISIONS["chat_sessions"]
 
@@ -154,6 +162,11 @@ def prepare_projects_db(db_path: Path, revision: str = TARGET_REVISIONS["project
         [
             ProjectOrm.__table__,
             ProjectNodeRootOrm.__table__,
+            ProjectGraphSnapshotOrm.__table__,
+            ProjectGraphFileOrm.__table__,
+            ProjectGraphSymbolOrm.__table__,
+            ProjectGraphImportOrm.__table__,
+            ProjectGraphRelationOrm.__table__,
         ],
         revision,
     )

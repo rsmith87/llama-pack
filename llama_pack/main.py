@@ -70,6 +70,8 @@ from llama_pack.core.persistence.model_download_store_orm import ModelDownloadSt
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
 from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
+from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
+from llama_pack.core.code_graph.indexer import ProjectGraphIndexer
 from llama_pack.core.settings.runtime import RuntimeSettingsService
 from llama_pack.core.benchmarks.runner import BenchmarkRunner
 from llama_pack.core.app.auth_policy import (
@@ -339,6 +341,7 @@ def _configure_app_state(
     )
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     app.state.project_store = ProjectStoreOrm(db_url=auth_urls.projects)
+    app.state.project_graph_store = ProjectGraphStoreOrm(db_url=auth_urls.projects)
     if app_config.mode == "controller":
         app.state.benchmark_runner = BenchmarkRunner(app.state.benchmark_store, app.state.chat_proxy)
         app.state.memory_store = ChromaMemoryStore(app_config.memory)
@@ -355,6 +358,7 @@ def _configure_app_state(
         gguf_library=app.state.gguf_library,
         process_manager=app.state.process_manager,
         transfer_manager=app.state.transfer_manager,
+        project_graph_indexer=ProjectGraphIndexer(app.state.project_graph_store),
     )
     app.state.controller_sweeper_task = None
     app.state.controller_sweeper_stop_event = asyncio.Event()

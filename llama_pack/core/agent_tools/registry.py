@@ -6,11 +6,12 @@ from llama_pack.core.config.models import AgentToolsConfig
 
 
 class ToolRegistry:
-    def __init__(self, config: AgentToolsConfig) -> None:
+    def __init__(self, config: AgentToolsConfig, runtime_tools: list[dict[str, Any]] | None = None) -> None:
         self.config = config
+        self.runtime_tools = runtime_tools or []
 
     def openai_tools(self) -> list[dict[str, Any]]:
-        tools = []
+        tools = list(self.runtime_tools)
         for name, tool in self.config.tools.items():
             parameters = tool.parameters or _default_parameters(tool.type)
             tools.append(

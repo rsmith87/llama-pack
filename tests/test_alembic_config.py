@@ -124,7 +124,15 @@ def test_target_metadata_for_returns_only_selected_target_tables():
         "models",
     }
     assert set(target_metadata_for("settings").tables) == {"settings_entries"}
-    assert set(target_metadata_for("projects").tables) == {"project_node_roots", "projects"}
+    assert set(target_metadata_for("projects").tables) == {
+        "project_node_roots",
+        "projects",
+        "project_graph_snapshots",
+        "project_graph_files",
+        "project_graph_symbols",
+        "project_graph_imports",
+        "project_graph_relations",
+    }
     assert set(target_metadata_for("controller").tables) == {
         "artifacts",
         "controller_leases",
@@ -178,6 +186,22 @@ def test_projects_migrations_include_initial_revision():
     assert module.revision == "20260618_0001"
 
 
+def test_projects_migrations_include_code_graph_revision():
+    migration_path = Path("migrations/versions/projects/20260619_0002_project_code_graph.py")
+    assert migration_path.exists()
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("projects_code_graph", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "20260619_0002"
+    assert module.down_revision == "20260618_0001"
+
+
 def test_projects_migration_stamps_existing_bootstrap_tables(tmp_path, monkeypatch):
     db_path = tmp_path / "projects.db"
     engine = create_engine(f"sqlite+pysqlite:///{db_path}", future=True)
@@ -199,7 +223,7 @@ def test_projects_migration_stamps_existing_bootstrap_tables(tmp_path, monkeypat
             version = connection.exec_driver_sql("select version_num from alembic_version").scalar_one()
     finally:
         engine.dispose()
-    assert version == "20260618_0001"
+    assert version == "20260619_0002"
 
 
 def test_models_migrations_include_catalog_expansion_revision():

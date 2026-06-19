@@ -41,6 +41,7 @@ class LlmGenerateJobPayload(BaseModel):
     target: str = "auto"
     cache_prompt: bool | None = None
     slot_id: int | None = None
+    project_id: str | None = None
     requirements: JobRequirements | None = None
 
     @model_validator(mode="after")
@@ -179,6 +180,29 @@ class LlmBatchJobPayload(BaseModel):
     requirements: JobRequirements | None = None
 
 
+class ProjectGraphIndexJobPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    project_id: str = Field(min_length=1)
+    node_name: str = Field(min_length=1)
+    root_path: str = Field(min_length=1)
+    include_globs: list[str] = Field(default_factory=lambda: ["**/*.py", "**/*.ts", "**/*.tsx"])
+    overview_files: list[str] = Field(default_factory=lambda: ["README.md", "AGENTS.md", "package.json", "pyproject.toml"])
+    exclude_dirs: list[str] = Field(default_factory=lambda: [".git", ".venv", "node_modules", "dist", "build", ".pytest_cache", "llama_pack/ui/react"])
+    max_file_bytes: int = Field(default=524288, ge=1)
+    force: bool = False
+    requirements: JobRequirements = Field(default_factory=lambda: JobRequirements(capacity={"project_graph_index": True}))
+
+    @field_validator("include_globs", "overview_files", "exclude_dirs")
+    @classmethod
+    def validate_relative_items(cls, value: list[str]) -> list[str]:
+        for item in value:
+            normalized = item.strip()
+            if not normalized or normalized.startswith("/") or "\\" in normalized:
+                raise ValueError("graph index path patterns must be non-empty relative POSIX strings")
+        return value
+
+
 @dataclass
 class ResolvedBatchCase:
     case_id: str
@@ -200,6 +224,8 @@ def validate_job_payload(job_type: str, payload: dict[str, Any]) -> dict[str, An
         return LlmEmbedJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     if job_type == "llm.batch":
         return LlmBatchJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
+    if job_type == "project.graph.index":
+        return ProjectGraphIndexJobPayload.model_validate(payload).model_dump(mode="json", exclude_none=True)
     return payload
 
 

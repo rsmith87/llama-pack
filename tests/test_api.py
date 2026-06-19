@@ -2083,6 +2083,85 @@ def test_openai_compat_agent_tool_runtime_executes_local_tool_loop(tmp_path):
     assert trace["status"] == "ok"
 
 
+def test_openai_compat_agent_tool_runtime_exposes_project_graph_tools(tmp_path):
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "graph ready"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint="/repo")
+    snapshot = app.state.project_graph_store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit=None)
+    app.state.project_graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    app.state.project_graph_store.activate_snapshot(str(snapshot["id"]))
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "what is in this project?"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+        },
+    )
+
+    assert response.status_code == 200
+    tool_names = [tool["function"]["name"] for tool in calls[0][1]["tools"]]
+    assert "graph_overview" in tool_names
+    assert calls[0][1]["messages"][0]["role"] == "system"
+    assert "Project code graph tools are available" in calls[0][1]["messages"][0]["content"]
+
+
+def test_openai_compat_agent_tool_runtime_rejects_unindexed_project_graph(tmp_path):
+    async def fake_chat_request(url, payload):
+        return {"choices": [{"message": {"role": "assistant", "content": "should not run"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint="/repo")
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "what is in this project?"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Project graph is not indexed"
+
+
 def test_openai_compat_agent_tool_runtime_uses_chat_scheduler_admission_hooks(tmp_path):
     async def fake_chat_request(url, payload):
         return {"choices": [{"message": {"role": "assistant", "content": "should be blocked"}}]}

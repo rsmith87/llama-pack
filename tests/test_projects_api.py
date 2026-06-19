@@ -58,6 +58,66 @@ def test_controller_can_upsert_project_node_root(tmp_path):
     assert loaded_response.json()["node_roots"] == [root]
 
 
+def test_project_graph_index_creates_orchestration_job(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        client.put(
+            f"/lm-api/v1/projects/{project['id']}/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "allowed"},
+        )
+        response = client.post(
+            f"/lm-api/v1/projects/{project['id']}/graph/index",
+            json={"node_name": "mac-mini", "root_path": "/repo"},
+        )
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["type"] == "project.graph.index"
+    assert body["target_selector"] == "node:mac-mini"
+    assert body["payload"]["project_id"] == project["id"]
+    assert body["payload"]["root_path"] == "/repo"
+
+
+def test_project_graph_index_rejects_unregistered_root(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        response = client.post(
+            f"/lm-api/v1/projects/{project['id']}/graph/index",
+            json={"node_name": "mac-mini", "root_path": "/repo"},
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Project root is not registered for node mac-mini: /repo"
+
+
+def test_project_graph_status_and_overview_return_not_indexed(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        status_response = client.get(f"/lm-api/v1/projects/{project['id']}/graph/status")
+        overview_response = client.get(f"/lm-api/v1/projects/{project['id']}/graph/overview")
+
+    assert status_response.status_code == 200
+    assert status_response.json() == {"project_id": project["id"], "status": "not_indexed", "snapshot_id": None}
+    assert overview_response.status_code == 409
+    assert overview_response.json()["detail"] == "Project graph is not indexed"
+
+
+def test_project_graph_query_rejects_unsupported_query_type(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        response = client.post(
+            f"/lm-api/v1/projects/{project['id']}/graph/query",
+            json={"type": "unknown", "payload": {}},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "Unsupported project graph query type: unknown"
+
+
 def test_external_app_key_can_create_and_list_client_projects(tmp_path):
     app = _controller_app(tmp_path)
     created_key = app.state.auth_store.create_external_key("Spitball", "https://spitball.local")

@@ -16,11 +16,12 @@ from llama_pack.api.http_headers import (
     get_node_header,
     get_route_header,
 )
-from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_project_store, get_thread_service
+from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_project_graph_store, get_project_store, get_thread_service
 from llama_pack.api.routes.projects import CreateProjectRequest
 from llama_pack.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_pack.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_pack.core.agent_tools.registry import ToolRegistry
+from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
 from llama_pack.api.routes.chat.common import (
     ChatMessage,
     ChatRequestBody,
@@ -34,6 +35,7 @@ from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
 from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.core.threads.service import ThreadService
@@ -68,6 +70,7 @@ class OpenAIChatCompletionsRequest(BaseModel):
     context_profile: str | None = None
     tool_runtime: Literal["agent"] | None = None
     tool_choice: dict[str, Any] | str | None = None
+    project_id: str | None = None
 
 
 class ClientChatDiagnosticsRequest(BaseModel):
@@ -258,6 +261,8 @@ async def openai_chat_completions(
     manager: ProcessManager = Depends(get_process_manager),
     profile_activation: ProfileActivationService = Depends(get_profile_activation_service),
     thread_service: ThreadService = Depends(get_thread_service),
+    project_store: ProjectStoreOrm = Depends(get_project_store),
+    project_graph_store: ProjectGraphStoreOrm = Depends(get_project_graph_store),
 ):
     try:
         model_name = body.model
@@ -268,14 +273,18 @@ async def openai_chat_completions(
             payload["tool_runtime"] = body.tool_runtime
         if body.tool_choice is not None:
             payload["tool_choice"] = body.tool_choice
+        if body.project_id is not None:
+            payload["project_id"] = body.project_id
         profile_headers: dict[str, str] = {}
         if config.mode != "controller":
             model_name, profile_headers = resolve_profile_model(model_name, payload, profile_activation)
         if body.tool_runtime == "agent" and config.mode == "agent":
             if not config.agent_tools.enabled:
                 raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
+            project_graph_context = _project_graph_context(body.project_id, project_store, project_graph_store)
             if body.stream:
-                tool_payload = {**payload, "tools": ToolRegistry(config.agent_tools).openai_tools()}
+                runtime_tools = project_graph_tool_definitions() if project_graph_context is not None else []
+                tool_payload = {**payload, "tools": ToolRegistry(config.agent_tools, runtime_tools=runtime_tools).openai_tools()}
                 stream, headers = await scheduler.stream_with_meta(model_name, tool_payload)
                 return StreamingResponse(
                     _agent_tool_detection_stream(stream),
@@ -288,7 +297,11 @@ async def openai_chat_completions(
                 )
             with track_model_if_local(manager, model_name):
                 response, headers = await AgentToolLoop(
-                    config, scheduler, process_manager=manager, memory_store=getattr(request.app.state, "memory_store", None)
+                    config,
+                    scheduler,
+                    process_manager=manager,
+                    memory_store=getattr(request.app.state, "memory_store", None),
+                    project_graph_context=project_graph_context,
                 ).run(model_name, payload)
             return JSONResponse(
                 content=response,
@@ -393,6 +406,20 @@ async def _agent_tool_detection_stream(stream: AsyncIterator[bytes]) -> AsyncIte
                 yield b"data: [DONE]\n\n"
                 return
         yield chunk
+
+
+def _project_graph_context(
+    project_id: str | None,
+    project_store: ProjectStoreOrm,
+    project_graph_store: ProjectGraphStoreOrm,
+) -> ProjectGraphToolContext | None:
+    if project_id is None:
+        return None
+    if project_store.get_project(project_id) is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project_graph_store.get_active_snapshot(project_id) is None:
+        raise HTTPException(status_code=409, detail="Project graph is not indexed")
+    return ProjectGraphToolContext(project_id=project_id, store=project_graph_store)
 
 
 def _project_context_metadata() -> dict[str, object]:

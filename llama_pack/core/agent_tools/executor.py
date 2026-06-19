@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING, Any
 
 from llama_pack.core.agent_tools.adapters import ToolAdapter, default_adapters
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder, ToolTraceWriter
+from llama_pack.core.code_graph.tools import GRAPH_TOOL_NAMES, ProjectGraphToolContext, execute_project_graph_tool
 from llama_pack.core.config.models import AppConfig
 
 if TYPE_CHECKING:
@@ -21,11 +22,13 @@ class ToolExecutor:
         trace_recorder: RuntimeTraceRecorder | None = None,
         process_manager: ProcessManager | None = None,
         memory_store: ChromaMemoryStore | None = None,
+        project_graph_context: ProjectGraphToolContext | None = None,
     ) -> None:
         self.config = config
         self.adapters = adapters or default_adapters(config, process_manager=process_manager, memory_store=memory_store)
         self.trace_writer = trace_writer or ToolTraceWriter(config)
         self.trace_recorder = trace_recorder
+        self.project_graph_context = project_graph_context
 
     async def execute(
         self,
@@ -47,6 +50,12 @@ class ToolExecutor:
                 title=f"{name} started",
                 payload={"tool_name": name, "arguments": arguments},
             )
+        if name in GRAPH_TOOL_NAMES:
+            result = await self._execute_project_graph_tool(name, arguments)
+            self.trace_writer.write(request_id, model, name, "project_graph", started, result)
+            self._emit_completed(name, arguments, result, model, case_id, tool_call_id, started)
+            return result
+
         tool = self.config.agent_tools.tools.get(name)
         if tool is None:
             result = {"ok": False, "error": f"Unknown tool {name!r}"}
@@ -69,6 +78,14 @@ class ToolExecutor:
         self.trace_writer.write(request_id, model, name, tool.type, started, result)
         self._emit_completed(name, arguments, result, model, case_id, tool_call_id, started)
         return result
+
+    async def _execute_project_graph_tool(self, name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+        if self.project_graph_context is None:
+            return {"ok": False, "error": "Project graph tools require an active project_id"}
+        try:
+            return await execute_project_graph_tool(self.project_graph_context, name, arguments)
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
 
     def _emit_completed(
         self,

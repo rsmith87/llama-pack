@@ -7,6 +7,7 @@ from uuid import uuid4
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
+from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
 from llama_pack.core.config.models import AppConfig
 
 if TYPE_CHECKING:
@@ -22,16 +23,19 @@ class AgentToolLoop:
         process_manager: ProcessManager | None = None,
         memory_store: ChromaMemoryStore | None = None,
         trace_recorder: RuntimeTraceRecorder | None = None,
+        project_graph_context: ProjectGraphToolContext | None = None,
     ) -> None:
         self.config = config
         self.proxy = proxy
-        self.registry = ToolRegistry(config.agent_tools)
+        runtime_tools = project_graph_tool_definitions() if project_graph_context is not None else []
+        self.registry = ToolRegistry(config.agent_tools, runtime_tools=runtime_tools)
         self.trace_recorder = trace_recorder
         self.executor = ToolExecutor(
             config,
             process_manager=process_manager,
             memory_store=memory_store,
             trace_recorder=trace_recorder,
+            project_graph_context=project_graph_context,
         )
 
     async def run(
@@ -42,6 +46,14 @@ class AgentToolLoop:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         request_id = request_id or str(uuid4())
         messages = [dict(message) for message in payload.get("messages", [])]
+        if self.executor.project_graph_context is not None:
+            messages.insert(
+                0,
+                {
+                    "role": "system",
+                    "content": "Project code graph tools are available for this chat. Use them to inspect indexed symbols, relationships, routes, and React components before making codebase claims.",
+                },
+            )
         base_payload = {key: value for key, value in payload.items() if key not in {"messages", "tool_runtime"}}
         tool_defs = self.registry.openai_tools()
         last_meta: dict[str, Any] = {}

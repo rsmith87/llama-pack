@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from llama_pack.core.code_graph.models import GraphIndexProgress, GraphIndexResult
 from llama_pack.core.nodes.worker import AgentWorker
 from llama_pack.core.config import load_config
 from llama_pack.core.orchestration.job_contracts import validate_job_payload
@@ -104,6 +105,28 @@ def test_validate_model_transfer_payload_rejects_same_node():
                 "include": "selected_with_sidecars",
             },
         )
+
+
+def test_validate_project_graph_index_payload_accepts_defaults():
+    payload = validate_job_payload(
+        "project.graph.index",
+        {
+            "project_id": "project-1",
+            "node_name": "agent-a",
+            "root_path": "/repo",
+        },
+    )
+
+    assert payload["project_id"] == "project-1"
+    assert payload["node_name"] == "agent-a"
+    assert payload["include_globs"] == ["**/*.py", "**/*.ts", "**/*.tsx"]
+    assert payload["exclude_dirs"] == [".git", ".venv", "node_modules", "dist", "build", ".pytest_cache", "llama_pack/ui/react"]
+    assert payload["requirements"]["capacity"] == {"project_graph_index": True}
+
+
+def test_validate_project_graph_index_payload_rejects_missing_project_id():
+    with pytest.raises(ValueError):
+        validate_job_payload("project.graph.index", {"node_name": "agent-a", "root_path": "/repo"})
 
 
 def test_model_download_job_validates_required_payload(tmp_path):
@@ -323,6 +346,96 @@ async def test_agent_worker_fails_unsupported_job_type_non_retryable():
     fail_payload = [call[2] for call in calls if call[1].endswith("/fail")][0]
     assert fail_payload["error_code"] == "UNSUPPORTED_JOB_TYPE"
     assert fail_payload["retryable"] is False
+
+
+@pytest.mark.asyncio
+async def test_agent_worker_completes_project_graph_index_job():
+    calls = []
+
+    async def request(method, url, payload=None, headers=None):
+        calls.append((method, url, payload))
+        if url.endswith("/nodes/agent-a/work/claim"):
+            return [
+                {
+                    "attempt_id": "attempt-graph",
+                    "job": {
+                        "id": "job-graph",
+                        "type": "project.graph.index",
+                        "status": "assigned",
+                        "payload": {
+                            "project_id": "project-1",
+                            "node_name": "agent-a",
+                            "root_path": "/repo",
+                            "include_globs": ["**/*.py"],
+                            "overview_files": [],
+                            "exclude_dirs": [],
+                            "max_file_bytes": 1024,
+                            "force": False,
+                        },
+                    },
+                }
+            ]
+        if url.endswith("/nodes/agent-a/work/jobs/job-graph/cancellation"):
+            return {"id": "job-graph", "cancellation_requested": False}
+        if url.endswith("/nodes/agent-a/work/attempt-graph/progress"):
+            return {"ok": True}
+        if url.endswith("/nodes/agent-a/work/attempt-graph/complete"):
+            return {"id": "job-graph", "status": "completed"}
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    class FakeGraphIndexer:
+        def index(self, payload, progress, is_cancel_requested):
+            assert payload.project_id == "project-1"
+            assert is_cancel_requested() is False
+            progress(
+                GraphIndexProgress(
+                    phase="completed",
+                    message="done",
+                    percent=100,
+                    files_discovered=1,
+                    files_scanned=1,
+                    files_indexed=1,
+                    files_failed=0,
+                    symbols_indexed=1,
+                    relations_indexed=0,
+                    current_path=None,
+                    warnings=[],
+                )
+            )
+            return GraphIndexResult(
+                project_id="project-1",
+                snapshot_id="snapshot-1",
+                status="ready",
+                root_path="/repo",
+                node_name="agent-a",
+                git_commit=None,
+                file_count=1,
+                symbol_count=1,
+                relation_count=0,
+                failed_file_count=0,
+                duration_ms=12,
+                warnings=[],
+            )
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+        project_graph_indexer=FakeGraphIndexer(),
+    )
+
+    assert await worker.run_once() == 1
+    progress_payload = next(call[2]["progress"] for call in calls if call[1].endswith("/progress"))
+    assert progress_payload["phase"] == "completed"
+    complete_payload = next(call[2] for call in calls if call[1].endswith("/complete"))
+    assert complete_payload["result"]["snapshot_id"] == "snapshot-1"
+    assert complete_payload["artifacts"][0]["kind"] == "project_graph_snapshot"
 
 
 @pytest.mark.asyncio

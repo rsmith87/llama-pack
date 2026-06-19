@@ -10,7 +10,12 @@ import respx
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
+from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
 from llama_pack.core.config import load_config
+from llama_pack.core.persistence.db_infra import sqlite_url_for_path
+from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
+from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
+from tests.persistence_db_setup import prepare_projects_db
 
 
 def test_tool_registry_emits_openai_tool_definitions(tmp_path):
@@ -76,6 +81,18 @@ def test_tool_registry_emits_dynamic_file_read_path_schema(tmp_path):
         "required": ["path"],
         "additionalProperties": False,
     }
+
+
+def test_tool_registry_emits_project_graph_runtime_tools(tmp_path):
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    tools = ToolRegistry(config.agent_tools, runtime_tools=project_graph_tool_definitions()).openai_tools()
+
+    names = [tool["function"]["name"] for tool in tools]
+    assert "graph_overview" in names
+    assert "graph_find_symbol" in names
+    find_symbol = next(tool for tool in tools if tool["function"]["name"] == "graph_find_symbol")
+    assert find_symbol["function"]["parameters"]["required"] == ["query"]
 
 
 @pytest.mark.asyncio
@@ -145,6 +162,60 @@ async def test_tool_executor_reads_dynamic_file_under_configured_root(tmp_path):
     assert result["ok"] is True
     assert result["path"] == str(logs / "backend.log")
     assert result["content"] == "backend ready"
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_runs_project_graph_tool_from_runtime_context(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project_store = ProjectStoreOrm(sqlite_url_for_path(db_path))
+    project = project_store.create_project(name="Llama Pack", root_hint="/repo")
+    project_store.close()
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    snapshot = graph_store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-ui",
+                "path": "frontend/src/App.tsx",
+                "language": "typescript",
+                "content_hash": "hash-ui",
+                "size_bytes": 42,
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-app",
+                "file_id": "file-ui",
+                "qualified_name": "frontend.src.App.App",
+                "name": "App",
+                "kind": "component",
+                "language": "typescript",
+                "start_line": 1,
+                "end_line": 5,
+                "signature": "export function App()",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    result = await ToolExecutor(
+        config,
+        project_graph_context=ProjectGraphToolContext(project_id=str(project["id"]), store=graph_store),
+    ).execute("graph_find_symbol", {"query": "App"}, request_id="req-1", model="qwen")
+
+    assert result["ok"] is True
+    assert result["symbols"][0]["id"] == "sym-app"
 
 
 @pytest.mark.asyncio

@@ -48,7 +48,15 @@ TARGET_TABLES: dict[str, tuple[str, ...]] = {
     ),
     "models": ("model_assets", "models", "model_asset_provenance", "model_profiles", "model_deployments"),
     "settings": ("settings_entries",),
-    "projects": ("projects", "project_node_roots"),
+    "projects": (
+        "projects",
+        "project_node_roots",
+        "project_graph_snapshots",
+        "project_graph_files",
+        "project_graph_symbols",
+        "project_graph_imports",
+        "project_graph_relations",
+    ),
 }
 
 

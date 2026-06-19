@@ -22,6 +22,8 @@ from llama_pack.core.orchestration.job_contracts import (
     embed_payload_from_llm_embed,
     install_payload_from_model_install,
 )
+from llama_pack.core.code_graph.indexer import ProjectGraphIndexCanceled
+from llama_pack.core.code_graph.models import ProjectGraphIndexPayload
 from llama_pack.core.runtime.process_manager import ProcessManager
 
 
@@ -45,6 +47,7 @@ class AgentWorker:
         gguf_library: Any | None = None,
         process_manager: Any | None = None,
         transfer_manager: Any | None = None,
+        project_graph_indexer: Any | None = None,
     ):
         self.config = config
         self._request = request or self._default_request
@@ -55,6 +58,7 @@ class AgentWorker:
         self._download_manager = download_manager
         self._gguf_library = gguf_library
         self._process_manager = process_manager
+        self._project_graph_indexer = project_graph_indexer
         self._task: asyncio.Task | None = None
         self._stop_event: asyncio.Event | None = None
 
@@ -141,6 +145,9 @@ class AgentWorker:
             return
         if job_type == "llm.batch":
             await self._run_llm_batch(attempt_id, job)
+            return
+        if job_type == "project.graph.index":
+            await self._run_project_graph_index(attempt_id, job)
             return
         await self._fail(attempt_id, "UNSUPPORTED_JOB_TYPE", f"Unsupported job type: {job_type}", retryable=False)
 
@@ -424,6 +431,56 @@ class AgentWorker:
             await self._fail(attempt_id, "UPSTREAM_TRANSPORT_ERROR", str(exc), retryable=True)
         except Exception as exc:
             await self._fail(attempt_id, "EXECUTION_ERROR", str(exc), retryable=True)
+
+    async def _run_project_graph_index(self, attempt_id: str, job: dict[str, Any]) -> None:
+        job_id = str(job.get("id", ""))
+        if await self._is_cancel_requested(job_id):
+            await self._fail(attempt_id, "GRAPH_INDEX_CANCELED", "Job canceled before graph indexing", retryable=False)
+            return
+        if self._project_graph_indexer is None:
+            await self._fail(attempt_id, "EXECUTION_ERROR", "Agent worker project graph indexer is not configured", retryable=False)
+            return
+        try:
+            payload = ProjectGraphIndexPayload.model_validate(job.get("payload", {}))
+            cancel_requested = await self._is_cancel_requested(job_id)
+
+            def progress(event) -> None:
+                progress_events.append(event.model_dump())
+
+            def is_cancel_requested() -> bool:
+                return cancel_requested
+
+            progress_events: list[dict[str, Any]] = []
+            result = self._project_graph_indexer.index(payload=payload, progress=progress, is_cancel_requested=is_cancel_requested)
+            for event in progress_events:
+                await self._progress(attempt_id, event)
+            await self._complete(
+                attempt_id,
+                {
+                    **result.model_dump(mode="json"),
+                    "worker_node": self.config.node_name,
+                    "completed_at": datetime.now(timezone.utc).isoformat(),
+                },
+                artifacts=[
+                    {
+                        "kind": "project_graph_snapshot",
+                        "uri": f"project-graph://{result.snapshot_id}",
+                        "meta": {
+                            "project_id": result.project_id,
+                            "snapshot_id": result.snapshot_id,
+                            "status": result.status,
+                        },
+                    }
+                ],
+            )
+        except ProjectGraphIndexCanceled as exc:
+            await self._fail(attempt_id, "GRAPH_INDEX_CANCELED", str(exc), retryable=False)
+        except ValueError as exc:
+            await self._fail(attempt_id, "INVALID_JOB_PAYLOAD", str(exc), retryable=False)
+        except FileNotFoundError as exc:
+            await self._fail(attempt_id, "PROJECT_ROOT_NOT_FOUND", str(exc), retryable=False)
+        except Exception as exc:
+            await self._fail(attempt_id, "GRAPH_SNAPSHOT_WRITE_FAILED", str(exc), retryable=True)
 
     async def _is_cancel_requested(self, job_id: str) -> bool:
         if not job_id:

@@ -152,6 +152,7 @@ class ChatProxy:
             "tools",
             "tool_choice",
             "tool_runtime",
+            "project_id",
         ):
             if payload.get(key) is not None:
                 request_payload[key] = payload[key]
