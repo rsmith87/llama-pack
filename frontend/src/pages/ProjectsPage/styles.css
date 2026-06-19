@@ -1,0 +1,55 @@
+.projects-page-react {
+  display: grid;
+  gap: 16px;
+}
+
+.projects-layout {
+  display: grid;
+  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.4fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.projects-create-form,
+.projects-edit-form,
+.projects-root-form {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.projects-root-form {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.4fr) minmax(140px, 0.6fr) auto;
+  align-items: end;
+}
+
+.projects-edit-form {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
+  align-items: end;
+}
+
+.projects-create-form {
+  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
+  align-items: end;
+}
+
+.projects-detail-stack {
+  display: grid;
+  gap: 12px;
+}
+
+.projects-save-message {
+  margin: 0;
+  color: var(--success);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+@media (max-width: 1080px) {
+  .projects-layout,
+  .projects-create-form,
+  .projects-edit-form,
+  .projects-root-form {
+    grid-template-columns: 1fr;
+  }
+}

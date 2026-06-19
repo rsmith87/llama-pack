@@ -1,10 +1,39 @@
-import { apiGet, apiPost } from "./client";
+import { apiGet, apiPatch, apiPost, apiPut } from "./client";
 
 export type ProjectRecord = {
   id: string;
   name: string;
   root_hint?: string | null;
   archived?: boolean;
+};
+
+export type ProjectNodeRootSafeStatus = "unknown" | "allowed" | "blocked";
+
+export type ProjectNodeRootRecord = {
+  id: string;
+  project_id: string;
+  node_name: string;
+  root_path: string;
+  safe_root_status: ProjectNodeRootSafeStatus;
+  created_at: string;
+  updated_at: string;
+};
+
+export type CreateProjectRequest = {
+  name: string;
+  root_hint: string | null;
+};
+
+export type UpdateProjectRequest = {
+  name: string;
+  root_hint: string | null;
+  archived: boolean;
+};
+
+export type UpsertProjectNodeRootRequest = {
+  node_name: string;
+  root_path: string;
+  safe_root_status: ProjectNodeRootSafeStatus;
 };
 
 export type ProjectGraphStatus = {
@@ -32,6 +61,22 @@ export type ProjectGraphQueryRequest = {
 
 export function listProjects(includeArchived: boolean) {
   return apiGet<{ projects: ProjectRecord[] }>(`/projects?include_archived=${includeArchived ? "true" : "false"}`);
+}
+
+export function createProject(payload: CreateProjectRequest) {
+  return apiPost<ProjectRecord>("/projects", payload);
+}
+
+export function updateProject(projectId: string, payload: UpdateProjectRequest) {
+  return apiPatch<ProjectRecord>(`/projects/${encodeURIComponent(projectId)}`, payload);
+}
+
+export function listProjectNodeRoots(projectId: string) {
+  return apiGet<{ node_roots: ProjectNodeRootRecord[] }>(`/projects/${encodeURIComponent(projectId)}/node-roots`);
+}
+
+export function upsertProjectNodeRoot(projectId: string, payload: UpsertProjectNodeRootRequest) {
+  return apiPut<ProjectNodeRootRecord>(`/projects/${encodeURIComponent(projectId)}/node-roots`, payload);
 }
 
 export function getProjectGraphStatus(projectId: string) {
