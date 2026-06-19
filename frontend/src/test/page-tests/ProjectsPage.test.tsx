@@ -37,7 +37,7 @@ it("creates projects and upserts safe node roots", async () => {
       }));
     }
     if (url === "/lm-api/v1/projects/project-1/graph/status" && options?.method === "GET") {
-      return Promise.resolve(okJson({ project_id: "project-1", status: "not_indexed", snapshot_id: null }));
+      return Promise.resolve(okJson({ project_id: "project-1", status: "ready", snapshot_id: "snapshot-1" }));
     }
     if (url === "/lm-api/v1/projects" && options?.method === "POST") {
       return Promise.resolve(okJson({ id: "project-2", name: "New Project", root_hint: "/workspace", archived: false }));
@@ -55,6 +55,25 @@ it("creates projects and upserts safe node roots", async () => {
     }
     if (url === "/lm-api/v1/projects/project-1/graph/index" && options?.method === "POST") {
       return Promise.resolve(okJson({ id: "job-1", type: "project.graph.index" }));
+    }
+    if (url === "/lm-api/v1/projects/project-1/graph/query" && options?.method === "POST") {
+      return Promise.resolve(okJson({
+        type: "find_symbol",
+        result: [
+          {
+            id: "sym-indexer",
+            qualified_name: "llama_pack.core.code_graph.indexer.ProjectGraphIndexer",
+            name: "ProjectGraphIndexer",
+            kind: "class",
+            language: "python",
+            start_line: 30,
+            end_line: 242,
+            file: {
+              path: "llama_pack/core/code_graph/indexer.py",
+            },
+          },
+        ],
+      }));
     }
     return Promise.resolve(okJson({}));
   });
@@ -92,4 +111,14 @@ it("creates projects and upserts safe node roots", async () => {
     method: "POST",
     body: JSON.stringify({ node_name: "mac-mini", root_path: "/repo", force: false }),
   })));
+
+  await user.type(screen.getByLabelText("Symbol Query"), "ProjectGraphIndexer");
+  await user.click(screen.getByRole("button", { name: "Search Symbols" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/projects/project-1/graph/query", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ type: "find_symbol", payload: { query: "ProjectGraphIndexer" } }),
+  })));
+  expect(await screen.findByText("ProjectGraphIndexer")).toBeInTheDocument();
+  expect(screen.getByText("llama_pack/core/code_graph/indexer.py")).toBeInTheDocument();
 });

@@ -2,6 +2,7 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import {
   createProject,
+  findProjectGraphSymbols,
   getProjectGraphStatus,
   indexProjectGraph,
   listProjectNodeRoots,
@@ -9,6 +10,7 @@ import {
   updateProject,
   upsertProjectNodeRoot,
   type ProjectGraphStatus,
+  type ProjectGraphSymbolRecord,
   type ProjectNodeRootRecord,
   type ProjectNodeRootSafeStatus,
   type ProjectRecord,
@@ -66,6 +68,9 @@ export function ProjectsPage() {
   const [graphStatus, setGraphStatus] = useState<ProjectGraphStatus | null>(null);
   const [rootsLoading, setRootsLoading] = useState(false);
   const [ingesting, setIngesting] = useState(false);
+  const [symbolQuery, setSymbolQuery] = useState("");
+  const [symbolResults, setSymbolResults] = useState<ProjectGraphSymbolRecord[]>([]);
+  const [symbolSearching, setSymbolSearching] = useState(false);
   const [saveMessage, setSaveMessage] = useState("");
   const [newProjectName, setNewProjectName] = useState("");
   const [newRootHint, setNewRootHint] = useState("");
@@ -80,6 +85,8 @@ export function ProjectsPage() {
       setEditRootHint("");
       setNodeRoots([]);
       setGraphStatus(null);
+      setSymbolQuery("");
+      setSymbolResults([]);
       setRootForm(emptyRootForm(null));
       return;
     }
@@ -87,6 +94,8 @@ export function ProjectsPage() {
     setEditName(selectedProject.name);
     setEditRootHint(selectedProject.root_hint || "");
     setRootForm(emptyRootForm(selectedProject));
+    setSymbolQuery("");
+    setSymbolResults([]);
   }, [selectedProject, selectedProjectId]);
 
   useEffect(() => {
@@ -192,6 +201,24 @@ export function ProjectsPage() {
       setSaveMessage(force ? "Codebase reindex queued." : "Codebase ingest queued.");
     } finally {
       setIngesting(false);
+    }
+  }
+
+  async function handleSearchSymbols(): Promise<void> {
+    if (!selectedProject) return;
+    setSaveMessage("");
+    setError("");
+    const query = symbolQuery.trim();
+    if (!query) {
+      setError("Symbol query is required.");
+      return;
+    }
+    setSymbolSearching(true);
+    try {
+      const response = await findProjectGraphSymbols(selectedProject.id, query);
+      setSymbolResults(response.result);
+    } finally {
+      setSymbolSearching(false);
     }
   }
 
@@ -313,6 +340,35 @@ export function ProjectsPage() {
                       Force Reindex
                     </Button>
                   </div>
+                </div>
+                <div className="projects-symbol-search">
+                  <div className="projects-symbol-search-form">
+                    <FormField label="Symbol Query">
+                      <input
+                        value={symbolQuery}
+                        onChange={(event) => setSymbolQuery(event.target.value)}
+                        placeholder="ProjectGraphIndexer"
+                      />
+                    </FormField>
+                    <Button
+                      type="button"
+                      onClick={() => void handleSearchSymbols()}
+                      disabled={symbolSearching || graphStatus?.status !== "ready"}
+                    >
+                      {symbolSearching ? "Searching" : "Search Symbols"}
+                    </Button>
+                  </div>
+                  <DataTable
+                    rows={symbolResults}
+                    emptyMessage={symbolSearching ? "Searching symbols..." : "No symbol results."}
+                    getRowKey={(symbol) => symbol.id}
+                    columns={[
+                      { key: "name", header: "Name", render: (symbol) => symbol.name },
+                      { key: "kind", header: "Kind", render: (symbol) => symbol.kind },
+                      { key: "path", header: "Path", render: (symbol) => symbol.file.path },
+                      { key: "lines", header: "Lines", render: (symbol) => `${symbol.start_line}-${symbol.end_line}` },
+                    ]}
+                  />
                 </div>
               </Panel>
             </div>

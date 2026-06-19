@@ -59,6 +59,24 @@ export type ProjectGraphQueryRequest = {
   payload: Record<string, unknown>;
 };
 
+export type ProjectGraphSymbolRecord = {
+  id: string;
+  qualified_name: string;
+  name: string;
+  kind: string;
+  language: string;
+  start_line: number;
+  end_line: number;
+  file: {
+    path: string;
+  };
+};
+
+export type ProjectGraphSymbolQueryResponse = {
+  type: "find_symbol";
+  result: ProjectGraphSymbolRecord[];
+};
+
 export function listProjects(includeArchived: boolean) {
   return apiGet<{ projects: ProjectRecord[] }>(`/projects?include_archived=${includeArchived ? "true" : "false"}`);
 }
@@ -93,4 +111,11 @@ export function indexProjectGraph(projectId: string, payload: ProjectGraphIndexR
 
 export function queryProjectGraph(projectId: string, payload: ProjectGraphQueryRequest) {
   return apiPost<Record<string, unknown>>(`/projects/${encodeURIComponent(projectId)}/graph/query`, payload);
+}
+
+export function findProjectGraphSymbols(projectId: string, query: string) {
+  return apiPost<ProjectGraphSymbolQueryResponse>(`/projects/${encodeURIComponent(projectId)}/graph/query`, {
+    type: "find_symbol",
+    payload: { query },
+  });
 }
