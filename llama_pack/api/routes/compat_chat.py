@@ -22,6 +22,7 @@ from llama_pack.api.http_headers import (
     compatibility_header_pairs,
 )
 from llama_pack.core.chat.scheduler import ChatAdmissionError
+from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config import AppConfig
 from llama_pack.core.threads.service import ThreadChatError, ThreadService
 
@@ -107,7 +108,7 @@ async def controller_chat(
         )
     except ThreadChatError as exc:
         raise CompatChatHTTPError(409, str(exc), compatibility_headers(exc.thread_id, None)) from exc
-    request_payload = {**payload, "target": compat["target"]}
+    request_payload = {**payload, "target": compat["target"], TRUSTED_CONTROLLER_TARGET_KEY: True}
     request_payload = await _inject_memories(request.app.state.memory_store, config, request_payload)
     try:
         response, meta = await proxy.chat_with_meta(compat["model"], request_payload)
@@ -160,7 +161,7 @@ async def controller_stream(
         )
     except ThreadChatError as exc:
         raise CompatChatHTTPError(409, str(exc), compatibility_headers(exc.thread_id, None)) from exc
-    request_payload = {**payload, "target": compat["target"]}
+    request_payload = {**payload, "target": compat["target"], TRUSTED_CONTROLLER_TARGET_KEY: True}
     request_payload = await _inject_memories(request.app.state.memory_store, config, request_payload)
     try:
         stream, meta = await proxy.stream_with_meta(compat["model"], request_payload)

@@ -10,7 +10,7 @@ import respx
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
-from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
+from llama_pack.core.code_graph.tools import ProjectGraphToolContext, execute_project_graph_tool, project_graph_tool_definitions
 from llama_pack.core.config import load_config
 from llama_pack.core.persistence.db_infra import sqlite_url_for_path
 from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
@@ -216,6 +216,87 @@ async def test_tool_executor_runs_project_graph_tool_from_runtime_context(tmp_pa
 
     assert result["ok"] is True
     assert result["symbols"][0]["id"] == "sym-app"
+
+
+@pytest.mark.asyncio
+async def test_project_graph_trace_callers_defaults_to_indexed_call_relation_type(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project_store = ProjectStoreOrm(sqlite_url_for_path(db_path))
+    project = project_store.create_project(name="Llama Pack", root_hint="/repo")
+    project_store.close()
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    snapshot = graph_store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-api",
+                "path": "api.py",
+                "language": "python",
+                "content_hash": "hash-api",
+                "size_bytes": 100,
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-caller",
+                "file_id": "file-api",
+                "qualified_name": "api.caller",
+                "name": "caller",
+                "kind": "function",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 2,
+                "signature": "def caller()",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            },
+            {
+                "id": "sym-callee",
+                "file_id": "file-api",
+                "qualified_name": "api.callee",
+                "name": "callee",
+                "kind": "function",
+                "language": "python",
+                "start_line": 4,
+                "end_line": 5,
+                "signature": "def callee()",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            },
+        ],
+        imports=[],
+        relations=[
+            {
+                "id": "rel-call",
+                "source_symbol_id": "sym-caller",
+                "target_symbol_id": "sym-callee",
+                "source_file_id": "file-api",
+                "target_file_id": "file-api",
+                "relation_type": "calls_best_effort",
+                "start_line": 2,
+                "end_line": 2,
+                "confidence": 0.7,
+                "evidence": {"call": "callee"},
+            }
+        ],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+
+    result = await execute_project_graph_tool(
+        ProjectGraphToolContext(project_id=str(project["id"]), store=graph_store),
+        "graph_trace_callers",
+        {"symbol_id": "sym-callee"},
+    )
+
+    assert result["ok"] is True
+    assert result["relations"][0]["target_symbol"]["id"] == "sym-caller"
 
 
 @pytest.mark.asyncio

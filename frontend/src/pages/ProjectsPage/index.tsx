@@ -314,7 +314,7 @@ export function ProjectsPage() {
                 ]}
               />
 
-              <Panel title="Code Graph" eyebrow="Ingest">
+              <Panel title="Code Graph" eyebrow="Indexed graph">
                 <div className="projects-graph-panel">
                   <div className="projects-graph-status">
                     <span className="label">Graph Status</span>

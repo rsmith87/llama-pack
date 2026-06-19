@@ -40,12 +40,12 @@ def project_graph_tool_definitions() -> list[dict[str, Any]]:
         _tool(
             "graph_trace_callers",
             "Find symbols that call the supplied symbol id.",
-            _object_schema({"symbol_id": _string("Symbol id to trace."), "relation_type": _string("Optional relation type. Defaults to calls.")}, ["symbol_id"]),
+            _object_schema({"symbol_id": _string("Symbol id to trace."), "relation_type": _string("Optional relation type. Defaults to calls_best_effort.")}, ["symbol_id"]),
         ),
         _tool(
             "graph_trace_callees",
             "Find symbols called by the supplied symbol id.",
-            _object_schema({"symbol_id": _string("Symbol id to trace."), "relation_type": _string("Optional relation type. Defaults to calls.")}, ["symbol_id"]),
+            _object_schema({"symbol_id": _string("Symbol id to trace."), "relation_type": _string("Optional relation type. Defaults to calls_best_effort.")}, ["symbol_id"]),
         ),
         _tool(
             "graph_find_references",
@@ -75,15 +75,15 @@ async def execute_project_graph_tool(context: ProjectGraphToolContext, name: str
         return {"ok": True, "symbol": symbol}
     if name == "graph_trace_callers":
         symbol_id = _required_string(arguments, "symbol_id")
-        relation_type = _optional_string(arguments, "relation_type") or "calls"
-        return {"ok": True, "relations": context.store.relations(project_id=context.project_id, symbol_id=symbol_id, direction="in", relation_type=relation_type)}
+        relation_type = _optional_string(arguments, "relation_type") or "calls_best_effort"
+        return {"ok": True, "relations": context.store.relations(project_id=context.project_id, symbol_id=symbol_id, direction="in", relation_type=relation_type, depth=1)}
     if name == "graph_trace_callees":
         symbol_id = _required_string(arguments, "symbol_id")
-        relation_type = _optional_string(arguments, "relation_type") or "calls"
-        return {"ok": True, "relations": context.store.relations(project_id=context.project_id, symbol_id=symbol_id, direction="out", relation_type=relation_type)}
+        relation_type = _optional_string(arguments, "relation_type") or "calls_best_effort"
+        return {"ok": True, "relations": context.store.relations(project_id=context.project_id, symbol_id=symbol_id, direction="out", relation_type=relation_type, depth=1)}
     if name == "graph_find_references":
         symbol_id = _required_string(arguments, "symbol_id")
-        return {"ok": True, "relations": context.store.relations(project_id=context.project_id, symbol_id=symbol_id, direction="in", relation_type="component_uses")}
+        return {"ok": True, "relations": context.store.relations(project_id=context.project_id, symbol_id=symbol_id, direction="in", relation_type="component_uses", depth=1)}
     if name == "graph_find_routes":
         return {"ok": True, "symbols": context.store.find_symbols(project_id=context.project_id, query="", kind="route")}
     if name == "graph_find_components":

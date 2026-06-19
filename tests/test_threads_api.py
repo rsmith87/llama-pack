@@ -297,7 +297,7 @@ async def test_post_message_async_uses_thread_affinity_on_second_turn_when_previ
 
 
 @pytest.mark.asyncio
-async def test_post_message_async_does_not_use_affinity_for_different_context_profile(tmp_path):
+async def test_post_message_async_rejects_switching_nodes_on_existing_thread(tmp_path):
     chat_proxy = RecordingChatProxy(responses=["first reply", "second reply"])
     service = _service(
         tmp_path,
@@ -324,20 +324,24 @@ async def test_post_message_async_does_not_use_affinity_for_different_context_pr
         model_family="gemma",
         context_profile="fast",
     )
-    response = await service.post_message_async(
-        thread_id=thread["id"],
-        role="user",
-        content="Second",
-        model=None,
-        target="node:linux-2080ti",
-        metadata=None,
-        model_family="gemma",
-        context_profile="long",
-    )
+    with pytest.raises(ValueError) as exc_info:
+        await service.post_message_async(
+            thread_id=thread["id"],
+            role="user",
+            content="Second",
+            model=None,
+            target="node:linux-2080ti",
+            metadata=None,
+            model_family="gemma",
+            context_profile="long",
+        )
 
-    assert response["route"]["node"] == "linux-2080ti"
-    assert response["route"]["model"] == "gemma:long"
-    assert response["route"]["reason"] == "explicit_target"
+    assert str(exc_info.value) == (
+        "This thread is already routed to node 'mac-mini'. Start a new thread to use node 'linux-2080ti'."
+    )
+    public_events = service.list_events(thread["id"], include_internal=False)
+    assert public_events[-1]["event_type"] == "error"
+    assert public_events[-1]["error_detail"] == str(exc_info.value)
 
 
 def test_thread_service_persists_route_metadata_on_assistant_events(tmp_path):

@@ -7,6 +7,7 @@ from typing import Any
 from uuid import uuid4
 
 from llama_pack.core.config.models import AppConfig
+from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 
@@ -103,6 +104,11 @@ class ThreadService:
             public=True,
             turn_id=turn_id,
         )
+        try:
+            self._require_thread_node_target(thread_id, target)
+        except ValueError as exc:
+            self._append_error(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
+            raise ThreadChatError(thread_id, "ROUTING_ERROR", str(exc)) from exc
 
         try:
             decision = await self.routing_policy.choose(
@@ -235,6 +241,11 @@ class ThreadService:
             public=True,
             turn_id=turn_id,
         )
+        try:
+            self._require_thread_node_target(thread_id, target)
+        except ValueError as exc:
+            self._append_error(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
+            raise
 
         try:
             decision = await self.routing_policy.choose(
@@ -322,6 +333,7 @@ class ThreadService:
                     "messages": messages,
                     **(generation_payload or {}),
                     "target": f"node:{decision.node}",
+                    TRUSTED_CONTROLLER_TARGET_KEY: True,
                     **self._profile_payload(prepared),
                 },
             )
@@ -399,6 +411,7 @@ class ThreadService:
                     "messages": messages,
                     **(generation_payload or {}),
                     "target": f"node:{decision.node}",
+                    TRUSTED_CONTROLLER_TARGET_KEY: True,
                     **self._profile_payload(prepared),
                 },
             )
@@ -490,7 +503,7 @@ class ThreadService:
             try:
                 raw_response, response_meta = await self.chat_proxy.chat_with_meta(
                     target.model,
-                    {"messages": messages, "target": f"node:{target.node}"},
+                    {"messages": messages, "target": f"node:{target.node}", TRUSTED_CONTROLLER_TARGET_KEY: True},
                 )
                 content = raw_response["choices"][0]["message"]["content"]
                 self._append_agent_response(
@@ -595,6 +608,27 @@ class ThreadService:
                         continue
                 return {"node": event["agent_node"], "model": event["model"]}
         return None
+
+    def _assigned_node(self, thread_id: str) -> str | None:
+        for event in reversed(self.store.list_events(thread_id, include_internal=True)):
+            if event["event_type"] == "assistant_message" and event.get("agent_node"):
+                return str(event["agent_node"])
+        return None
+
+    def _require_thread_node_target(self, thread_id: str, target: str) -> None:
+        target_value = target.strip()
+        if not target_value.startswith("node:"):
+            return
+        requested_node = target_value.removeprefix("node:").strip()
+        if not requested_node:
+            return
+        assigned_node = self._assigned_node(thread_id)
+        if assigned_node is None or assigned_node == requested_node:
+            return
+        raise ValueError(
+            f"This thread is already routed to node '{assigned_node}'. "
+            f"Start a new thread to use node '{requested_node}'."
+        )
 
     def _public_messages(self, thread_id: str) -> list[dict[str, str]]:
         messages = []
@@ -740,7 +774,7 @@ class ThreadService:
             try:
                 raw_response, _response_meta = await self.chat_proxy.chat_with_meta(
                     decision.model,
-                    {"messages": messages, "target": f"node:{decision.node}"},
+                    {"messages": messages, "target": f"node:{decision.node}", TRUSTED_CONTROLLER_TARGET_KEY: True},
                 )
                 step_output = raw_response["choices"][0]["message"]["content"]
             except Exception as exc:

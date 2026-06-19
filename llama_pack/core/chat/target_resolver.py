@@ -65,6 +65,12 @@ class TargetResolver:
             raise ModelNotRunningError(f"Model is not running on controller node '{node_name}': {model_name}")
         return {"kind": "remote", "url": node["url"], "node_name": node_name}
 
+    def resolve_known_node_target(self, node_name: str) -> dict[str, str]:
+        node = next((item for item in self.node_registry.list_nodes() if item["name"] == node_name), None)
+        if node is None:
+            raise ModelNotRunningError(f"Unknown controller node: {node_name}")
+        return {"kind": "remote", "url": node["url"], "node_name": node_name}
+
     async def is_model_running_on_node(self, node_name: str, model_name: str) -> bool:
         try:
             statuses = await self.node_registry.request_node(node_name, "GET", "/lm-api/v1/models")

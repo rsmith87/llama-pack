@@ -8,6 +8,7 @@ import httpx
 
 from llama_pack.core.chat import CapabilityInspector, ModelNotRunningError, PromptTemplateAdapter, TargetResolver, TransportBuilder
 from llama_pack.core.chat.context_budget import ContextBudgetEstimator
+from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.runtime.process_manager import ProcessManager
@@ -161,7 +162,11 @@ class ChatProxy:
                 request_payload[key] = payload[key]
 
         if self.config.mode == "controller":
-            target = await self._resolver.resolve_controller_target(model_name, str(payload.get("target", "auto")))
+            target_selector = str(payload.get("target", "auto"))
+            if bool(payload.get(TRUSTED_CONTROLLER_TARGET_KEY)) and target_selector.strip().lower().startswith("node:"):
+                target = self._resolver.resolve_known_node_target(target_selector.split(":", 1)[1].strip())
+            else:
+                target = await self._resolver.resolve_controller_target(model_name, target_selector)
             use_openai_endpoint = request_payload.get("tool_runtime") == "agent"
             if use_openai_endpoint:
                 request_payload["model"] = model_name

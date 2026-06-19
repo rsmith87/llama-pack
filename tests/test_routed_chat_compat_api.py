@@ -10,18 +10,31 @@ from tests.helpers import authenticated_client as TestClient
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
 
-def _controller_app(tmp_path, chat_responses=None, stream_chunks=None, model_running=True, controller_request=None):
+_DEFAULT_MODEL_RUNNING = object()
+
+
+def _controller_app(
+    tmp_path,
+    chat_responses=None,
+    stream_chunks=None,
+    model_running=True,
+    controller_request=None,
+    chat_request=None,
+    patch_chat_proxy=True,
+):
     prepare_all_persistence_dbs(tmp_path)
     calls = []
     stream_calls = []
 
     async def fake_chat(model_name, payload):
-        calls.append({"model_name": model_name, "payload": payload})
+        recorded_payload = {key: value for key, value in payload.items() if not key.startswith("_")}
+        calls.append({"model_name": model_name, "payload": recorded_payload})
         content = (chat_responses or ["hello from routed node"])[len(calls) - 1]
         return {"choices": [{"message": {"role": "assistant", "content": content}}]}, {"route": payload["target"]}
 
     async def fake_stream(model_name, payload):
-        stream_calls.append({"model_name": model_name, "payload": payload})
+        recorded_payload = {key: value for key, value in payload.items() if not key.startswith("_")}
+        stream_calls.append({"model_name": model_name, "payload": recorded_payload})
         async def stream():
             for chunk in stream_chunks or [
                 b'data: {"choices":[{"delta":{"content":"hel"}}]}\n\n',
@@ -52,10 +65,13 @@ def _controller_app(tmp_path, chat_responses=None, stream_chunks=None, model_run
             }
         ),
         controller_request=controller_request,
+        chat_request=chat_request,
     )
-    app.state.chat_proxy.chat_with_meta = fake_chat
-    app.state.chat_proxy.stream_with_meta = fake_stream
-    app.state.thread_service.routing_policy.model_running = lambda node, model: model_running
+    if patch_chat_proxy:
+        app.state.chat_proxy.chat_with_meta = fake_chat
+        app.state.chat_proxy.stream_with_meta = fake_stream
+    if model_running is not _DEFAULT_MODEL_RUNNING:
+        app.state.thread_service.routing_policy.model_running = lambda node, model: model_running
     return app, calls, stream_calls
 
 
@@ -85,6 +101,48 @@ def test_openai_chat_completions_routes_by_request_type_and_creates_thread(tmp_p
     assert calls[0]["payload"]["target"] == "node:linux-2080ti"
     public_events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [event["event_type"] for event in public_events] == ["user_message", "assistant_message"]
+
+
+def test_routed_openai_chat_does_not_probe_selected_node_twice(tmp_path):
+    controller_calls = []
+    chat_calls = []
+
+    async def fake_controller_request(method, url, api_key, verify_tls, json_body=None):
+        controller_calls.append({"method": method, "url": url})
+        if method == "GET" and url == "http://linux/lm-api/v1/models":
+            return [{"name": "qwen", "running": True}]
+        raise AssertionError(f"unexpected controller request: {method} {url}")
+
+    async def fake_chat_request(url, payload):
+        chat_calls.append({"url": url, "payload": payload})
+        return {"choices": [{"message": {"role": "assistant", "content": "direct"}}]}
+
+    app, _, _ = _controller_app(
+        tmp_path,
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+        model_running=_DEFAULT_MODEL_RUNNING,
+        patch_chat_proxy=False,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "write code"}],
+            "request_type": "coding",
+            "stream": False,
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["X-Llama-Pack-Route"] == "node:linux-2080ti"
+    assert controller_calls == [{"method": "GET", "url": "http://linux/lm-api/v1/models"}]
+    assert len(chat_calls) == 1
+    assert chat_calls[0]["url"] == "http://linux/lm-api/v1/chat/qwen"
+    assert chat_calls[0]["payload"]["messages"] == [{"role": "user", "content": "write code"}]
+    assert "_trusted_controller_target" not in chat_calls[0]["payload"]
 
 
 def test_openai_chat_completions_routes_from_persisted_remote_deployment_when_live_models_are_empty(tmp_path):
@@ -172,6 +230,39 @@ def test_openai_chat_completions_appends_to_existing_thread(tmp_path):
         "user_message",
         "assistant_message",
     ]
+
+
+def test_openai_chat_completions_rejects_node_switch_on_existing_thread(tmp_path):
+    app, _, _ = _controller_app(tmp_path, chat_responses=["first"])
+    client = TestClient(app)
+
+    first = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "first"}],
+            "request_type": "coding",
+            "stream": False,
+        },
+    )
+    thread_id = first.headers["X-Llama-Pack-Thread-Id"]
+
+    second = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "gemma",
+            "thread_id": thread_id,
+            "messages": [{"role": "user", "content": "second"}],
+            "target": "node:mac-mini",
+            "stream": False,
+        },
+    )
+
+    assert second.status_code == 409
+    assert second.json()["detail"] == (
+        "This thread is already routed to node 'linux-2080ti'. Start a new thread to use node 'mac-mini'."
+    )
+    assert second.headers["X-Llama-Pack-Thread-Id"] == thread_id
 
 
 def test_ollama_chat_returns_ollama_shape_with_routing_headers(tmp_path):
