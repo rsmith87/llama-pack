@@ -647,6 +647,74 @@ def test_threads_api_posts_message_with_context_profile_fields(tmp_path):
     assert response.json()["route"]["profile"] == "long"
 
 
+def test_threads_api_posts_message_with_agent_tool_runtime_fields(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_controller_request(method, url, api_key=None, verify_tls=True, json_body=None):
+        assert method == "GET"
+        if url == "http://linux/lm-api/v1/models":
+            return [{"name": "qwen", "running": True}]
+        raise AssertionError(f"unexpected controller request: {url}")
+
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append({"url": url, "payload": payload})
+        return {"choices": [{"message": {"content": "tool answer"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        ),
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+    thread_id = client.post("/lm-api/v1/threads", json={"metadata": {"request_type": "coding"}}).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages",
+        json={
+            "role": "user",
+            "content": "inspect project graph",
+            "model": "qwen",
+            "tool_runtime": "agent",
+            "tool_choice": "auto",
+            "project_id": "project-1",
+            "agent_tool_max_iterations": 4,
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls == [
+        {
+            "url": "http://linux/v1/chat/completions",
+            "payload": {
+                "messages": [{"role": "user", "content": "inspect project graph"}],
+                "temperature": 0.7,
+                "max_tokens": 512,
+                "stream": False,
+                "chat_template_kwargs": {"enable_thinking": False},
+                "tool_choice": "auto",
+                "tool_runtime": "agent",
+                "agent_tool_max_iterations": 4,
+                "project_id": "project-1",
+                "model": "qwen",
+            },
+        }
+    ]
+
+
 def test_threads_api_routes_to_node_with_recently_received_gguf_when_model_is_not_running(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
 
@@ -1153,6 +1221,63 @@ def test_threads_stream_api_persists_assistant_and_forwards_generation_params(tm
     assert [event["event_type"] for event in events] == ["user_message", "assistant_message"]
     assert events[1]["content"]["text"] == "hello"
     assert events[1]["content"]["reasoning_text"] == "thinking "
+
+
+def test_threads_stream_api_forwards_agent_tool_runtime_fields(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    captured_payloads = []
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+
+    async def fake_stream(model_name, payload):
+        captured_payloads.append({"model_name": model_name, "payload": payload})
+
+        async def _stream():
+            yield b'data: {"choices":[{"delta":{"content":"tool stream"}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        return _stream(), {"route": payload["target"]}
+
+    app.state.chat_proxy.stream_with_meta = fake_stream
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"metadata": {"request_type": "coding"}},
+    ).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages/stream",
+        json={
+            "role": "user",
+            "content": "inspect project graph",
+            "model": "qwen",
+            "tool_runtime": "agent",
+            "tool_choice": {"type": "function", "function": {"name": "graph_overview"}},
+            "project_id": "project-1",
+            "agent_tool_max_iterations": 5,
+        },
+    )
+
+    assert response.status_code == 200
+    assert captured_payloads[0]["model_name"] == "qwen"
+    assert captured_payloads[0]["payload"]["tool_runtime"] == "agent"
+    assert captured_payloads[0]["payload"]["tool_choice"] == {"type": "function", "function": {"name": "graph_overview"}}
+    assert captured_payloads[0]["payload"]["project_id"] == "project-1"
+    assert captured_payloads[0]["payload"]["agent_tool_max_iterations"] == 5
 
 
 # ---------------------------------------------------------------------------

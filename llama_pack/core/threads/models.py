@@ -71,6 +71,10 @@ class ThreadMessageRequest(BaseModel):
     reasoning: bool = False
     cache_prompt: bool | None = None
     slot_id: int | None = None
+    tool_runtime: Literal["agent"] | None = None
+    tool_choice: dict[str, Any] | str | None = None
+    project_id: str | None = None
+    agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=16)
 
     def generation_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {}
@@ -88,6 +92,10 @@ class ThreadMessageRequest(BaseModel):
             "reasoning",
             "cache_prompt",
             "slot_id",
+            "tool_runtime",
+            "tool_choice",
+            "project_id",
+            "agent_tool_max_iterations",
         ):
             value = getattr(self, key)
             if value is not None:
