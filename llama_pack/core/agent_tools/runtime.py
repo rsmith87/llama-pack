@@ -48,17 +48,10 @@ class AgentToolLoop:
         request_id = request_id or str(uuid4())
         messages = [dict(message) for message in payload.get("messages", [])]
         max_iterations = _request_max_iterations(payload, self.config.agent_tools.max_iterations)
-        if self.executor.project_graph_context is not None:
-            messages.insert(
-                0,
-                {
-                    "role": "system",
-                    "content": "Project code graph tools are available for this chat. Use them to inspect indexed symbols, relationships, routes, and React components before making codebase claims.",
-                },
-            )
         base_payload = {key: value for key, value in payload.items() if key not in {"messages", "tool_runtime", "agent_tool_max_iterations"}}
         tool_defs = self.registry.openai_tools()
         last_meta: dict[str, Any] = {}
+        source_tool_evidence_available = False
 
         for iteration in range(max_iterations):
             self._emit(
@@ -73,14 +66,21 @@ class AgentToolLoop:
             tool_calls = _tool_calls(message)
             if not tool_calls:
                 if self.executor.project_graph_context is not None and self.config.agent_tools.answer_verification_mode != "off":
-                    self._emit(
-                        "answer_verification_started",
-                        model=model_name,
-                        title="Reviewing generation",
-                        payload={"iteration": iteration + 1},
-                    )
-                    report = AnswerVerifier(self.executor.project_graph_context).verify(str(message.get("content") or ""))
-                    if not report.ok:
+                    verifier = AnswerVerifier(self.executor.project_graph_context)
+                    retries_used = 0
+                    while True:
+                        self._emit(
+                            "answer_verification_started",
+                            model=model_name,
+                            title="Reviewing generation",
+                            payload={"iteration": iteration + 1, "retry": retries_used},
+                        )
+                        report = verifier.verify(
+                            str(message.get("content") or ""),
+                            source_evidence_available=source_tool_evidence_available or retries_used > 0,
+                        )
+                        if report.ok:
+                            break
                         self._emit(
                             "answer_verification_failed",
                             status="failed",
@@ -89,27 +89,34 @@ class AgentToolLoop:
                             payload={
                                 "missing_paths": report.missing_paths,
                                 "missing_symbols": report.missing_symbols,
+                                "missing_source_evidence": report.missing_source_evidence,
                             },
                         )
-                        if self.config.agent_tools.answer_verification_max_retries <= 0:
+                        if retries_used >= self.config.agent_tools.answer_verification_max_retries:
                             if self.config.agent_tools.answer_verification_mode == "strict":
                                 raise RuntimeError("answer verification failed before final assistant response")
-                        else:
-                            messages.append(message)
-                            messages.append(
-                                {
-                                    "role": "user",
-                                    "content": (
-                                        "Your draft contains unverified codebase claims.\n"
-                                        f"{report.feedback()}\n\n"
-                                        "Revise using only verified file paths and symbols. "
-                                        "If a detail is not verified, say not verified."
-                                    ),
-                                }
-                            )
-                            request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
-                            response, last_meta = await self.proxy.chat_with_meta(model_name, request_payload)
+                            response = _replace_assistant_content(response, _unverified_answer_message())
                             message = _assistant_message(response)
+                            break
+                        messages.append(message)
+                        messages.append(
+                            {
+                                "role": "user",
+                                "content": (
+                                    "Review this exact draft answer, not conversational memory:\n\n"
+                                    f"<draft_answer>\n{message.get('content') or ''}\n</draft_answer>\n\n"
+                                    "Your draft contains unverified codebase claims.\n"
+                                    f"{report.feedback()}\n\n"
+                                    "Revise using only verified file paths and symbols. "
+                                    "Do not introduce new paths or symbols unless they are verified by tool evidence. "
+                                    "If a detail is not verified, say not verified."
+                                ),
+                            }
+                        )
+                        retries_used += 1
+                        request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
+                        response, last_meta = await self.proxy.chat_with_meta(model_name, request_payload)
+                        message = _assistant_message(response)
                 self._emit(
                     "assistant_message_completed",
                     status="passed",
@@ -125,6 +132,7 @@ class AgentToolLoop:
                 name = str(function.get("name") or "")
                 arguments = _parse_arguments(function.get("arguments"))
                 tool_call_id = str(tool_call.get("id") or name)
+                source_tool_evidence_available = True
                 result = await self.executor.execute(
                     name,
                     arguments,
@@ -155,6 +163,24 @@ def _assistant_message(response: dict[str, Any]) -> dict[str, Any]:
         return {"role": "assistant", "content": ""}
     message = choices[0].get("message") or {}
     return dict(message) if isinstance(message, dict) else {"role": "assistant", "content": str(message)}
+
+
+def _replace_assistant_content(response: dict[str, Any], content: str) -> dict[str, Any]:
+    choices = response.get("choices") or []
+    if not choices or not isinstance(choices[0], dict):
+        return {"choices": [{"message": {"role": "assistant", "content": content}}]}
+    choice = dict(choices[0])
+    message = choice.get("message") or {}
+    message_data = dict(message) if isinstance(message, dict) else {"role": "assistant"}
+    choice["message"] = {**message_data, "content": content}
+    return {**response, "choices": [choice, *choices[1:]]}
+
+
+def _unverified_answer_message() -> str:
+    return (
+        "I could not verify the codebase claims in the generated answer, so I am not returning them as facts. "
+        "Please ask again with a narrower codebase query."
+    )
 
 
 def _tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:

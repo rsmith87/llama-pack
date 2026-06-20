@@ -34,6 +34,40 @@ graph. In `warn` mode, the runtime asks the model to revise once when
 unverified claims are found. In `strict` mode, unresolved verifier failures can
 fail the request rather than returning an ungrounded answer.
 
+## Prompt Assembly
+
+Agent-tool chat prompts are assembled through
+`llama_pack.core.agent_tools.prompt_builder.PromptBuilder` before they are sent
+to `AgentToolLoop`. Prompt mutations for agent chats should live there rather
+than in routes, tool runtime loops, or UI-specific code.
+
+Current prompt inputs:
+
+- Project graph context: when a project graph is active, `PromptBuilder` adds a
+  system instruction telling the model to inspect indexed symbols,
+  relationships, routes, and React components before making codebase claims.
+- Previous-answer review context: when the latest user message asks to review,
+  verify, correct, or check a previous answer, `PromptBuilder` injects the
+  latest prior assistant answer in a `<previous_assistant_answer>` block. This
+  keeps self-review prompts grounded in the exact answer being reviewed instead
+  of conversational memory.
+
+Add future prompt inputs by extending `PromptBuilder` with a small, test-covered
+message transformation. Keep each transformation deterministic and based on
+explicit request, thread, or runtime context. Do not make prompt assembly depend
+on model output, and do not duplicate prompt-injection behavior in callers.
+
+Expected call flow for OpenAI-compatible agent chats:
+
+```text
+openai_compat.openai_chat_completions
+  -> PromptBuilder.build_agent_messages(...)
+  -> AgentToolLoop.run(...)
+```
+
+`AgentToolLoop` may still append verification retry messages during a turn, but
+initial request prompt shaping belongs in `PromptBuilder`.
+
 ---
 
 ## Tool Types

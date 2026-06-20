@@ -2117,6 +2117,50 @@ def test_openai_compat_agent_tool_runtime_executes_local_tool_loop(tmp_path):
     assert trace["status"] == "ok"
 
 
+def test_openai_compat_agent_tool_runtime_injects_previous_answer_context(tmp_path):
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "reviewed"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [
+                {"role": "user", "content": "Trace BenchmarkRunner."},
+                {"role": "assistant", "content": "BenchmarkRunner is in `llama_pack/core/benchmarks/runner.py`."},
+                {"role": "user", "content": "Review your previous answer for unsupported claims."},
+            ],
+            "tool_runtime": "agent",
+        },
+    )
+
+    assert response.status_code == 200
+    sent_messages = calls[0][1]["messages"]
+    injected = [message for message in sent_messages if "<previous_assistant_answer>" in str(message.get("content", ""))]
+    assert len(injected) == 1
+    assert "BenchmarkRunner is in `llama_pack/core/benchmarks/runner.py`." in injected[0]["content"]
+    assert sent_messages[-1]["content"] == "Review your previous answer for unsupported claims."
+
+
 def test_openai_compat_agent_tool_runtime_streams_tool_progress(tmp_path):
     calls = []
     status = tmp_path / "status.txt"

@@ -24,9 +24,12 @@ class AnswerVerificationReport:
     missing_paths: list[str]
     verified_symbols: list[str]
     missing_symbols: list[str]
+    missing_source_evidence: bool
 
     def feedback(self) -> str:
         parts: list[str] = []
+        if self.missing_source_evidence:
+            parts.append("No project/source tool evidence was captured for these codebase claims.")
         if self.missing_paths:
             parts.append("Missing file paths: " + ", ".join(self.missing_paths))
         if self.missing_symbols:
@@ -38,7 +41,7 @@ class AnswerVerifier:
     def __init__(self, context: ProjectGraphToolContext) -> None:
         self.context = context
 
-    def verify(self, answer: str) -> AnswerVerificationReport:
+    def verify(self, answer: str, source_evidence_available: bool) -> AnswerVerificationReport:
         claims = extract_answer_claims(answer)
         verified_paths: list[str] = []
         missing_paths: list[str] = []
@@ -54,12 +57,14 @@ class AnswerVerifier:
                 verified_symbols.append(symbol)
             else:
                 missing_symbols.append(symbol)
+        missing_source_evidence = bool(claims.paths or claims.symbols) and not source_evidence_available
         return AnswerVerificationReport(
-            ok=not missing_paths and not missing_symbols,
+            ok=not missing_paths and not missing_symbols and not missing_source_evidence,
             verified_paths=verified_paths,
             missing_paths=missing_paths,
             verified_symbols=verified_symbols,
             missing_symbols=missing_symbols,
+            missing_source_evidence=missing_source_evidence,
         )
 
     def _path_exists(self, path: str) -> bool:

@@ -8,6 +8,7 @@ import pytest
 import respx
 
 from llama_pack.core.agent_tools.executor import ToolExecutor
+from llama_pack.core.agent_tools.prompt_builder import PromptBuilder
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
@@ -152,7 +153,8 @@ def test_answer_verifier_reports_missing_paths_and_symbols(tmp_path):
 
     report = verifier.verify(
         "Use `llama_pack/core/benchmarks/runner.py`, `src/repositories/sample_repository.py`, "
-        "BenchmarkRunner, and SampleRepository.save."
+        "BenchmarkRunner, and SampleRepository.save.",
+        source_evidence_available=True,
     )
 
     assert report.ok is False
@@ -160,6 +162,36 @@ def test_answer_verifier_reports_missing_paths_and_symbols(tmp_path):
     assert "SampleRepository.save" in report.missing_symbols
     assert "llama_pack/core/benchmarks/runner.py" in report.verified_paths
     assert "BenchmarkRunner" in report.verified_symbols
+
+
+def test_prompt_builder_injects_previous_answer_for_review_request():
+    messages = [
+        {"role": "user", "content": "Trace BenchmarkRunner."},
+        {"role": "assistant", "content": "The runner lives in `llama_pack/core/benchmarks/runner.py`."},
+        {"role": "user", "content": "Review your previous answer for unsupported claims."},
+    ]
+
+    built = PromptBuilder().build_agent_messages(messages, project_graph_enabled=False)
+
+    assert built is not messages
+    assert built[-2]["role"] == "system"
+    assert "The user is referring to the previous assistant answer." in built[-2]["content"]
+    assert "<previous_assistant_answer>" in built[-2]["content"]
+    assert "The runner lives in `llama_pack/core/benchmarks/runner.py`." in built[-2]["content"]
+    assert "</previous_assistant_answer>" in built[-2]["content"]
+    assert built[-1] == messages[-1]
+
+
+def test_prompt_builder_does_not_inject_previous_answer_for_unrelated_request():
+    messages = [
+        {"role": "user", "content": "Trace BenchmarkRunner."},
+        {"role": "assistant", "content": "The runner lives in `llama_pack/core/benchmarks/runner.py`."},
+        {"role": "user", "content": "Now explain BenchmarkStoreOrm."},
+    ]
+
+    built = PromptBuilder().build_agent_messages(messages, project_graph_enabled=False)
+
+    assert built == messages
 
 
 @pytest.mark.asyncio
@@ -819,9 +851,130 @@ async def test_tool_loop_revises_unverified_project_graph_answer(tmp_path):
     assert "llama_pack/core/benchmarks/runner.py" in response["choices"][0]["message"]["content"]
     assert "src/repositories/sample_repository.py" not in response["choices"][0]["message"]["content"]
     assert "Your draft contains unverified codebase claims" in proxy.messages[1][-1]["content"]
+    assert "<draft_answer>" in proxy.messages[1][-1]["content"]
+    assert "Edit `src/repositories/sample_repository.py`." in proxy.messages[1][-1]["content"]
+    assert "</draft_answer>" in proxy.messages[1][-1]["content"]
     event_types = [event["event_type"] for event in trace_recorder.events]
     assert "answer_verification_started" in event_types
     assert "answer_verification_failed" in event_types
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_revises_code_claims_without_tool_evidence(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": 10,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-runner",
+                "file_id": "file-runner",
+                "name": "BenchmarkRunner",
+                "qualified_name": "llama_pack.core.benchmarks.runner.BenchmarkRunner",
+                "kind": "class",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 10,
+                "signature": "class BenchmarkRunner",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    class Proxy:
+        def __init__(self):
+            self.messages = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.messages.append(payload["messages"])
+            if len(self.messages) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Use `llama_pack/core/benchmarks/runner.py` and BenchmarkRunner.",
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Verified with source tools: `llama_pack/core/benchmarks/runner.py` defines BenchmarkRunner.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    proxy = Proxy()
+    response, _meta = await AgentToolLoop(
+        config,
+        proxy,
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
+
+    assert "Verified with source tools" in response["choices"][0]["message"]["content"]
+    assert "No project/source tool evidence was captured" in proxy.messages[1][-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_fails_closed_when_revised_answer_is_unverified(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    class Proxy:
+        async def chat_with_meta(self, model_name, payload):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Route: `src/api/v1/endpoints/benchmark.py`; Runner: `src/services/benchmark_runner.py`.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    response, _meta = await AgentToolLoop(
+        config,
+        Proxy(),
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
+
+    content = response["choices"][0]["message"]["content"]
+    assert "I could not verify the codebase claims" in content
+    assert "src/api/v1/endpoints/benchmark.py" not in content
+    assert "src/services/benchmark_runner.py" not in content
 
 
 @pytest.mark.asyncio

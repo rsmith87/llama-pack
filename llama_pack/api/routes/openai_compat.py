@@ -28,6 +28,7 @@ from llama_pack.api.routes.projects import (
 from llama_pack.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_pack.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_pack.core.agent_tools.registry import ToolRegistry
+from llama_pack.core.agent_tools.prompt_builder import PromptBuilder
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
 from llama_pack.api.routes.chat.common import (
@@ -348,6 +349,13 @@ async def openai_chat_completions(
             if not config.agent_tools.enabled:
                 raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
             project_graph_context = _project_graph_context(body.project_id, project_store, project_graph_store)
+            payload = {
+                **payload,
+                "messages": PromptBuilder().build_agent_messages(
+                    payload["messages"],
+                    project_graph_enabled=project_graph_context is not None,
+                ),
+            }
             if body.stream:
                 recorder = RuntimeTraceRecorder(trace_id=str(uuid4()), source="agent_tool_loop", scope="chat_completion")
 
