@@ -529,7 +529,7 @@ export function SettingsPage() {
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_tools_enabled")}</span>
               </FormField>
               <FormField label="Agent Tools Max Iterations">
-                <input aria-label="Agent Tools Max Iterations" type="number" min={1} max={16} value={runtimeSettings.agent_tools_max_iterations} onChange={(event) => updateRuntimeNumber("agent_tools_max_iterations", event.target.value)} />
+                <input aria-label="Agent Tools Max Iterations" type="number" min={1} max={32} value={runtimeSettings.agent_tools_max_iterations} onChange={(event) => updateRuntimeNumber("agent_tools_max_iterations", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_tools_max_iterations")}</span>
               </FormField>
               <FormField label="Agent Tools Timeout Seconds">

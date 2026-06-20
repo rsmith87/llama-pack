@@ -9,7 +9,7 @@ from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
-from llama_pack.core.config.models import AppConfig
+from llama_pack.core.config.models import AGENT_TOOL_MAX_ITERATIONS_LIMIT, AppConfig
 
 if TYPE_CHECKING:
     from llama_pack.core.memory.store import ChromaMemoryStore
@@ -205,7 +205,7 @@ def _request_max_iterations(payload: dict[str, Any], configured_max_iterations: 
     if raw is None:
         return configured_max_iterations
     if not isinstance(raw, int):
-        raise ValueError("agent_tool_max_iterations must be an integer between 1 and 16")
-    if raw < 1 or raw > 16:
-        raise ValueError("agent_tool_max_iterations must be between 1 and 16")
+        raise ValueError(f"agent_tool_max_iterations must be an integer between 1 and {AGENT_TOOL_MAX_ITERATIONS_LIMIT}")
+    if raw < 1 or raw > AGENT_TOOL_MAX_ITERATIONS_LIMIT:
+        raise ValueError(f"agent_tool_max_iterations must be between 1 and {AGENT_TOOL_MAX_ITERATIONS_LIMIT}")
     return raw

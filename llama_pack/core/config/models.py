@@ -180,9 +180,12 @@ class MemoryConfig(BaseModel):
     durable_ttl_days: int = Field(default=90, ge=1)
 
 
+AGENT_TOOL_MAX_ITERATIONS_LIMIT = 32
+
+
 class AgentToolsConfig(BaseModel):
     enabled: bool = False
-    max_iterations: int = Field(default=4, ge=1, le=16)
+    max_iterations: int = Field(default=4, ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     tool_timeout_seconds: float = Field(default=10.0, gt=0)
     answer_verification_mode: Literal["off", "warn", "strict"] = "warn"
     answer_verification_max_retries: int = Field(default=1, ge=0, le=2)

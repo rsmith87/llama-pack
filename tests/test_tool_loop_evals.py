@@ -3,6 +3,7 @@ from __future__ import annotations
 import pytest
 
 from llama_pack.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
+from llama_pack.core.agent_tools.runtime import _request_max_iterations
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_pack.core.config import load_config
 
@@ -35,6 +36,10 @@ def _config(tmp_path):
             },
         }
     )
+
+
+def test_agent_tool_request_max_iterations_allows_large_codebase_workflows():
+    assert _request_max_iterations({"agent_tool_max_iterations": 32}, 4) == 32
 
 
 class ScriptedToolProxy:

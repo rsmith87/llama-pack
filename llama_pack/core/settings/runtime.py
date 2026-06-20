@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validator
 
 from llama_pack.core.config import AppConfig
-from llama_pack.core.config.models import AgentToolDefinitionConfig, AgentToolsConfig
+from llama_pack.core.config.models import AGENT_TOOL_MAX_ITERATIONS_LIMIT, AgentToolDefinitionConfig, AgentToolsConfig
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
 
 
@@ -34,7 +34,7 @@ class RuntimeSettings(BaseModel):
     agent_worker_capacity: dict[str, JsonScalar]
     client_cors_origins: list[str]
     agent_tools_enabled: bool
-    agent_tools_max_iterations: int = Field(ge=1, le=16)
+    agent_tools_max_iterations: int = Field(ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     agent_tools_tool_timeout_seconds: float = Field(gt=0)
     agent_tools_safe_roots: list[Path]
 
@@ -64,7 +64,7 @@ class RuntimeSettingsPatch(BaseModel):
     agent_worker_capacity: dict[str, JsonScalar] | None = None
     client_cors_origins: list[str] | None = None
     agent_tools_enabled: bool | None = None
-    agent_tools_max_iterations: int | None = Field(default=None, ge=1, le=16)
+    agent_tools_max_iterations: int | None = Field(default=None, ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     agent_tools_tool_timeout_seconds: float | None = Field(default=None, gt=0)
     agent_tools_safe_roots: list[Path] | None = None
 

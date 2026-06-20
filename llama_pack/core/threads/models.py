@@ -5,6 +5,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
+from llama_pack.core.config.models import AGENT_TOOL_MAX_ITERATIONS_LIMIT
+
 
 Priority = Literal["high", "medium", "low"]
 RequestType = Literal["coding", "general", "research"]
@@ -74,7 +76,7 @@ class ThreadMessageRequest(BaseModel):
     tool_runtime: Literal["agent"] | None = None
     tool_choice: dict[str, Any] | str | None = None
     project_id: str | None = None
-    agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=16)
+    agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
 
     def generation_payload(self) -> dict[str, object]:
         payload: dict[str, object] = {}

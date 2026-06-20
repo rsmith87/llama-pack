@@ -31,6 +31,7 @@ from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.prompt_builder import PromptBuilder
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
+from llama_pack.core.config.models import AGENT_TOOL_MAX_ITERATIONS_LIMIT
 from llama_pack.api.routes.chat.common import (
     ChatMessage,
     ChatRequestBody,
@@ -79,7 +80,7 @@ class OpenAIChatCompletionsRequest(BaseModel):
     context_profile: str | None = None
     tool_runtime: Literal["agent"] | None = None
     tool_choice: dict[str, Any] | str | None = None
-    agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=16)
+    agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     project_id: str | None = None
 
 
