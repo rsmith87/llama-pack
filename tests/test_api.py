@@ -2464,6 +2464,7 @@ def test_openai_compat_controller_forwards_agent_tool_runtime_to_selected_agent(
             "model": "qwen",
             "messages": [{"role": "user", "content": "hi"}],
             "tool_runtime": "agent",
+            "agent_tool_max_iterations": 12,
         },
     )
 
@@ -2478,6 +2479,7 @@ def test_openai_compat_controller_forwards_agent_tool_runtime_to_selected_agent(
                 "stream": False,
                 "chat_template_kwargs": {"enable_thinking": False},
                 "tool_runtime": "agent",
+                "agent_tool_max_iterations": 12,
                 "model": "qwen",
             },
         )

@@ -153,6 +153,7 @@ class ChatProxy:
             "tools",
             "tool_choice",
             "tool_runtime",
+            "agent_tool_max_iterations",
             "project_id",
         ):
             if payload.get(key) is not None:
