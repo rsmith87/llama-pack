@@ -7,6 +7,33 @@ function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
 
+function projectListPayload() {
+  return {
+    projects: [
+      { id: "project-1", name: "Spitball", root_hint: "/repo", archived: false },
+    ],
+  };
+}
+
+function emptyNodeRootsPayload() {
+  return { node_roots: [] };
+}
+
+function stubProjectsGraphStatus(statusPayload: unknown) {
+  vi.stubGlobal("fetch", vi.fn((url: string, options?: RequestInit) => {
+    if (url === "/lm-api/v1/projects?include_archived=false") {
+      return Promise.resolve(okJson(projectListPayload()));
+    }
+    if (url === "/lm-api/v1/projects/project-1/node-roots" && options?.method === "GET") {
+      return Promise.resolve(okJson(emptyNodeRootsPayload()));
+    }
+    if (url === "/lm-api/v1/projects/project-1/graph/status" && options?.method === "GET") {
+      return Promise.resolve(okJson(statusPayload));
+    }
+    return Promise.resolve(okJson({}));
+  }));
+}
+
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
@@ -121,4 +148,52 @@ it("creates projects and upserts safe node roots", async () => {
   })));
   expect(await screen.findByText("ProjectGraphIndexer")).toBeInTheDocument();
   expect(screen.getByText("llama_pack/core/code_graph/indexer.py")).toBeInTheDocument();
+});
+
+it("shows failed graph ingest details", async () => {
+  stubProjectsGraphStatus({
+    project_id: "project-1",
+    status: "failed",
+    snapshot_id: "snapshot-failed",
+    latest_snapshot_id: "snapshot-failed",
+    latest_status: "failed",
+    file_count: 0,
+    symbol_count: 0,
+    relation_count: 0,
+    updated_at: "2026-06-18T12:05:00Z",
+    error_detail: "Parser crashed on src/main.py",
+  });
+
+  render(<ProjectsPage />);
+
+  expect(await screen.findByText("Ingest failed")).toBeInTheDocument();
+  expect(screen.getByText("Parser crashed on src/main.py")).toBeInTheDocument();
+  expect(screen.getByText("Files")).toBeInTheDocument();
+  expect(screen.getAllByText("0").length).toBeGreaterThan(0);
+  expect(screen.getByText("2026-06-18T12:05:00Z")).toBeInTheDocument();
+});
+
+it("shows stale graph details when latest ingest failed after an active snapshot", async () => {
+  stubProjectsGraphStatus({
+    project_id: "project-1",
+    status: "ready",
+    snapshot_id: "snapshot-ready",
+    active_snapshot_id: "snapshot-ready",
+    latest_snapshot_id: "snapshot-failed",
+    latest_status: "failed",
+    file_count: 12,
+    symbol_count: 34,
+    relation_count: 56,
+    updated_at: "2026-06-18T12:05:00Z",
+    error_detail: "Parser crashed on src/main.py",
+  });
+
+  render(<ProjectsPage />);
+
+  expect(await screen.findByText("Latest ingest failed; showing the previous ready graph.")).toBeInTheDocument();
+  expect(screen.getByText("Parser crashed on src/main.py")).toBeInTheDocument();
+  expect(screen.getByText("12")).toBeInTheDocument();
+  expect(screen.getByText("34")).toBeInTheDocument();
+  expect(screen.getByText("56")).toBeInTheDocument();
+  expect(screen.getByText("2026-06-18T12:05:00Z")).toBeInTheDocument();
 });

@@ -42,10 +42,12 @@ export type ProjectGraphStatus = {
   snapshot_id?: string | null;
   active_snapshot_id?: string | null;
   latest_snapshot_id?: string | null;
+  latest_status?: string | null;
   file_count?: number;
   symbol_count?: number;
   relation_count?: number;
   updated_at?: string | null;
+  error_detail?: string | null;
 };
 
 export type ProjectGraphIndexRequest = {

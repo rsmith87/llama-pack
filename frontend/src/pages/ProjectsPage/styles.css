@@ -54,6 +54,64 @@
   flex-wrap: wrap;
 }
 
+.projects-graph-summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.projects-graph-summary div {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-muted);
+}
+
+.projects-graph-summary span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.projects-graph-summary strong {
+  color: var(--text);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.projects-graph-explanation {
+  display: grid;
+  gap: 6px;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.projects-graph-explanation.warning {
+  border-color: color-mix(in srgb, var(--warning) 42%, var(--border));
+  background: color-mix(in srgb, var(--warning) 10%, transparent);
+}
+
+.projects-graph-explanation.danger {
+  border-color: color-mix(in srgb, var(--danger) 42%, var(--border));
+  background: color-mix(in srgb, var(--danger) 10%, transparent);
+}
+
+.projects-graph-explanation strong {
+  font-size: 13px;
+}
+
+.projects-graph-explanation p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
 .projects-symbol-search {
   display: grid;
   gap: 12px;
@@ -79,6 +137,7 @@
   .projects-create-form,
   .projects-edit-form,
   .projects-root-form,
+  .projects-graph-summary,
   .projects-symbol-search-form {
     grid-template-columns: 1fr;
   }

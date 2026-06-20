@@ -44,12 +44,55 @@ def test_project_graph_store_preserves_active_snapshot_when_new_snapshot_fails(t
     store.replace_snapshot_graph(snapshot_id=str(first["id"]), files=[], symbols=[], imports=[], relations=[])
     store.activate_snapshot(str(first["id"]))
     failed = store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit="a2")
-    store.fail_snapshot(str(failed["id"]), "parse crashed")
+    failed = store.fail_snapshot(str(failed["id"]), "parse crashed")
 
     active = store.get_active_snapshot(str(project["id"]))
     assert active is not None
     assert active["id"] == first["id"]
     assert store.status(str(project["id"]))["status"] == "ready"
+
+
+def test_project_graph_store_status_reports_latest_failed_snapshot_with_active_counts(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project = _create_project(db_path)
+    store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+
+    first = store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit="a1")
+    store.replace_snapshot_graph(
+        snapshot_id=str(first["id"]),
+        files=[
+            {
+                "id": "file-api",
+                "path": "api.py",
+                "language": "python",
+                "content_hash": "hash-api",
+                "size_bytes": 100,
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    store.activate_snapshot(str(first["id"]))
+    failed = store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path="/repo", git_commit="a2")
+    failed = store.fail_snapshot(str(failed["id"]), "parse crashed")
+
+    status = store.status(str(project["id"]))
+
+    assert status["status"] == "ready"
+    assert status["snapshot_id"] == first["id"]
+    assert status["active_snapshot_id"] == first["id"]
+    assert status["latest_snapshot_id"] == failed["id"]
+    assert status["latest_status"] == "failed"
+    assert status["file_count"] == 1
+    assert status["symbol_count"] == 0
+    assert status["relation_count"] == 0
+    assert status["updated_at"] == failed["finished_at"]
+    assert status["error_detail"] == "parse crashed"
 
 
 def test_project_graph_store_queries_symbols_and_relations(tmp_path):

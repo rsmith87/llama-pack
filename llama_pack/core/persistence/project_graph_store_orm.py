@@ -259,6 +259,15 @@ class ProjectGraphStoreOrm:
             ).scalar_one_or_none()
             return self._snapshot_payload(row) if row is not None else None
 
+    def get_latest_snapshot(self, project_id: str) -> dict[str, object] | None:
+        with session_scope(self.session_factory) as session:
+            row = session.execute(
+                select(ProjectGraphSnapshotOrm)
+                .where(ProjectGraphSnapshotOrm.project_id == project_id)
+                .order_by(ProjectGraphSnapshotOrm.created_at.desc())
+            ).scalars().first()
+            return self._snapshot_payload(row) if row is not None else None
+
     def upsert_context_artifact(
         self,
         project_id: str,
@@ -322,20 +331,44 @@ class ProjectGraphStoreOrm:
 
     def status(self, project_id: str) -> dict[str, object]:
         active = self.get_active_snapshot(project_id)
-        if active is None:
+        latest = self.get_latest_snapshot(project_id)
+        if latest is None:
             return {"project_id": project_id, "status": "not_indexed", "snapshot_id": None}
+        if active is None:
+            return {
+                "project_id": project_id,
+                "status": latest["status"],
+                "snapshot_id": latest["id"],
+                "latest_snapshot_id": latest["id"],
+                "latest_status": latest["status"],
+                "file_count": latest["file_count"],
+                "symbol_count": latest["symbol_count"],
+                "relation_count": latest["relation_count"],
+                "root_path": latest["root_path"],
+                "node_name": latest["node_name"],
+                "git_commit": latest["git_commit"],
+                "updated_at": self._snapshot_updated_at(latest),
+                "error_detail": latest["error_detail"],
+            }
         return {
             "project_id": project_id,
             "status": active["status"],
             "snapshot_id": active["id"],
+            "active_snapshot_id": active["id"],
+            "latest_snapshot_id": latest["id"],
+            "latest_status": latest["status"],
             "file_count": active["file_count"],
             "symbol_count": active["symbol_count"],
             "relation_count": active["relation_count"],
             "root_path": active["root_path"],
             "node_name": active["node_name"],
             "git_commit": active["git_commit"],
-            "error_detail": active["error_detail"],
+            "updated_at": self._snapshot_updated_at(latest),
+            "error_detail": latest["error_detail"] or active["error_detail"],
         }
+
+    def _snapshot_updated_at(self, snapshot: dict[str, object]) -> object:
+        return snapshot["finished_at"] or snapshot["started_at"] or snapshot["created_at"]
 
     def find_symbols(self, project_id: str, query: str, kind: str | None) -> list[dict[str, object]]:
         snapshot = self.get_active_snapshot(project_id)

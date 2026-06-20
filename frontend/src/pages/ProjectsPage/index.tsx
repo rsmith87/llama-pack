@@ -50,6 +50,26 @@ function graphStatusTone(status: string | undefined): "success" | "warning" | "d
   return "muted";
 }
 
+function graphMetricValue(value: number | undefined): string {
+  return typeof value === "number" ? String(value) : "-";
+}
+
+function hasStaleGraphIngest(status: ProjectGraphStatus | null): boolean {
+  return Boolean(
+    status?.latest_status === "failed"
+    && status.active_snapshot_id
+    && status.latest_snapshot_id
+    && status.active_snapshot_id !== status.latest_snapshot_id,
+  );
+}
+
+function graphStatusMessage(status: ProjectGraphStatus | null): string {
+  if (hasStaleGraphIngest(status)) return "Latest ingest failed; showing the previous ready graph.";
+  if (status?.status === "failed" || status?.latest_status === "failed") return "Ingest failed";
+  if (status?.status === "not_indexed") return "No graph has been indexed yet.";
+  return "";
+}
+
 async function loadProjectsData(): Promise<ProjectsData> {
   const payload = await listProjects(false);
   return { projects: payload.projects };
@@ -341,6 +361,18 @@ export function ProjectsPage() {
                     </Button>
                   </div>
                 </div>
+                <div className="projects-graph-summary">
+                  <div><span>Files</span><strong>{graphMetricValue(graphStatus?.file_count)}</strong></div>
+                  <div><span>Symbols</span><strong>{graphMetricValue(graphStatus?.symbol_count)}</strong></div>
+                  <div><span>Relations</span><strong>{graphMetricValue(graphStatus?.relation_count)}</strong></div>
+                  <div><span>Last Update</span><strong>{graphStatus?.updated_at || "-"}</strong></div>
+                </div>
+                {graphStatusMessage(graphStatus) ? (
+                  <div className={`projects-graph-explanation ${hasStaleGraphIngest(graphStatus) ? "warning" : "danger"}`} role="status">
+                    <strong>{graphStatusMessage(graphStatus)}</strong>
+                    {graphStatus?.error_detail ? <p>{graphStatus.error_detail}</p> : null}
+                  </div>
+                ) : null}
                 <div className="projects-symbol-search">
                   <div className="projects-symbol-search-form">
                     <FormField label="Symbol Query">
