@@ -131,6 +131,22 @@ it("renders local models as GGUF-style cards with runtime actions", async () => 
   expect(screen.getAllByText("mac-mini").length).toBeGreaterThan(0);
 });
 
+it("marks startup-failed models and points users to logs", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "agent", configured_models: 1 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "qwen-coder", status: "stopped", process_state: "stale" }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) }),
+  );
+
+  renderDashboardPage();
+
+  const logsButton = await screen.findByRole("button", { name: "View startup problem logs for qwen-coder" });
+  expect(logsButton).toHaveClass("model-logs-problem");
+  expect(logsButton.closest(".library-card")).toHaveClass("problem");
+});
+
 it("renders rich model card runtime and configuration details", async () => {
   vi.stubGlobal(
     "fetch",

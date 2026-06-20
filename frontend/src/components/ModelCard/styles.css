@@ -152,6 +152,13 @@
   padding: 4px 8px;
 }
 
+.model-actions button.model-logs-problem {
+  border-color: color-mix(in srgb, var(--warning) 76%, var(--line));
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--warning);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--warning) 20%, transparent);
+}
+
 .model-action-target {
   margin: 0;
   color: var(--muted);

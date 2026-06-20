@@ -2,7 +2,7 @@ import "./styles.css";
 import { useId, useState, type ReactNode } from "react";
 import type { LocalModel } from "../../types/models";
 import { Button, StatusBadge } from "../ui";
-import { isActiveModel, isLoadingModel } from "../../features/models/modelStatus";
+import { isActiveModel, isLoadingModel, isProblemModel } from "../../features/models/modelStatus";
 import { modelName, statusTone } from "../../features/models";
 import { IoStar, IoStarOutline, IoHome, IoCheckmarkCircle, IoStop, IoPlaySharp, IoChatbubbles, IoSend, IoTerminal, IoStatsChart, IoRefresh, IoLayers } from "react-icons/io5";
 
@@ -155,6 +155,7 @@ export function ModelCard({
   const name = modelName(model as Parameters<typeof modelName>[0]);
   const active = isActiveModel(model as Parameters<typeof isActiveModel>[0]);
   const loading = isLoadingModel(model as Parameters<typeof isLoadingModel>[0]);
+  const problem = isProblemModel(model as Parameters<typeof isProblemModel>[0]);
   const status = str(raw, "status", "status") || "available";
   const processState = str(raw, "process_state", "process_state");
   const port = num(raw, "port", "model_port");
@@ -265,7 +266,12 @@ export function ModelCard({
           </Button>
         ) : null}
         {onLogs ? (
-          <Button type="button" onClick={onLogs} aria-label={`View logs for ${name}${labelSuffix}`}>
+          <Button
+            type="button"
+            onClick={onLogs}
+            className={problem ? "model-logs-problem" : undefined}
+            aria-label={`${problem ? "View startup problem logs" : "View logs"} for ${name}${labelSuffix}`}
+          >
             <IoTerminal />
           </Button>
         ) : null}
@@ -290,7 +296,7 @@ export function ModelCard({
     );
   }
 
-  const stateClass = loading ? "loading" : active ? "active" : "";
+  const stateClass = problem ? "problem" : loading ? "loading" : active ? "active" : "";
 
   return (
     <article className={`library-card ${stateClass}`.trim()}>

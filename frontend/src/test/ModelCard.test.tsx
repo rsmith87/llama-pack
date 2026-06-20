@@ -4,6 +4,23 @@ import { describe, expect, it } from "vitest";
 import { ModelCard } from "../components/ModelCard";
 import { modelActionTargetLabel, modelPlacementDetails } from "../features/models";
 
+it("highlights stale startup failure cards and their logs action", () => {
+  render(
+    <ModelCard
+      model={{
+        name: "qwen-local",
+        status: "stopped",
+        process_state: "stale",
+      }}
+      onLogs={() => undefined}
+    />,
+  );
+
+  const logsButton = screen.getByRole("button", { name: "View startup problem logs for qwen-local" });
+  expect(logsButton).toHaveClass("model-logs-problem");
+  expect(logsButton.closest(".library-card")).toHaveClass("problem");
+});
+
 it("expands model profile details from the card", async () => {
   const user = userEvent.setup();
 

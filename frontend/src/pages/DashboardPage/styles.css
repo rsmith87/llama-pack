@@ -71,6 +71,13 @@
   box-shadow: inset 3px 0 0 var(--warning), 0 0 0 1px color-mix(in srgb, var(--warning) 16%, transparent);
 }
 
+.model-card.problem,
+.library-card.problem {
+  border-color: color-mix(in srgb, var(--warning) 78%, var(--line));
+  background: linear-gradient(180deg, color-mix(in srgb, var(--warning) 18%, var(--card-strong)), var(--card));
+  box-shadow: inset 3px 0 0 var(--warning), 0 0 0 1px color-mix(in srgb, var(--warning) 24%, transparent);
+}
+
 .model-card.active strong,
 .library-card.active .library-card-button strong {
   color: var(--success);
@@ -78,6 +85,11 @@
 
 .model-card.loading strong,
 .library-card.loading .library-card-button strong {
+  color: var(--warning);
+}
+
+.model-card.problem strong,
+.library-card.problem .library-card-button strong {
   color: var(--warning);
 }
 

@@ -2,6 +2,7 @@ type ActiveModelLike = {
   pid?: unknown;
   running?: unknown;
   status?: unknown;
+  process_state?: unknown;
 };
 
 export function isActiveModel(model: ActiveModelLike): boolean {
@@ -10,4 +11,8 @@ export function isActiveModel(model: ActiveModelLike): boolean {
 
 export function isLoadingModel(model: ActiveModelLike): boolean {
   return model.status === "starting";
+}
+
+export function isProblemModel(model: ActiveModelLike): boolean {
+  return model.process_state === "stale";
 }
