@@ -13,6 +13,8 @@ agent_tools:
   enabled: true
   max_iterations: 4          # max tool-call rounds per request (1–16)
   tool_timeout_seconds: 10   # per-tool timeout in seconds
+  answer_verification_mode: warn
+  answer_verification_max_retries: 1
   safe_roots:
     - /path/to/allowed/root  # all file-system tools must resolve under a safe root
   tools:
@@ -21,6 +23,16 @@ agent_tools:
       description: What this tool does (shown to the LLM).
       # ... type-specific fields
 ```
+
+---
+
+## Final Answer Verification
+
+Project-graph chats can verify final answers before returning them. The verifier
+checks repository file paths and symbol-looking claims against the active project
+graph. In `warn` mode, the runtime asks the model to revise once when
+unverified claims are found. In `strict` mode, unresolved verifier failures can
+fail the request rather than returning an ungrounded answer.
 
 ---
 

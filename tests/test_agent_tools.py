@@ -10,6 +10,7 @@ import respx
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
+from llama_pack.core.agent_tools.answer_verifier import AnswerVerifier, extract_answer_claims
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext, execute_project_graph_tool, project_graph_tool_definitions
 from llama_pack.core.config import load_config
 from llama_pack.core.persistence.db_infra import sqlite_url_for_path
@@ -93,6 +94,71 @@ def test_tool_registry_emits_project_graph_runtime_tools(tmp_path):
     assert "graph_find_symbol" in names
     find_symbol = next(tool for tool in tools if tool["function"]["name"] == "graph_find_symbol")
     assert find_symbol["function"]["parameters"]["required"] == ["query"]
+
+
+def test_answer_verifier_extracts_codebase_paths_and_symbols():
+    claims = extract_answer_claims(
+        "Edit `llama_pack/core/benchmarks/runner.py` and call BenchmarkRunner.execute_run. "
+        "Ignore `src/repositories/sample_repository.py`."
+    )
+
+    assert "llama_pack/core/benchmarks/runner.py" in claims.paths
+    assert "src/repositories/sample_repository.py" in claims.paths
+    assert "BenchmarkRunner.execute_run" in claims.symbols
+
+
+def test_answer_verifier_reports_missing_paths_and_symbols(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": 10,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-runner",
+                "file_id": "file-runner",
+                "name": "BenchmarkRunner",
+                "qualified_name": "llama_pack.core.benchmarks.runner.BenchmarkRunner",
+                "kind": "class",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 10,
+                "signature": "class BenchmarkRunner",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    report = verifier.verify(
+        "Use `llama_pack/core/benchmarks/runner.py`, `src/repositories/sample_repository.py`, "
+        "BenchmarkRunner, and SampleRepository.save."
+    )
+
+    assert report.ok is False
+    assert "src/repositories/sample_repository.py" in report.missing_paths
+    assert "SampleRepository.save" in report.missing_symbols
+    assert "llama_pack/core/benchmarks/runner.py" in report.verified_paths
+    assert "BenchmarkRunner" in report.verified_symbols
 
 
 @pytest.mark.asyncio
@@ -691,6 +757,65 @@ async def test_tool_loop_honors_request_max_iterations_override(tmp_path):
     )
 
     assert response["choices"][0]["message"]["content"] == "done"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_revises_unverified_project_graph_answer(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": 10,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    class Proxy:
+        def __init__(self):
+            self.messages = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.messages.append(payload["messages"])
+            if len(self.messages) == 1:
+                return {"choices": [{"message": {"role": "assistant", "content": "Edit `src/repositories/sample_repository.py`."}}]}, {"route": "local"}
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "I could not verify that path. Use `llama_pack/core/benchmarks/runner.py`.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    proxy = Proxy()
+    response, _meta = await AgentToolLoop(
+        config,
+        proxy,
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
+
+    assert "llama_pack/core/benchmarks/runner.py" in response["choices"][0]["message"]["content"]
+    assert "src/repositories/sample_repository.py" not in response["choices"][0]["message"]["content"]
+    assert "Your draft contains unverified codebase claims" in proxy.messages[1][-1]["content"]
 
 
 @pytest.mark.asyncio

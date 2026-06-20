@@ -242,6 +242,13 @@ def test_agent_tools_defaults_are_disabled():
     assert config.agent_tools.tools == {}
 
 
+def test_agent_tools_answer_verification_defaults():
+    config = load_config({"mode": "agent"})
+
+    assert config.agent_tools.answer_verification_mode == "warn"
+    assert config.agent_tools.answer_verification_max_retries == 1
+
+
 def test_client_cors_origins_default_to_empty_and_load_from_config():
     default_config = load_config({"mode": "controller"})
     configured = load_config(

@@ -4,6 +4,7 @@ import json
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from llama_pack.core.agent_tools.answer_verifier import AnswerVerifier
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
@@ -71,6 +72,38 @@ class AgentToolLoop:
             message = _assistant_message(response)
             tool_calls = _tool_calls(message)
             if not tool_calls:
+                if self.executor.project_graph_context is not None and self.config.agent_tools.answer_verification_mode != "off":
+                    report = AnswerVerifier(self.executor.project_graph_context).verify(str(message.get("content") or ""))
+                    if not report.ok:
+                        self._emit(
+                            "answer_verification_failed",
+                            status="failed",
+                            model=model_name,
+                            title="Answer verification failed",
+                            payload={
+                                "missing_paths": report.missing_paths,
+                                "missing_symbols": report.missing_symbols,
+                            },
+                        )
+                        if self.config.agent_tools.answer_verification_max_retries <= 0:
+                            if self.config.agent_tools.answer_verification_mode == "strict":
+                                raise RuntimeError("answer verification failed before final assistant response")
+                        else:
+                            messages.append(message)
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": (
+                                        "Your draft contains unverified codebase claims.\n"
+                                        f"{report.feedback()}\n\n"
+                                        "Revise using only verified file paths and symbols. "
+                                        "If a detail is not verified, say not verified."
+                                    ),
+                                }
+                            )
+                            request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
+                            response, last_meta = await self.proxy.chat_with_meta(model_name, request_payload)
+                            message = _assistant_message(response)
                 self._emit(
                     "assistant_message_completed",
                     status="passed",
