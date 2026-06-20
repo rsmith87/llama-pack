@@ -2117,6 +2117,81 @@ def test_openai_compat_agent_tool_runtime_executes_local_tool_loop(tmp_path):
     assert trace["status"] == "ok"
 
 
+def test_openai_compat_agent_tool_runtime_streams_tool_progress(tmp_path):
+    calls = []
+    status = tmp_path / "status.txt"
+    status.write_text("agent ok", encoding="utf-8")
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        if len(calls) == 1:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {"name": "read_status", "arguments": "{}"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        return {"choices": [{"message": {"role": "assistant", "content": "status is agent ok"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {
+                    "enabled": True,
+                    "safe_roots": [str(tmp_path)],
+                    "tools": {
+                        "read_status": {
+                            "type": "file_read",
+                            "description": "Read status.",
+                            "path": str(status),
+                        }
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "check status"}],
+            "tool_runtime": "agent",
+            "stream": True,
+        },
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert '"type": "trace_event"' in body
+    assert '"event_type": "tool_call_started"' in body
+    assert '"event_type": "tool_call_completed"' in body
+    assert '"tool_name": "read_status"' in body
+    assert '"type": "final"' in body
+    assert "status is agent ok" in body
+    assert "data: [DONE]" in body
+
+
 def test_openai_compat_agent_tool_runtime_exposes_project_graph_tools(tmp_path):
     calls = []
 
@@ -2290,10 +2365,9 @@ def test_stream_payload_has_tool_call_ignores_content_only_chunks():
 def test_openai_compat_agent_tool_runtime_streams_when_no_tool_call(tmp_path):
     calls = []
 
-    async def fake_chat_stream_request(url, payload):
+    async def fake_chat_request(url, payload):
         calls.append((url, payload))
-        yield b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
-        yield b"data: [DONE]\n\n"
+        return {"choices": [{"message": {"role": "assistant", "content": "hello"}}]}
 
     app = create_app(
         config=load_config(
@@ -2317,7 +2391,7 @@ def test_openai_compat_agent_tool_runtime_streams_when_no_tool_call(tmp_path):
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
-        chat_stream_request=fake_chat_stream_request,
+        chat_request=fake_chat_request,
     )
     client = TestClient(app)
 
@@ -2335,17 +2409,38 @@ def test_openai_compat_agent_tool_runtime_streams_when_no_tool_call(tmp_path):
 
     assert response.status_code == 200
     assert "hello" in body
+    assert '"type": "final"' in body
     assert "data: [DONE]" in body
     assert calls[0][1]["tools"][0]["function"]["name"] == "read_status"
     assert not (tmp_path / "agent_tool_calls.jsonl").exists()
 
 
 def test_openai_compat_agent_tool_runtime_stream_reports_actual_tool_call(tmp_path):
-    async def fake_chat_stream_request(url, payload):
-        yield (
-            b'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1",'
-            b'"type":"function","function":{"name":"read_status","arguments":"{}"}}]}}]}\n\n'
-        )
+    calls = []
+    status = tmp_path / "status.txt"
+    status.write_text("agent ok", encoding="utf-8")
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        if len(calls) == 1:
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {"name": "read_status", "arguments": "{}"},
+                                }
+                            ],
+                        }
+                    }
+                ]
+            }
+        return {"choices": [{"message": {"role": "assistant", "content": "status is agent ok"}}]}
 
     app = create_app(
         config=load_config(
@@ -2360,7 +2455,7 @@ def test_openai_compat_agent_tool_runtime_stream_reports_actual_tool_call(tmp_pa
                         "read_status": {
                             "type": "file_read",
                             "description": "Read status.",
-                            "path": str(tmp_path / "status.txt"),
+                            "path": str(status),
                         }
                     },
                 },
@@ -2369,7 +2464,7 @@ def test_openai_compat_agent_tool_runtime_stream_reports_actual_tool_call(tmp_pa
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
-        chat_stream_request=fake_chat_stream_request,
+        chat_request=fake_chat_request,
     )
     client = TestClient(app)
 
@@ -2386,15 +2481,33 @@ def test_openai_compat_agent_tool_runtime_stream_reports_actual_tool_call(tmp_pa
         body = response.read().decode("utf-8")
 
     assert response.status_code == 200
-    assert '"type": "tool_call"' in body
-    assert "streamed agent tool execution is not supported yet" in body
+    assert '"event_type": "tool_call_started"' in body
+    assert '"event_type": "tool_call_completed"' in body
+    assert '"tool_name": "read_status"' in body
+    assert "status is agent ok" in body
     assert "data: [DONE]" in body
-    assert not (tmp_path / "agent_tool_calls.jsonl").exists()
+    assert (tmp_path / "agent_tool_calls.jsonl").exists()
 
 
-def test_openai_compat_agent_tool_runtime_stream_detects_tool_call_finish_reason(tmp_path):
-    async def fake_chat_stream_request(url, payload):
-        yield b'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n'
+def test_openai_compat_agent_tool_runtime_stream_reports_loop_errors(tmp_path):
+    async def fake_chat_request(url, payload):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call-1",
+                                "type": "function",
+                                "function": {"name": "missing_tool", "arguments": "{}"},
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
 
     app = create_app(
         config=load_config(
@@ -2408,7 +2521,7 @@ def test_openai_compat_agent_tool_runtime_stream_detects_tool_call_finish_reason
         process_manager=StubProcessManager(running=True),
         conversion_manager=StubConversionManager(),
         gguf_library=StubGgufLibrary(),
-        chat_stream_request=fake_chat_stream_request,
+        chat_request=fake_chat_request,
     )
     client = TestClient(app)
 
@@ -2425,7 +2538,8 @@ def test_openai_compat_agent_tool_runtime_stream_detects_tool_call_finish_reason
         body = response.read().decode("utf-8")
 
     assert response.status_code == 200
-    assert '"type": "tool_call"' in body
+    assert '"type": "error"' in body
+    assert "agent tool loop reached max_iterations before final assistant response" in body
     assert "data: [DONE]" in body
 
 

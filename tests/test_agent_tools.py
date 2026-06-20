@@ -10,6 +10,7 @@ import respx
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.runtime import AgentToolLoop
+from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_pack.core.agent_tools.answer_verifier import AnswerVerifier, extract_answer_claims
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext, execute_project_graph_tool, project_graph_tool_definitions
 from llama_pack.core.config import load_config
@@ -807,15 +808,20 @@ async def test_tool_loop_revises_unverified_project_graph_answer(tmp_path):
             }, {"route": "local"}
 
     proxy = Proxy()
+    trace_recorder = RuntimeTraceRecorder(trace_id="trace-1", source="agent_tool_loop", scope="chat_completion")
     response, _meta = await AgentToolLoop(
         config,
         proxy,
+        trace_recorder=trace_recorder,
         project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
     ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
 
     assert "llama_pack/core/benchmarks/runner.py" in response["choices"][0]["message"]["content"]
     assert "src/repositories/sample_repository.py" not in response["choices"][0]["message"]["content"]
     assert "Your draft contains unverified codebase claims" in proxy.messages[1][-1]["content"]
+    event_types = [event["event_type"] for event in trace_recorder.events]
+    assert "answer_verification_started" in event_types
+    assert "answer_verification_failed" in event_types
 
 
 @pytest.mark.asyncio

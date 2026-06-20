@@ -73,6 +73,12 @@ class AgentToolLoop:
             tool_calls = _tool_calls(message)
             if not tool_calls:
                 if self.executor.project_graph_context is not None and self.config.agent_tools.answer_verification_mode != "off":
+                    self._emit(
+                        "answer_verification_started",
+                        model=model_name,
+                        title="Reviewing generation",
+                        payload={"iteration": iteration + 1},
+                    )
                     report = AnswerVerifier(self.executor.project_graph_context).verify(str(message.get("content") or ""))
                     if not report.ok:
                         self._emit(

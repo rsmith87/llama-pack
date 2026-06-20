@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import Any, Literal
+from uuid import uuid4
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -26,6 +28,7 @@ from llama_pack.api.routes.projects import (
 from llama_pack.api.routes.compat_chat import CompatChatHTTPError, controller_chat, controller_stream, extract_openai_sse_json, stream_payload_has_tool_call
 from llama_pack.api.routes.external_usage_audit import audit_external_chat_completion
 from llama_pack.core.agent_tools.registry import ToolRegistry
+from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext, project_graph_tool_definitions
 from llama_pack.api.routes.chat.common import (
     ChatMessage,
@@ -346,15 +349,25 @@ async def openai_chat_completions(
                 raise HTTPException(status_code=400, detail="agent tool runtime is not enabled")
             project_graph_context = _project_graph_context(body.project_id, project_store, project_graph_store)
             if body.stream:
-                runtime_tools = project_graph_tool_definitions() if project_graph_context is not None else []
-                tool_payload = {**payload, "tools": ToolRegistry(config.agent_tools, runtime_tools=runtime_tools).openai_tools()}
-                stream, headers = await scheduler.stream_with_meta(model_name, tool_payload)
+                recorder = RuntimeTraceRecorder(trace_id=str(uuid4()), source="agent_tool_loop", scope="chat_completion")
+
+                async def run_agent_loop() -> tuple[dict[str, Any], dict[str, Any]]:
+                    with track_model_if_local(manager, model_name):
+                        return await AgentToolLoop(
+                            config,
+                            scheduler,
+                            process_manager=manager,
+                            memory_store=getattr(request.app.state, "memory_store", None),
+                            trace_recorder=recorder,
+                            project_graph_context=project_graph_context,
+                        ).run(model_name, payload)
+
                 return StreamingResponse(
-                    _agent_tool_detection_stream(stream),
+                    _agent_tool_progress_stream(recorder, run_agent_loop()),
                     media_type="text/event-stream",
                     headers={
-                        LLAMA_PACK_ROUTE_HEADER: headers.get("route", "local"),
-                        LEGACY_LLAMA_MANAGER_ROUTE_HEADER: headers.get("route", "local"),
+                        LLAMA_PACK_ROUTE_HEADER: "local",
+                        LEGACY_LLAMA_MANAGER_ROUTE_HEADER: "local",
                         **profile_headers,
                     },
                 )
@@ -470,6 +483,33 @@ async def _agent_tool_detection_stream(stream: AsyncIterator[bytes]) -> AsyncIte
                 yield b"data: [DONE]\n\n"
                 return
         yield chunk
+
+
+async def _agent_tool_progress_stream(
+    recorder: RuntimeTraceRecorder,
+    runner: Awaitable[tuple[dict[str, Any], dict[str, Any]]],
+) -> AsyncIterator[bytes]:
+    async def run_and_close() -> tuple[dict[str, Any], dict[str, Any]]:
+        try:
+            return await runner
+        finally:
+            recorder.close()
+
+    task = asyncio.create_task(run_and_close())
+    async for event in recorder.stream():
+        yield _agent_tool_sse({"type": "trace_event", **event})
+    try:
+        response, _headers = await task
+    except Exception as exc:
+        yield _agent_tool_sse({"type": "error", "error": str(exc)})
+        yield b"data: [DONE]\n\n"
+        return
+    yield _agent_tool_sse({"type": "final", **response})
+    yield b"data: [DONE]\n\n"
+
+
+def _agent_tool_sse(payload: dict[str, Any]) -> bytes:
+    return f"data: {json.dumps(payload)}\n\n".encode()
 
 
 def _project_graph_context(
