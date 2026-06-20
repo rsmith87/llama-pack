@@ -263,6 +263,7 @@ async def openai_client_chat_diagnostics(
                 request_type=body.request_type,
                 metadata={"diagnostic": True},
                 target=body.target,
+                include_thread_event=False,
             )
             if config.mode != "controller":
                 stream = _track_stream(manager, body.model, stream)
@@ -383,6 +384,7 @@ async def openai_chat_completions(
                 request_type=body.request_type,
                 metadata=body.metadata,
                 target=body.target,
+                include_thread_event=True,
             )
             if config.mode != "controller":
                 stream = _track_stream(manager, model_name, stream)

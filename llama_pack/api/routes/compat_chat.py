@@ -129,7 +129,8 @@ async def controller_chat(
         response_meta=meta,
         route=compat["route"],
     )
-    return response, compatibility_headers(compat["thread_id"], compat["route"], meta)
+    response_with_thread = {**response, "thread_id": compat["thread_id"]}
+    return response_with_thread, compatibility_headers(compat["thread_id"], compat["route"], meta)
 
 
 async def controller_stream(
@@ -144,6 +145,7 @@ async def controller_stream(
     request_type: str | None,
     metadata: dict[str, Any] | None,
     target: str,
+    include_thread_event: bool,
 ) -> tuple[AsyncIterator[bytes], dict[str, str]]:
     payload = _with_admission_session(payload, request)
     if config.mode != "controller":
@@ -183,6 +185,9 @@ async def controller_stream(
 
     async def _recording_stream() -> AsyncIterator[bytes]:
         parts: list[str] = []
+        if include_thread_event:
+            thread_event = json.dumps({"type": "thread", "thread_id": compat["thread_id"]})
+            yield f"data: {thread_event}\n\n".encode()
         try:
             async for chunk in stream:
                 parts.extend(extract_openai_sse_content(chunk))

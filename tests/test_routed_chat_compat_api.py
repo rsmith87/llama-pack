@@ -91,11 +91,13 @@ def test_openai_chat_completions_routes_by_request_type_and_creates_thread(tmp_p
     )
 
     assert response.status_code == 200
-    assert response.json() == {"choices": [{"message": {"role": "assistant", "content": "hello from routed node"}}]}
+    body = response.json()
+    assert body["choices"] == [{"message": {"role": "assistant", "content": "hello from routed node"}}]
     assert response.headers["X-Llama-Pack-Route"] == "node:linux-2080ti"
     assert response.headers["X-Llama-Pack-Node"] == "linux-2080ti"
     assert response.headers["X-Llama-Pack-Model"] == "qwen"
     thread_id = response.headers["X-Llama-Pack-Thread-Id"]
+    assert body["thread_id"] == thread_id
     assert calls[0]["model_name"] == "qwen"
     assert calls[0]["payload"]["messages"] == [{"role": "user", "content": "write code"}]
     assert calls[0]["payload"]["target"] == "node:linux-2080ti"
@@ -908,11 +910,15 @@ def test_openai_chat_completions_stream_keeps_sse_shape_and_records_thread(tmp_p
     assert response.headers["content-type"].startswith("text/event-stream")
     assert response.headers["X-Llama-Pack-Node"] == "linux-2080ti"
     thread_id = response.headers["X-Llama-Pack-Thread-Id"]
-    assert body == (
-        b'data: {"choices":[{"delta":{"content":"hel"}}]}\n\n'
-        b'data: {"choices":[{"delta":{"content":"lo"}}]}\n\n'
-        b"data: [DONE]\n\n"
-    )
+    events = [line.removeprefix("data: ").strip() for line in body.decode("utf-8").split("\n\n") if line.strip()]
+    meta = json.loads(events[0])
+    assert meta["type"] == "thread"
+    assert meta["thread_id"] == thread_id
+    assert events[1:] == [
+        '{"choices":[{"delta":{"content":"hel"}}]}',
+        '{"choices":[{"delta":{"content":"lo"}}]}',
+        "[DONE]",
+    ]
     assert stream_calls[0]["payload"]["target"] == "node:linux-2080ti"
     events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [event["event_type"] for event in events] == ["user_message", "assistant_message"]

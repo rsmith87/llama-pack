@@ -67,6 +67,7 @@ async def ollama_chat(
                 request_type=body.request_type,
                 metadata=body.metadata,
                 target=body.target,
+                include_thread_event=False,
             )
             if config.mode != "controller":
                 stream = _track_stream(manager, model_name, stream)
