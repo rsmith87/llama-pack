@@ -46,6 +46,7 @@ class AgentToolLoop:
     ) -> tuple[dict[str, Any], dict[str, Any]]:
         request_id = request_id or str(uuid4())
         messages = [dict(message) for message in payload.get("messages", [])]
+        max_iterations = _request_max_iterations(payload, self.config.agent_tools.max_iterations)
         if self.executor.project_graph_context is not None:
             messages.insert(
                 0,
@@ -54,11 +55,11 @@ class AgentToolLoop:
                     "content": "Project code graph tools are available for this chat. Use them to inspect indexed symbols, relationships, routes, and React components before making codebase claims.",
                 },
             )
-        base_payload = {key: value for key, value in payload.items() if key not in {"messages", "tool_runtime"}}
+        base_payload = {key: value for key, value in payload.items() if key not in {"messages", "tool_runtime", "agent_tool_max_iterations"}}
         tool_defs = self.registry.openai_tools()
         last_meta: dict[str, Any] = {}
 
-        for iteration in range(self.config.agent_tools.max_iterations):
+        for iteration in range(max_iterations):
             self._emit(
                 "assistant_turn_started",
                 model=model_name,
@@ -132,3 +133,14 @@ def _parse_arguments(raw: Any) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _request_max_iterations(payload: dict[str, Any], configured_max_iterations: int) -> int:
+    raw = payload.get("agent_tool_max_iterations")
+    if raw is None:
+        return configured_max_iterations
+    if not isinstance(raw, int):
+        raise ValueError("agent_tool_max_iterations must be an integer between 1 and 16")
+    if raw < 1 or raw > 16:
+        raise ValueError("agent_tool_max_iterations must be between 1 and 16")
+    return raw

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from pathlib import Path
@@ -83,6 +84,14 @@ def test_start_frontend_checks_running_pid_before_building() -> None:
     contents = read_script("start_frontend.sh")
 
     assert contents.index('if [[ -f "$PID_FILE" ]]') < contents.index('echo "Building frontend..."')
+
+
+def test_frontend_build_does_not_generate_docs_by_default() -> None:
+    package_json = json.loads((ROOT_DIR / "frontend" / "package.json").read_text(encoding="utf-8"))
+    scripts = package_json["scripts"]
+
+    assert scripts["generate:docs"] == "node scripts/generate-docs.mjs"
+    assert scripts["build"] == "tsc -b && vite build"
 
 
 def test_start_controller_stack_script_starts_controller_and_frontend() -> None:

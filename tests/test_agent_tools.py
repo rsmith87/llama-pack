@@ -635,6 +635,65 @@ async def test_tool_loop_stops_at_max_iterations(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_tool_loop_honors_request_max_iterations_override(tmp_path):
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "max_iterations": 1,
+                "safe_roots": [str(tmp_path)],
+                "tools": {
+                    "read_status": {
+                        "type": "file_read",
+                        "description": "Read status.",
+                        "path": str(tmp_path / "status.txt"),
+                    }
+                },
+            },
+        }
+    )
+    (tmp_path / "status.txt").write_text("agent ok", encoding="utf-8")
+
+    class Proxy:
+        def __init__(self):
+            self.calls = 0
+
+        async def chat_with_meta(self, model_name, payload):
+            self.calls += 1
+            if self.calls < 3:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": f"call-{self.calls}",
+                                        "type": "function",
+                                        "function": {"name": "read_status", "arguments": "{}"},
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            return {"choices": [{"message": {"role": "assistant", "content": "done"}}]}, {"route": "local"}
+
+    response, _meta = await AgentToolLoop(config, Proxy()).run(
+        "qwen",
+        {
+            "messages": [{"role": "user", "content": "loop"}],
+            "agent_tool_max_iterations": 3,
+        },
+    )
+
+    assert response["choices"][0]["message"]["content"] == "done"
+
+
+@pytest.mark.asyncio
 async def test_tool_executor_searches_files_by_glob(tmp_path):
     root = tmp_path / "project"
     (root / "src").mkdir(parents=True)

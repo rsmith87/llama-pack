@@ -813,6 +813,27 @@ it("renders telemetry chips from streamed chunks after finalization", async () =
   expect(screen.getByText("gen_toks: 8")).toBeInTheDocument();
 });
 
+it("renders assistant markdown in streamed responses", async () => {
+  stubChatPageFetch((url) => {
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
+      return streamResponse([
+        'data: {"choices":[{"delta":{"content":"## Summary\\n\\n- alpha item\\n\\n```ts\\nconst value = 1;\\n```"}}]}\n\n',
+      ]);
+    }
+    if (url === "/lm-api/v1/threads/thread-1/events") return conversationEvents("Markdown", "## Summary\n\n- alpha item\n\n```ts\nconst value = 1;\n```");
+    return okJson({});
+  });
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+  await user.type(await screen.findByLabelText("Prompt"), "Markdown");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  expect(await screen.findByRole("heading", { name: "Summary" })).toBeInTheDocument();
+  expect(screen.getByRole("listitem")).toHaveTextContent("alpha item");
+  expect(document.querySelector(".chat-markdown code")?.textContent).toContain("const value = 1;");
+});
+
 it("shows a clear error when conversation streaming is unavailable", async () => {
   stubChatPageFetch((url) => {
     if (url === "/lm-api/v1/threads/thread-1/messages/stream") {

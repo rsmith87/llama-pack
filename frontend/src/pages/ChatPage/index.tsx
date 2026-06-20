@@ -1,5 +1,7 @@
 import "./styles.css";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, getContextBudget, inspectModel, listChatSessions, listKvSlots, saveChatSession } from "../../api/chat";
 import { searchMemory, writeMemory } from "../../api/memory";
 import { getModelProfiles, listModels } from "../../api/models";
@@ -80,6 +82,14 @@ function contextBudgetPercent(budget: ContextBudget): number {
 function memoryResultLine(result: MemorySearchResult): string {
   const score = result.score == null ? "-" : result.score.toFixed(4);
   return `${score} ${result.tier || "-"} ${result.topic || "-"} ${result.text || "-"}`;
+}
+
+function MarkdownMessage({ content }: { content: string }) {
+  return (
+    <div className="chat-markdown">
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+  );
 }
 
 export function ChatPage() {
@@ -880,7 +890,7 @@ export function ChatPage() {
                       </details>
                     ) : null}
                     {message.content ? (
-                      <p>{message.content}</p>
+                      message.role === "user" ? <p>{message.content}</p> : <MarkdownMessage content={message.content} />
                     ) : message.pending ? (
                       <div className="chat-activity" data-testid="assistant-activity-indicator" role="status">
                         <span className="chat-activity-dots" aria-hidden="true"><span /> <span /> <span /></span>

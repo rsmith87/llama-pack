@@ -75,6 +75,7 @@ class OpenAIChatCompletionsRequest(BaseModel):
     context_profile: str | None = None
     tool_runtime: Literal["agent"] | None = None
     tool_choice: dict[str, Any] | str | None = None
+    agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=16)
     project_id: str | None = None
 
 
@@ -327,12 +328,14 @@ async def openai_chat_completions(
     try:
         model_name = body.model
         payload: dict[str, Any] = ChatRequestBody.model_validate(
-            body.model_dump(exclude={"model", "stream", "thread_id", "request_type", "metadata"})
+            body.model_dump(exclude={"model", "stream", "thread_id", "request_type", "metadata", "agent_tool_max_iterations"})
         ).model_dump()
         if body.tool_runtime is not None:
             payload["tool_runtime"] = body.tool_runtime
         if body.tool_choice is not None:
             payload["tool_choice"] = body.tool_choice
+        if body.agent_tool_max_iterations is not None:
+            payload["agent_tool_max_iterations"] = body.agent_tool_max_iterations
         if body.project_id is not None:
             payload["project_id"] = body.project_id
         profile_headers: dict[str, str] = {}
