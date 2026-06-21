@@ -484,6 +484,40 @@ def test_agent_model_routes():
     assert client.get("/lm-api/v1/logs/qwen").json()["text"] == "hello\n"
 
 
+def test_agent_chat_slot_cancel_forwards_to_llama_cpp_slot():
+    calls = []
+
+    async def chat_request(url, payload):
+        calls.append((url, payload))
+        return {"ok": True}
+
+    config = load_config(
+        {
+            "mode": "agent",
+            "models": {
+                "qwen": {
+                    "path": "/models/qwen.gguf",
+                    "port": 8081,
+                }
+            },
+        }
+    )
+    app = create_app(
+        config=config,
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=chat_request,
+    )
+    client = TestClient(app)
+
+    response = client.post("/lm-api/v1/chat/qwen/kv/slots/0", json={"action": "cancel", "target": "auto"})
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert calls == [("http://127.0.0.1:8081/slots/0/cancel", {})]
+
+
 def test_runtime_overview_exposes_running_model_process_state():
     config = load_config(
         {

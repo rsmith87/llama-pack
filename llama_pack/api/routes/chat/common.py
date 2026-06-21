@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from typing import Literal
 
 import httpx
 from fastapi import HTTPException
@@ -78,7 +79,7 @@ class EmbeddingsRequestBody(BaseModel):
 
 class SlotActionRequest(BaseModel):
     target: str = "auto"
-    action: str = "clear"
+    action: Literal["clear", "save", "restore", "erase", "cancel"] = "clear"
 
 
 class SessionMessage(BaseModel):

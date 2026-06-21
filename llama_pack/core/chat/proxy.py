@@ -86,10 +86,8 @@ class ChatProxy:
     async def kv_slot_action_with_meta(self, model_name: str, slot_id: int, action: str, target_selector: str = "auto") -> tuple[dict[str, Any], dict[str, str]]:
         suffix = f"/{slot_id}" if action == "clear" else f"/{slot_id}/{action}"
         url, headers, verify_tls, route_meta = await self._build_slots_request(model_name, target_selector, suffix)
-        async with httpx.AsyncClient(timeout=None, verify=verify_tls) as client:
-            response = await client.post(url, headers=headers or None, json={})
-            response.raise_for_status()
-            return response.json() if response.content else {"ok": True}, route_meta
+        response = await self._call_request(url, {}, headers, verify_tls)
+        return response, route_meta
 
     async def kv_capabilities_with_meta(self, model_name: str, target_selector: str = "auto") -> tuple[dict[str, Any], dict[str, str]]:
         checks = {
@@ -276,6 +274,8 @@ class ChatProxy:
         async with httpx.AsyncClient(timeout=None, verify=verify_tls) as client:
             response = await client.post(url, json=payload, headers=headers or None)
             response.raise_for_status()
+            if not response.content:
+                return {"ok": True}
             return response.json()
 
     @staticmethod
