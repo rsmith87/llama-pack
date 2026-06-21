@@ -199,7 +199,7 @@ class ChatProxy:
         typed_messages = [message for message in messages if isinstance(message, dict)]
         if len(typed_messages) != len(messages):
             return payload
-        if not should_summarize_messages(self.config, model_name, typed_messages):
+        if not self._should_summarize_payload(model_name, {**payload, "messages": typed_messages}):
             return payload
         recent_message_count = self.config.context_summarization_recent_messages
         if len(typed_messages) <= recent_message_count:
@@ -249,6 +249,19 @@ class ChatProxy:
                 f"Estimated prompt tokens exceeded the configured context summarization trigger."
             ) from exc
         return {**payload, "messages": [summary_system_message(summary), *recent_messages]}
+
+    def _should_summarize_payload(self, model_name: str, payload: dict[str, Any]) -> bool:
+        if not self.config.context_summarization_enabled or not self.config.thread_history_compaction_enabled:
+            return False
+        try:
+            budget = self._context_budget.estimate(model_name, payload)
+        except KeyError:
+            messages = payload.get("messages")
+            if not isinstance(messages, list):
+                return False
+            typed_messages = [message for message in messages if isinstance(message, dict)]
+            return len(typed_messages) == len(messages) and should_summarize_messages(self.config, model_name, typed_messages)
+        return budget.usage_ratio >= self.config.context_summarization_trigger_ratio
 
     async def _summary_request(self, model_name: str, payload: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, str], bool]:
         request_payload = {

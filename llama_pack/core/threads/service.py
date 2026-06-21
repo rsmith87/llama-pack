@@ -240,6 +240,64 @@ class ThreadService:
         self.store.get_thread(thread_id)
         return self.store.list_events(thread_id, include_internal=include_internal)
 
+    async def compact_thread_async(
+        self,
+        thread_id: str,
+        model: str | None,
+        model_family: str | None,
+        context_profile: str | None,
+        target: str,
+        recent_message_count: int | None,
+    ) -> dict[str, Any]:
+        thread = self.store.get_thread(thread_id)
+        request_metadata = thread.get("metadata", {})
+        request_type = request_metadata.get("request_type") or "general"
+        previous_route = self._previous_route(thread_id, model_family=model_family, context_profile=context_profile)
+        requested_model = self._requested_model(model, model_family, context_profile)
+        try:
+            self._require_thread_node_target(thread_id, target)
+            decision = await self.routing_policy.choose(
+                request_type=request_type,
+                requested_model=requested_model or thread.get("default_model"),
+                explicit_target=target,
+                previous_route=previous_route,
+            )
+        except ValueError as exc:
+            self._append_error(thread_id, "ROUTING_ERROR", exc)
+            raise
+
+        route = {
+            "node": decision.node,
+            "model": decision.model,
+            "family": model_family,
+            "profile": context_profile,
+            "strategy": decision.strategy,
+            "reason": decision.reason,
+        }
+        self.store.append_event(
+            thread_id=thread_id,
+            event_type="routing_decision",
+            role=None,
+            content={**route, "candidates": list(decision.candidates), "purpose": "manual_context_compaction"},
+            public=False,
+            route=route,
+            agent_node=decision.node,
+            model=decision.model,
+        )
+        compacted = await self._compact_thread_history(
+            thread_id=thread_id,
+            turn_id=None,
+            model=decision.model,
+            route=route,
+            recent_message_count=recent_message_count or self.config.context_summarization_recent_messages,
+            source="manual",
+        )
+        return {
+            **compacted["metadata"],
+            "messages": compacted["messages"],
+            "route": route,
+        }
+
     def post_message(
         self,
         thread_id: str,
@@ -787,9 +845,42 @@ class ThreadService:
         if not should_summarize_messages(self.config, model, current_messages):
             return {"messages": current_messages, "metadata": None}
 
-        recent_message_count = self.config.context_summarization_recent_messages
+        return await self._compact_thread_history(
+            thread_id=thread_id,
+            turn_id=turn_id,
+            model=model,
+            route=route,
+            recent_message_count=self.config.context_summarization_recent_messages,
+            source="auto",
+        )
+
+    async def _compact_thread_history(
+        self,
+        thread_id: str,
+        turn_id: str | None,
+        model: str,
+        route: dict[str, Any],
+        recent_message_count: int,
+        source: str,
+    ) -> dict[str, Any]:
+        public_events = self._public_message_events(thread_id)
+        latest_summary = self._latest_history_summary(thread_id)
+        covered_event_ids = list(latest_summary.get("covered_event_ids", [])) if latest_summary else []
+        covered_event_id_set = set(covered_event_ids)
+        unsummarized_events = [event for event in public_events if event["id"] not in covered_event_id_set]
+        previous_summary = str(latest_summary.get("summary", "")) if latest_summary else None
+        current_messages = [self._event_message(event) for event in unsummarized_events]
+        if previous_summary:
+            current_messages = [summary_system_message(previous_summary), *current_messages]
         if len(unsummarized_events) <= recent_message_count:
-            return {"messages": current_messages, "metadata": None}
+            return {
+                "messages": current_messages,
+                "metadata": {
+                    "summarized": False,
+                    "reason": "not_enough_unsummarized_events",
+                    "unsummarized_event_count": len(unsummarized_events),
+                },
+            }
 
         events_to_summarize = unsummarized_events[:-recent_message_count]
         recent_events = unsummarized_events[-recent_message_count:]
@@ -832,6 +923,7 @@ class ThreadService:
                 "model": model,
                 "route": route,
                 "response_meta": response_meta,
+                "source": source,
             },
             public=False,
             turn_id=turn_id,
@@ -841,11 +933,15 @@ class ThreadService:
         )
         return {
             "messages": compacted_messages,
-            "metadata": context_management_metadata(
-                summary_event_id=summary_event["id"],
-                prompt_tokens_before=prompt_tokens_before,
-                prompt_tokens_after=prompt_tokens_after,
-            ),
+            "metadata": {
+                **context_management_metadata(
+                    summary_event_id=summary_event["id"],
+                    prompt_tokens_before=prompt_tokens_before,
+                    prompt_tokens_after=prompt_tokens_after,
+                ),
+                "summary": summary,
+                "covered_event_count": len(events_to_summarize),
+            },
         }
 
     def _history_prompt_token_budget(self, model: str) -> int:

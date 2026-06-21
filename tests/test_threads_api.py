@@ -274,6 +274,55 @@ async def test_post_message_async_summarizes_long_history_before_current_user_me
 
 
 @pytest.mark.asyncio
+async def test_compact_thread_async_summarizes_history_on_request_below_auto_threshold(tmp_path):
+    chat_proxy = RecordingChatProxy(responses=["first reply", "second reply", "manual summary"])
+    config = load_config(
+        {
+            "mode": "controller",
+            "models": {"qwen": {"path": "qwen.gguf", "port": 8080, "ctx": 8192}},
+            "context_summarization_trigger_ratio": 0.95,
+            "nodes": {
+                "linux-2080ti": {
+                    "url": "http://linux",
+                    "default_model": "qwen",
+                    "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                },
+            },
+        }
+    )
+    service = ThreadService(
+        config=config,
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    await service.post_message_async(thread["id"], "user", "First question " + ("alpha " * 80), None, "auto", None)
+    await service.post_message_async(thread["id"], "user", "Second question " + ("bravo " * 80), None, "auto", None)
+    result = await service.compact_thread_async(
+        thread_id=thread["id"],
+        model=None,
+        model_family=None,
+        context_profile=None,
+        target="auto",
+        recent_message_count=2,
+    )
+
+    summary_calls = [call for call in chat_proxy.calls if call["payload"].get("_skip_context_management") is True]
+    assert len(summary_calls) == 1
+    assert result["summarized"] is True
+    assert result["summary"] == "manual summary"
+    assert result["summary_event_id"]
+    assert result["covered_event_count"] == 2
+    assert result["prompt_tokens_before"] > result["prompt_tokens_after"]
+    events = service.list_events(thread["id"], include_internal=True)
+    summary_event = next(event for event in events if event["event_type"] == "history_summary")
+    assert summary_event["content"]["summary"] == "manual summary"
+    assert summary_event["content"]["source"] == "manual"
+
+
+@pytest.mark.asyncio
 async def test_thread_message_resolves_context_profile_and_records_route(tmp_path):
     chat_proxy = RecordingChatProxy(responses=["profile reply"])
     service = _service(
@@ -551,6 +600,53 @@ def test_threads_api_creates_thread_and_posts_message(tmp_path):
 
     public_events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [event["event_type"] for event in public_events] == ["user_message", "assistant_message"]
+
+
+def test_threads_api_compacts_thread_on_request(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "qwen.gguf", "port": 8080, "ctx": 8192}},
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+
+    responses = ["first reply", "second reply", "manual summary"]
+
+    async def fake_chat(model_name, payload):
+        return {"choices": [{"message": {"content": responses.pop(0)}}]}, {"route": payload["target"]}
+
+    app.state.chat_proxy.chat_with_meta = fake_chat
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"metadata": {"request_type": "coding"}},
+    ).json()["id"]
+    client.post(f"/lm-api/v1/threads/{thread_id}/messages", json={"role": "user", "content": "First question"})
+    client.post(f"/lm-api/v1/threads/{thread_id}/messages", json={"role": "user", "content": "Second question"})
+
+    response = client.post(f"/lm-api/v1/threads/{thread_id}/compact", json={"recent_message_count": 2})
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["summarized"] is True
+    assert body["summary"] == "manual summary"
+    assert body["summary_event_id"]
+    assert body["covered_event_count"] == 2
+    internal_events = client.get(f"/lm-api/v1/threads/{thread_id}/events?include_internal=true").json()
+    summary_event = next(event for event in internal_events if event["event_type"] == "history_summary")
+    assert summary_event["content"]["source"] == "manual"
 
 
 def test_threads_api_reports_no_eligible_route_contract(tmp_path):

@@ -18,6 +18,7 @@ ThreadEventType = Literal[
     "agent_response",
     "aggregation",
     "workflow_step",
+    "history_summary",
     "error",
 ]
 
@@ -103,6 +104,14 @@ class ThreadMessageRequest(BaseModel):
             if value is not None:
                 payload[key] = value
         return payload
+
+
+class CompactThreadRequest(BaseModel):
+    model: str | None = None
+    model_family: str | None = None
+    context_profile: str | None = None
+    target: str = "auto"
+    recent_message_count: int | None = Field(default=None, ge=1, le=100)
 
 
 class WorkflowStep(BaseModel):

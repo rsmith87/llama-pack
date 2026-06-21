@@ -200,6 +200,19 @@ class StubProcessManager:
         return self.list_statuses()[0]
 
 
+class RuntimeContextCatalog:
+    def __init__(self, ctx: int):
+        self.ctx = ctx
+
+    def runtime_model(self, name):
+        class RuntimeModel:
+            def __init__(self, ctx: int):
+                self.ctx = ctx
+                self.prompt_template = None
+
+        return RuntimeModel(self.ctx)
+
+
 def test_models_route_reports_vision_config_for_chat_ui(tmp_path):
     config, store, catalog = _catalog_config(tmp_path)
     _register_catalog_model(
@@ -553,6 +566,54 @@ async def test_kv_capabilities_reports_cancel_slot_support():
     assert payload["probe"]["cancel_slot"] == {"status_code": 200}
     assert ("qwen", "auto", "POST", "/slots/0/cancel") in checked_paths
     assert meta == {"route": "local"}
+
+
+@pytest.mark.asyncio
+async def test_chat_proxy_summarizes_against_runtime_context_window():
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        if len(calls) == 1:
+            return {"choices": [{"message": {"role": "assistant", "content": "summary"}}]}
+        return {"choices": [{"message": {"role": "assistant", "content": "answer"}}]}
+
+    process_manager = StubProcessManager(running=True)
+    process_manager.catalog_service = RuntimeContextCatalog(ctx=260)
+    config = load_config(
+        {
+            "mode": "agent",
+            "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081, "ctx": 1000}},
+            "context_summarization_trigger_ratio": 0.75,
+        }
+    )
+    proxy = ChatProxy(
+        process_manager=process_manager,
+        config=config,
+        node_registry=NodeRegistry(config=config),
+        request=fake_chat_request,
+    )
+
+    response = await proxy.chat(
+        "qwen",
+        {
+            "messages": [
+                {"role": "user", "content": "alpha " * 20},
+                {"role": "assistant", "content": "bravo " * 20},
+                {"role": "user", "content": "charlie " * 20},
+                {"role": "assistant", "content": "delta " * 20},
+                {"role": "user", "content": "echo " * 20},
+                {"role": "assistant", "content": "foxtrot " * 20},
+            ],
+            "max_tokens": 16,
+        },
+    )
+
+    assert response["choices"][0]["message"]["content"] == "answer"
+    assert len(calls) == 2
+    assert calls[0][1]["temperature"] == 0.0
+    assert calls[0][1]["messages"][0]["role"] == "system"
+    assert calls[1][1]["messages"][0] == {"role": "system", "content": "Earlier conversation summary:\nsummary"}
 
 
 def test_runtime_overview_exposes_running_model_process_state():

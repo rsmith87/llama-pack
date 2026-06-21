@@ -5,7 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from llama_pack.api.chat_error_contract import is_no_eligible_route_message, no_eligible_route_detail, thread_chat_error_detail
 from llama_pack.api.dependencies import get_thread_service
-from llama_pack.core.threads.models import CreateThreadRequest, ThreadMessageRequest, WorkflowRunRequest
+from llama_pack.core.threads.models import CompactThreadRequest, CreateThreadRequest, ThreadMessageRequest, WorkflowRunRequest
 from llama_pack.core.threads.service import ThreadChatError, ThreadService
 
 
@@ -46,6 +46,34 @@ def list_events(
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
+
+
+@router.post("/{thread_id}/compact")
+async def compact_thread(
+    thread_id: str,
+    body: CompactThreadRequest,
+    service: ThreadService = Depends(get_thread_service),
+):
+    lock = await service.acquire_turn_lock(thread_id)
+    try:
+        return await service.compact_thread_async(
+            thread_id=thread_id,
+            model=body.model,
+            model_family=body.model_family,
+            context_profile=body.context_profile,
+            target=body.target,
+            recent_message_count=body.recent_message_count,
+        )
+    except KeyError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ThreadChatError as exc:
+        raise HTTPException(status_code=409, detail=thread_chat_error_detail(exc)) from exc
+    except ValueError as exc:
+        if is_no_eligible_route_message(str(exc)):
+            raise HTTPException(status_code=409, detail=no_eligible_route_detail(str(exc))) from exc
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    finally:
+        lock.release()
 
 
 @router.post("/{thread_id}/messages")
