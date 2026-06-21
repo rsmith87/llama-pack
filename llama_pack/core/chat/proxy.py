@@ -2,12 +2,13 @@ from __future__ import annotations
 
 from collections.abc import AsyncIterator, Awaitable, Callable
 import inspect
+import logging
 from typing import Any
 
 import httpx
 
 from llama_pack.core.chat import CapabilityInspector, ModelNotRunningError, PromptTemplateAdapter, TargetResolver, TransportBuilder
-from llama_pack.core.chat.context_budget import ContextBudgetEstimator
+from llama_pack.core.chat.context_budget import ContextBudgetEstimator, estimate_prompt_tokens
 from llama_pack.core.chat.context_management import (
     assistant_summary_content,
     should_summarize_messages,
@@ -22,6 +23,7 @@ from llama_pack.core.runtime.process_manager import ProcessManager
 
 ChatRequest = Callable[..., Awaitable[dict[str, Any]]]
 ChatStreamRequest = Callable[..., AsyncIterator[bytes]]
+logger = logging.getLogger(__name__)
 
 
 class ChatProxy:
@@ -204,6 +206,7 @@ class ChatProxy:
             return payload
         older_messages = typed_messages[:-recent_message_count]
         recent_messages = typed_messages[-recent_message_count:]
+        prompt_tokens_before = estimate_prompt_tokens({"messages": typed_messages})
         summary_payload = {
             "messages": summary_prompt_messages(None, older_messages),
             "temperature": 0.0,
@@ -213,10 +216,34 @@ class ChatProxy:
         if payload.get("target") is not None:
             summary_payload["target"] = payload["target"]
         url, request_payload, headers, verify_tls = await self._summary_request(model_name, summary_payload)
+        logger.info(
+            "ChatProxy summary request prepared model=%s mode=%s target=%s url=%s message_count=%d older_message_count=%d recent_message_count=%d prompt_tokens_before=%d summary_prompt_tokens=%d max_tokens=%s request_keys=%s verify_tls=%s",
+            model_name,
+            self.config.mode,
+            summary_payload.get("target", "auto"),
+            url,
+            len(typed_messages),
+            len(older_messages),
+            len(recent_messages),
+            prompt_tokens_before,
+            estimate_prompt_tokens({"messages": request_payload["messages"]}),
+            request_payload.get("max_tokens"),
+            sorted(request_payload.keys()),
+            verify_tls,
+        )
         try:
             response = await self._call_request(url, request_payload, headers, verify_tls)
             summary = assistant_summary_content(response)
         except Exception as exc:
+            logger.exception(
+                "ChatProxy summary request failed model=%s mode=%s target=%s url=%s error_type=%s http_detail=%s",
+                model_name,
+                self.config.mode,
+                summary_payload.get("target", "auto"),
+                url,
+                type(exc).__name__,
+                _http_exception_detail(exc),
+            )
             raise RuntimeError(
                 f"Failed to summarize chat request for model {model_name}: {exc}. "
                 f"Estimated prompt tokens exceeded the configured context summarization trigger."
@@ -239,8 +266,24 @@ class ChatProxy:
                 False,
                 False,
             )
+            logger.info(
+                "ChatProxy summary request routed model=%s target_selector=%s node=%s url=%s verify_tls=%s header_keys=%s",
+                model_name,
+                target_selector,
+                target.get("node_name", target.get("kind", "unknown")),
+                url,
+                verify_tls,
+                sorted(headers.keys()),
+            )
             return url, request_payload, headers, verify_tls
         local_target = self._resolver.resolve_local_target(model_name)
+        logger.info(
+            "ChatProxy summary request routed model=%s target_selector=local url=%s verify_tls=%s header_keys=%s",
+            model_name,
+            local_target["url"],
+            True,
+            [],
+        )
         return local_target["url"], request_payload, {}, True
 
     async def _build_slots_request(self, model_name: str, target_selector: str, suffix: str) -> tuple[str, dict[str, str], bool, dict[str, str]]:
@@ -274,7 +317,17 @@ class ChatProxy:
     async def _default_request(url: str, payload: dict[str, Any], headers: dict[str, str] | None = None, verify_tls: bool = True) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=None, verify=verify_tls) as client:
             response = await client.post(url, json=payload, headers=headers or None)
-            response.raise_for_status()
+            try:
+                response.raise_for_status()
+            except httpx.HTTPStatusError as exc:
+                logger.warning(
+                    "ChatProxy HTTP request failed url=%s status_code=%s response_body=%s request_keys=%s",
+                    url,
+                    response.status_code,
+                    _response_body_preview(response),
+                    sorted(payload.keys()),
+                )
+                raise exc
             if not response.content:
                 return {"ok": True}
             return response.json()
@@ -309,3 +362,20 @@ class ChatProxy:
                 yield chunk
 
         return _wrapped
+
+
+def _http_exception_detail(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return (
+            f"status_code={exc.response.status_code} "
+            f"url={exc.request.url} "
+            f"response_body={_response_body_preview(exc.response)}"
+        )
+    return str(exc)
+
+
+def _response_body_preview(response: httpx.Response) -> str:
+    text = response.text.strip()
+    if len(text) <= 1000:
+        return text
+    return f"{text[:1000]}...<truncated>"
