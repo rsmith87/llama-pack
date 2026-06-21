@@ -18,6 +18,15 @@ class AnswerClaims:
 
 
 @dataclass(frozen=True)
+class AnswerClaim:
+    kind: str
+    value: str
+    start: int
+    end: int
+    excerpt: str
+
+
+@dataclass(frozen=True)
 class AnswerVerificationReport:
     ok: bool
     verified_paths: list[str]
@@ -25,6 +34,7 @@ class AnswerVerificationReport:
     verified_symbols: list[str]
     missing_symbols: list[str]
     missing_source_evidence: bool
+    issues: list[dict[str, str | int]]
 
     def feedback(self) -> str:
         parts: list[str] = []
@@ -43,10 +53,12 @@ class AnswerVerifier:
 
     def verify(self, answer: str, source_evidence_available: bool) -> AnswerVerificationReport:
         claims = extract_answer_claims(answer)
+        claim_spans = extract_answer_claim_spans(answer)
         verified_paths: list[str] = []
         missing_paths: list[str] = []
         verified_symbols: list[str] = []
         missing_symbols: list[str] = []
+        issues: list[dict[str, str | int]] = []
         for path in claims.paths:
             if self._path_exists(path):
                 verified_paths.append(path)
@@ -58,6 +70,11 @@ class AnswerVerifier:
             else:
                 missing_symbols.append(symbol)
         missing_source_evidence = bool(claims.paths or claims.symbols) and not source_evidence_available
+        for claim in claim_spans:
+            if claim.kind == "path" and claim.value in missing_paths:
+                issues.append(_issue_from_claim("missing_path", claim))
+            if claim.kind == "symbol" and claim.value in missing_symbols:
+                issues.append(_issue_from_claim("missing_symbol", claim))
         return AnswerVerificationReport(
             ok=not missing_paths and not missing_symbols and not missing_source_evidence,
             verified_paths=verified_paths,
@@ -65,6 +82,7 @@ class AnswerVerifier:
             verified_symbols=verified_symbols,
             missing_symbols=missing_symbols,
             missing_source_evidence=missing_source_evidence,
+            issues=issues,
         )
 
     def _path_exists(self, path: str) -> bool:
@@ -88,6 +106,41 @@ def extract_answer_claims(answer: str) -> AnswerClaims:
     return AnswerClaims(paths=paths, symbols=symbols)
 
 
+def extract_answer_claim_spans(answer: str) -> list[AnswerClaim]:
+    claims: list[AnswerClaim] = []
+    for match in _PATH_RE.finditer(answer):
+        value = match.group(1)
+        start = match.start(1)
+        end = match.end(1)
+        claims.append(AnswerClaim(kind="path", value=value, start=start, end=end, excerpt=match.group(0)))
+    qualified_symbol_spans: list[tuple[int, int]] = []
+    for match in _QUALIFIED_SYMBOL_RE.finditer(answer):
+        value = match.group(1)
+        start = match.start(1)
+        end = match.end(1)
+        qualified_symbol_spans.append((start, end))
+        claims.append(AnswerClaim(kind="symbol", value=value, start=start, end=end, excerpt=match.group(0)))
+    for match in _CLASS_SYMBOL_RE.finditer(answer):
+        value = match.group(1)
+        start = match.start(1)
+        end = match.end(1)
+        if _is_inside_span(start, end, qualified_symbol_spans):
+            continue
+        claims.append(AnswerClaim(kind="symbol", value=value, start=start, end=end, excerpt=match.group(0)))
+    return _unique_claim_spans(claims)
+
+
+def _issue_from_claim(kind: str, claim: AnswerClaim) -> dict[str, str | int]:
+    return {
+        "kind": kind,
+        "value": claim.value,
+        "start": claim.start,
+        "end": claim.end,
+        "excerpt": claim.excerpt,
+        "severity": "failed",
+    }
+
+
 def _unique(values: list[str]) -> list[str]:
     seen: set[str] = set()
     unique_values: list[str] = []
@@ -97,3 +150,19 @@ def _unique(values: list[str]) -> list[str]:
         seen.add(value)
         unique_values.append(value)
     return unique_values
+
+
+def _unique_claim_spans(claims: list[AnswerClaim]) -> list[AnswerClaim]:
+    seen: set[tuple[str, str, int, int]] = set()
+    unique_claims: list[AnswerClaim] = []
+    for claim in claims:
+        key = (claim.kind, claim.value, claim.start, claim.end)
+        if key in seen:
+            continue
+        seen.add(key)
+        unique_claims.append(claim)
+    return unique_claims
+
+
+def _is_inside_span(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
+    return any(span_start <= start and end <= span_end for span_start, span_end in spans)

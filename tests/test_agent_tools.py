@@ -174,6 +174,160 @@ def test_answer_verifier_reports_missing_paths_and_symbols(tmp_path):
     assert "BenchmarkRunner" in report.verified_symbols
 
 
+def test_answer_verifier_reports_issue_spans_for_missing_claims(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = "Edit `src/repositories/sample_repository.py`, then call SampleRepository.save."
+    report = verifier.verify(answer, source_evidence_available=True)
+
+    assert report.ok is False
+    assert report.issues == [
+        {
+            "kind": "missing_path",
+            "value": "src/repositories/sample_repository.py",
+            "start": answer.index("src/repositories/sample_repository.py"),
+            "end": answer.index("src/repositories/sample_repository.py") + len("src/repositories/sample_repository.py"),
+            "excerpt": "`src/repositories/sample_repository.py`",
+            "severity": "failed",
+        },
+        {
+            "kind": "missing_symbol",
+            "value": "SampleRepository.save",
+            "start": answer.index("SampleRepository.save"),
+            "end": answer.index("SampleRepository.save") + len("SampleRepository.save"),
+            "excerpt": "SampleRepository.save",
+            "severity": "failed",
+        },
+    ]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_returns_structured_verification_metadata_for_verified_answer(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": 10,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-runner",
+                "file_id": "file-runner",
+                "name": "BenchmarkRunner",
+                "qualified_name": "llama_pack.core.benchmarks.runner.BenchmarkRunner",
+                "kind": "class",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 10,
+                "signature": "class BenchmarkRunner",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    class Proxy:
+        async def chat_with_meta(self, model_name, payload):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Use `llama_pack/core/benchmarks/runner.py` and BenchmarkRunner.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    response, _meta = await AgentToolLoop(
+        config,
+        Proxy(),
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
+
+    assert response["llama_pack"]["verification"] == {
+        "status": "verified",
+        "ok": True,
+        "verified_paths": ["llama_pack/core/benchmarks/runner.py"],
+        "missing_paths": [],
+        "verified_symbols": ["BenchmarkRunner"],
+        "missing_symbols": [],
+        "missing_source_evidence": False,
+        "issues": [],
+    }
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_returns_structured_verification_metadata_for_unverified_answer(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    class Proxy:
+        async def chat_with_meta(self, model_name, payload):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Edit `src/repositories/sample_repository.py`.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    response, _meta = await AgentToolLoop(
+        config,
+        Proxy(),
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "trace repository"}]})
+
+    verification = response["llama_pack"]["verification"]
+    assert verification["status"] == "unverified"
+    assert verification["ok"] is False
+    assert verification["missing_paths"] == ["src/repositories/sample_repository.py"]
+    assert verification["issues"] == [
+        {
+            "kind": "missing_path",
+            "value": "src/repositories/sample_repository.py",
+            "start": len("Edit `"),
+            "end": len("Edit `") + len("src/repositories/sample_repository.py"),
+            "excerpt": "`src/repositories/sample_repository.py`",
+            "severity": "failed",
+        }
+    ]
+
+
 def test_prompt_builder_injects_previous_answer_for_review_request():
     messages = [
         {"role": "user", "content": "Trace BenchmarkRunner."},
@@ -965,6 +1119,17 @@ async def test_tool_loop_revises_unverified_project_graph_answer(tmp_path):
     event_types = [event["event_type"] for event in trace_recorder.events]
     assert "answer_verification_started" in event_types
     assert "answer_verification_failed" in event_types
+    failed_event = next(event for event in trace_recorder.events if event["event_type"] == "answer_verification_failed")
+    assert failed_event["payload"]["issues"] == [
+        {
+            "kind": "missing_path",
+            "value": "src/repositories/sample_repository.py",
+            "start": len("Edit `"),
+            "end": len("Edit `") + len("src/repositories/sample_repository.py"),
+            "excerpt": "`src/repositories/sample_repository.py`",
+            "severity": "failed",
+        }
+    ]
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ import json
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from llama_pack.core.agent_tools.answer_verifier import AnswerVerifier
+from llama_pack.core.agent_tools.answer_verifier import AnswerVerificationReport, AnswerVerifier
 from llama_pack.core.agent_tools.executor import ToolExecutor
 from llama_pack.core.agent_tools.registry import ToolRegistry
 from llama_pack.core.agent_tools.tracing import RuntimeTraceRecorder
@@ -68,6 +68,8 @@ class AgentToolLoop:
                 if self.executor.project_graph_context is not None and self.config.agent_tools.answer_verification_mode != "off":
                     verifier = AnswerVerifier(self.executor.project_graph_context)
                     retries_used = 0
+                    verification_report: AnswerVerificationReport | None = None
+                    verification_status = "unavailable"
                     while True:
                         self._emit(
                             "answer_verification_started",
@@ -79,6 +81,8 @@ class AgentToolLoop:
                             str(message.get("content") or ""),
                             source_evidence_available=source_tool_evidence_available or retries_used > 0,
                         )
+                        verification_report = report
+                        verification_status = _verification_status(report)
                         if report.ok:
                             break
                         self._emit(
@@ -90,6 +94,7 @@ class AgentToolLoop:
                                 "missing_paths": report.missing_paths,
                                 "missing_symbols": report.missing_symbols,
                                 "missing_source_evidence": report.missing_source_evidence,
+                                "issues": report.issues,
                             },
                         )
                         if retries_used >= self.config.agent_tools.answer_verification_max_retries:
@@ -117,6 +122,8 @@ class AgentToolLoop:
                         request_payload = {**base_payload, "messages": messages, "tools": tool_defs}
                         response, last_meta = await self.proxy.chat_with_meta(model_name, request_payload)
                         message = _assistant_message(response)
+                    if verification_report is not None:
+                        response = _attach_verification_metadata(response, verification_report, verification_status)
                 self._emit(
                     "assistant_message_completed",
                     status="passed",
@@ -174,6 +181,40 @@ def _replace_assistant_content(response: dict[str, Any], content: str) -> dict[s
     message_data = dict(message) if isinstance(message, dict) else {"role": "assistant"}
     choice["message"] = {**message_data, "content": content}
     return {**response, "choices": [choice, *choices[1:]]}
+
+
+def _attach_verification_metadata(
+    response: dict[str, Any],
+    report: AnswerVerificationReport,
+    status: str,
+) -> dict[str, Any]:
+    existing = response.get("llama_pack")
+    metadata = dict(existing) if isinstance(existing, dict) else {}
+    metadata["verification"] = {
+        "status": status,
+        "ok": report.ok,
+        "verified_paths": report.verified_paths,
+        "missing_paths": report.missing_paths,
+        "verified_symbols": report.verified_symbols,
+        "missing_symbols": report.missing_symbols,
+        "missing_source_evidence": report.missing_source_evidence,
+        "issues": report.issues,
+    }
+    return {**response, "llama_pack": metadata}
+
+
+def _verification_status(report: AnswerVerificationReport) -> str:
+    has_code_claims = bool(
+        report.verified_paths
+        or report.missing_paths
+        or report.verified_symbols
+        or report.missing_symbols
+    )
+    if report.ok and has_code_claims:
+        return "verified"
+    if report.ok:
+        return "no_code_claims"
+    return "unverified"
 
 
 def _unverified_answer_message() -> str:

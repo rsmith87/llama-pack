@@ -2429,6 +2429,8 @@ def test_openai_compat_agent_tool_runtime_exposes_project_graph_tools(tmp_path):
     )
 
     assert response.status_code == 200
+    assert response.json()["llama_pack"]["verification"]["status"] == "no_code_claims"
+    assert response.json()["llama_pack"]["verification"]["issues"] == []
     tool_names = [tool["function"]["name"] for tool in calls[0][1]["tools"]]
     assert "graph_overview" in tool_names
     assert calls[0][1]["messages"][0]["role"] == "system"
