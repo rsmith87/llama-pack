@@ -63,6 +63,8 @@ def test_controller_background_sweeper_requeues_expired_attempt(tmp_path):
         assert refreshed["status"] == "queued"
 
 from llama_pack.core.config import NodeConfig, load_config
+from llama_pack.core.chat.proxy import ChatProxy
+from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.main import create_app
 
@@ -516,6 +518,41 @@ def test_agent_chat_slot_cancel_forwards_to_llama_cpp_slot():
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert calls == [("http://127.0.0.1:8081/slots/0/cancel", {})]
+
+
+@pytest.mark.asyncio
+async def test_kv_capabilities_reports_cancel_slot_support():
+    checked_paths = []
+
+    config = load_config(
+        {
+            "mode": "agent",
+            "models": {
+                "qwen": {
+                    "path": "/models/qwen.gguf",
+                    "port": 8081,
+                }
+            },
+        }
+    )
+    proxy = ChatProxy(
+        process_manager=StubProcessManager(running=True),
+        config=config,
+        node_registry=NodeRegistry(config=config),
+    )
+
+    async def probe_slot_path(model_name, target_selector, method, path_suffix):
+        checked_paths.append((model_name, target_selector, method, path_suffix))
+        return True, 200, {"route": "local"}
+
+    proxy._probe_slot_path = probe_slot_path
+
+    payload, meta = await proxy.kv_capabilities_with_meta("qwen", "auto")
+
+    assert payload["supports"]["cancel_slot"] is True
+    assert payload["probe"]["cancel_slot"] == {"status_code": 200}
+    assert ("qwen", "auto", "POST", "/slots/0/cancel") in checked_paths
+    assert meta == {"route": "local"}
 
 
 def test_runtime_overview_exposes_running_model_process_state():
@@ -1161,6 +1198,29 @@ def test_nodes_models_reports_upstream_transport_error_classification():
     assert payload[0]["models"] == []
     assert payload[0]["agent_config_source"] is None
     assert payload[0]["models_source"] == "unknown"
+
+
+def test_chat_reports_model_not_running_contract(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_catalog_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081)
+    app = create_app(
+        config=config,
+        process_manager=ProcessManager(config, catalog_service=catalog),
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/chat/qwen",
+        json={"messages": [{"role": "user", "content": "hello"}]},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == {
+        "code": "MODEL_NOT_RUNNING",
+        "message": "Model is not running locally on agent host: qwen",
+        "action": "Start the requested model before sending chat requests.",
+        "model": "qwen",
+    }
 
 
 def test_nodes_models_includes_cert_expiry_seconds(monkeypatch):

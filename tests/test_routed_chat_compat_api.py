@@ -847,7 +847,11 @@ def test_chat_diagnostics_reports_route_failure_without_raising(tmp_path):
         "streaming": None,
     }
     assert payload["route"] is None
-    assert "No eligible running model" in payload["error"]["detail"]
+    assert payload["error"]["detail"] == {
+        "code": "NO_ELIGIBLE_ROUTE",
+        "message": "No eligible running model found",
+        "action": "Start an eligible model on a configured node or change the request model, target, or request_type.",
+    }
 
 
 def test_external_app_key_chat_call_writes_safe_audit_metadata(tmp_path):

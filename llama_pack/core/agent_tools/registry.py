@@ -35,7 +35,17 @@ def _default_parameters(tool_type: str) -> dict[str, Any]:
                 "path": {
                     "type": "string",
                     "description": "Relative file path under the configured root.",
-                }
+                },
+                "start_line": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional 1-based first line to read.",
+                },
+                "end_line": {
+                    "type": "integer",
+                    "minimum": 1,
+                    "description": "Optional 1-based last line to read.",
+                },
             },
             "required": ["path"],
             "additionalProperties": False,

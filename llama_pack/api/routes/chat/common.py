@@ -15,6 +15,7 @@ from llama_pack.api.http_headers import (
     LLAMA_PACK_MODEL_FAMILY_HEADER,
     LLAMA_PACK_RESOLVED_MODEL_HEADER,
 )
+from llama_pack.api.chat_error_contract import model_not_running_detail
 from llama_pack.core.chat.profile_activation import ProfileActivationService
 from llama_pack.core.chat.context_budget import ContextBudgetExceededError
 from llama_pack.core.chat.proxy import ModelNotRunningError
@@ -134,7 +135,7 @@ def raise_proxy_http_exception(exc: Exception) -> None:
     if isinstance(exc, KeyError):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if isinstance(exc, ModelNotRunningError):
-        raise HTTPException(status_code=409, detail=str(exc)) from exc
+        raise HTTPException(status_code=409, detail=model_not_running_detail(exc)) from exc
     if isinstance(exc, httpx.HTTPStatusError):
         raise HTTPException(
             status_code=502,

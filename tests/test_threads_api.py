@@ -553,6 +553,46 @@ def test_threads_api_creates_thread_and_posts_message(tmp_path):
     assert [event["event_type"] for event in public_events] == ["user_message", "assistant_message"]
 
 
+def test_threads_api_reports_no_eligible_route_contract(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+    app.state.thread_service.routing_policy.model_running = lambda node, model: False
+    client = TestClient(app)
+
+    thread_response = client.post("/lm-api/v1/threads", json={"title": "Debug"})
+    assert thread_response.status_code == 201
+
+    message_response = client.post(
+        f"/lm-api/v1/threads/{thread_response.json()['id']}/messages",
+        json={
+            "role": "user",
+            "content": "hello",
+            "metadata": {"request_type": "coding"},
+        },
+    )
+
+    assert message_response.status_code == 409
+    assert message_response.json()["detail"] == {
+        "code": "NO_ELIGIBLE_ROUTE",
+        "message": "No eligible running model found",
+        "action": "Start an eligible model on a configured node or change the request model, target, or request_type.",
+    }
+
+
 @pytest.mark.asyncio
 async def test_thread_routing_records_node_request_failure_in_candidate_metadata(tmp_path):
     prepare_all_persistence_dbs(tmp_path)

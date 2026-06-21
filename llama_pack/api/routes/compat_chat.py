@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import Request
 
+from llama_pack.api.chat_error_contract import thread_chat_http_detail
 from llama_pack.api.http_headers import (
     LEGACY_LLAMA_MANAGER_CONTEXT_PROFILE_HEADER,
     LEGACY_LLAMA_MANAGER_MODEL_FAMILY_HEADER,
@@ -31,8 +32,8 @@ if TYPE_CHECKING:
 
 
 class CompatChatHTTPError(RuntimeError):
-    def __init__(self, status_code: int, detail: str, headers: dict[str, str]) -> None:
-        super().__init__(detail)
+    def __init__(self, status_code: int, detail: str | dict[str, str], headers: dict[str, str]) -> None:
+        super().__init__(str(detail))
         self.status_code = status_code
         self.detail = detail
         self.headers = headers
@@ -107,7 +108,7 @@ async def controller_chat(
             created_by=getattr(request.state, "ui_user", None),
         )
     except ThreadChatError as exc:
-        raise CompatChatHTTPError(409, str(exc), compatibility_headers(exc.thread_id, None)) from exc
+        raise CompatChatHTTPError(409, thread_chat_http_detail(exc), compatibility_headers(exc.thread_id, None)) from exc
     request_payload = {
         **payload,
         "messages": compat["messages"],
@@ -169,7 +170,7 @@ async def controller_stream(
             created_by=getattr(request.state, "ui_user", None),
         )
     except ThreadChatError as exc:
-        raise CompatChatHTTPError(409, str(exc), compatibility_headers(exc.thread_id, None)) from exc
+        raise CompatChatHTTPError(409, thread_chat_http_detail(exc), compatibility_headers(exc.thread_id, None)) from exc
     request_payload = {
         **payload,
         "messages": compat["messages"],

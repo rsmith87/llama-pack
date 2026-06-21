@@ -3,9 +3,10 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 
+from llama_pack.api.chat_error_contract import is_no_eligible_route_message, no_eligible_route_detail, thread_chat_error_detail
 from llama_pack.api.dependencies import get_thread_service
 from llama_pack.core.threads.models import CreateThreadRequest, ThreadMessageRequest, WorkflowRunRequest
-from llama_pack.core.threads.service import ThreadService
+from llama_pack.core.threads.service import ThreadChatError, ThreadService
 
 
 router = APIRouter(prefix="/threads")
@@ -69,7 +70,11 @@ async def post_message(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ThreadChatError as exc:
+        raise HTTPException(status_code=409, detail=thread_chat_error_detail(exc)) from exc
     except ValueError as exc:
+        if is_no_eligible_route_message(str(exc)):
+            raise HTTPException(status_code=409, detail=no_eligible_route_detail(str(exc))) from exc
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     finally:
         lock.release()
@@ -98,8 +103,13 @@ async def post_message_stream(
     except KeyError as exc:
         lock.release()
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ThreadChatError as exc:
+        lock.release()
+        raise HTTPException(status_code=409, detail=thread_chat_error_detail(exc)) from exc
     except ValueError as exc:
         lock.release()
+        if is_no_eligible_route_message(str(exc)):
+            raise HTTPException(status_code=409, detail=no_eligible_route_detail(str(exc))) from exc
         raise HTTPException(status_code=409, detail=str(exc)) from exc
     return StreamingResponse(_release_lock_after_stream(stream, lock), media_type="text/event-stream")
 

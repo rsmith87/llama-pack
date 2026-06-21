@@ -111,6 +111,7 @@ class ToolTraceWriter:
             "exit_code": result.get("exit_code"),
             "status_code": result.get("status_code"),
             "error": result.get("error") or "",
+            "locations": result.get("locations") or [],
             "result_preview": truncate(str(result.get("content") or ""), TRACE_RESULT_CHARS),
         }
         with (self.config.log_dir / "agent_tool_calls.jsonl").open("a", encoding="utf-8") as handle:

@@ -96,6 +96,7 @@ class ChatProxy:
             "save_slot": ("POST", "/slots/0/save"),
             "restore_slot": ("POST", "/slots/0/restore"),
             "erase_slot": ("POST", "/slots/0/erase"),
+            "cancel_slot": ("POST", "/slots/0/cancel"),
         }
         supports: dict[str, bool] = {}
         details: dict[str, Any] = {}

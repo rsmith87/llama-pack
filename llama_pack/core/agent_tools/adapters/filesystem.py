@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from pathlib import Path
 import re
 
@@ -8,6 +9,18 @@ from llama_pack.core.agent_tools.common import MAX_RESULT_CHARS, is_relative_to,
 from llama_pack.core.config.models import AgentToolDefinitionConfig, AppConfig
 
 _MAX_LINE_CHARS = 500
+
+
+@dataclass(frozen=True)
+class FileRangeContent:
+    content: str
+    start_line: int
+    end_line: int
+
+
+@dataclass(frozen=True)
+class FileRangeError:
+    error: str
 
 
 class FileReadToolAdapter:
@@ -22,7 +35,12 @@ class FileReadToolAdapter:
         if not roots or not any(is_relative_to(resolved, root) for root in roots):
             return {"ok": False, "error": f"file path is outside configured safe roots: {resolved}"}
         content = await asyncio.to_thread(resolved.read_text, encoding="utf-8")
-        return {"ok": True, "content": truncate(content, MAX_RESULT_CHARS)}
+        line_count = _count_text_lines(content)
+        return {
+            "ok": True,
+            "content": truncate(content, MAX_RESULT_CHARS),
+            "locations": _locations_for_range(str(resolved), 1, line_count),
+        }
 
 
 class DynamicFileReadToolAdapter:
@@ -63,8 +81,19 @@ class DynamicFileReadToolAdapter:
         if size > tool.max_file_bytes:
             return {"ok": False, "error": f"file exceeds max_file_bytes ({tool.max_file_bytes}): {resolved}"}
 
-        content = await asyncio.to_thread(resolved.read_text, encoding="utf-8")
-        return {"ok": True, "path": str(resolved), "content": truncate(content, MAX_RESULT_CHARS)}
+        line_range = _read_line_range(arguments)
+        if isinstance(line_range, str):
+            return {"ok": False, "error": line_range}
+
+        read_result = await asyncio.to_thread(_read_file_range, resolved, line_range)
+        if isinstance(read_result, FileRangeError):
+            return {"ok": False, "error": read_result.error}
+        return {
+            "ok": True,
+            "path": str(resolved),
+            "content": truncate(read_result.content, MAX_RESULT_CHARS),
+            "locations": _locations_for_range(str(resolved), read_result.start_line, read_result.end_line),
+        }
 
 
 class FileWriteToolAdapter:
@@ -187,6 +216,7 @@ class TextSearchToolAdapter:
             "root": str(root),
             "query": query,
             "matches": matches,
+            "locations": [_location(str(match["file"]), int(match["line"]), int(match["line"])) for match in matches],
             "truncated": truncated,
         }
 
@@ -229,6 +259,60 @@ def _read_tail(path, max_lines: int) -> tuple[list[str], int]:
             if len(buf) > max_lines:
                 buf.pop(0)
     return buf, total
+
+
+def _location(path: str, start_line: int, end_line: int) -> dict[str, str | int]:
+    return {"path": path, "start_line": start_line, "end_line": end_line}
+
+
+def _locations_for_range(path: str, start_line: int, end_line: int) -> list[dict[str, str | int]]:
+    if end_line < start_line:
+        return []
+    return [_location(path, start_line, end_line)]
+
+
+def _count_text_lines(content: str) -> int:
+    return len(content.splitlines())
+
+
+def _read_line_range(arguments: dict[str, object]) -> tuple[int | None, int | None] | str:
+    start_line = _optional_positive_int(arguments.get("start_line"), "start_line")
+    if isinstance(start_line, str):
+        return start_line
+    end_line = _optional_positive_int(arguments.get("end_line"), "end_line")
+    if isinstance(end_line, str):
+        return end_line
+    if start_line is not None and end_line is not None and end_line < start_line:
+        return "end_line must be greater than or equal to start_line"
+    return start_line, end_line
+
+
+def _optional_positive_int(value: object, name: str) -> int | None | str:
+    if value is None:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int):
+        return f"{name} must be an integer"
+    if value < 1:
+        return f"{name} must be greater than or equal to 1"
+    return value
+
+
+def _read_file_range(path: Path, line_range: tuple[int | None, int | None]) -> FileRangeContent | FileRangeError:
+    content = path.read_text(encoding="utf-8")
+    start_line, end_line = line_range
+    if start_line is None and end_line is None:
+        return FileRangeContent(content=content, start_line=1, end_line=_count_text_lines(content))
+
+    lines = content.splitlines()
+    first_line = start_line or 1
+    last_line = end_line or len(lines)
+    line_count = len(lines)
+    if first_line > line_count:
+        return FileRangeError(error=f"start_line {first_line} exceeds file line count {line_count}")
+    if last_line > line_count:
+        return FileRangeError(error=f"end_line {last_line} exceeds file line count {line_count}")
+    selected = lines[first_line - 1 : last_line]
+    return FileRangeContent(content="\n".join(selected), start_line=first_line, end_line=last_line)
 
 
 def _search_text(root, tool: AgentToolDefinitionConfig, query: str, pattern: re.Pattern | None) -> tuple[list[dict[str, object]], bool]:

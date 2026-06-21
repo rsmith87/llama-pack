@@ -79,7 +79,17 @@ def test_tool_registry_emits_dynamic_file_read_path_schema(tmp_path):
             "path": {
                 "type": "string",
                 "description": "Relative file path under the configured root.",
-            }
+            },
+            "start_line": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Optional 1-based first line to read.",
+            },
+            "end_line": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "Optional 1-based last line to read.",
+            },
         },
         "required": ["path"],
         "additionalProperties": False,
@@ -261,6 +271,91 @@ async def test_tool_executor_reads_dynamic_file_under_configured_root(tmp_path):
     assert result["ok"] is True
     assert result["path"] == str(logs / "backend.log")
     assert result["content"] == "backend ready"
+
+
+@pytest.mark.asyncio
+async def test_dynamic_file_read_trace_locations_distinguish_same_file_ranges(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    source = project / "service.py"
+    source.write_text("one\n two\nthree\nfour\n", encoding="utf-8")
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "safe_roots": [str(project)],
+                "tools": {
+                    "read_project_file": {
+                        "type": "file_read_dynamic",
+                        "description": "Read a project file by relative path.",
+                        "path": str(project),
+                    }
+                },
+            },
+        }
+    )
+    recorder = RuntimeTraceRecorder(trace_id="trace-1", source="agent_tool_loop", scope="chat_completion")
+    executor = ToolExecutor(config, trace_recorder=recorder)
+
+    await executor.execute(
+        "read_project_file",
+        {"path": "service.py", "start_line": 1, "end_line": 2},
+        request_id="req-1",
+        model="qwen",
+        tool_call_id="call-1",
+    )
+    await executor.execute(
+        "read_project_file",
+        {"path": "service.py", "start_line": 3, "end_line": 4},
+        request_id="req-1",
+        model="qwen",
+        tool_call_id="call-2",
+    )
+
+    completed = [event for event in recorder.events if event["event_type"] == "tool_call_completed"]
+    first_result = completed[0]["payload"]["result"]
+    second_result = completed[1]["payload"]["result"]
+    assert first_result["path"] == second_result["path"] == str(source.resolve())
+    assert first_result["content"] == "one\n two"
+    assert second_result["content"] == "three\nfour"
+    assert first_result["locations"] == [{"path": str(source.resolve()), "start_line": 1, "end_line": 2}]
+    assert second_result["locations"] == [{"path": str(source.resolve()), "start_line": 3, "end_line": 4}]
+
+
+@pytest.mark.asyncio
+async def test_dynamic_file_read_rejects_ranges_past_end_of_file(tmp_path):
+    project = tmp_path / "project"
+    project.mkdir()
+    (project / "service.py").write_text("one\ntwo\n", encoding="utf-8")
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "safe_roots": [str(project)],
+                "tools": {
+                    "read_project_file": {
+                        "type": "file_read_dynamic",
+                        "description": "Read a project file by relative path.",
+                        "path": str(project),
+                    }
+                },
+            },
+        }
+    )
+
+    result = await ToolExecutor(config).execute(
+        "read_project_file",
+        {"path": "service.py", "start_line": 2, "end_line": 3},
+        request_id="req-1",
+        model="qwen",
+    )
+
+    assert result["ok"] is False
+    assert result["error"] == "end_line 3 exceeds file line count 2"
 
 
 @pytest.mark.asyncio
@@ -1125,6 +1220,33 @@ async def test_tool_executor_text_search_finds_matches(tmp_path):
     assert result["matches"] == [
         {"file": "src/app.py", "line": 1, "text": "def hello():"},
         {"file": "src/app.py", "line": 2, "text": "    return 'hello world'"},
+    ]
+    assert result["locations"] == [
+        {"path": "src/app.py", "start_line": 1, "end_line": 1},
+        {"path": "src/app.py", "start_line": 2, "end_line": 2},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_text_search_trace_payload_includes_match_locations(tmp_path):
+    root = tmp_path / "project"
+    root.mkdir()
+    (root / "mod.py").write_text("alpha\nneedle\nneedle again\n", encoding="utf-8")
+    config = _make_text_search_config(tmp_path, root, glob="*.py")
+    recorder = RuntimeTraceRecorder(trace_id="trace-1", source="agent_tool_loop", scope="chat_completion")
+
+    await ToolExecutor(config, trace_recorder=recorder).execute(
+        "search_src",
+        {"query": "needle"},
+        request_id="req-1",
+        model="qwen",
+        tool_call_id="call-1",
+    )
+
+    completed = [event for event in recorder.events if event["event_type"] == "tool_call_completed"]
+    assert completed[0]["payload"]["result"]["locations"] == [
+        {"path": "mod.py", "start_line": 2, "end_line": 2},
+        {"path": "mod.py", "start_line": 3, "end_line": 3},
     ]
 
 
