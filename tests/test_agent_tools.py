@@ -192,6 +192,19 @@ def test_prompt_builder_injects_previous_answer_for_review_request():
     assert built[-1] == messages[-1]
 
 
+def test_prompt_builder_requires_source_trace_evidence_contract():
+    messages = [{"role": "user", "content": "Trace the runtime path for starting a benchmark run."}]
+
+    built = PromptBuilder().build_agent_messages(messages, project_graph_enabled=True)
+
+    assert built[0]["role"] == "system"
+    assert "For runtime trace answers" in built[0]["content"]
+    assert "from_symbol" in built[0]["content"]
+    assert "to_symbol" in built[0]["content"]
+    assert "statement" in built[0]["content"]
+    assert "mark that edge unverified" in built[0]["content"]
+
+
 def test_prompt_builder_does_not_inject_previous_answer_for_unrelated_request():
     messages = [
         {"role": "user", "content": "Trace BenchmarkRunner."},

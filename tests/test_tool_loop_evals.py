@@ -101,6 +101,7 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
         "subagent-delegation-simulation",
         "technical-design-doc-draft",
         "collaborative-notes-app-design",
+        "benchmark-runtime-trace",
     ] == list(cases)
     assert cases["linear-8-step-synthesis"].max_iterations >= 9
     assert cases["tool-error-recovery"].expected_error_tools == ["unstable_primary"]
@@ -119,6 +120,11 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
     assert cases["collaborative-notes-app-design"].scoring_mode == "set_membership"
     assert cases["collaborative-notes-app-design"].max_repeated_tool_calls == 1
     assert cases["collaborative-notes-app-design"].request_defaults["max_tokens"] >= 1000
+    assert cases["benchmark-runtime-trace"].category == "real_world"
+    assert cases["benchmark-runtime-trace"].scoring_mode == "set_membership"
+    assert cases["benchmark-runtime-trace"].max_repeated_tool_calls == 1
+    assert "read_benchmark_unrelated_ui" in cases["benchmark-runtime-trace"].eval_tools
+    assert "read_benchmark_unrelated_ui" not in cases["benchmark-runtime-trace"].expected_tool_sequence
 
 
 @pytest.mark.asyncio
@@ -533,6 +539,58 @@ async def test_tool_loop_eval_scores_collaborative_notes_app_design(tmp_path):
     assert result["checks"]["expected_tool_sequence"] is True
     assert result["checks"]["expected_final_substrings"] is True
     assert result["checks"]["no_repeated_calls"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_scores_benchmark_runtime_trace(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "benchmark-runtime-trace")
+    proxy = ScriptedToolProxy(
+        [
+            "read_benchmark_route_source",
+            "read_benchmark_dependency_source",
+            "read_benchmark_runner_source",
+            "read_benchmark_inference_source",
+            "read_benchmark_store_source",
+            "read_benchmark_api_tests",
+            "read_benchmark_store_tests",
+        ],
+        (
+            "Ordered call path with source evidence:\n"
+            "1. from_symbol=benchmarks.start_runs to_symbol=BenchmarkStoreOrm.get_definition "
+            "file=llama_pack/api/routes/benchmarks.py statement='defn = store.get_definition(body.definition_id)'\n"
+            "2. from_symbol=benchmarks.start_runs to_symbol=BenchmarkStoreOrm.create_run "
+            "file=llama_pack/api/routes/benchmarks.py statement='run = store.create_run('\n"
+            "3. from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
+            "file=llama_pack/api/routes/benchmarks.py statement='asyncio.create_task(runner.execute_run(run[\"id\"]))'\n"
+            "4. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run "
+            "file=llama_pack/core/benchmarks/runner.py statement='run = self._store.get_run(run_id)'\n"
+            "5. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_definition "
+            "file=llama_pack/core/benchmarks/runner.py statement='defn = self._store.get_definition(run[\"benchmark_definition_id\"])'\n"
+            "6. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run "
+            "file=llama_pack/core/benchmarks/runner.py statement='self._store.update_run('\n"
+            "7. from_symbol=BenchmarkRunner.execute_run to_symbol=run_inference "
+            "file=llama_pack/core/benchmarks/runner.py statement='result = await run_inference(self._proxy, model_name, payload)'\n"
+            "8. from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta "
+            "file=llama_pack/core/chat/inference_service.py statement='response, meta = await proxy.chat_with_meta(model_name, payload)'\n"
+            "9. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.create_sample "
+            "file=llama_pack/core/benchmarks/runner.py statement='self._store.create_sample(' success and failed sample paths\n"
+            "10. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run_samples "
+            "file=llama_pack/core/benchmarks/runner.py statement='samples = self._store.get_run_samples(run_id)'\n"
+            "11. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run "
+            "file=llama_pack/core/benchmarks/runner.py statement='self._store.update_run(' final status update\n"
+            "Store/database methods: get_definition, create_run, get_run, update_run, create_sample, get_run_samples.\n"
+            "Tests: tests/test_benchmark_api.py covers route scheduling, completed runs, partial failures, and managed load; "
+            "tests/test_benchmark_store_orm.py covers create_sample through get_run.\n"
+            "Unverified: ChatProxy.chat_with_meta internals."
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("gpt-oss-20b", case)
+
+    assert result["status"] == "passed"
+    assert result["case_category"] == "real_world"
+    assert result["checks"]["expected_tool_sequence"] is True
+    assert result["checks"]["expected_final_substrings"] is True
 
 
 @pytest.mark.asyncio

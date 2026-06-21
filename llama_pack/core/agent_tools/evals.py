@@ -505,6 +505,67 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
             max_iterations=8,
             max_repeated_tool_calls=1,
         ),
+        ToolLoopEvalCase(
+            id="benchmark-runtime-trace",
+            category="real_world",
+            system_prompt=(
+                "You are tracing a runtime call path from deterministic project sources. "
+                "Use only relevant source and test tools, call each relevant tool at most once, "
+                "and ground every call-path edge in a file, line or quoted statement, and symbol handoff. "
+                "If a claim is not directly verified by source, list it as unverified."
+            ),
+            prompt=(
+                "Trace the runtime path for starting a benchmark run. Start at the FastAPI route that receives "
+                "the request and end at the method that records each benchmark sample. Return the ordered call path "
+                "with exact file paths and function/class names, the exact line or quoted statement where each "
+                "handoff happens, every store/database method called along that path, which tests cover this path, "
+                "and any claim you could not verify. Do not inspect unrelated UI context."
+            ),
+            expected_tool_sequence=[
+                "read_benchmark_route_source",
+                "read_benchmark_dependency_source",
+                "read_benchmark_runner_source",
+                "read_benchmark_inference_source",
+                "read_benchmark_store_source",
+                "read_benchmark_api_tests",
+                "read_benchmark_store_tests",
+            ],
+            expected_final_substrings=[
+                "llama_pack/api/routes/benchmarks.py",
+                "start_runs",
+                "store.get_definition",
+                "store.create_run",
+                "asyncio.create_task",
+                "BenchmarkRunner.execute_run",
+                "llama_pack/core/benchmarks/runner.py",
+                "self._store.get_run",
+                "self._store.get_definition",
+                "self._store.update_run",
+                "run_inference",
+                "llama_pack/core/chat/inference_service.py",
+                "proxy.chat_with_meta",
+                "self._store.create_sample",
+                "self._store.get_run_samples",
+                "BenchmarkStoreOrm.create_sample",
+                "tests/test_benchmark_api.py",
+                "tests/test_benchmark_store_orm.py",
+                "Unverified",
+            ],
+            request_defaults={"max_tokens": 1400},
+            eval_tools=[
+                "read_benchmark_route_source",
+                "read_benchmark_dependency_source",
+                "read_benchmark_runner_source",
+                "read_benchmark_inference_source",
+                "read_benchmark_store_source",
+                "read_benchmark_api_tests",
+                "read_benchmark_store_tests",
+                "read_benchmark_unrelated_ui",
+            ],
+            scoring_mode="set_membership",
+            max_iterations=10,
+            max_repeated_tool_calls=1,
+        ),
     ]
 
 
@@ -672,6 +733,89 @@ class EvalToolExecutor:
                 "source": "registration_auth",
                 "fact": "registration and account-management requirements are intentionally out of scope for this app design.",
             }
+        if name == "read_benchmark_route_source":
+            return {
+                "ok": True,
+                "source": "llama_pack/api/routes/benchmarks.py",
+                "symbols": ["start_runs", "StartBenchmarkRunsRequest"],
+                "statements": [
+                    "defn = store.get_definition(body.definition_id)",
+                    "run = store.create_run(",
+                    "asyncio.create_task(runner.execute_run(run[\"id\"]))",
+                ],
+                "store_methods": ["get_definition", "create_run"],
+            }
+        if name == "read_benchmark_dependency_source":
+            return {
+                "ok": True,
+                "source": "llama_pack/api/dependencies.py",
+                "symbols": ["get_benchmark_store", "get_benchmark_runner"],
+                "statements": [
+                    "return request.app.state.benchmark_store",
+                    "return request.app.state.benchmark_runner",
+                ],
+            }
+        if name == "read_benchmark_runner_source":
+            return {
+                "ok": True,
+                "source": "llama_pack/core/benchmarks/runner.py",
+                "symbols": ["BenchmarkRunner", "BenchmarkRunner.execute_run"],
+                "statements": [
+                    "run = self._store.get_run(run_id)",
+                    "defn = self._store.get_definition(run[\"benchmark_definition_id\"])",
+                    "self._store.update_run(",
+                    "result = await run_inference(self._proxy, model_name, payload)",
+                    "self._store.create_sample(",
+                    "samples = self._store.get_run_samples(run_id)",
+                ],
+                "store_methods": ["get_run", "get_definition", "update_run", "create_sample", "get_run_samples"],
+                "note": "create_sample is called on both success and failed sample paths.",
+            }
+        if name == "read_benchmark_inference_source":
+            return {
+                "ok": True,
+                "source": "llama_pack/core/chat/inference_service.py",
+                "symbols": ["run_inference", "InferenceResult"],
+                "statements": ["response, meta = await proxy.chat_with_meta(model_name, payload)"],
+                "unverified": "This source verifies the ChatProxy.chat_with_meta call but not ChatProxy internals.",
+            }
+        if name == "read_benchmark_store_source":
+            return {
+                "ok": True,
+                "source": "llama_pack/core/persistence/benchmark_store_orm.py",
+                "symbols": [
+                    "BenchmarkStoreOrm.get_definition",
+                    "BenchmarkStoreOrm.create_run",
+                    "BenchmarkStoreOrm.get_run",
+                    "BenchmarkStoreOrm.update_run",
+                    "BenchmarkStoreOrm.create_sample",
+                    "BenchmarkStoreOrm.get_run_samples",
+                ],
+            }
+        if name == "read_benchmark_api_tests":
+            return {
+                "ok": True,
+                "source": "tests/test_benchmark_api.py",
+                "coverage": [
+                    "test_start_runs_returns_202_with_pending_runs",
+                    "test_runner_executes_samples_and_aggregates",
+                    "test_runner_marks_partial_on_mixed_failures",
+                    "test_runner_manages_model_lifecycle_and_restores",
+                    "test_runner_marks_failed_when_managed_model_start_times_out",
+                ],
+            }
+        if name == "read_benchmark_store_tests":
+            return {
+                "ok": True,
+                "source": "tests/test_benchmark_store_orm.py",
+                "coverage": ["test_get_run_includes_samples"],
+            }
+        if name == "read_benchmark_unrelated_ui":
+            return {
+                "ok": True,
+                "source": "frontend/src/pages/BenchmarksPage.tsx",
+                "fact": "unrelated UI context is not needed to trace the backend runtime path.",
+            }
         return {"ok": False, "error": f"Unknown eval tool {name!r}"}
 
 
@@ -752,6 +896,14 @@ _EVAL_TOOL_DESCRIPTIONS = {
     "inspect_notes_app_frontend_requirements": "Inspect frontend requirements for the notes list, editor, and collaborator UI.",
     "read_notes_app_delivery_risks": "Read delivery risks for the collaborative notes app design.",
     "inspect_registration_auth_requirements": "Inspect registration and account auth requirements. This is intentionally out of scope for the notes app scenario.",
+    "read_benchmark_route_source": "Read the FastAPI benchmark route source for start_runs handoffs and route-level store calls.",
+    "read_benchmark_dependency_source": "Read benchmark dependency injection source for store and runner resolution.",
+    "read_benchmark_runner_source": "Read BenchmarkRunner source for execute_run handoffs, inference calls, sample recording, and store calls.",
+    "read_benchmark_inference_source": "Read inference service source for the ChatProxy handoff used by benchmark samples.",
+    "read_benchmark_store_source": "Read BenchmarkStoreOrm source for benchmark run and sample database methods.",
+    "read_benchmark_api_tests": "Read benchmark API tests that cover route scheduling and runner behavior.",
+    "read_benchmark_store_tests": "Read benchmark store tests that cover sample persistence.",
+    "read_benchmark_unrelated_ui": "Read unrelated benchmark UI context. This is intentionally irrelevant to the backend runtime trace.",
 }
 
 

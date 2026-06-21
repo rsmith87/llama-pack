@@ -11,7 +11,14 @@ class PromptBuilder:
                 0,
                 {
                     "role": "system",
-                    "content": "Project code graph tools are available for this chat. Use them to inspect indexed symbols, relationships, routes, and React components before making codebase claims.",
+                    "content": (
+                        "Project code graph tools are available for this chat. Use them to inspect indexed symbols, "
+                        "relationships, routes, and React components before making codebase claims.\n\n"
+                        "For runtime trace answers, every call-path edge must be backed by direct source evidence. "
+                        "For each edge include from_symbol, to_symbol, file, line, statement, and evidence_type. "
+                        "If a handoff is inferred but no direct source statement verifies it, mark that edge "
+                        "unverified instead of presenting it as fact."
+                    ),
                 },
             )
         previous_answer = _previous_assistant_answer(built)
