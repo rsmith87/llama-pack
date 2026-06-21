@@ -19,6 +19,8 @@ class ToolLoopEvalCase:
     system_prompt: str | None = None
     expected_tool_sequence: list[str] = field(default_factory=list)
     expected_final_substrings: list[str] = field(default_factory=list)
+    required_tool_names: list[str] = field(default_factory=list)
+    required_final_substrings: list[str] = field(default_factory=list)
     request_defaults: dict[str, Any] = field(default_factory=dict)
     scoring_mode: str = "strict_sequence"
     eval_tools: list[str] = field(default_factory=lambda: ["read_status", "read_details"])
@@ -155,6 +157,12 @@ class ToolLoopEvaluator:
             "expected_final_substrings": _contains_all(final_answer, case.expected_final_substrings),
             "no_tool_errors": all(result["ok"] or result.get("expected_error") for result in tool_results),
         }
+        missing_required_tools = _missing_required_tools(observed_tools, case.required_tool_names)
+        missing_required_final_substrings = _missing_required_substrings(final_answer, case.required_final_substrings)
+        if case.required_tool_names:
+            checks["required_tool_names"] = not missing_required_tools
+        if case.required_final_substrings:
+            checks["required_final_substrings"] = not missing_required_final_substrings
         if case.required_tool_arguments:
             checks["expected_tool_arguments"] = _required_arguments_match(tool_results, case.required_tool_arguments)
         if case.max_repeated_tool_calls is not None:
@@ -192,6 +200,10 @@ class ToolLoopEvaluator:
             "expected_tool_sequence": list(case.expected_tool_sequence),
             "missing_expected_tools": missing_expected_tools,
             "unexpected_tools": unexpected_tools,
+            "required_tool_names": list(case.required_tool_names),
+            "missing_required_tools": missing_required_tools,
+            "required_final_substrings": list(case.required_final_substrings),
+            "missing_required_final_substrings": missing_required_final_substrings,
             "scoring_mode": case.scoring_mode,
             "tool_results": tool_results,
             "trace_events": self.trace_recorder.events_for_case(case.id) if self.trace_recorder is not None else [],
@@ -550,6 +562,31 @@ def default_tool_loop_eval_cases() -> list[ToolLoopEvalCase]:
                 "tests/test_benchmark_api.py",
                 "tests/test_benchmark_store_orm.py",
                 "Unverified",
+            ],
+            required_tool_names=[
+                "read_benchmark_route_source",
+                "read_benchmark_dependency_source",
+                "read_benchmark_runner_source",
+                "read_benchmark_inference_source",
+                "read_benchmark_store_source",
+                "read_benchmark_api_tests",
+                "read_benchmark_store_tests",
+            ],
+            required_final_substrings=[
+                "from_symbol=benchmarks.start_runs to_symbol=BenchmarkStoreOrm.get_definition",
+                "from_symbol=benchmarks.start_runs to_symbol=BenchmarkStoreOrm.create_run",
+                "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run",
+                "from_symbol=get_benchmark_runner to_symbol=request.app.state.benchmark_runner",
+                "from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run",
+                "from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_definition",
+                "from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run",
+                "from_symbol=BenchmarkRunner.execute_run to_symbol=run_inference",
+                "from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta",
+                "from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.create_sample",
+                "from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run_samples",
+                "tests/test_benchmark_api.py::TestBenchmarkRunExecution::test_runner_completes_run_with_mocked_inference",
+                "tests/test_benchmark_api.py::TestBenchmarkRunExecution::test_runner_marks_partial_on_mixed_failures",
+                "tests/test_benchmark_store_orm.py::test_get_run_includes_samples",
             ],
             request_defaults={"max_tokens": 1400},
             eval_tools=[
@@ -1034,6 +1071,24 @@ def _arguments_include(arguments: Any, expected_arguments: dict[str, Any]) -> bo
 def _contains_all(text: str, expected_substrings: list[str]) -> bool:
     normalized = _normalize_match_text(text)
     return all(_normalize_match_text(substring) in normalized for substring in expected_substrings)
+
+
+def _missing_required_tools(observed: list[str], required: list[str]) -> list[str]:
+    observed_counts = Counter(observed)
+    required_counts = Counter(required)
+    missing: list[str] = []
+    for tool_name, count in required_counts.items():
+        missing.extend([tool_name] * max(0, count - observed_counts[tool_name]))
+    return missing
+
+
+def _missing_required_substrings(text: str, required_substrings: list[str]) -> list[str]:
+    normalized = _normalize_match_text(text)
+    return [
+        substring
+        for substring in required_substrings
+        if _normalize_match_text(substring) not in normalized
+    ]
 
 
 def _normalize_match_text(text: str) -> str:

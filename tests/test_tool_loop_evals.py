@@ -244,6 +244,46 @@ async def test_tool_loop_eval_records_trace_events_for_replay(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_tool_loop_eval_fails_missing_required_tool_names(tmp_path):
+    case = ToolLoopEvalCase(
+        id="required-tool-check",
+        prompt="Read the required sources and answer.",
+        expected_tool_sequence=["read_status"],
+        required_tool_names=["read_status", "read_details"],
+        expected_final_substrings=["status"],
+        scoring_mode="set_membership",
+    )
+    proxy = ScriptedToolProxy(["read_status"], "status only")
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("qwen", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["required_tool_names"] is False
+    assert result["missing_required_tools"] == ["read_details"]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_fails_missing_required_final_substrings(tmp_path):
+    case = ToolLoopEvalCase(
+        id="required-final-check",
+        prompt="Read the required sources and answer.",
+        expected_tool_sequence=["read_status"],
+        required_tool_names=["read_status"],
+        required_final_substrings=["from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta"],
+        scoring_mode="set_membership",
+    )
+    proxy = ScriptedToolProxy(["read_status"], "general answer without the required edge")
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("qwen", case)
+
+    assert result["status"] == "failed"
+    assert result["checks"]["required_final_substrings"] is False
+    assert result["missing_required_final_substrings"] == [
+        "from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta"
+    ]
+
+
+@pytest.mark.asyncio
 async def test_tool_loop_eval_honors_case_max_iterations_for_long_presets(tmp_path):
     case = next(case for case in default_tool_loop_eval_cases() if case.id == "linear-8-step-synthesis")
     proxy = ScriptedToolProxy(
@@ -562,25 +602,28 @@ async def test_tool_loop_eval_scores_benchmark_runtime_trace(tmp_path):
             "file=llama_pack/api/routes/benchmarks.py statement='run = store.create_run('\n"
             "3. from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
             "file=llama_pack/api/routes/benchmarks.py statement='asyncio.create_task(runner.execute_run(run[\"id\"]))'\n"
-            "4. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run "
+            "4. from_symbol=get_benchmark_runner to_symbol=request.app.state.benchmark_runner "
+            "file=llama_pack/api/dependencies.py statement='return request.app.state.benchmark_runner'\n"
+            "5. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run "
             "file=llama_pack/core/benchmarks/runner.py statement='run = self._store.get_run(run_id)'\n"
-            "5. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_definition "
+            "6. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_definition "
             "file=llama_pack/core/benchmarks/runner.py statement='defn = self._store.get_definition(run[\"benchmark_definition_id\"])'\n"
-            "6. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run "
+            "7. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run "
             "file=llama_pack/core/benchmarks/runner.py statement='self._store.update_run('\n"
-            "7. from_symbol=BenchmarkRunner.execute_run to_symbol=run_inference "
+            "8. from_symbol=BenchmarkRunner.execute_run to_symbol=run_inference "
             "file=llama_pack/core/benchmarks/runner.py statement='result = await run_inference(self._proxy, model_name, payload)'\n"
-            "8. from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta "
+            "9. from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta "
             "file=llama_pack/core/chat/inference_service.py statement='response, meta = await proxy.chat_with_meta(model_name, payload)'\n"
-            "9. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.create_sample "
+            "10. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.create_sample "
             "file=llama_pack/core/benchmarks/runner.py statement='self._store.create_sample(' success and failed sample paths\n"
-            "10. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run_samples "
+            "11. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.get_run_samples "
             "file=llama_pack/core/benchmarks/runner.py statement='samples = self._store.get_run_samples(run_id)'\n"
-            "11. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run "
+            "12. from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.update_run "
             "file=llama_pack/core/benchmarks/runner.py statement='self._store.update_run(' final status update\n"
             "Store/database methods: get_definition, create_run, get_run, update_run, create_sample, get_run_samples.\n"
-            "Tests: tests/test_benchmark_api.py covers route scheduling, completed runs, partial failures, and managed load; "
-            "tests/test_benchmark_store_orm.py covers create_sample through get_run.\n"
+            "Tests: tests/test_benchmark_api.py::TestBenchmarkRunExecution::test_runner_completes_run_with_mocked_inference, "
+            "tests/test_benchmark_api.py::TestBenchmarkRunExecution::test_runner_marks_partial_on_mixed_failures, "
+            "and tests/test_benchmark_store_orm.py::test_get_run_includes_samples.\n"
             "Unverified: ChatProxy.chat_with_meta internals."
         ),
     )
@@ -591,6 +634,32 @@ async def test_tool_loop_eval_scores_benchmark_runtime_trace(tmp_path):
     assert result["case_category"] == "real_world"
     assert result["checks"]["expected_tool_sequence"] is True
     assert result["checks"]["expected_final_substrings"] is True
+    assert result["checks"]["required_tool_names"] is True
+    assert result["checks"]["required_final_substrings"] is True
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_eval_benchmark_runtime_trace_fails_missing_inference_evidence(tmp_path):
+    case = next(case for case in default_tool_loop_eval_cases() if case.id == "benchmark-runtime-trace")
+    proxy = ScriptedToolProxy(
+        [
+            "read_benchmark_route_source",
+            "read_benchmark_runner_source",
+            "read_benchmark_store_source",
+        ],
+        (
+            "Ordered call path:\n"
+            "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run\n"
+            "from_symbol=BenchmarkRunner.execute_run to_symbol=BenchmarkStoreOrm.create_sample\n"
+            "Tests: tests/test_benchmark_api.py and tests/test_benchmark_store_orm.py."
+        ),
+    )
+
+    result = await ToolLoopEvaluator(_config(tmp_path), proxy).run_case("qwen", case)
+
+    assert result["status"] == "failed"
+    assert "read_benchmark_inference_source" in result["missing_required_tools"]
+    assert "from_symbol=run_inference to_symbol=ChatProxy.chat_with_meta" in result["missing_required_final_substrings"]
 
 
 @pytest.mark.asyncio
