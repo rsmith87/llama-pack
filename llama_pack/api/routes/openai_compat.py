@@ -146,7 +146,7 @@ async def openai_client_session(request: Request, registry: NodeRegistry = Depen
         "capabilities": {
             "openaiChatCompletions": True,
             "streaming": True,
-            "serverHistory": False,
+            "serverHistory": True,
             "projectContext": True,
         },
         "projectContext": _project_context_metadata(),

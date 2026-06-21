@@ -76,17 +76,16 @@ async def chat_context_budget(
     try:
         request_payload = body.model_dump()
         if config.mode == "controller":
-            compat = await thread_service.prepare_compat_chat_async(
-                thread_id=None,
+            compat = await thread_service.preview_compat_chat_async(
+                thread_id=body.thread_id,
                 messages=[message.model_dump() for message in body.messages],
                 model=model_name,
                 model_family=body.model_family,
                 context_profile=body.context_profile,
                 target=body.target,
                 metadata={"request_type": body.request_type} if body.request_type else {},
-                created_by=getattr(request.state, "ui_user", None),
             )
-            upstream_payload = {**request_payload, "target": compat["target"]}
+            upstream_payload = {**request_payload, "messages": compat["messages"], "target": compat["target"]}
             return JSONResponse(
                 content=await node_registry.request_node(
                     str(compat["route"]["node"]),

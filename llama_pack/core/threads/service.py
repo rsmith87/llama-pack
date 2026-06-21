@@ -7,8 +7,15 @@ from typing import Any
 from uuid import uuid4
 
 from llama_pack.core.chat.context_budget import estimate_prompt_tokens
+from llama_pack.core.chat.context_management import (
+    assistant_summary_content,
+    context_management_metadata,
+    should_summarize_messages,
+    summary_prompt_messages,
+    summary_system_message,
+)
 from llama_pack.core.config.models import AppConfig
-from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
+from llama_pack.core.chat.internal_payload import SKIP_CONTEXT_MANAGEMENT_KEY, TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 
@@ -141,17 +148,66 @@ class ThreadService:
             agent_node=decision.node,
             model=decision.model,
         )
+        managed_messages = await self._managed_thread_messages(
+            thread_id=thread_id,
+            turn_id=turn_id,
+            messages=self._public_messages(thread_id),
+            model=decision.model,
+            route=route,
+        )
         return {
             "thread_id": thread_id,
             "model": decision.model,
             "target": f"node:{decision.node}",
             "route": route,
-            "messages": self._compact_thread_messages(
-                thread_id=thread_id,
-                turn_id=turn_id,
-                messages=self._public_messages(thread_id),
-                model=decision.model,
-            ),
+            "messages": managed_messages["messages"],
+            "context_management": managed_messages["metadata"],
+        }
+
+    async def preview_compat_chat_async(
+        self,
+        thread_id: str | None,
+        messages: list[dict[str, Any]],
+        model: str | None,
+        model_family: str | None,
+        context_profile: str | None,
+        target: str,
+        metadata: dict[str, Any] | None,
+    ) -> dict[str, Any]:
+        request_metadata = metadata or {}
+        thread: dict[str, Any] | None = None
+        if thread_id is not None:
+            thread = self.store.get_thread(thread_id)
+            request_metadata = {**thread.get("metadata", {}), **request_metadata}
+
+        request_type = request_metadata.get("request_type") or "general"
+        previous_route = self._previous_route(thread_id, model_family=model_family, context_profile=context_profile) if thread_id else None
+        requested_model = self._requested_model(model, model_family, context_profile)
+        try:
+            decision = await self.routing_policy.choose(
+                request_type=request_type,
+                requested_model=requested_model or (thread.get("default_model") if thread else None),
+                explicit_target=target,
+                previous_route=previous_route,
+            )
+        except ValueError as exc:
+            raise ThreadChatError(thread_id or "", "ROUTING_ERROR", str(exc)) from exc
+
+        route = {
+            "node": decision.node,
+            "model": decision.model,
+            "family": model_family,
+            "profile": context_profile,
+            "strategy": decision.strategy,
+            "reason": decision.reason,
+        }
+        history_messages = self._preview_thread_messages(thread_id, messages, decision.model) if thread_id else list(messages)
+        return {
+            "thread_id": thread_id,
+            "model": decision.model,
+            "target": f"node:{decision.node}",
+            "route": route,
+            "messages": history_messages,
         }
 
     def record_compat_assistant(
@@ -285,22 +341,24 @@ class ThreadService:
             agent_node=decision.node,
             model=decision.model,
         )
-        messages = self._compact_thread_messages(
+        managed_messages = await self._managed_thread_messages(
             thread_id=thread_id,
             turn_id=turn_id,
             messages=messages,
             model=decision.model,
+            route=route,
         )
 
         return {
             "thread": thread,
             "request_metadata": request_metadata,
-            "messages": messages,
+            "messages": managed_messages["messages"],
             "turn_id": turn_id,
             "route": route,
             "decision": decision,
             "model_family": model_family,
             "context_profile": context_profile,
+            "context_management": managed_messages["metadata"],
         }
 
     async def post_message_async(
@@ -375,6 +433,7 @@ class ThreadService:
             "thread_id": thread_id,
             "message": {"role": "assistant", "content": assistant_content},
             "route": route,
+            "context_management": prepared["context_management"],
         }
 
     async def stream_message_async(
@@ -435,6 +494,9 @@ class ThreadService:
         async def _generate() -> AsyncIterator[bytes]:
             route_event = json.dumps({"type": "route", "route": route})
             yield f"data: {route_event}\n\n".encode()
+            if prepared["context_management"] is not None:
+                context_event = json.dumps({"type": "context_management", **prepared["context_management"]})
+                yield f"data: {context_event}\n\n".encode()
 
             assistant_content = ""
             reasoning_content = ""
@@ -645,58 +707,146 @@ class ThreadService:
 
     def _public_messages(self, thread_id: str) -> list[dict[str, str]]:
         messages = []
+        for event in self._public_message_events(thread_id):
+            messages.append(self._event_message(event))
+        return messages
+
+    def _public_message_events(self, thread_id: str) -> list[dict[str, Any]]:
+        events: list[dict[str, Any]] = []
         for event in self.store.list_events(thread_id, include_internal=False):
             if event["event_type"] not in {"user_message", "assistant_message"}:
                 continue
             text = event["content"].get("text")
             role = event.get("role")
             if isinstance(text, str) and role in {"user", "assistant"}:
-                messages.append({"role": role, "content": text})
-        return messages
+                events.append(event)
+        return events
 
-    def _compact_thread_messages(
+    def _event_message(self, event: dict[str, Any]) -> dict[str, str]:
+        return {"role": str(event["role"]), "content": str(event["content"]["text"])}
+
+    def _latest_history_summary(self, thread_id: str) -> dict[str, Any] | None:
+        for event in reversed(self.store.list_events(thread_id, include_internal=True)):
+            if event["event_type"] != "history_summary":
+                continue
+            content = event.get("content") or {}
+            summary = content.get("summary")
+            covered_event_ids = content.get("covered_event_ids")
+            if isinstance(summary, str) and isinstance(covered_event_ids, list):
+                return {"summary": summary, "covered_event_ids": [str(item) for item in covered_event_ids]}
+        return None
+
+    def _preview_thread_messages(
+        self,
+        thread_id: str,
+        incoming_messages: list[dict[str, Any]],
+        model: str,
+    ) -> list[dict[str, Any]]:
+        public_events = self._public_message_events(thread_id)
+        latest_summary = self._latest_history_summary(thread_id)
+        covered_event_ids = list(latest_summary.get("covered_event_ids", [])) if latest_summary else []
+        covered_event_id_set = set(covered_event_ids)
+        unsummarized_events = [event for event in public_events if event["id"] not in covered_event_id_set]
+        messages = [self._event_message(event) for event in unsummarized_events]
+        previous_summary = str(latest_summary.get("summary", "")) if latest_summary else None
+        if previous_summary:
+            messages = [summary_system_message(previous_summary), *messages]
+        messages = [*messages, *incoming_messages]
+        if not should_summarize_messages(self.config, model, messages):
+            return messages
+        recent_message_count = self.config.context_summarization_recent_messages
+        return [
+            summary_system_message(previous_summary or "A summary will be generated before the next model response."),
+            *messages[-recent_message_count:],
+        ]
+
+    async def _managed_thread_messages(
         self,
         thread_id: str,
         turn_id: str,
         messages: list[dict[str, Any]],
         model: str,
-    ) -> list[dict[str, Any]]:
-        if not self.config.thread_history_compaction_enabled:
-            return list(messages)
-        recent_message_count = self.config.thread_history_recent_messages
-        if len(messages) <= recent_message_count + 1:
-            return list(messages)
-        prompt_tokens = estimate_prompt_tokens({"messages": messages})
-        token_budget = self._history_prompt_token_budget(model)
-        if prompt_tokens <= token_budget:
-            return list(messages)
+        route: dict[str, Any],
+    ) -> dict[str, Any]:
+        if not self.config.context_summarization_enabled:
+            return {"messages": list(messages), "metadata": None}
 
-        recent_messages = messages[-recent_message_count:]
-        older_messages = messages[:-recent_message_count]
-        summary_content = _history_summary_content(
-            messages=older_messages,
-            max_chars=self.config.thread_history_summary_max_chars,
-            item_max_chars=self.config.thread_history_summary_item_max_chars,
-        )
-        self.store.append_event(
+        public_events = self._public_message_events(thread_id)
+        if not public_events:
+            return {"messages": list(messages), "metadata": None}
+
+        latest_summary = self._latest_history_summary(thread_id)
+        covered_event_ids = list(latest_summary.get("covered_event_ids", [])) if latest_summary else []
+        covered_event_id_set = set(covered_event_ids)
+        unsummarized_events = [event for event in public_events if event["id"] not in covered_event_id_set]
+        previous_summary = str(latest_summary.get("summary", "")) if latest_summary else None
+        current_messages = [self._event_message(event) for event in unsummarized_events]
+        if previous_summary:
+            current_messages = [summary_system_message(previous_summary), *current_messages]
+
+        if not should_summarize_messages(self.config, model, current_messages):
+            return {"messages": current_messages, "metadata": None}
+
+        recent_message_count = self.config.context_summarization_recent_messages
+        if len(unsummarized_events) <= recent_message_count:
+            return {"messages": current_messages, "metadata": None}
+
+        events_to_summarize = unsummarized_events[:-recent_message_count]
+        recent_events = unsummarized_events[-recent_message_count:]
+        messages_to_summarize = [self._event_message(event) for event in events_to_summarize]
+        prompt_tokens_before = estimate_prompt_tokens({"messages": current_messages})
+        summary_payload = {
+            "messages": summary_prompt_messages(previous_summary, messages_to_summarize),
+            "temperature": 0.0,
+            "max_tokens": self.config.context_summarization_max_tokens,
+            "target": f"node:{route['node']}",
+            TRUSTED_CONTROLLER_TARGET_KEY: True,
+            SKIP_CONTEXT_MANAGEMENT_KEY: True,
+        }
+        try:
+            response, response_meta = await self.chat_proxy.chat_with_meta(model, summary_payload)
+            summary = assistant_summary_content(response)
+        except Exception as exc:
+            self._append_error(thread_id, "CONTEXT_SUMMARY_ERROR", exc, turn_id=turn_id)
+            raise ThreadChatError(
+                thread_id,
+                "CONTEXT_SUMMARY_ERROR",
+                f"Failed to summarize thread {thread_id} for model {model}: {exc}",
+            ) from exc
+
+        all_covered_event_ids = [*covered_event_ids, *[event["id"] for event in events_to_summarize]]
+        compacted_messages = [summary_system_message(summary), *[self._event_message(event) for event in recent_events]]
+        prompt_tokens_after = estimate_prompt_tokens({"messages": compacted_messages})
+        summary_event = self.store.append_event(
             thread_id=thread_id,
-            event_type="history_compaction",
+            event_type="history_summary",
             role=None,
             content={
-                "summary": summary_content,
-                "prompt_tokens_estimated": prompt_tokens,
-                "token_budget": token_budget,
-                "older_message_count": len(older_messages),
-                "recent_message_count": len(recent_messages),
+                "summary": summary,
+                "covered_event_ids": all_covered_event_ids,
+                "source_event_ids": [event["id"] for event in events_to_summarize],
+                "prompt_tokens_before": prompt_tokens_before,
+                "prompt_tokens_after": prompt_tokens_after,
+                "summary_tokens_estimated": estimate_prompt_tokens({"messages": [summary_system_message(summary)]}),
+                "summary_model": model,
                 "model": model,
+                "route": route,
+                "response_meta": response_meta,
             },
             public=False,
             turn_id=turn_id,
+            route=route,
+            agent_node=route["node"],
             model=model,
         )
-        compacted_messages: list[dict[str, Any]] = [{"role": "system", "content": summary_content}]
-        compacted_messages.extend(recent_messages)
-        return compacted_messages
+        return {
+            "messages": compacted_messages,
+            "metadata": context_management_metadata(
+                summary_event_id=summary_event["id"],
+                prompt_tokens_before=prompt_tokens_before,
+                prompt_tokens_after=prompt_tokens_after,
+            ),
+        }
 
     def _history_prompt_token_budget(self, model: str) -> int:
         try:

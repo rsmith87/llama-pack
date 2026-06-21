@@ -8,7 +8,13 @@ import httpx
 
 from llama_pack.core.chat import CapabilityInspector, ModelNotRunningError, PromptTemplateAdapter, TargetResolver, TransportBuilder
 from llama_pack.core.chat.context_budget import ContextBudgetEstimator
-from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
+from llama_pack.core.chat.context_management import (
+    assistant_summary_content,
+    should_summarize_messages,
+    summary_prompt_messages,
+    summary_system_message,
+)
+from llama_pack.core.chat.internal_payload import SKIP_CONTEXT_MANAGEMENT_KEY, TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.runtime.process_manager import ProcessManager
@@ -127,6 +133,7 @@ class ChatProxy:
         }
 
     async def _build_request(self, model_name: str, payload: dict[str, Any], stream: bool) -> tuple[str, dict[str, Any], dict[str, str], bool, dict[str, str]]:
+        payload = await self._summarize_ad_hoc_payload(model_name, payload)
         self._context_budget.require_fits(model_name, payload)
         request_payload = {
             "messages": payload["messages"],
@@ -181,6 +188,61 @@ class ChatProxy:
 
         local_target = self._resolver.resolve_local_target(model_name)
         return local_target["url"], request_payload, {}, True, {"route": "local"}
+
+    async def _summarize_ad_hoc_payload(self, model_name: str, payload: dict[str, Any]) -> dict[str, Any]:
+        if bool(payload.get(SKIP_CONTEXT_MANAGEMENT_KEY)):
+            return payload
+        messages = payload.get("messages")
+        if not isinstance(messages, list):
+            return payload
+        typed_messages = [message for message in messages if isinstance(message, dict)]
+        if len(typed_messages) != len(messages):
+            return payload
+        if not should_summarize_messages(self.config, model_name, typed_messages):
+            return payload
+        recent_message_count = self.config.context_summarization_recent_messages
+        if len(typed_messages) <= recent_message_count:
+            return payload
+        older_messages = typed_messages[:-recent_message_count]
+        recent_messages = typed_messages[-recent_message_count:]
+        summary_payload = {
+            "messages": summary_prompt_messages(None, older_messages),
+            "temperature": 0.0,
+            "max_tokens": self.config.context_summarization_max_tokens,
+            SKIP_CONTEXT_MANAGEMENT_KEY: True,
+        }
+        if payload.get("target") is not None:
+            summary_payload["target"] = payload["target"]
+        url, request_payload, headers, verify_tls = await self._summary_request(model_name, summary_payload)
+        try:
+            response = await self._call_request(url, request_payload, headers, verify_tls)
+            summary = assistant_summary_content(response)
+        except Exception as exc:
+            raise RuntimeError(
+                f"Failed to summarize chat request for model {model_name}: {exc}. "
+                f"Estimated prompt tokens exceeded the configured context summarization trigger."
+            ) from exc
+        return {**payload, "messages": [summary_system_message(summary), *recent_messages]}
+
+    async def _summary_request(self, model_name: str, payload: dict[str, Any]) -> tuple[str, dict[str, Any], dict[str, str], bool]:
+        request_payload = {
+            "messages": payload["messages"],
+            "temperature": payload["temperature"],
+            "max_tokens": payload["max_tokens"],
+            "stream": False,
+        }
+        if self.config.mode == "controller":
+            target_selector = str(payload.get("target", "auto"))
+            target = await self._resolver.resolve_controller_target(model_name, target_selector)
+            url, headers, verify_tls, _route_meta = self._transport.chat_transport_for_target(
+                target,
+                model_name,
+                False,
+                False,
+            )
+            return url, request_payload, headers, verify_tls
+        local_target = self._resolver.resolve_local_target(model_name)
+        return local_target["url"], request_payload, {}, True
 
     async def _build_slots_request(self, model_name: str, target_selector: str, suffix: str) -> tuple[str, dict[str, str], bool, dict[str, str]]:
         if self.config.mode == "controller":

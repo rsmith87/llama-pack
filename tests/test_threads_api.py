@@ -190,12 +190,15 @@ async def test_post_message_async_sends_prior_public_messages_plus_current_user_
 
 
 @pytest.mark.asyncio
-async def test_post_message_async_compacts_long_history_before_current_user_message(tmp_path):
-    chat_proxy = RecordingChatProxy(responses=["first reply", "second reply", "third reply", "final reply"])
+async def test_post_message_async_summarizes_long_history_before_current_user_message(tmp_path):
+    chat_proxy = RecordingChatProxy(
+        responses=["first reply", "second reply", "durable summary", "third reply", "updated durable summary", "final reply"]
+    )
     config = load_config(
         {
             "mode": "controller",
             "models": {"qwen": {"path": "qwen.gguf", "port": 8080, "ctx": 220}},
+            "context_summarization_trigger_ratio": 0.50,
             "nodes": {
                 "linux-2080ti": {
                     "url": "http://linux",
@@ -246,19 +249,28 @@ async def test_post_message_async_compacts_long_history_before_current_user_mess
         metadata=None,
     )
 
-    messages = chat_proxy.calls[3]["payload"]["messages"]
+    summary_calls = [call for call in chat_proxy.calls if call["payload"].get("_skip_context_management") is True]
+    summary_call = summary_calls[0]
+    assert summary_call["payload"]["temperature"] == 0.0
+    assert summary_call["payload"]["max_tokens"] == 768
+    assert summary_call["payload"]["_skip_context_management"] is True
+    assert "Summarize the earlier conversation" in summary_call["payload"]["messages"][0]["content"]
+
+    messages = chat_proxy.calls[-1]["payload"]["messages"]
     assert messages[0]["role"] == "system"
-    assert "Earlier thread history summary:" in messages[0]["content"]
-    assert "user: First question" in messages[0]["content"]
+    assert "Earlier conversation summary:" in messages[0]["content"]
+    assert len(summary_calls) == 2
+    assert "updated durable summary" in messages[0]["content"]
     assert {"role": "user", "content": "Third question"} in messages
     assert {"role": "assistant", "content": "third reply"} in messages
     assert messages[-1] == {"role": "user", "content": "Fourth question"}
     assert not any(message["role"] == "user" and message["content"].startswith("First question") for message in messages[1:])
     internal_events = service.list_events(thread["id"], include_internal=True)
-    compaction_event = next(event for event in internal_events if event["event_type"] == "history_compaction")
-    assert compaction_event["content"]["model"] == "qwen"
-    assert compaction_event["content"]["older_message_count"] > 0
-    assert compaction_event["content"]["prompt_tokens_estimated"] > compaction_event["content"]["token_budget"]
+    summary_event = [event for event in internal_events if event["event_type"] == "history_summary"][-1]
+    assert summary_event["content"]["model"] == "qwen"
+    assert summary_event["content"]["summary"] == "updated durable summary"
+    assert summary_event["content"]["covered_event_ids"]
+    assert summary_event["content"]["prompt_tokens_before"] > summary_event["content"]["prompt_tokens_after"]
 
 
 @pytest.mark.asyncio

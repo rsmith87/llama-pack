@@ -400,6 +400,58 @@ def test_controller_context_budget_proxies_to_routed_agent_model(tmp_path):
     assert response.headers["X-Llama-Pack-Model"] == "qwen"
 
 
+def test_controller_context_budget_with_thread_id_does_not_append_events(tmp_path):
+    budget_calls = []
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        budget_calls.append({"method": method, "url": url, "json_body": json_body})
+        return {
+            "model": "qwen",
+            "context_window_tokens": 32768,
+            "prompt_tokens_estimated": 12,
+            "reserved_completion_tokens": 512,
+            "available_input_tokens": 32256,
+            "remaining_context_tokens": 32244,
+            "usage_ratio": 0.016,
+            "status": "comfortable",
+            "estimation_method": "approx_chars_div_4",
+            "precision": "approximate",
+            "warnings": [],
+        }
+
+    app, _, _ = _controller_app(tmp_path, controller_request=fake_request, chat_responses=["first"])
+    client = TestClient(app)
+    first = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "first"}],
+            "request_type": "coding",
+            "stream": False,
+        },
+    )
+    thread_id = first.headers["X-Llama-Pack-Thread-Id"]
+
+    response = client.post(
+        "/lm-api/v1/chat/qwen/context-budget",
+        json={
+            "thread_id": thread_id,
+            "messages": [{"role": "user", "content": "second"}],
+            "request_type": "coding",
+            "max_tokens": 512,
+        },
+    )
+
+    assert response.status_code == 200
+    assert budget_calls[0]["json_body"]["messages"] == [
+        {"role": "user", "content": "first"},
+        {"role": "assistant", "content": "first"},
+        {"role": "user", "content": "second"},
+    ]
+    events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
+    assert [event["event_type"] for event in events] == ["user_message", "assistant_message"]
+
+
 def test_external_app_key_can_list_client_safe_models(tmp_path):
     app, _, _ = _controller_app(tmp_path)
     raw_key = app.state.auth_store.create_external_key("Home App", "https://home.local")["key"]
@@ -508,7 +560,7 @@ def test_external_app_key_can_read_client_session_capabilities(tmp_path):
     assert payload["auth"] == {"method": "external_key", "role": "external", "username": "Home App"}
     assert payload["capabilities"]["openaiChatCompletions"] is True
     assert payload["capabilities"]["streaming"] is True
-    assert payload["capabilities"]["serverHistory"] is False
+    assert payload["capabilities"]["serverHistory"] is True
     assert payload["capabilities"]["projectContext"] is True
     assert payload["projectContext"] == {
         "actions": ["summarize_project", "summarize_path", "refresh_context_item"],

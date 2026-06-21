@@ -46,6 +46,7 @@ class ChatRequestBody(BaseModel):
     context_profile: str | None = None
     request_type: str | None = None
     project_id: str | None = None
+    thread_id: str | None = None
 
     @model_validator(mode="after")
     def normalize_fields(self) -> "ChatRequestBody":

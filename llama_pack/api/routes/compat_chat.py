@@ -130,6 +130,8 @@ async def controller_chat(
         route=compat["route"],
     )
     response_with_thread = {**response, "thread_id": compat["thread_id"]}
+    if compat.get("context_management") is not None:
+        response_with_thread["context_management"] = compat["context_management"]
     return response_with_thread, compatibility_headers(compat["thread_id"], compat["route"], meta)
 
 
@@ -188,6 +190,9 @@ async def controller_stream(
         if include_thread_event:
             thread_event = json.dumps({"type": "thread", "thread_id": compat["thread_id"]})
             yield f"data: {thread_event}\n\n".encode()
+        if compat.get("context_management") is not None:
+            context_event = json.dumps({"type": "context_management", **compat["context_management"]})
+            yield f"data: {context_event}\n\n".encode()
         try:
             async for chunk in stream:
                 parts.extend(extract_openai_sse_content(chunk))
