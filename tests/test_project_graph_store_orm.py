@@ -34,6 +34,32 @@ def test_project_graph_store_activates_latest_ready_snapshot(tmp_path):
     assert store.status(str(project["id"]))["snapshot_id"] == second["id"]
 
 
+def test_project_graph_store_keeps_active_snapshots_per_node(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project = _create_project(db_path)
+    store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+
+    mac = store.create_snapshot(project_id=str(project["id"]), node_name="mac-mini", root_path="/repo", git_commit="a1")
+    store.replace_snapshot_graph(snapshot_id=str(mac["id"]), files=[], symbols=[], imports=[], relations=[])
+    store.activate_snapshot(str(mac["id"]))
+
+    linux = store.create_snapshot(project_id=str(project["id"]), node_name="linux-2080ti", root_path="/repo", git_commit="a1")
+    store.replace_snapshot_graph(snapshot_id=str(linux["id"]), files=[], symbols=[], imports=[], relations=[])
+    store.activate_snapshot(str(linux["id"]))
+
+    mac_active = store.get_active_snapshot_for_node(str(project["id"]), "mac-mini")
+    linux_active = store.get_active_snapshot_for_node(str(project["id"]), "linux-2080ti")
+    project_active = store.get_active_snapshot(str(project["id"]))
+
+    assert mac_active is not None
+    assert linux_active is not None
+    assert project_active is not None
+    assert mac_active["id"] == mac["id"]
+    assert linux_active["id"] == linux["id"]
+    assert project_active["id"] in {mac["id"], linux["id"]}
+
+
 def test_project_graph_store_preserves_active_snapshot_when_new_snapshot_fails(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)

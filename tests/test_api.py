@@ -2802,6 +2802,172 @@ def test_openai_compat_controller_forwards_agent_tool_runtime_to_selected_agent(
     assert not (tmp_path / "agent_tool_calls.jsonl").exists()
 
 
+def test_openai_compat_controller_rejects_project_chat_without_target_node_root(tmp_path):
+    calls = []
+
+    async def fake_controller_request(method, url, api_key=None, verify_tls=True, json_body=None):
+        if url.endswith("/lm-api/v1/models"):
+            return [{"name": "qwen", "running": True}]
+        return {}
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "controller"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "mac-mini": {"url": "http://mac", "default_model": "qwen"},
+                    "linux-2080ti": {"url": "http://linux", "default_model": "qwen"},
+                },
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint="/Users/robertsmith/Apps/llama-pack")
+    app.state.project_store.upsert_node_root(
+        project_id=str(project["id"]),
+        node_name="mac-mini",
+        root_path="/Users/robertsmith/Apps/llama-pack",
+        safe_root_status="allowed",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+            "target": "node:linux-2080ti",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Project has no allowed root for node linux-2080ti"
+    assert calls == []
+
+
+def test_openai_compat_controller_rejects_project_chat_without_target_node_graph(tmp_path):
+    calls = []
+
+    async def fake_controller_request(method, url, api_key=None, verify_tls=True, json_body=None):
+        if url.endswith("/lm-api/v1/models"):
+            return [{"name": "qwen", "running": True}]
+        return {}
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "controller"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"linux-2080ti": {"url": "http://linux", "default_model": "qwen"}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint="/home/neuraxis/Apps/llama-pack")
+    app.state.project_store.upsert_node_root(
+        project_id=str(project["id"]),
+        node_name="linux-2080ti",
+        root_path="/home/neuraxis/Apps/llama-pack",
+        safe_root_status="allowed",
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+            "target": "node:linux-2080ti",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Project graph is not indexed for node linux-2080ti"
+    assert calls == []
+
+
+def test_openai_compat_controller_forwards_project_chat_to_indexed_target_node(tmp_path):
+    calls = []
+
+    async def fake_controller_request(method, url, api_key=None, verify_tls=True, json_body=None):
+        if url.endswith("/lm-api/v1/models"):
+            return [{"name": "qwen", "running": True}]
+        return {}
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "controller"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {"linux-2080ti": {"url": "http://linux", "default_model": "qwen"}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint="/home/neuraxis/Apps/llama-pack")
+    app.state.project_store.upsert_node_root(
+        project_id=str(project["id"]),
+        node_name="linux-2080ti",
+        root_path="/home/neuraxis/Apps/llama-pack",
+        safe_root_status="allowed",
+    )
+    snapshot = app.state.project_graph_store.create_snapshot(
+        project_id=str(project["id"]),
+        node_name="linux-2080ti",
+        root_path="/home/neuraxis/Apps/llama-pack",
+        git_commit=None,
+    )
+    app.state.project_graph_store.activate_snapshot(str(snapshot["id"]))
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "hi"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+            "target": "node:linux-2080ti",
+        },
+    )
+
+    assert response.status_code == 200
+    assert calls[0][0] == "http://linux/v1/chat/completions"
+    assert calls[0][1]["project_id"] == project["id"]
+
+
 def test_chat_stream_route_proxies_stream_to_llama_server():
     calls = []
 

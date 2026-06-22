@@ -24,6 +24,9 @@ function stubProjectsGraphStatus(statusPayload: unknown) {
     if (url === "/lm-api/v1/projects?include_archived=false") {
       return Promise.resolve(okJson(projectListPayload()));
     }
+    if (url === "/lm-api/v1/nodes") {
+      return Promise.resolve(okJson({ nodes: [{ name: "mac-mini", reachable: true }] }));
+    }
     if (url === "/lm-api/v1/projects/project-1/node-roots" && options?.method === "GET") {
       return Promise.resolve(okJson(emptyNodeRootsPayload()));
     }
@@ -45,6 +48,14 @@ it("creates projects and upserts safe node roots", async () => {
       return Promise.resolve(okJson({
         projects: [
           { id: "project-1", name: "Spitball", root_hint: "/repo", archived: false },
+        ],
+      }));
+    }
+    if (url === "/lm-api/v1/nodes") {
+      return Promise.resolve(okJson({
+        nodes: [
+          { name: "mac-mini", reachable: true },
+          { name: "linux-2080ti", reachable: true },
         ],
       }));
     }
@@ -111,6 +122,7 @@ it("creates projects and upserts safe node roots", async () => {
 
   expect(await screen.findByRole("heading", { name: "Projects" })).toBeInTheDocument();
   expect(await screen.findByText("/repo")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Configure root for linux-2080ti" })).toBeInTheDocument();
 
   await user.clear(screen.getByLabelText("New Project Name"));
   await user.type(screen.getByLabelText("New Project Name"), "New Project");
@@ -123,7 +135,7 @@ it("creates projects and upserts safe node roots", async () => {
     body: JSON.stringify({ name: "New Project", root_hint: "/workspace" }),
   }));
 
-  await user.click(screen.getByRole("button", { name: "Edit" }));
+  await user.click(screen.getByRole("button", { name: "Edit root for mac-mini" }));
   await user.selectOptions(screen.getByLabelText("Safe Root Status"), "allowed");
   await user.click(screen.getByRole("button", { name: "Save Node Root" }));
 
@@ -148,6 +160,10 @@ it("creates projects and upserts safe node roots", async () => {
   })));
   expect(await screen.findByText("ProjectGraphIndexer")).toBeInTheDocument();
   expect(screen.getByText("llama_pack/core/code_graph/indexer.py")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Configure root for linux-2080ti" }));
+  expect(screen.getByLabelText("Node Name")).toHaveValue("linux-2080ti");
+  expect(screen.getByLabelText("Root Path")).toHaveValue("/repo");
 });
 
 it("shows failed graph ingest details", async () => {

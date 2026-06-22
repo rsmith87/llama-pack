@@ -15,11 +15,19 @@ import {
   type ProjectNodeRootSafeStatus,
   type ProjectRecord,
 } from "../../api/projects";
+import { listNodes } from "../../api/nodes";
 import { Button, DataTable, ErrorBanner, FormField, Panel, StatusBadge } from "../../components/ui";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
+import type { NodeInventoryItem } from "../../types";
 
 type ProjectsData = {
   projects: ProjectRecord[];
+  nodes: NodeInventoryItem[];
+};
+
+type ProjectNodeRootMapping = {
+  nodeName: string;
+  root: ProjectNodeRootRecord | null;
 };
 
 const SAFE_ROOT_STATUSES: ProjectNodeRootSafeStatus[] = ["unknown", "allowed", "blocked"];
@@ -71,13 +79,27 @@ function graphStatusMessage(status: ProjectGraphStatus | null): string {
 }
 
 async function loadProjectsData(): Promise<ProjectsData> {
-  const payload = await listProjects(false);
-  return { projects: payload.projects };
+  const [projectsPayload, nodesPayload] = await Promise.all([listProjects(false), listNodes()]);
+  return { projects: projectsPayload.projects, nodes: nodesPayload.nodes || [] };
+}
+
+function nodeRootMappings(nodes: NodeInventoryItem[], roots: ProjectNodeRootRecord[]): ProjectNodeRootMapping[] {
+  const byNode = new Map<string, ProjectNodeRootRecord>();
+  for (const root of roots) byNode.set(root.node_name, root);
+  const names = new Set<string>();
+  for (const node of nodes) {
+    if (node.name) names.add(node.name);
+  }
+  for (const root of roots) names.add(root.node_name);
+  return Array.from(names)
+    .sort((left, right) => left.localeCompare(right))
+    .map((nodeName) => ({ nodeName, root: byNode.get(nodeName) || null }));
 }
 
 export function ProjectsPage() {
-  const { data, loading, error, refresh, setError } = useAsyncResource<ProjectsData>(loadProjectsData, { projects: [] });
+  const { data, loading, error, refresh, setError } = useAsyncResource<ProjectsData>(loadProjectsData, { projects: [], nodes: [] });
   const projects = data.projects;
+  const nodes = data.nodes;
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) || projects[0] || null,
@@ -250,6 +272,16 @@ export function ProjectsPage() {
     });
   }
 
+  function configureNodeRoot(nodeName: string): void {
+    setRootForm({
+      nodeName,
+      rootPath: selectedProject?.root_hint || "",
+      safeRootStatus: "unknown",
+    });
+  }
+
+  const rootMappings = nodeRootMappings(nodes, nodeRoots);
+
   return (
     <div className="projects-page-react">
       <div className="page-heading">
@@ -331,6 +363,32 @@ export function ProjectsPage() {
                   { key: "status", header: "Safe Status", render: (root) => <StatusBadge tone={statusTone(root.safe_root_status)}>{root.safe_root_status}</StatusBadge> },
                   { key: "updated", header: "Updated", render: (root) => root.updated_at },
                   { key: "actions", header: "Actions", render: (root) => <Button type="button" onClick={() => editRoot(root)}>Edit</Button> },
+                ]}
+              />
+
+              <DataTable
+                rows={rootMappings}
+                emptyMessage={rootsLoading ? "Loading controller nodes..." : "No controller nodes found."}
+                getRowKey={(mapping) => mapping.nodeName}
+                columns={[
+                  { key: "node", header: "Node", render: (mapping) => mapping.nodeName },
+                  { key: "path", header: "Project Root", render: (mapping) => mapping.root?.root_path || "No root mapped" },
+                  {
+                    key: "status",
+                    header: "Safe Status",
+                    render: (mapping) => mapping.root ? <StatusBadge tone={statusTone(mapping.root.safe_root_status)}>{mapping.root.safe_root_status}</StatusBadge> : <StatusBadge tone="muted">unmapped</StatusBadge>,
+                  },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (mapping) => {
+                      const root = mapping.root;
+                      if (root) {
+                        return <Button type="button" onClick={() => editRoot(root)} aria-label={`Edit root for ${mapping.nodeName}`}>Edit</Button>;
+                      }
+                      return <Button type="button" onClick={() => configureNodeRoot(mapping.nodeName)} aria-label={`Configure root for ${mapping.nodeName}`}>Configure</Button>;
+                    },
+                  },
                 ]}
               />
 

@@ -23,6 +23,7 @@ from llama_pack.api.http_headers import (
     compatibility_header_pairs,
 )
 from llama_pack.core.chat.scheduler import ChatAdmissionError
+from llama_pack.core.chat.proxy import ProjectRoutingError
 from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config import AppConfig
 from llama_pack.core.threads.service import ThreadChatError, ThreadService
@@ -120,6 +121,9 @@ async def controller_chat(
         response, meta = await proxy.chat_with_meta(compat["model"], request_payload)
     except ChatAdmissionError as exc:
         raise CompatChatHTTPError(exc.status_code, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
+    except ProjectRoutingError as exc:
+        service.record_compat_error(compat["thread_id"], exc)
+        raise CompatChatHTTPError(exc.status_code, exc.detail, compatibility_headers(compat["thread_id"], compat["route"])) from exc
     except Exception as exc:
         service.record_compat_error(compat["thread_id"], exc)
         raise CompatChatHTTPError(502, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
@@ -182,6 +186,9 @@ async def controller_stream(
         stream, meta = await proxy.stream_with_meta(compat["model"], request_payload)
     except ChatAdmissionError as exc:
         raise CompatChatHTTPError(exc.status_code, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
+    except ProjectRoutingError as exc:
+        service.record_compat_error(compat["thread_id"], exc)
+        raise CompatChatHTTPError(exc.status_code, exc.detail, compatibility_headers(compat["thread_id"], compat["route"])) from exc
     except Exception as exc:
         service.record_compat_error(compat["thread_id"], exc)
         raise CompatChatHTTPError(502, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc

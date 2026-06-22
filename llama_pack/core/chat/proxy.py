@@ -18,6 +18,8 @@ from llama_pack.core.chat.context_management import (
 from llama_pack.core.chat.internal_payload import SKIP_CONTEXT_MANAGEMENT_KEY, TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
+from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
 from llama_pack.core.runtime.process_manager import ProcessManager
 
 
@@ -26,11 +28,29 @@ ChatStreamRequest = Callable[..., AsyncIterator[bytes]]
 logger = logging.getLogger(__name__)
 
 
+class ProjectRoutingError(Exception):
+    def __init__(self, status_code: int, detail: str) -> None:
+        super().__init__(detail)
+        self.status_code = status_code
+        self.detail = detail
+
+
 class ChatProxy:
-    def __init__(self, process_manager: ProcessManager, config: AppConfig, node_registry: NodeRegistry, request: ChatRequest | None = None, stream_request: ChatStreamRequest | None = None):
+    def __init__(
+        self,
+        process_manager: ProcessManager,
+        config: AppConfig,
+        node_registry: NodeRegistry,
+        request: ChatRequest | None = None,
+        stream_request: ChatStreamRequest | None = None,
+        project_store: ProjectStoreOrm | None = None,
+        project_graph_store: ProjectGraphStoreOrm | None = None,
+    ):
         self.process_manager = process_manager
         self.config = config
         self.node_registry = node_registry
+        self.project_store = project_store
+        self.project_graph_store = project_graph_store
         self._request = self._adapt_request_callable(request or self._default_request)
         self._stream_request = self._adapt_stream_request_callable(stream_request or self._default_stream_request)
         self._resolver = TargetResolver(process_manager, node_registry, config)
@@ -178,6 +198,7 @@ class ChatProxy:
                 target = await self._resolver.resolve_controller_target(model_name, target_selector)
             use_openai_endpoint = request_payload.get("tool_runtime") == "agent"
             if use_openai_endpoint:
+                self._require_project_ready_for_node(payload.get("project_id"), target)
                 request_payload["model"] = model_name
             url, headers, verify_tls, route_meta = self._transport.chat_transport_for_target(
                 target,
@@ -189,6 +210,26 @@ class ChatProxy:
 
         local_target = self._resolver.resolve_local_target(model_name)
         return local_target["url"], request_payload, {}, True, {"route": "local"}
+
+    def _require_project_ready_for_node(self, project_id: object, target: dict[str, str]) -> None:
+        if project_id is None or target["kind"] != "remote":
+            return
+        if self.project_store is None or self.project_graph_store is None:
+            raise ProjectRoutingError(409, "Project routing stores are not configured")
+        project_id_value = str(project_id)
+        node_name = target["node_name"]
+        roots = self.project_store.list_node_roots(project_id_value)
+        if roots is None:
+            raise ProjectRoutingError(404, "Project not found")
+        allowed_roots = [
+            root for root in roots
+            if root["node_name"] == node_name and root["safe_root_status"] == "allowed"
+        ]
+        if not allowed_roots:
+            raise ProjectRoutingError(409, f"Project has no allowed root for node {node_name}")
+        active_snapshot = self.project_graph_store.get_active_snapshot_for_node(project_id_value, node_name)
+        if active_snapshot is None:
+            raise ProjectRoutingError(409, f"Project graph is not indexed for node {node_name}")
 
     async def _summarize_ad_hoc_payload(self, model_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         if bool(payload.get(SKIP_CONTEXT_MANAGEMENT_KEY)):

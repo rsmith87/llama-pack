@@ -113,6 +113,7 @@ class ProjectGraphStoreOrm:
                 for row in session.execute(
                     select(ProjectGraphSnapshotOrm.id).where(
                         ProjectGraphSnapshotOrm.project_id == snapshot.project_id,
+                        ProjectGraphSnapshotOrm.node_name == snapshot.node_name,
                         ProjectGraphSnapshotOrm.id != snapshot_id,
                     )
                 ).scalars()
@@ -179,7 +180,10 @@ class ProjectGraphStoreOrm:
             old_snapshot_ids = [
                 row
                 for row in session.execute(
-                    select(ProjectGraphSnapshotOrm.id).where(ProjectGraphSnapshotOrm.project_id == project_id)
+                    select(ProjectGraphSnapshotOrm.id).where(
+                        ProjectGraphSnapshotOrm.project_id == project_id,
+                        ProjectGraphSnapshotOrm.node_name == node_name,
+                    )
                 ).scalars()
             ]
             self._delete_snapshot_graphs(session, old_snapshot_ids, delete_snapshots=True)
@@ -223,7 +227,7 @@ class ProjectGraphStoreOrm:
                 raise KeyError(f"Project graph snapshot not found: {snapshot_id}")
             session.execute(
                 update(ProjectGraphSnapshotOrm)
-                .where(ProjectGraphSnapshotOrm.project_id == snapshot.project_id)
+                .where(ProjectGraphSnapshotOrm.project_id == snapshot.project_id, ProjectGraphSnapshotOrm.node_name == snapshot.node_name)
                 .values(active=0)
             )
             snapshot.status = "ready"
@@ -251,12 +255,21 @@ class ProjectGraphStoreOrm:
         return loaded
 
     def get_active_snapshot(self, project_id: str) -> dict[str, object] | None:
+        return self._active_snapshot(project_id=project_id, node_name=None)
+
+    def get_active_snapshot_for_node(self, project_id: str, node_name: str) -> dict[str, object] | None:
+        return self._active_snapshot(project_id=project_id, node_name=node_name)
+
+    def _active_snapshot(self, project_id: str, node_name: str | None) -> dict[str, object] | None:
         with session_scope(self.session_factory) as session:
-            row = session.execute(
+            stmt = (
                 select(ProjectGraphSnapshotOrm)
                 .where(ProjectGraphSnapshotOrm.project_id == project_id, ProjectGraphSnapshotOrm.active == 1)
                 .order_by(ProjectGraphSnapshotOrm.created_at.desc())
-            ).scalar_one_or_none()
+            )
+            if node_name is not None:
+                stmt = stmt.where(ProjectGraphSnapshotOrm.node_name == node_name)
+            row = session.execute(stmt).scalars().first()
             return self._snapshot_payload(row) if row is not None else None
 
     def get_latest_snapshot(self, project_id: str) -> dict[str, object] | None:

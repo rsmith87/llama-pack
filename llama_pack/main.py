@@ -342,6 +342,8 @@ def _configure_app_state(
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     app.state.project_store = ProjectStoreOrm(db_url=auth_urls.projects)
     app.state.project_graph_store = ProjectGraphStoreOrm(db_url=auth_urls.projects)
+    app.state.chat_proxy.project_store = app.state.project_store
+    app.state.chat_proxy.project_graph_store = app.state.project_graph_store
     if app_config.mode == "controller":
         app.state.benchmark_runner = BenchmarkRunner(app.state.benchmark_store, app.state.chat_proxy)
         app.state.memory_store = ChromaMemoryStore(app_config.memory)
