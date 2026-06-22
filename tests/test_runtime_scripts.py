@@ -123,6 +123,16 @@ def test_smoke_ocr_document_script_exposes_ppocrv5_defaults() -> None:
     assert "pip install pillow" in contents
 
 
+def test_smoke_ocr_document_script_exposes_tesseract_engine() -> None:
+    script = ROOT_DIR / "scripts" / "smoke_ocr_document.py"
+    contents = script.read_text(encoding="utf-8")
+
+    assert "--engine" in contents
+    assert "tesseract" in contents
+    assert "pdftoppm" in contents
+    assert "shutil.which" in contents
+
+
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     contents = read_script("start_frontend.sh")
 

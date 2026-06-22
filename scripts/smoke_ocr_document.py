@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
+import subprocess
 import tempfile
 from pathlib import Path
 from typing import Any
@@ -21,8 +23,14 @@ class OcrSmokeError(RuntimeError):
 
 
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run a local PaddleOCR smoke test against one document.")
+    parser = argparse.ArgumentParser(description="Run a local OCR smoke test against one document.")
     parser.add_argument("--file", required=True, help="Image or PDF file to OCR.")
+    parser.add_argument(
+        "--engine",
+        choices=["tesseract", "paddleocr"],
+        default="tesseract",
+        help="OCR engine to use.",
+    )
     parser.add_argument("--det-model", default=str(DEFAULT_DET_MODEL), help="PaddleOCR detection model directory.")
     parser.add_argument("--rec-model", default=str(DEFAULT_REC_MODEL), help="PaddleOCR recognition model directory.")
     parser.add_argument("--det-model-name", default=DEFAULT_DET_MODEL_NAME, help="PaddleOCR detection model name.")
@@ -45,6 +53,13 @@ def require_existing_directory(path: Path, label: str) -> None:
         raise OcrSmokeError(f"{label} model directory does not exist: {path}")
     if not path.is_dir():
         raise OcrSmokeError(f"{label} model path is not a directory: {path}")
+
+
+def require_command(command: str) -> str:
+    resolved = shutil.which(command)
+    if resolved is None:
+        raise OcrSmokeError(f"Required command is not installed or not on PATH: {command}")
+    return resolved
 
 
 def render_pdf_page(pdf_path: Path, page_index: int, scale: float, output_dir: Path) -> Path:
@@ -78,11 +93,48 @@ def render_pdf_page(pdf_path: Path, page_index: int, scale: float, output_dir: P
     return output_path
 
 
-def image_path_for_ocr(input_path: Path, page_index: int, scale: float, output_dir: Path) -> Path:
+def render_pdf_page_with_pdftoppm(pdf_path: Path, page_index: int, output_dir: Path) -> Path:
+    if page_index < 0:
+        raise OcrSmokeError(f"PDF page index must be non-negative: {page_index}")
+    pdftoppm = require_command("pdftoppm")
+    output_prefix = output_dir / f"{pdf_path.stem}-page"
+    page_number = page_index + 1
+    result = subprocess.run(
+        [
+            pdftoppm,
+            "-png",
+            "-f",
+            str(page_number),
+            "-l",
+            str(page_number),
+            "-singlefile",
+            str(pdf_path),
+            str(output_prefix),
+        ],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise OcrSmokeError(f"pdftoppm failed with exit code {result.returncode}: {result.stderr.strip()}")
+    output_path = output_prefix.with_suffix(".png")
+    if not output_path.exists():
+        raise OcrSmokeError(f"pdftoppm did not produce expected image: {output_path}")
+    return output_path
+
+
+def image_path_for_ocr(
+    input_path: Path,
+    page_index: int,
+    scale: float,
+    output_dir: Path,
+    engine: str,
+) -> Path:
     extension = input_path.suffix.lower()
     if extension in IMAGE_EXTENSIONS:
         return input_path
     if extension in PDF_EXTENSIONS:
+        if engine == "tesseract":
+            return render_pdf_page_with_pdftoppm(input_path, page_index, output_dir)
         return render_pdf_page(input_path, page_index, scale, output_dir)
     raise OcrSmokeError(f"Unsupported OCR smoke input type: {input_path.name}")
 
@@ -153,6 +205,18 @@ def run_ocr(
     return collect_text_items(raw_result)
 
 
+def run_tesseract(image_path: Path) -> str:
+    tesseract = require_command("tesseract")
+    result = subprocess.run(
+        [tesseract, str(image_path), "stdout"],
+        capture_output=True,
+        text=True,
+    )
+    if result.returncode != 0:
+        raise OcrSmokeError(f"tesseract failed with exit code {result.returncode}: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
 def print_report(input_path: Path, ocr_image_path: Path, items: list[dict[str, Any]], as_json: bool) -> None:
     if as_json:
         print(json.dumps({"file": str(input_path), "ocr_image": str(ocr_image_path), "items": items}, indent=2))
@@ -167,6 +231,17 @@ def print_report(input_path: Path, ocr_image_path: Path, items: list[dict[str, A
         print(f"- {item['text']}{suffix}")
 
 
+def print_tesseract_report(input_path: Path, ocr_image_path: Path, text: str, as_json: bool) -> None:
+    if as_json:
+        print(json.dumps({"file": str(input_path), "ocr_image": str(ocr_image_path), "text": text}, indent=2))
+        return
+
+    print(f"Input: {input_path}")
+    print(f"OCR image: {ocr_image_path}")
+    print("Detected text:")
+    print(text)
+
+
 def main() -> int:
     parser = build_parser()
     args = parser.parse_args()
@@ -176,12 +251,17 @@ def main() -> int:
 
     try:
         require_existing_file(input_path)
-        require_existing_directory(det_model, "Detection")
-        require_existing_directory(rec_model, "Recognition")
+        if args.engine == "paddleocr":
+            require_existing_directory(det_model, "Detection")
+            require_existing_directory(rec_model, "Recognition")
         with tempfile.TemporaryDirectory(prefix="llama-pack-ocr-smoke-") as tmp:
-            ocr_image_path = image_path_for_ocr(input_path, args.pdf_page, args.pdf_scale, Path(tmp))
-            items = run_ocr(ocr_image_path, det_model, rec_model, args.det_model_name, args.rec_model_name)
-            print_report(input_path, ocr_image_path, items, args.json)
+            ocr_image_path = image_path_for_ocr(input_path, args.pdf_page, args.pdf_scale, Path(tmp), args.engine)
+            if args.engine == "tesseract":
+                text = run_tesseract(ocr_image_path)
+                print_tesseract_report(input_path, ocr_image_path, text, args.json)
+            else:
+                items = run_ocr(ocr_image_path, det_model, rec_model, args.det_model_name, args.rec_model_name)
+                print_report(input_path, ocr_image_path, items, args.json)
     except OcrSmokeError as exc:
         parser.exit(2, f"ERROR: {exc}\n")
     return 0
