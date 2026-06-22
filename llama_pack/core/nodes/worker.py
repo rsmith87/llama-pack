@@ -701,15 +701,26 @@ class AgentWorker:
     async def _default_request(method: str, url: str, payload: dict[str, Any] | None, headers: dict[str, str] | None) -> Any:
         async with httpx.AsyncClient(timeout=None) as client:
             response = await client.request(method, url, json=payload, headers=headers or None)
-            response.raise_for_status()
+            _raise_for_status_with_body(response)
             return response.json() if response.content else {"ok": True}
 
     @staticmethod
     async def _default_transfer_stream(url: str, headers: dict[str, str]) -> Any:
         async with httpx.AsyncClient(timeout=None) as client:
             response = await client.get(url, headers=headers)
-            response.raise_for_status()
+            _raise_for_status_with_body(response)
             content_type = response.headers.get("content-type", "")
             if "application/json" in content_type:
                 return response.json()
             return io.BytesIO(response.content)
+
+
+def _raise_for_status_with_body(response: httpx.Response) -> None:
+    try:
+        response.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        body = response.text[:2000] if response.text else ""
+        message = str(exc)
+        if body:
+            message = f"{message}\nResponse body: {body}"
+        raise httpx.HTTPStatusError(message, request=exc.request, response=exc.response) from exc

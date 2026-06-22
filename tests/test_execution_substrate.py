@@ -1,6 +1,7 @@
 import asyncio
 import json
 
+import httpx
 import pytest
 
 from llama_pack.core.code_graph.models import GraphIndexProgress, GraphIndexResult
@@ -315,6 +316,30 @@ async def test_agent_worker_authenticates_work_requests_with_agent_api_key():
     assert processed == 0
     assert calls[0][1] == "http://controller/lm-api/v1/nodes/agent-a/work/claim"
     assert calls[0][3] == {"X-Llama-Pack-Key": "agent-key"}
+
+
+@pytest.mark.asyncio
+async def test_agent_worker_default_request_includes_error_response_body(monkeypatch):
+    request = httpx.Request("POST", "https://pi-controller.local/lm-api/v1/nodes/linux-2080ti/work/claim")
+    response = httpx.Response(502, request=request, text="upstream controller unavailable")
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def request(self, method, url, json, headers):
+            return response
+
+    monkeypatch.setattr("llama_pack.core.nodes.worker.httpx.AsyncClient", FakeClient)
+
+    with pytest.raises(httpx.HTTPStatusError, match="upstream controller unavailable"):
+        await AgentWorker._default_request("POST", str(request.url), {"max_jobs": 1}, {"X-Llama-Pack-Key": "node-secret"})
 
 
 @pytest.mark.asyncio
