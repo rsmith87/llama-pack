@@ -18,7 +18,9 @@ class PromptBuilder:
                         "For each edge use this exact format: from_symbol=... to_symbol=... file=... line=... statement='...'. "
                         "Answers without this exact edge evidence are unverified. "
                         "If a handoff is inferred but no direct source statement verifies it, mark that edge "
-                        "unverified instead of presenting it as fact."
+                        "unverified instead of presenting it as fact. "
+                        "If the answer says which tests cover behavior, read the relevant test source first. "
+                        "Do not claim test coverage from filenames, search results, or memory alone."
                     ),
                 },
             )

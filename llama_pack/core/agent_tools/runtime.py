@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -52,6 +53,7 @@ class AgentToolLoop:
         tool_defs = self.registry.openai_tools()
         last_meta: dict[str, Any] = {}
         source_tool_evidence_available = False
+        test_source_tool_evidence_available = False
 
         for iteration in range(max_iterations):
             self._emit(
@@ -80,6 +82,7 @@ class AgentToolLoop:
                         report = verifier.verify(
                             str(message.get("content") or ""),
                             source_evidence_available=source_tool_evidence_available or retries_used > 0,
+                            test_source_evidence_available=test_source_tool_evidence_available,
                         )
                         verification_report = report
                         verification_status = _verification_status(report)
@@ -94,6 +97,7 @@ class AgentToolLoop:
                                 "missing_paths": report.missing_paths,
                                 "missing_symbols": report.missing_symbols,
                                 "missing_source_evidence": report.missing_source_evidence,
+                                "missing_test_source_evidence": report.missing_test_source_evidence,
                                 "issues": report.issues,
                             },
                         )
@@ -147,6 +151,8 @@ class AgentToolLoop:
                     model=model_name,
                     tool_call_id=tool_call_id,
                 )
+                if bool(result.get("ok")):
+                    test_source_tool_evidence_available = test_source_tool_evidence_available or _result_has_test_source_evidence(result)
                 messages.append(
                     {
                         "role": "tool",
@@ -198,6 +204,7 @@ def _attach_verification_metadata(
         "verified_symbols": report.verified_symbols,
         "missing_symbols": report.missing_symbols,
         "missing_source_evidence": report.missing_source_evidence,
+        "missing_test_source_evidence": report.missing_test_source_evidence,
         "issues": report.issues,
     }
     return {**response, "llama_pack": metadata}
@@ -239,6 +246,34 @@ def _parse_arguments(raw: Any) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return parsed if isinstance(parsed, dict) else {}
+
+
+def _result_has_test_source_evidence(result: dict[str, Any]) -> bool:
+    return any(_is_test_source_path(value) for value in _walk_result_strings(result))
+
+
+def _walk_result_strings(value: Any) -> list[str]:
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        values: list[str] = []
+        for item in value:
+            values.extend(_walk_result_strings(item))
+        return values
+    if isinstance(value, dict):
+        values: list[str] = []
+        for item in value.values():
+            values.extend(_walk_result_strings(item))
+        return values
+    return []
+
+
+def _is_test_source_path(value: str) -> bool:
+    path = value.replace("\\", "/")
+    if path.startswith("tests/") and path.endswith(".py"):
+        return True
+    parts = Path(path).parts
+    return "tests" in parts and path.endswith(".py")
 
 
 def _request_max_iterations(payload: dict[str, Any], configured_max_iterations: int) -> int:

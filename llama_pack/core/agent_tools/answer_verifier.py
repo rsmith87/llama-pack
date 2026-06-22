@@ -11,6 +11,7 @@ _PATH_RE = re.compile(r"`?((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_]
 _QUALIFIED_SYMBOL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]+)+)\b")
 _CLASS_SYMBOL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*)\b")
 _TRACE_HINT_RE = re.compile(r"(ordered call path|runtime path|handoff|from_symbol=|to_symbol=)", re.IGNORECASE)
+_TEST_COVERAGE_HINT_RE = re.compile(r"(covering tests|tests cover|which tests cover|covered by|coverage)", re.IGNORECASE)
 _TRACE_EDGE_RE = re.compile(
     r"from_symbol=(?P<from_symbol>\S+)\s+"
     r"to_symbol=(?P<to_symbol>\S+)\s+"
@@ -43,12 +44,15 @@ class AnswerVerificationReport:
     verified_symbols: list[str]
     missing_symbols: list[str]
     missing_source_evidence: bool
+    missing_test_source_evidence: bool
     issues: list[dict[str, str | int]]
 
     def feedback(self) -> str:
         parts: list[str] = []
         if self.missing_source_evidence:
             parts.append("No project/source tool evidence was captured for these codebase claims.")
+        if self.missing_test_source_evidence:
+            parts.append("No test source tool evidence was captured for these test coverage claims.")
         if self.missing_paths:
             parts.append("Missing file paths: " + ", ".join(self.missing_paths))
         if self.missing_symbols:
@@ -63,7 +67,12 @@ class AnswerVerifier:
     def __init__(self, context: ProjectGraphToolContext) -> None:
         self.context = context
 
-    def verify(self, answer: str, source_evidence_available: bool) -> AnswerVerificationReport:
+    def verify(
+        self,
+        answer: str,
+        source_evidence_available: bool,
+        test_source_evidence_available: bool,
+    ) -> AnswerVerificationReport:
         claims = extract_answer_claims(answer)
         claim_spans = extract_answer_claim_spans(answer)
         verified_paths: list[str] = []
@@ -89,13 +98,16 @@ class AnswerVerifier:
                 issues.append(_issue_from_claim("missing_symbol", claim))
         trace_issues = self._trace_evidence_issues(answer)
         issues.extend(trace_issues)
+        test_source_issues = self._test_source_evidence_issues(answer, claims.paths, test_source_evidence_available)
+        issues.extend(test_source_issues)
         return AnswerVerificationReport(
-            ok=not missing_paths and not missing_symbols and not missing_source_evidence and not trace_issues,
+            ok=not missing_paths and not missing_symbols and not missing_source_evidence and not trace_issues and not test_source_issues,
             verified_paths=verified_paths,
             missing_paths=missing_paths,
             verified_symbols=verified_symbols,
             missing_symbols=missing_symbols,
             missing_source_evidence=missing_source_evidence,
+            missing_test_source_evidence=bool(test_source_issues),
             issues=issues,
         )
 
@@ -160,6 +172,28 @@ class AnswerVerifier:
                 }
             )
         return issues
+
+    def _test_source_evidence_issues(
+        self,
+        answer: str,
+        paths: list[str],
+        test_source_evidence_available: bool,
+    ) -> list[dict[str, str | int]]:
+        if test_source_evidence_available:
+            return []
+        hint = _TEST_COVERAGE_HINT_RE.search(answer)
+        if hint is None or not any(_is_test_path(path) for path in paths):
+            return []
+        return [
+            {
+                "kind": "missing_source_evidence",
+                "value": "test coverage claims",
+                "start": hint.start(1),
+                "end": hint.end(1),
+                "excerpt": hint.group(1),
+                "severity": "failed",
+            }
+        ]
 
     def _source_statement_status(self, file_path: str, line_value: str, statement: str) -> str:
         active = self.context.store.get_active_snapshot(self.context.project_id)
@@ -238,6 +272,10 @@ def _unique(values: list[str]) -> list[str]:
         seen.add(value)
         unique_values.append(value)
     return unique_values
+
+
+def _is_test_path(path: str) -> bool:
+    return path == "tests" or path.startswith("tests/") or "/tests/" in path
 
 
 def _unique_claim_spans(claims: list[AnswerClaim]) -> list[AnswerClaim]:

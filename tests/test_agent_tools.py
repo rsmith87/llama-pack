@@ -165,6 +165,7 @@ def test_answer_verifier_reports_missing_paths_and_symbols(tmp_path):
         "Use `llama_pack/core/benchmarks/runner.py`, `src/repositories/sample_repository.py`, "
         "BenchmarkRunner, and SampleRepository.save.",
         source_evidence_available=True,
+        test_source_evidence_available=True,
     )
 
     assert report.ok is False
@@ -185,7 +186,7 @@ def test_answer_verifier_reports_issue_spans_for_missing_claims(tmp_path):
     verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
 
     answer = "Edit `src/repositories/sample_repository.py`, then call SampleRepository.save."
-    report = verifier.verify(answer, source_evidence_available=True)
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
 
     assert report.ok is False
     assert report.issues == [
@@ -275,7 +276,7 @@ def test_answer_verifier_requires_structured_trace_edge_evidence(tmp_path):
         "Handoff: In llama_pack/api/routes/benchmarks.py at line 123: "
         "asyncio.create_task(runner.execute_run(run[\"id\"]))"
     )
-    report = verifier.verify(answer, source_evidence_available=True)
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
 
     assert report.ok is False
     assert report.issues == [
@@ -285,6 +286,54 @@ def test_answer_verifier_requires_structured_trace_edge_evidence(tmp_path):
             "start": 0,
             "end": len("Ordered Call Path"),
             "excerpt": "Ordered Call Path",
+            "severity": "failed",
+        }
+    ]
+
+
+def test_answer_verifier_requires_test_source_evidence_for_test_coverage_claims(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    test_source = root / "tests" / "test_benchmark_api.py"
+    test_source.parent.mkdir(parents=True)
+    test_source.write_text("def test_start_runs_returns_202_with_pending_runs():\n    pass\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-test-benchmark-api",
+                "path": "tests/test_benchmark_api.py",
+                "language": "python",
+                "size_bytes": test_source.stat().st_size,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = "Covering tests: tests/test_benchmark_api.py covers the route and runner orchestration."
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=False)
+
+    assert report.ok is False
+    assert report.issues == [
+        {
+            "kind": "missing_source_evidence",
+            "value": "test coverage claims",
+            "start": 0,
+            "end": len("Covering tests"),
+            "excerpt": "Covering tests",
             "severity": "failed",
         }
     ]
@@ -357,7 +406,7 @@ def test_answer_verifier_rejects_trace_edge_statement_not_in_file(tmp_path):
         "1. from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
         f"file=llama_pack/api/routes/benchmarks.py line=1 statement='{statement}'"
     )
-    report = verifier.verify(answer, source_evidence_available=True)
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
 
     assert report.ok is False
     assert report.issues == [
@@ -424,7 +473,7 @@ def test_answer_verifier_rejects_trace_edge_statement_on_wrong_line(tmp_path):
         "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
         f"file=llama_pack/api/routes/benchmarks.py line=1 statement='{statement}'"
     )
-    report = verifier.verify(answer, source_evidence_available=True)
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
 
     assert report.ok is False
     assert report.issues == [
@@ -491,7 +540,7 @@ def test_answer_verifier_accepts_trace_edge_statement_on_claimed_line(tmp_path):
         "file=llama_pack/api/routes/benchmarks.py line=2 "
         "statement='asyncio.create_task(runner.execute_run(run[\"id\"]))'"
     )
-    report = verifier.verify(answer, source_evidence_available=True)
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
 
     assert report.ok is True
     assert report.issues == []
@@ -549,7 +598,7 @@ def test_answer_verifier_checks_trace_edge_without_heading(tmp_path):
         "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
         f"file=llama_pack/api/routes/benchmarks.py line=1 statement='{statement}'"
     )
-    report = verifier.verify(answer, source_evidence_available=True)
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
 
     assert report.ok is False
     assert report.issues == [
@@ -634,6 +683,7 @@ async def test_tool_loop_returns_structured_verification_metadata_for_verified_a
         "verified_symbols": ["BenchmarkRunner"],
         "missing_symbols": [],
         "missing_source_evidence": False,
+        "missing_test_source_evidence": False,
         "issues": [],
     }
 
@@ -715,6 +765,8 @@ def test_prompt_builder_requires_source_trace_evidence_contract():
     assert "from_symbol=... to_symbol=... file=... line=... statement='...'" in built[0]["content"]
     assert "Answers without this exact edge evidence are unverified" in built[0]["content"]
     assert "mark that edge unverified" in built[0]["content"]
+    assert "read the relevant test source first" in built[0]["content"]
+    assert "Do not claim test coverage from filenames, search results, or memory alone" in built[0]["content"]
 
 
 def test_prompt_builder_does_not_inject_previous_answer_for_unrelated_request():
@@ -1586,6 +1638,128 @@ async def test_tool_loop_revises_trace_answer_without_structured_edge_evidence(t
     assert response["llama_pack"]["verification"]["status"] == "verified"
     assert "from_symbol=benchmarks.start_runs" in response["choices"][0]["message"]["content"]
     assert "Unsupported source evidence: runtime trace edges" in proxy.messages[1][-1]["content"]
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_revises_test_coverage_claim_without_test_source_evidence(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    runner_source = root / "llama_pack" / "core" / "benchmarks" / "runner.py"
+    runner_source.parent.mkdir(parents=True)
+    runner_source.write_text("class BenchmarkRunner:\n    pass\n", encoding="utf-8")
+    test_source = root / "tests" / "test_benchmark_api.py"
+    test_source.parent.mkdir(parents=True)
+    test_source.write_text("def test_runner_executes_samples_and_aggregates():\n    pass\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": runner_source.stat().st_size,
+                "content_hash": "hash-runner",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            },
+            {
+                "id": "file-test-benchmark-api",
+                "path": "tests/test_benchmark_api.py",
+                "language": "python",
+                "size_bytes": test_source.stat().st_size,
+                "content_hash": "hash-test",
+                "mtime_ns": 2,
+                "parse_status": "parsed",
+                "parse_error": None,
+            },
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "safe_roots": [str(root)],
+                "tools": {
+                    "read_project_file": {
+                        "type": "file_read_dynamic",
+                        "description": "Read a project file.",
+                        "path": str(root),
+                    }
+                },
+            },
+        }
+    )
+
+    class Proxy:
+        def __init__(self):
+            self.messages = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.messages.append(payload["messages"])
+            if len(self.messages) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "type": "function",
+                                        "function": {
+                                            "name": "read_project_file",
+                                            "arguments": json.dumps({"path": "llama_pack/core/benchmarks/runner.py"}),
+                                        },
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            if len(self.messages) == 2:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Covering tests: tests/test_benchmark_api.py covers the runner path.",
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "I could not verify which tests cover the runner path.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    proxy = Proxy()
+    response, _meta = await AgentToolLoop(
+        config,
+        proxy,
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "which tests cover BenchmarkRunner?"}]})
+
+    assert response["choices"][0]["message"]["content"] == "I could not verify which tests cover the runner path."
+    assert response["llama_pack"]["verification"]["status"] == "no_code_claims"
+    assert "No test source tool evidence was captured for these test coverage claims." in proxy.messages[2][-1]["content"]
 
 
 @pytest.mark.asyncio
