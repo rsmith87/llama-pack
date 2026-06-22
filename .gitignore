@@ -62,4 +62,6 @@ frontend/src/generated
 !frontend/src/features/logs
 llama_pack/ui/assets
 llama_pack/ui/index.html
+plugins/llama-pack-business
+tmp
 
