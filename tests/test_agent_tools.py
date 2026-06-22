@@ -355,7 +355,7 @@ def test_answer_verifier_rejects_trace_edge_statement_not_in_file(tmp_path):
     answer = (
         "Ordered call path with source evidence:\n"
         "1. from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
-        f"file=llama_pack/api/routes/benchmarks.py statement='{statement}'"
+        f"file=llama_pack/api/routes/benchmarks.py line=1 statement='{statement}'"
     )
     report = verifier.verify(answer, source_evidence_available=True)
 
@@ -370,6 +370,131 @@ def test_answer_verifier_rejects_trace_edge_statement_not_in_file(tmp_path):
             "severity": "failed",
         }
     ]
+
+
+def test_answer_verifier_rejects_trace_edge_statement_on_wrong_line(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    source = root / "llama_pack" / "api" / "routes" / "benchmarks.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def helper():\n    asyncio.create_task(runner.execute_run(run[\"id\"]))\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-benchmarks",
+                "path": "llama_pack/api/routes/benchmarks.py",
+                "language": "python",
+                "size_bytes": source.stat().st_size,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-execute-run",
+                "file_id": "file-benchmarks",
+                "name": "execute_run",
+                "qualified_name": "llama_pack.core.benchmarks.runner.BenchmarkRunner.execute_run",
+                "kind": "method",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 2,
+                "signature": "async def execute_run",
+                "doc_summary": None,
+                "exported": False,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    statement = "asyncio.create_task(runner.execute_run(run[\"id\"]))"
+    answer = (
+        "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
+        f"file=llama_pack/api/routes/benchmarks.py line=1 statement='{statement}'"
+    )
+    report = verifier.verify(answer, source_evidence_available=True)
+
+    assert report.ok is False
+    assert report.issues == [
+        {
+            "kind": "missing_source_evidence",
+            "value": "line=1",
+            "start": answer.index("line=1"),
+            "end": answer.index("line=1") + len("line=1"),
+            "excerpt": "line=1",
+            "severity": "failed",
+        }
+    ]
+
+
+def test_answer_verifier_accepts_trace_edge_statement_on_claimed_line(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    source = root / "llama_pack" / "api" / "routes" / "benchmarks.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def helper():\n    asyncio.create_task(runner.execute_run(run[\"id\"]))\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-benchmarks",
+                "path": "llama_pack/api/routes/benchmarks.py",
+                "language": "python",
+                "size_bytes": source.stat().st_size,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-execute-run",
+                "file_id": "file-benchmarks",
+                "name": "execute_run",
+                "qualified_name": "llama_pack.core.benchmarks.runner.BenchmarkRunner.execute_run",
+                "kind": "method",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 2,
+                "signature": "async def execute_run",
+                "doc_summary": None,
+                "exported": False,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = (
+        "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
+        "file=llama_pack/api/routes/benchmarks.py line=2 "
+        "statement='asyncio.create_task(runner.execute_run(run[\"id\"]))'"
+    )
+    report = verifier.verify(answer, source_evidence_available=True)
+
+    assert report.ok is True
+    assert report.issues == []
 
 
 def test_answer_verifier_checks_trace_edge_without_heading(tmp_path):
@@ -422,7 +547,7 @@ def test_answer_verifier_checks_trace_edge_without_heading(tmp_path):
     statement = "asyncio.create_task(runner.execute_run(run_id))"
     answer = (
         "from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
-        f"file=llama_pack/api/routes/benchmarks.py statement='{statement}'"
+        f"file=llama_pack/api/routes/benchmarks.py line=1 statement='{statement}'"
     )
     report = verifier.verify(answer, source_evidence_available=True)
 
@@ -587,7 +712,7 @@ def test_prompt_builder_requires_source_trace_evidence_contract():
     assert "from_symbol" in built[0]["content"]
     assert "to_symbol" in built[0]["content"]
     assert "statement" in built[0]["content"]
-    assert "from_symbol=... to_symbol=... file=... statement='...'" in built[0]["content"]
+    assert "from_symbol=... to_symbol=... file=... line=... statement='...'" in built[0]["content"]
     assert "Answers without this exact edge evidence are unverified" in built[0]["content"]
     assert "mark that edge unverified" in built[0]["content"]
 
@@ -1443,6 +1568,7 @@ async def test_tool_loop_revises_trace_answer_without_structured_edge_evidence(t
                             "content": (
                                 "1. from_symbol=benchmarks.start_runs to_symbol=BenchmarkRunner.execute_run "
                                 "file=llama_pack/api/routes/benchmarks.py "
+                                "line=1 "
                                 "statement='asyncio.create_task(runner.execute_run(run[\"id\"]))'"
                             ),
                         }

@@ -15,6 +15,7 @@ _TRACE_EDGE_RE = re.compile(
     r"from_symbol=(?P<from_symbol>\S+)\s+"
     r"to_symbol=(?P<to_symbol>\S+)\s+"
     r"file=(?P<file>\S+)\s+"
+    r"(?P<line_label>line|lines)=(?P<line_value>\d+(?:-\d+)?)\s+"
     r"statement=(?P<quote>['\"])(?P<statement>.*?)(?P=quote)"
 )
 
@@ -132,7 +133,21 @@ class AnswerVerifier:
         for edge in edges:
             file_path = edge.group("file")
             statement = edge.group("statement")
-            if self._source_statement_exists(file_path, statement):
+            line_spec = f"{edge.group('line_label')}={edge.group('line_value')}"
+            source_status = self._source_statement_status(file_path, edge.group("line_value"), statement)
+            if source_status == "ok":
+                continue
+            if source_status == "wrong_line":
+                issues.append(
+                    {
+                        "kind": "missing_source_evidence",
+                        "value": line_spec,
+                        "start": edge.start("line_label"),
+                        "end": edge.end("line_value"),
+                        "excerpt": line_spec,
+                        "severity": "failed",
+                    }
+                )
                 continue
             issues.append(
                 {
@@ -146,20 +161,31 @@ class AnswerVerifier:
             )
         return issues
 
-    def _source_statement_exists(self, file_path: str, statement: str) -> bool:
+    def _source_statement_status(self, file_path: str, line_value: str, statement: str) -> str:
         active = self.context.store.get_active_snapshot(self.context.project_id)
         if active is None:
-            return False
+            return "missing_statement"
         root_path = active.get("root_path")
         if not isinstance(root_path, str) or not root_path.strip():
-            return False
+            return "missing_statement"
         source_path = (Path(root_path) / file_path).resolve()
         root = Path(root_path).resolve()
         if root not in source_path.parents and source_path != root:
-            return False
+            return "missing_statement"
         if not source_path.exists() or not source_path.is_file():
-            return False
-        return statement in source_path.read_text(encoding="utf-8")
+            return "missing_statement"
+        content = source_path.read_text(encoding="utf-8")
+        if statement not in content:
+            return "missing_statement"
+        line_span = _parse_line_span(line_value)
+        if line_span is None:
+            return "wrong_line"
+        lines = content.splitlines()
+        start_line, end_line = line_span
+        if start_line > len(lines) or end_line > len(lines):
+            return "wrong_line"
+        selected = "\n".join(lines[start_line - 1:end_line])
+        return "ok" if statement in selected else "wrong_line"
 
 
 def extract_answer_claims(answer: str) -> AnswerClaims:
@@ -228,3 +254,15 @@ def _unique_claim_spans(claims: list[AnswerClaim]) -> list[AnswerClaim]:
 
 def _is_inside_span(start: int, end: int, spans: list[tuple[int, int]]) -> bool:
     return any(span_start <= start and end <= span_end for span_start, span_end in spans)
+
+
+def _parse_line_span(value: str) -> tuple[int, int] | None:
+    if "-" not in value:
+        line = int(value)
+        return (line, line) if line >= 1 else None
+    raw_start, raw_end = value.split("-", 1)
+    start = int(raw_start)
+    end = int(raw_end)
+    if start < 1 or end < start:
+        return None
+    return start, end
