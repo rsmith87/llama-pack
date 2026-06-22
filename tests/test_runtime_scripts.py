@@ -80,6 +80,46 @@ def test_install_ocr_model_script_downloads_ppocrv5_to_repo_models_dir() -> None
     assert "snapshot_download" in contents
 
 
+def test_smoke_ocr_document_script_validates_paths_without_loading_ocr(tmp_path: Path) -> None:
+    script = ROOT_DIR / "scripts" / "smoke_ocr_document.py"
+    missing_file = tmp_path / "missing.png"
+    det_model = tmp_path / "det"
+    rec_model = tmp_path / "rec"
+    det_model.mkdir()
+    rec_model.mkdir()
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(script),
+            "--file",
+            str(missing_file),
+            "--det-model",
+            str(det_model),
+            "--rec-model",
+            str(rec_model),
+        ],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 2
+    assert f"OCR input file does not exist: {missing_file}" in result.stderr
+
+
+def test_smoke_ocr_document_script_exposes_ppocrv5_defaults() -> None:
+    script = ROOT_DIR / "scripts" / "smoke_ocr_document.py"
+    contents = script.read_text(encoding="utf-8")
+
+    assert script.exists()
+    assert script.stat().st_mode & S_IXUSR
+    assert "./models/ocr/pp-ocrv5-server/det" in contents
+    assert "./models/ocr/pp-ocrv5-server/rec" in contents
+    assert "PaddleOCR" in contents
+    assert "pypdfium2" in contents
+
+
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     contents = read_script("start_frontend.sh")
 
@@ -176,6 +216,8 @@ def test_runtime_shell_scripts_parse_cleanly() -> None:
     ]:
         subprocess.run(["bash", "-n", str(ROOT_DIR / script)], check=True)
 
+    subprocess.run(["python3", "-m", "py_compile", str(ROOT_DIR / "scripts" / "smoke_ocr_document.py")], check=True)
+
 
 def test_runtime_shell_scripts_are_executable() -> None:
     for script in [
@@ -194,6 +236,7 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/renew_caddy_step_cert.sh",
         "scripts/install_llama_cpp.sh",
         "scripts/install_ocr_model.sh",
+        "scripts/smoke_ocr_document.py",
         "scripts/refresh_curated_catalog.py",
         "scripts/setup_llama_pack.py",
         "scripts/setup_llama_pack.sh",
