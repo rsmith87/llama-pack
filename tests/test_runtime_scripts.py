@@ -116,8 +116,11 @@ def test_smoke_ocr_document_script_exposes_ppocrv5_defaults() -> None:
     assert script.stat().st_mode & S_IXUSR
     assert "./models/ocr/pp-ocrv5-server/det" in contents
     assert "./models/ocr/pp-ocrv5-server/rec" in contents
+    assert "PP-OCRv5_server_det" in contents
+    assert "PP-OCRv5_server_rec" in contents
     assert "PaddleOCR" in contents
     assert "pypdfium2" in contents
+    assert "pip install pillow" in contents
 
 
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:

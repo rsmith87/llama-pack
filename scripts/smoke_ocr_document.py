@@ -10,6 +10,8 @@ from typing import Any
 
 DEFAULT_DET_MODEL = Path("./models/ocr/pp-ocrv5-server/det")
 DEFAULT_REC_MODEL = Path("./models/ocr/pp-ocrv5-server/rec")
+DEFAULT_DET_MODEL_NAME = "PP-OCRv5_server_det"
+DEFAULT_REC_MODEL_NAME = "PP-OCRv5_server_rec"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff", ".bmp"}
 PDF_EXTENSIONS = {".pdf"}
 
@@ -23,6 +25,8 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--file", required=True, help="Image or PDF file to OCR.")
     parser.add_argument("--det-model", default=str(DEFAULT_DET_MODEL), help="PaddleOCR detection model directory.")
     parser.add_argument("--rec-model", default=str(DEFAULT_REC_MODEL), help="PaddleOCR recognition model directory.")
+    parser.add_argument("--det-model-name", default=DEFAULT_DET_MODEL_NAME, help="PaddleOCR detection model name.")
+    parser.add_argument("--rec-model-name", default=DEFAULT_REC_MODEL_NAME, help="PaddleOCR recognition model name.")
     parser.add_argument("--pdf-page", type=int, default=0, help="Zero-based PDF page index to render for OCR.")
     parser.add_argument("--pdf-scale", type=float, default=2.0, help="PDF render scale used before OCR.")
     parser.add_argument("--json", action="store_true", help="Print structured JSON instead of a text report.")
@@ -63,7 +67,12 @@ def render_pdf_page(pdf_path: Path, page_index: int, scale: float, output_dir: P
 
     page = document[page_index]
     bitmap = page.render(scale=scale)
-    image = bitmap.to_pil()
+    try:
+        image = bitmap.to_pil()
+    except ImportError as exc:
+        raise OcrSmokeError(
+            "Pillow is required to render PDF pages for OCR. Install it in the OCR Python environment with `pip install pillow`."
+        ) from exc
     output_path = output_dir / f"{pdf_path.stem}-page-{page_index + 1}.png"
     image.save(output_path)
     return output_path
@@ -78,7 +87,7 @@ def image_path_for_ocr(input_path: Path, page_index: int, scale: float, output_d
     raise OcrSmokeError(f"Unsupported OCR smoke input type: {input_path.name}")
 
 
-def create_paddle_ocr(det_model: Path, rec_model: Path) -> Any:
+def create_paddle_ocr(det_model: Path, rec_model: Path, det_model_name: str, rec_model_name: str) -> Any:
     try:
         from paddleocr import PaddleOCR
     except ImportError as exc:
@@ -89,7 +98,9 @@ def create_paddle_ocr(det_model: Path, rec_model: Path) -> Any:
 
     try:
         return PaddleOCR(
+            text_detection_model_name=det_model_name,
             text_detection_model_dir=str(det_model),
+            text_recognition_model_name=rec_model_name,
             text_recognition_model_dir=str(rec_model),
             use_doc_orientation_classify=False,
             use_doc_unwarping=False,
@@ -127,8 +138,14 @@ def collect_text_items(raw_result: Any) -> list[dict[str, Any]]:
     return items
 
 
-def run_ocr(image_path: Path, det_model: Path, rec_model: Path) -> list[dict[str, Any]]:
-    ocr = create_paddle_ocr(det_model, rec_model)
+def run_ocr(
+    image_path: Path,
+    det_model: Path,
+    rec_model: Path,
+    det_model_name: str,
+    rec_model_name: str,
+) -> list[dict[str, Any]]:
+    ocr = create_paddle_ocr(det_model, rec_model, det_model_name, rec_model_name)
     if hasattr(ocr, "predict"):
         raw_result = ocr.predict(str(image_path))
     else:
@@ -163,7 +180,7 @@ def main() -> int:
         require_existing_directory(rec_model, "Recognition")
         with tempfile.TemporaryDirectory(prefix="llama-pack-ocr-smoke-") as tmp:
             ocr_image_path = image_path_for_ocr(input_path, args.pdf_page, args.pdf_scale, Path(tmp))
-            items = run_ocr(ocr_image_path, det_model, rec_model)
+            items = run_ocr(ocr_image_path, det_model, rec_model, args.det_model_name, args.rec_model_name)
             print_report(input_path, ocr_image_path, items, args.json)
     except OcrSmokeError as exc:
         parser.exit(2, f"ERROR: {exc}\n")
