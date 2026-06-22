@@ -100,8 +100,15 @@ class AnswerVerifier:
         issues.extend(trace_issues)
         test_source_issues = self._test_source_evidence_issues(answer, claims.paths, test_source_evidence_available)
         issues.extend(test_source_issues)
+        empty_answer_issues = _empty_answer_issues(answer)
+        issues.extend(empty_answer_issues)
         return AnswerVerificationReport(
-            ok=not missing_paths and not missing_symbols and not missing_source_evidence and not trace_issues and not test_source_issues,
+            ok=not missing_paths
+            and not missing_symbols
+            and not missing_source_evidence
+            and not trace_issues
+            and not test_source_issues
+            and not empty_answer_issues,
             verified_paths=verified_paths,
             missing_paths=missing_paths,
             verified_symbols=verified_symbols,
@@ -276,6 +283,21 @@ def _unique(values: list[str]) -> list[str]:
 
 def _is_test_path(path: str) -> bool:
     return path == "tests" or path.startswith("tests/") or "/tests/" in path
+
+
+def _empty_answer_issues(answer: str) -> list[dict[str, str | int]]:
+    if answer.strip():
+        return []
+    return [
+        {
+            "kind": "missing_source_evidence",
+            "value": "assistant answer",
+            "start": 0,
+            "end": 0,
+            "excerpt": "",
+            "severity": "failed",
+        }
+    ]
 
 
 def _unique_claim_spans(claims: list[AnswerClaim]) -> list[AnswerClaim]:

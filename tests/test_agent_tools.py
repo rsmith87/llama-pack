@@ -1881,6 +1881,47 @@ async def test_tool_loop_fails_closed_when_revised_answer_is_unverified(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_tool_loop_fails_closed_when_revised_answer_is_empty(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config({"mode": "agent", "log_dir": str(tmp_path), "agent_tools": {"enabled": True}})
+
+    class Proxy:
+        def __init__(self):
+            self.messages = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.messages.append(payload["messages"])
+            if len(self.messages) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Route: `src/api/v1/endpoints/benchmark.py`.",
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            return {"choices": [{"message": {"role": "assistant", "content": ""}}]}, {"route": "local"}
+
+    response, _meta = await AgentToolLoop(
+        config,
+        Proxy(),
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
+
+    content = response["choices"][0]["message"]["content"]
+    assert "I could not verify the codebase claims" in content
+    assert response["llama_pack"]["verification"]["status"] == "unverified"
+
+
+@pytest.mark.asyncio
 async def test_tool_executor_searches_files_by_glob(tmp_path):
     root = tmp_path / "project"
     (root / "src").mkdir(parents=True)
