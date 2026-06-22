@@ -15,7 +15,8 @@ class PromptBuilder:
                         "Project code graph tools are available for this chat. Use them to inspect indexed symbols, "
                         "relationships, routes, and React components before making codebase claims.\n\n"
                         "For runtime trace answers, every call-path edge must be backed by direct source evidence. "
-                        "For each edge include from_symbol, to_symbol, file, line, statement, and evidence_type. "
+                        "For each edge use this exact format: from_symbol=... to_symbol=... file=... statement='...'. "
+                        "Answers without this exact edge evidence are unverified. "
                         "If a handoff is inferred but no direct source statement verifies it, mark that edge "
                         "unverified instead of presenting it as fact."
                     ),

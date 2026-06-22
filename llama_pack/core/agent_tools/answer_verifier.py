@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext
 
@@ -9,6 +10,13 @@ from llama_pack.core.code_graph.tools import ProjectGraphToolContext
 _PATH_RE = re.compile(r"`?((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_]+)?)`?")
 _QUALIFIED_SYMBOL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]+)+)\b")
 _CLASS_SYMBOL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*)\b")
+_TRACE_HINT_RE = re.compile(r"(ordered call path|runtime path|handoff|from_symbol=|to_symbol=)", re.IGNORECASE)
+_TRACE_EDGE_RE = re.compile(
+    r"from_symbol=(?P<from_symbol>\S+)\s+"
+    r"to_symbol=(?P<to_symbol>\S+)\s+"
+    r"file=(?P<file>\S+)\s+"
+    r"statement=(?P<quote>['\"])(?P<statement>.*?)(?P=quote)"
+)
 
 
 @dataclass(frozen=True)
@@ -44,6 +52,9 @@ class AnswerVerificationReport:
             parts.append("Missing file paths: " + ", ".join(self.missing_paths))
         if self.missing_symbols:
             parts.append("Missing symbols: " + ", ".join(self.missing_symbols))
+        unsupported_evidence = [str(issue["value"]) for issue in self.issues if issue["kind"] == "missing_source_evidence"]
+        if unsupported_evidence:
+            parts.append("Unsupported source evidence: " + ", ".join(unsupported_evidence))
         return "\n".join(parts)
 
 
@@ -75,8 +86,10 @@ class AnswerVerifier:
                 issues.append(_issue_from_claim("missing_path", claim))
             if claim.kind == "symbol" and claim.value in missing_symbols:
                 issues.append(_issue_from_claim("missing_symbol", claim))
+        trace_issues = self._trace_evidence_issues(answer)
+        issues.extend(trace_issues)
         return AnswerVerificationReport(
-            ok=not missing_paths and not missing_symbols and not missing_source_evidence,
+            ok=not missing_paths and not missing_symbols and not missing_source_evidence and not trace_issues,
             verified_paths=verified_paths,
             missing_paths=missing_paths,
             verified_symbols=verified_symbols,
@@ -98,6 +111,55 @@ class AnswerVerifier:
             return True
         leaf = symbol.rsplit(".", 1)[-1]
         return bool(self.context.store.find_symbols(project_id=self.context.project_id, query=leaf, kind=None))
+
+    def _trace_evidence_issues(self, answer: str) -> list[dict[str, str | int]]:
+        hint = _TRACE_HINT_RE.search(answer)
+        if hint is None:
+            return []
+        edges = list(_TRACE_EDGE_RE.finditer(answer))
+        if not edges:
+            return [
+                {
+                    "kind": "missing_source_evidence",
+                    "value": "runtime trace edges",
+                    "start": hint.start(1),
+                    "end": hint.end(1),
+                    "excerpt": hint.group(1),
+                    "severity": "failed",
+                }
+            ]
+        issues: list[dict[str, str | int]] = []
+        for edge in edges:
+            file_path = edge.group("file")
+            statement = edge.group("statement")
+            if self._source_statement_exists(file_path, statement):
+                continue
+            issues.append(
+                {
+                    "kind": "missing_source_evidence",
+                    "value": statement,
+                    "start": edge.start("statement"),
+                    "end": edge.end("statement"),
+                    "excerpt": statement,
+                    "severity": "failed",
+                }
+            )
+        return issues
+
+    def _source_statement_exists(self, file_path: str, statement: str) -> bool:
+        active = self.context.store.get_active_snapshot(self.context.project_id)
+        if active is None:
+            return False
+        root_path = active.get("root_path")
+        if not isinstance(root_path, str) or not root_path.strip():
+            return False
+        source_path = (Path(root_path) / file_path).resolve()
+        root = Path(root_path).resolve()
+        if root not in source_path.parents and source_path != root:
+            return False
+        if not source_path.exists() or not source_path.is_file():
+            return False
+        return statement in source_path.read_text(encoding="utf-8")
 
 
 def extract_answer_claims(answer: str) -> AnswerClaims:
