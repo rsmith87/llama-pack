@@ -309,6 +309,141 @@ def test_answer_verifier_requires_structured_trace_edge_evidence(tmp_path):
     ]
 
 
+def test_answer_verifier_accepts_parenthesized_line_source_citation_for_trace_claim(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    source = root / "llama_pack" / "api" / "routes" / "benchmarks.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def helper():\n    asyncio.create_task(runner.execute_run(run[\"id\"]))\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-benchmarks",
+                "path": "llama_pack/api/routes/benchmarks.py",
+                "language": "python",
+                "size_bytes": source.stat().st_size,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = (
+        "Handoff: llama_pack/api/routes/benchmarks.py (Line 2): "
+        "asyncio.create_task(runner.execute_run(run[\"id\"]))"
+    )
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
+
+    assert report.ok is True
+    assert report.issues == []
+
+
+def test_answer_verifier_accepts_colon_line_source_citation_for_trace_claim(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    source = root / "llama_pack" / "api" / "routes" / "benchmarks.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("asyncio.create_task(runner.execute_run(run[\"id\"]))\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-benchmarks",
+                "path": "llama_pack/api/routes/benchmarks.py",
+                "language": "python",
+                "size_bytes": source.stat().st_size,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = (
+        "Handoff: llama_pack/api/routes/benchmarks.py:1: "
+        "asyncio.create_task(runner.execute_run(run[\"id\"]))"
+    )
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
+
+    assert report.ok is True
+    assert report.issues == []
+
+
+def test_answer_verifier_rejects_source_citation_statement_on_wrong_line(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    root = tmp_path / "project"
+    root.mkdir()
+    source = root / "llama_pack" / "api" / "routes" / "benchmarks.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("def helper():\n    asyncio.create_task(runner.execute_run(run[\"id\"]))\n", encoding="utf-8")
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(root), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-benchmarks",
+                "path": "llama_pack/api/routes/benchmarks.py",
+                "language": "python",
+                "size_bytes": source.stat().st_size,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = (
+        "Handoff: llama_pack/api/routes/benchmarks.py (Line 1): "
+        "asyncio.create_task(runner.execute_run(run[\"id\"]))"
+    )
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
+
+    assert report.ok is False
+    assert report.issues == [
+        {
+            "kind": "missing_source_evidence",
+            "value": "1",
+            "start": answer.index("1"),
+            "end": answer.index("1") + len("1"),
+            "excerpt": "1",
+            "severity": "failed",
+        }
+    ]
+
+
 def test_answer_verifier_requires_test_source_evidence_for_test_coverage_claims(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)

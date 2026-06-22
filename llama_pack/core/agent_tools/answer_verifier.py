@@ -19,6 +19,16 @@ _TRACE_EDGE_RE = re.compile(
     r"(?P<line_label>line|lines)=(?P<line_value>\d+(?:-\d+)?)\s+"
     r"statement=(?P<quote>['\"])(?P<statement>.*?)(?P=quote)"
 )
+_PAREN_SOURCE_CITATION_RE = re.compile(
+    r"(?P<file>(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9_]+)\s+"
+    r"\((?:[Ll]ine|[Ll]ines)\s+(?P<line_value>\d+(?:-\d+)?)\):\s*"
+    r"(?P<statement>[^\n]+)"
+)
+_COLON_SOURCE_CITATION_RE = re.compile(
+    r"(?P<file>(?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9_]+):"
+    r"(?P<line_value>\d+(?:-\d+)?):\s*"
+    r"(?P<statement>[^\n]+)"
+)
 
 
 @dataclass(frozen=True)
@@ -137,7 +147,8 @@ class AnswerVerifier:
         if hint is None:
             return []
         edges = list(_TRACE_EDGE_RE.finditer(answer))
-        if not edges:
+        source_citations = [*_PAREN_SOURCE_CITATION_RE.finditer(answer), *_COLON_SOURCE_CITATION_RE.finditer(answer)]
+        if not edges and not source_citations:
             return [
                 {
                     "kind": "missing_source_evidence",
@@ -174,6 +185,35 @@ class AnswerVerifier:
                     "value": statement,
                     "start": edge.start("statement"),
                     "end": edge.end("statement"),
+                    "excerpt": statement,
+                    "severity": "failed",
+                }
+            )
+        for citation in source_citations:
+            file_path = citation.group("file")
+            statement = _clean_source_statement(citation.group("statement"))
+            line_value = citation.group("line_value")
+            source_status = self._source_statement_status(file_path, line_value, statement)
+            if source_status == "ok":
+                continue
+            if source_status == "wrong_line":
+                issues.append(
+                    {
+                        "kind": "missing_source_evidence",
+                        "value": line_value,
+                        "start": citation.start("line_value"),
+                        "end": citation.end("line_value"),
+                        "excerpt": line_value,
+                        "severity": "failed",
+                    }
+                )
+                continue
+            issues.append(
+                {
+                    "kind": "missing_source_evidence",
+                    "value": statement,
+                    "start": citation.start("statement"),
+                    "end": citation.end("statement"),
                     "excerpt": statement,
                     "severity": "failed",
                 }
@@ -326,3 +366,7 @@ def _parse_line_span(value: str) -> tuple[int, int] | None:
     if start < 1 or end < start:
         return None
     return start, end
+
+
+def _clean_source_statement(statement: str) -> str:
+    return statement.strip().strip("`").strip()
