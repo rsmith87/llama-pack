@@ -93,9 +93,24 @@ class ProjectGraphIndexer:
                     relations_indexed=sum(len(parsed.relations) for parsed in parsed_python),
                     current_path=file_path.relative_to(root).as_posix(),
                 )
-            )
+        )
         self._check_cancel(is_cancel_requested)
         if ts_files:
+            progress(
+                _progress(
+                    "parsing_typescript_started",
+                    f"Parsing TypeScript/React files ({len(ts_files)} files)",
+                    35,
+                    files_discovered=len(files),
+                    files_scanned=len(python_files),
+                    files_indexed=len(parsed_python),
+                    files_failed=0,
+                    symbols_indexed=sum(len(parsed.symbols) for parsed in parsed_python),
+                    relations_indexed=sum(len(parsed.relations) for parsed in parsed_python),
+                    current_path=None,
+                )
+            )
+            self._check_cancel(is_cancel_requested)
             ts_project = parse_typescript_files(root=root, files=ts_files)
             parsed_ts = ts_project.files
         progress(

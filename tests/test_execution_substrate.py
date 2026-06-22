@@ -411,6 +411,7 @@ async def test_agent_worker_completes_project_graph_index_job():
     class FakeGraphIndexer:
         def export_snapshot_graph(self, snapshot_id):
             assert snapshot_id == "snapshot-1"
+            assert any(call[1].endswith("/nodes/agent-a/work/attempt-graph/progress") for call in calls)
             return {
                 "snapshot": {
                     "id": "snapshot-1",
@@ -490,6 +491,83 @@ async def test_agent_worker_completes_project_graph_index_job():
     assert complete_payload["result"]["snapshot_id"] == "snapshot-1"
     assert complete_payload["result"]["graph_snapshot"]["files"][0]["path"] == "api.py"
     assert complete_payload["artifacts"][0]["kind"] == "project_graph_snapshot"
+
+
+@pytest.mark.asyncio
+async def test_agent_worker_reports_project_graph_progress_before_failure():
+    calls = []
+
+    async def request(method, url, payload=None, headers=None):
+        calls.append((method, url, payload))
+        if url.endswith("/nodes/agent-a/work/claim"):
+            return [
+                {
+                    "attempt_id": "attempt-graph",
+                    "job": {
+                        "id": "job-graph",
+                        "type": "project.graph.index",
+                        "status": "assigned",
+                        "payload": {
+                            "project_id": "project-1",
+                            "node_name": "agent-a",
+                            "root_path": "/repo",
+                            "include_globs": ["**/*.py"],
+                            "overview_files": [],
+                            "exclude_dirs": [],
+                            "max_file_bytes": 1024,
+                            "force": False,
+                        },
+                    },
+                }
+            ]
+        if url.endswith("/nodes/agent-a/work/jobs/job-graph/cancellation"):
+            return {"id": "job-graph", "cancellation_requested": False}
+        if url.endswith("/nodes/agent-a/work/attempt-graph/progress"):
+            return {"ok": True}
+        if url.endswith("/nodes/agent-a/work/attempt-graph/fail"):
+            return {"id": "job-graph", "status": "failed"}
+        raise AssertionError(f"unexpected request: {method} {url}")
+
+    class FakeGraphIndexer:
+        def index(self, payload, progress, is_cancel_requested):
+            progress(
+                GraphIndexProgress(
+                    phase="writing_snapshot",
+                    message="writing",
+                    percent=85,
+                    files_discovered=1,
+                    files_scanned=1,
+                    files_indexed=1,
+                    files_failed=0,
+                    symbols_indexed=1,
+                    relations_indexed=0,
+                    current_path=None,
+                    warnings=[],
+                )
+            )
+            raise RuntimeError("snapshot write failed")
+
+    worker = AgentWorker(
+        config=load_config(
+            {
+                "mode": "agent",
+                "controller_url": "http://controller",
+                "node_name": "agent-a",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=request,
+        project_graph_indexer=FakeGraphIndexer(),
+    )
+
+    assert await worker.run_once() == 1
+    progress_index = next(index for index, call in enumerate(calls) if call[1].endswith("/progress"))
+    fail_index = next(index for index, call in enumerate(calls) if call[1].endswith("/fail"))
+    assert progress_index < fail_index
+    progress_payload = calls[progress_index][2]["progress"]
+    assert progress_payload["phase"] == "writing_snapshot"
+    fail_payload = calls[fail_index][2]
+    assert fail_payload["error_code"] == "GRAPH_SNAPSHOT_WRITE_FAILED"
 
 
 def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):

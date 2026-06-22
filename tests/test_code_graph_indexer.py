@@ -63,7 +63,10 @@ def test_code_graph_indexer_indexes_python_and_typescript_and_reports_progress(t
     assert result.file_count == 2
     assert result.symbol_count >= 4
     assert graph_store.status(str(project["id"]))["status"] == "ready"
-    assert [event["phase"] for event in progress_events][:2] == ["validating_root", "discovering_files"]
+    phases = [event["phase"] for event in progress_events]
+    assert phases[:2] == ["validating_root", "discovering_files"]
+    assert "parsing_typescript_started" in phases
+    assert phases.index("parsing_typescript_started") < phases.index("parsing_typescript")
     assert progress_events[-1]["phase"] == "completed"
 
 

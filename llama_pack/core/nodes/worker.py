@@ -443,18 +443,37 @@ class AgentWorker:
         try:
             payload = ProjectGraphIndexPayload.model_validate(job.get("payload", {}))
             cancel_requested = await self._is_cancel_requested(job_id)
+            progress_queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
+            loop = asyncio.get_running_loop()
 
             def progress(event) -> None:
-                progress_events.append(event.model_dump())
+                loop.call_soon_threadsafe(progress_queue.put_nowait, event.model_dump())
 
             def is_cancel_requested() -> bool:
                 return cancel_requested
 
-            progress_events: list[dict[str, Any]] = []
-            result = self._project_graph_indexer.index(payload=payload, progress=progress, is_cancel_requested=is_cancel_requested)
-            graph_snapshot = self._project_graph_indexer.export_snapshot_graph(result.snapshot_id)
-            for event in progress_events:
+            async def send_queued_progress() -> None:
+                while not progress_queue.empty():
+                    await self._progress(attempt_id, progress_queue.get_nowait())
+
+            index_task = asyncio.create_task(
+                asyncio.to_thread(
+                    self._project_graph_indexer.index,
+                    payload=payload,
+                    progress=progress,
+                    is_cancel_requested=is_cancel_requested,
+                )
+            )
+            while not index_task.done():
+                try:
+                    event = await asyncio.wait_for(progress_queue.get(), timeout=0.1)
+                except TimeoutError:
+                    continue
                 await self._progress(attempt_id, event)
+            await send_queued_progress()
+            result = await index_task
+            await send_queued_progress()
+            graph_snapshot = self._project_graph_indexer.export_snapshot_graph(result.snapshot_id)
             await self._complete(
                 attempt_id,
                 {

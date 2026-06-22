@@ -465,10 +465,14 @@ class ProjectGraphStoreOrm:
         import_records: list[GraphImportRecord],
         relation_records: list[GraphRelationRecord],
     ) -> None:
+        file_ids = self._scoped_ids(session, ProjectGraphFileOrm, snapshot.id, [record.id for record in file_records])
+        symbol_ids = self._scoped_ids(session, ProjectGraphSymbolOrm, snapshot.id, [record.id for record in symbol_records])
+        import_ids = self._scoped_ids(session, ProjectGraphImportOrm, snapshot.id, [record.id for record in import_records])
+        relation_ids = self._scoped_ids(session, ProjectGraphRelationOrm, snapshot.id, [record.id for record in relation_records])
         for record in file_records:
             session.add(
                 ProjectGraphFileOrm(
-                    id=record.id or str(uuid.uuid4()),
+                    id=file_ids[record.id] if record.id is not None else str(uuid.uuid4()),
                     snapshot_id=snapshot.id,
                     path=record.path,
                     language=record.language,
@@ -484,9 +488,9 @@ class ProjectGraphStoreOrm:
         for record in symbol_records:
             session.add(
                 ProjectGraphSymbolOrm(
-                    id=record.id or str(uuid.uuid4()),
+                    id=symbol_ids[record.id] if record.id is not None else str(uuid.uuid4()),
                     snapshot_id=snapshot.id,
-                    file_id=record.file_id,
+                    file_id=file_ids.get(record.file_id, record.file_id),
                     qualified_name=record.qualified_name,
                     name=record.name,
                     kind=record.kind,
@@ -503,13 +507,13 @@ class ProjectGraphStoreOrm:
         for record in import_records:
             session.add(
                 ProjectGraphImportOrm(
-                    id=record.id or str(uuid.uuid4()),
+                    id=import_ids[record.id] if record.id is not None else str(uuid.uuid4()),
                     snapshot_id=snapshot.id,
-                    file_id=record.file_id,
+                    file_id=file_ids.get(record.file_id, record.file_id),
                     module=record.module,
                     imported_name=record.imported_name,
                     alias=record.alias,
-                    resolved_file_id=record.resolved_file_id,
+                    resolved_file_id=file_ids.get(record.resolved_file_id, record.resolved_file_id) if record.resolved_file_id is not None else None,
                     confidence=record.confidence,
                 )
             )
@@ -517,12 +521,12 @@ class ProjectGraphStoreOrm:
         for record in relation_records:
             session.add(
                 ProjectGraphRelationOrm(
-                    id=record.id or str(uuid.uuid4()),
+                    id=relation_ids[record.id] if record.id is not None else str(uuid.uuid4()),
                     snapshot_id=snapshot.id,
-                    source_symbol_id=record.source_symbol_id,
-                    target_symbol_id=record.target_symbol_id,
-                    source_file_id=record.source_file_id,
-                    target_file_id=record.target_file_id,
+                    source_symbol_id=symbol_ids.get(record.source_symbol_id, record.source_symbol_id) if record.source_symbol_id is not None else None,
+                    target_symbol_id=symbol_ids.get(record.target_symbol_id, record.target_symbol_id) if record.target_symbol_id is not None else None,
+                    source_file_id=file_ids.get(record.source_file_id, record.source_file_id) if record.source_file_id is not None else None,
+                    target_file_id=file_ids.get(record.target_file_id, record.target_file_id) if record.target_file_id is not None else None,
                     relation_type=record.relation_type,
                     start_line=record.start_line,
                     end_line=record.end_line,
@@ -533,6 +537,19 @@ class ProjectGraphStoreOrm:
         snapshot.file_count = len(file_records)
         snapshot.symbol_count = len(symbol_records)
         snapshot.relation_count = len(relation_records)
+
+    def _scoped_ids(self, session: Session, model: type[ProjectGraphFileOrm] | type[ProjectGraphSymbolOrm] | type[ProjectGraphImportOrm] | type[ProjectGraphRelationOrm], snapshot_id: str, ids: list[str | None]) -> dict[str, str]:
+        present_ids = [item for item in ids if item is not None]
+        if not present_ids:
+            return {}
+        existing_ids = set(session.execute(select(model.id).where(model.id.in_(present_ids))).scalars())
+        return {
+            item: self._snapshot_scoped_id(snapshot_id, item) if item in existing_ids else item
+            for item in present_ids
+        }
+
+    def _snapshot_scoped_id(self, snapshot_id: str, record_id: str) -> str:
+        return f"{snapshot_id}:{record_id}"
 
     def close(self) -> None:
         self.engine.dispose()

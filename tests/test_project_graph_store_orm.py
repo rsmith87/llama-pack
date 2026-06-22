@@ -60,6 +60,70 @@ def test_project_graph_store_keeps_active_snapshots_per_node(tmp_path):
     assert project_active["id"] in {mac["id"], linux["id"]}
 
 
+def test_project_graph_store_allows_same_graph_ids_on_multiple_nodes(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    project = _create_project(db_path)
+    store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    graph = {
+        "files": [
+            {
+                "id": "file-api",
+                "path": "api.py",
+                "language": "python",
+                "content_hash": "hash-api",
+                "size_bytes": 100,
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        "symbols": [
+            {
+                "id": "sym-run",
+                "file_id": "file-api",
+                "qualified_name": "api.run",
+                "name": "run",
+                "kind": "function",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 2,
+                "signature": "def run()",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        "imports": [],
+        "relations": [
+            {
+                "id": "rel-run",
+                "source_symbol_id": "sym-run",
+                "target_symbol_id": "sym-run",
+                "source_file_id": "file-api",
+                "target_file_id": "file-api",
+                "relation_type": "self",
+                "start_line": 1,
+                "end_line": 1,
+                "confidence": 1.0,
+                "evidence": {"text": "run"},
+            }
+        ],
+    }
+
+    mac = store.create_snapshot(project_id=str(project["id"]), node_name="mac-mini", root_path="/repo", git_commit="a1")
+    store.replace_snapshot_graph(snapshot_id=str(mac["id"]), **graph)
+    store.activate_snapshot(str(mac["id"]))
+
+    linux = store.create_snapshot(project_id=str(project["id"]), node_name="linux-2080ti", root_path="/repo", git_commit="a1")
+    store.replace_snapshot_graph(snapshot_id=str(linux["id"]), **graph)
+    store.activate_snapshot(str(linux["id"]))
+
+    assert store.get_active_snapshot_for_node(str(project["id"]), "mac-mini")["id"] == mac["id"]
+    assert store.get_active_snapshot_for_node(str(project["id"]), "linux-2080ti")["id"] == linux["id"]
+    assert store.find_symbols(project_id=str(project["id"]), query="run", kind=None)[0]["name"] == "run"
+
+
 def test_project_graph_store_preserves_active_snapshot_when_new_snapshot_fails(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)
