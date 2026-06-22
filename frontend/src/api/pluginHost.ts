@@ -1,9 +1,10 @@
-import { apiDelete, apiGet, apiPost, apiPut } from "./client";
+import { apiDelete, apiFormPost, apiGet, apiPost, apiPut } from "./client";
 
 export type PluginHostApi = {
   pluginId: string;
   apiGet<T = unknown>(path: string): Promise<T>;
   apiPost<T = unknown>(path: string, body?: unknown): Promise<T>;
+  apiFormPost<T = unknown>(path: string, body: FormData): Promise<T>;
   apiPut<T = unknown>(path: string, body?: unknown): Promise<T>;
   apiDelete<T = unknown>(path: string): Promise<T>;
   navigate(path: string): void;
@@ -28,6 +29,7 @@ export function createPluginHostApi({
     pluginId,
     apiGet: (path) => apiGet(pluginPath(pluginId, path)),
     apiPost: (path, body) => apiPost(pluginPath(pluginId, path), body),
+    apiFormPost: (path, body) => apiFormPost(pluginPath(pluginId, path), body),
     apiPut: (path, body) => apiPut(pluginPath(pluginId, path), body),
     apiDelete: (path) => apiDelete(pluginPath(pluginId, path)),
     navigate,

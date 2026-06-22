@@ -62,6 +62,16 @@ export function apiPost<T>(path: string, body?: unknown, options: Omit<ApiReques
   return apiRequest<T>(path, { ...options, method: "POST", body });
 }
 
+export async function apiFormPost<T>(path: string, body: FormData): Promise<T> {
+  const response = await fetch(API_PREFIX + path, {
+    method: "POST",
+    body,
+    headers: buildHeaders({}),
+  });
+  await assertOk(response);
+  return response.json() as Promise<T>;
+}
+
 export function apiAbsolutePost<T>(path: string, body?: unknown, options: Omit<ApiRequestOptions, "method" | "body"> = {}): Promise<T> {
   return apiAbsoluteRequest<T>(path, { ...options, method: "POST", body });
 }
