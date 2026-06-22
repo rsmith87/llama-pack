@@ -209,6 +209,24 @@ def test_answer_verifier_reports_issue_spans_for_missing_claims(tmp_path):
     ]
 
 
+def test_answer_verifier_ignores_slash_separated_section_labels(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    verifier = AnswerVerifier(ProjectGraphToolContext(project_id=project_id, store=graph_store))
+
+    answer = "Return exact function/class names and Store/Database methods."
+    report = verifier.verify(answer, source_evidence_available=True, test_source_evidence_available=True)
+
+    assert report.ok is True
+    assert report.missing_paths == []
+    assert report.issues == []
+
+
 def test_answer_verifier_requires_structured_trace_edge_evidence(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)
@@ -1845,7 +1863,7 @@ async def test_tool_loop_revises_code_claims_without_tool_evidence(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_tool_loop_fails_closed_when_revised_answer_is_unverified(tmp_path):
+async def test_tool_loop_warn_mode_returns_revised_answer_with_unverified_metadata(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)
     graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
@@ -1875,9 +1893,10 @@ async def test_tool_loop_fails_closed_when_revised_answer_is_unverified(tmp_path
     ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
 
     content = response["choices"][0]["message"]["content"]
-    assert "I could not verify the codebase claims" in content
-    assert "src/api/v1/endpoints/benchmark.py" not in content
-    assert "src/services/benchmark_runner.py" not in content
+    assert "src/api/v1/endpoints/benchmark.py" in content
+    assert "src/services/benchmark_runner.py" in content
+    assert response["llama_pack"]["verification"]["status"] == "unverified"
+    assert response["llama_pack"]["verification"]["ok"] is False
 
 
 @pytest.mark.asyncio
@@ -1919,6 +1938,47 @@ async def test_tool_loop_fails_closed_when_revised_answer_is_empty(tmp_path):
     content = response["choices"][0]["message"]["content"]
     assert "I could not verify the codebase claims" in content
     assert response["llama_pack"]["verification"]["status"] == "unverified"
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_strict_mode_fails_when_revised_answer_is_unverified(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "answer_verification_mode": "strict",
+            },
+        }
+    )
+
+    class Proxy:
+        async def chat_with_meta(self, model_name, payload):
+            return {
+                "choices": [
+                    {
+                        "message": {
+                            "role": "assistant",
+                            "content": "Route: `src/api/v1/endpoints/benchmark.py`; Runner: `src/services/benchmark_runner.py`.",
+                        }
+                    }
+                ]
+            }, {"route": "local"}
+
+    with pytest.raises(RuntimeError, match="answer verification failed"):
+        await AgentToolLoop(
+            config,
+            Proxy(),
+            project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+        ).run("qwen", {"messages": [{"role": "user", "content": "trace BenchmarkRunner"}]})
 
 
 @pytest.mark.asyncio

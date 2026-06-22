@@ -104,8 +104,9 @@ class AgentToolLoop:
                         if retries_used >= self.config.agent_tools.answer_verification_max_retries:
                             if self.config.agent_tools.answer_verification_mode == "strict":
                                 raise RuntimeError("answer verification failed before final assistant response")
-                            response = _replace_assistant_content(response, _unverified_answer_message())
-                            message = _assistant_message(response)
+                            if not str(message.get("content") or "").strip():
+                                response = _replace_assistant_content(response, _unverified_answer_message())
+                                message = _assistant_message(response)
                             break
                         messages.append(message)
                         messages.append(

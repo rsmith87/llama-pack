@@ -7,7 +7,7 @@ from pathlib import Path
 from llama_pack.core.code_graph.tools import ProjectGraphToolContext
 
 
-_PATH_RE = re.compile(r"`?((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+(?:\.[A-Za-z0-9_]+)?)`?")
+_PATH_RE = re.compile(r"`?((?:[A-Za-z0-9_.-]+/)+[A-Za-z0-9_.-]+\.[A-Za-z0-9_]+)`?")
 _QUALIFIED_SYMBOL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]+(?:\.[A-Za-z_][A-Za-z0-9_]+)+)\b")
 _CLASS_SYMBOL_RE = re.compile(r"\b([A-Z][A-Za-z0-9_]*[a-z][A-Z][A-Za-z0-9_]*)\b")
 _TRACE_HINT_RE = re.compile(r"(ordered call path|runtime path|handoff|from_symbol=|to_symbol=)", re.IGNORECASE)
