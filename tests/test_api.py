@@ -2685,9 +2685,205 @@ def test_openai_compat_agent_tool_runtime_stream_reports_actual_tool_call(tmp_pa
     assert '"event_type": "tool_call_started"' in body
     assert '"event_type": "tool_call_completed"' in body
     assert '"tool_name": "read_status"' in body
+    events = [
+        json.loads(line.removeprefix("data: "))
+        for line in body.splitlines()
+        if line.startswith("data: {")
+    ]
+    completed = [event for event in events if event.get("event_type") == "tool_call_completed"]
+    assert completed[0]["locations"] == [{"path": str(status), "start_line": 1, "end_line": 1}]
     assert "status is agent ok" in body
     assert "data: [DONE]" in body
     assert (tmp_path / "agent_tool_calls.jsonl").exists()
+
+
+def test_openai_compat_agent_tool_runtime_stream_reports_malformed_tool_arguments(tmp_path):
+    status = tmp_path / "status.txt"
+    status.write_text("agent ok", encoding="utf-8")
+
+    async def fake_chat_request(url, payload):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call-1",
+                                "type": "function",
+                                "function": {"name": "read_status", "arguments": '{"path":'},
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {
+                    "enabled": True,
+                    "safe_roots": [str(tmp_path)],
+                    "tools": {
+                        "read_status": {
+                            "type": "file_read",
+                            "description": "Read status.",
+                            "path": str(status),
+                        }
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "check status"}],
+            "tool_runtime": "agent",
+            "stream": True,
+        },
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert '"type": "error"' in body
+    assert '"error_type": "malformed_tool_call_arguments"' in body
+    assert '"tool_call_id": "call-1"' in body
+    assert "read_status" in body
+    assert not (tmp_path / "agent_tool_calls.jsonl").exists()
+    assert "data: [DONE]" in body
+
+
+def test_openai_compat_agent_tool_runtime_reports_malformed_tool_arguments(tmp_path):
+    status = tmp_path / "status.txt"
+    status.write_text("agent ok", encoding="utf-8")
+
+    async def fake_chat_request(url, payload):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call-1",
+                                "type": "function",
+                                "function": {"name": "read_status", "arguments": '{"path":'},
+                            }
+                        ],
+                    }
+                }
+            ]
+        }
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {
+                    "enabled": True,
+                    "safe_roots": [str(tmp_path)],
+                    "tools": {
+                        "read_status": {
+                            "type": "file_read",
+                            "description": "Read status.",
+                            "path": str(status),
+                        }
+                    },
+                },
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "check status"}],
+            "tool_runtime": "agent",
+        },
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"]["error_type"] == "malformed_tool_call_arguments"
+    assert response.json()["detail"]["tool_call_id"] == "call-1"
+    assert response.json()["detail"]["tool_name"] == "read_status"
+    assert not (tmp_path / "agent_tool_calls.jsonl").exists()
+
+
+def test_openai_compat_agent_tool_runtime_stream_reports_summarization_failure(tmp_path):
+    async def fake_chat_request(url, payload):
+        if payload.get("max_tokens") == 64:
+            raise RuntimeError("summary backend failed")
+        return {"choices": [{"message": {"role": "assistant", "content": "unused"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "context_summarization_trigger_ratio": 0.01,
+                "context_summarization_recent_messages": 1,
+                "context_summarization_max_tokens": 64,
+                "models": {
+                    "qwen": {
+                        "path": "/models/qwen.gguf",
+                        "port": 8081,
+                        "context_window_tokens": 64,
+                    }
+                },
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [
+                {"role": "user", "content": "alpha " * 80},
+                {"role": "assistant", "content": "beta " * 80},
+                {"role": "user", "content": "gamma"},
+            ],
+            "tool_runtime": "agent",
+            "stream": True,
+        },
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    assert response.status_code == 200
+    assert '"type": "error"' in body
+    assert '"error_type": "chat_summarization_failed"' in body
+    assert "Failed to summarize chat request for model qwen" in body
+    assert "data: [DONE]" in body
 
 
 def test_openai_compat_agent_tool_runtime_stream_reports_loop_errors(tmp_path):

@@ -40,9 +40,9 @@ from llama_pack.api.routes.chat.common import (
     track_model_if_local,
 )
 from llama_pack.core.chat.profile_activation import ProfileActivationService
-from llama_pack.core.chat.proxy import ChatProxy
+from llama_pack.core.chat.proxy import ChatProxy, ChatSummarizationError
 from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
-from llama_pack.core.agent_tools.runtime import AgentToolLoop
+from llama_pack.core.agent_tools.runtime import AgentToolLoop, MalformedToolCallArgumentsError
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
@@ -468,6 +468,8 @@ async def openai_chat_completions(
         return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail}, headers=exc.headers)
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    except MalformedToolCallArgumentsError as exc:
+        return JSONResponse(status_code=502, content={"detail": _agent_tool_error_payload(exc)})
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except Exception as exc:
@@ -510,11 +512,32 @@ async def _agent_tool_progress_stream(
     try:
         response, _headers = await task
     except Exception as exc:
-        yield _agent_tool_sse({"type": "error", "error": str(exc)})
+        yield _agent_tool_sse(_agent_tool_error_payload(exc))
         yield b"data: [DONE]\n\n"
         return
     yield _agent_tool_sse({"type": "final", **response})
     yield b"data: [DONE]\n\n"
+
+
+def _agent_tool_error_payload(exc: Exception) -> dict[str, Any]:
+    if isinstance(exc, MalformedToolCallArgumentsError):
+        return {
+            "type": "error",
+            "error_type": "malformed_tool_call_arguments",
+            "error": str(exc),
+            "tool_name": exc.tool_name,
+            "tool_call_id": exc.tool_call_id,
+            "detail": exc.detail,
+        }
+    if isinstance(exc, ChatSummarizationError):
+        return {
+            "type": "error",
+            "error_type": "chat_summarization_failed",
+            "error": str(exc),
+            "model": exc.model_name,
+            "detail": exc.detail,
+        }
+    return {"type": "error", "error_type": "agent_tool_runtime_error", "error": str(exc)}
 
 
 def _agent_tool_sse(payload: dict[str, Any]) -> bytes:

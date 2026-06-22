@@ -142,8 +142,8 @@ class AgentToolLoop:
             for tool_call in tool_calls:
                 function = tool_call.get("function") or {}
                 name = str(function.get("name") or "")
-                arguments = _parse_arguments(function.get("arguments"))
                 tool_call_id = str(tool_call.get("id") or name)
+                arguments = _parse_arguments(function.get("arguments"), tool_name=name, tool_call_id=tool_call_id)
                 source_tool_evidence_available = True
                 result = await self.executor.execute(
                     name,
@@ -169,6 +169,14 @@ class AgentToolLoop:
         if self.trace_recorder is None:
             return None
         return self.trace_recorder.emit(event_type, **kwargs)
+
+
+class MalformedToolCallArgumentsError(ValueError):
+    def __init__(self, tool_name: str, tool_call_id: str, detail: str) -> None:
+        super().__init__(f"Malformed arguments for tool call {tool_call_id} ({tool_name}): {detail}")
+        self.tool_name = tool_name
+        self.tool_call_id = tool_call_id
+        self.detail = detail
 
 
 def _assistant_message(response: dict[str, Any]) -> dict[str, Any]:
@@ -237,16 +245,18 @@ def _tool_calls(message: dict[str, Any]) -> list[dict[str, Any]]:
     return [call for call in calls if isinstance(call, dict)]
 
 
-def _parse_arguments(raw: Any) -> dict[str, Any]:
+def _parse_arguments(raw: Any, *, tool_name: str, tool_call_id: str) -> dict[str, Any]:
     if isinstance(raw, dict):
         return raw
     if not isinstance(raw, str) or not raw.strip():
         return {}
     try:
         parsed = json.loads(raw)
-    except json.JSONDecodeError:
-        return {}
-    return parsed if isinstance(parsed, dict) else {}
+    except json.JSONDecodeError as exc:
+        raise MalformedToolCallArgumentsError(tool_name, tool_call_id, exc.msg) from exc
+    if not isinstance(parsed, dict):
+        raise MalformedToolCallArgumentsError(tool_name, tool_call_id, "arguments must decode to a JSON object")
+    return parsed
 
 
 def _result_has_test_source_evidence(result: dict[str, Any]) -> bool:

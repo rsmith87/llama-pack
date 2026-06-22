@@ -68,6 +68,18 @@ def test_migrate_all_script_is_executable_and_uses_setup_migrations() -> None:
     assert "--config" in contents
 
 
+def test_install_ocr_model_script_downloads_ppocrv5_to_repo_models_dir() -> None:
+    script = ROOT_DIR / "scripts" / "install_ocr_model.sh"
+    contents = script.read_text(encoding="utf-8")
+
+    assert script.exists()
+    assert script.stat().st_mode & S_IXUSR
+    assert "PaddlePaddle/PP-OCRv5_server_det" in contents
+    assert "PaddlePaddle/PP-OCRv5_server_rec" in contents
+    assert "./models/ocr/pp-ocrv5-server" in contents
+    assert "snapshot_download" in contents
+
+
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     contents = read_script("start_frontend.sh")
 
@@ -159,6 +171,7 @@ def test_runtime_shell_scripts_parse_cleanly() -> None:
         "scripts/install_caddy_fullchain.sh",
         "scripts/renew_caddy_step_cert.sh",
         "scripts/install_llama_cpp.sh",
+        "scripts/install_ocr_model.sh",
         "scripts/setup_llama_pack.sh",
     ]:
         subprocess.run(["bash", "-n", str(ROOT_DIR / script)], check=True)
@@ -180,6 +193,7 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/install_caddy_fullchain.sh",
         "scripts/renew_caddy_step_cert.sh",
         "scripts/install_llama_cpp.sh",
+        "scripts/install_ocr_model.sh",
         "scripts/refresh_curated_catalog.py",
         "scripts/setup_llama_pack.py",
         "scripts/setup_llama_pack.sh",

@@ -100,7 +100,7 @@ class ToolExecutor:
         if self.trace_recorder is None:
             return
         ok = bool(result.get("ok"))
-        self.trace_recorder.emit(
+        event = self.trace_recorder.emit(
             "tool_call_completed" if ok else "tool_call_failed",
             status="passed" if ok else "failed",
             case_id=case_id,
@@ -114,3 +114,6 @@ class ToolExecutor:
                 "result": result,
             },
         )
+        locations = result.get("locations")
+        if isinstance(locations, list):
+            event["locations"] = locations

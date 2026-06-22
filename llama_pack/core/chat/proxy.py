@@ -35,6 +35,16 @@ class ProjectRoutingError(Exception):
         self.detail = detail
 
 
+class ChatSummarizationError(RuntimeError):
+    def __init__(self, model_name: str, detail: str) -> None:
+        super().__init__(
+            f"Failed to summarize chat request for model {model_name}: {detail}. "
+            "Estimated prompt tokens exceeded the configured context summarization trigger."
+        )
+        self.model_name = model_name
+        self.detail = detail
+
+
 class ChatProxy:
     def __init__(
         self,
@@ -285,10 +295,7 @@ class ChatProxy:
                 type(exc).__name__,
                 _http_exception_detail(exc),
             )
-            raise RuntimeError(
-                f"Failed to summarize chat request for model {model_name}: {exc}. "
-                f"Estimated prompt tokens exceeded the configured context summarization trigger."
-            ) from exc
+            raise ChatSummarizationError(model_name, str(exc)) from exc
         return {**payload, "messages": [summary_system_message(summary), *recent_messages]}
 
     def _should_summarize_payload(self, model_name: str, payload: dict[str, Any]) -> bool:
