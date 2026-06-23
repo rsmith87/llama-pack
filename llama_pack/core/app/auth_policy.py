@@ -66,6 +66,8 @@ def is_external_key_forbidden(path: str, role: str) -> bool:
         return False
     if path.startswith(f"{LM_API_PREFIX}/chat/") and path.endswith("/context-budget"):
         return False
+    if path.startswith(f"{LM_API_PREFIX}/plugins/llama_pack_business/"):
+        return False
     return True
 
 

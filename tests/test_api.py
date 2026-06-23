@@ -33,6 +33,17 @@ def worker_nodes(*names):
     }
 
 
+def _openai_compat_sse_events(body: str) -> list[dict[str, object]]:
+    events: list[dict[str, object]] = []
+    for line in body.splitlines():
+        if line.startswith("data: {"):
+            parsed = json.loads(line.removeprefix("data: "))
+            if not isinstance(parsed, dict):
+                raise TypeError("OpenAI compatibility SSE payload must be a JSON object")
+            events.append(parsed)
+    return events
+
+
 @pytest.fixture(autouse=True)
 def _prepare_migrated_persistence(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
@@ -2614,6 +2625,182 @@ def test_openai_compat_agent_tool_runtime_streams_when_no_tool_call(tmp_path):
     assert "data: [DONE]" in body
     assert calls[0][1]["tools"][0]["function"]["name"] == "read_status"
     assert not (tmp_path / "agent_tool_calls.jsonl").exists()
+
+
+def test_openai_compat_agent_tool_runtime_streams_verified_answer_metadata(tmp_path):
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Use `llama_pack/core/benchmarks/runner.py` and BenchmarkRunner.",
+                    }
+                }
+            ]
+        }
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint=str(tmp_path))
+    snapshot = app.state.project_graph_store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path=str(tmp_path), git_commit=None)
+    app.state.project_graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": 10,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[
+            {
+                "id": "sym-runner",
+                "file_id": "file-runner",
+                "name": "BenchmarkRunner",
+                "qualified_name": "llama_pack.core.benchmarks.runner.BenchmarkRunner",
+                "kind": "class",
+                "language": "python",
+                "start_line": 1,
+                "end_line": 10,
+                "signature": "class BenchmarkRunner",
+                "doc_summary": None,
+                "exported": True,
+                "confidence": 1.0,
+            }
+        ],
+        imports=[],
+        relations=[],
+    )
+    app.state.project_graph_store.activate_snapshot(str(snapshot["id"]))
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "trace BenchmarkRunner"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+            "stream": True,
+        },
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    events = _openai_compat_sse_events(body)
+    verification_events = [event for event in events if event.get("type") == "verification"]
+    final_events = [event for event in events if event.get("type") == "final"]
+    assert response.status_code == 200
+    assert verification_events == [
+        {
+            "type": "verification",
+            "llama_pack": {
+                "verification": {
+                    "status": "verified",
+                    "ok": True,
+                    "verified_paths": ["llama_pack/core/benchmarks/runner.py"],
+                    "missing_paths": [],
+                    "verified_symbols": ["BenchmarkRunner"],
+                    "missing_symbols": [],
+                    "missing_source_evidence": False,
+                    "missing_test_source_evidence": False,
+                    "issues": [],
+                }
+            },
+        }
+    ]
+    assert final_events[0]["llama_pack"] == verification_events[0]["llama_pack"]
+    assert events.index(verification_events[0]) < events.index(final_events[0])
+    assert "data: [DONE]" in body
+    assert calls[0][1]["tools"][0]["function"]["name"] == "graph_overview"
+
+
+def test_openai_compat_agent_tool_runtime_streams_unverified_answer_metadata(tmp_path):
+    async def fake_chat_request(url, payload):
+        return {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "Edit `src/repositories/sample_repository.py`.",
+                    }
+                }
+            ]
+        }
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+                "agent_tools": {"enabled": True},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Llama Pack", root_hint=str(tmp_path))
+    snapshot = app.state.project_graph_store.create_snapshot(project_id=str(project["id"]), node_name="local", root_path=str(tmp_path), git_commit=None)
+    app.state.project_graph_store.replace_snapshot_graph(snapshot_id=str(snapshot["id"]), files=[], symbols=[], imports=[], relations=[])
+    app.state.project_graph_store.activate_snapshot(str(snapshot["id"]))
+    client = TestClient(app)
+
+    with client.stream(
+        "POST",
+        "/v1/chat/completions",
+        json={
+            "model": "qwen",
+            "messages": [{"role": "user", "content": "trace repository"}],
+            "tool_runtime": "agent",
+            "project_id": project["id"],
+            "stream": True,
+        },
+    ) as response:
+        body = response.read().decode("utf-8")
+
+    events = _openai_compat_sse_events(body)
+    verification = next(event for event in events if event.get("type") == "verification")["llama_pack"]["verification"]
+    final = next(event for event in events if event.get("type") == "final")
+    assert response.status_code == 200
+    assert verification["status"] == "unverified"
+    assert verification["ok"] is False
+    assert verification["missing_paths"] == ["src/repositories/sample_repository.py"]
+    assert verification["issues"] == [
+        {
+            "kind": "missing_path",
+            "value": "src/repositories/sample_repository.py",
+            "start": len("Edit `"),
+            "end": len("Edit `") + len("src/repositories/sample_repository.py"),
+            "excerpt": "`src/repositories/sample_repository.py`",
+            "severity": "failed",
+        }
+    ]
+    assert final["llama_pack"]["verification"] == verification
+    assert "data: [DONE]" in body
 
 
 def test_openai_compat_agent_tool_runtime_stream_reports_actual_tool_call(tmp_path):

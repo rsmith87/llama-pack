@@ -515,8 +515,21 @@ async def _agent_tool_progress_stream(
         yield _agent_tool_sse(_agent_tool_error_payload(exc))
         yield b"data: [DONE]\n\n"
         return
+    verification = _agent_tool_verification_payload(response)
+    if verification is not None:
+        yield _agent_tool_sse(verification)
     yield _agent_tool_sse({"type": "final", **response})
     yield b"data: [DONE]\n\n"
+
+
+def _agent_tool_verification_payload(response: dict[str, Any]) -> dict[str, Any] | None:
+    metadata = response.get("llama_pack")
+    if not isinstance(metadata, dict):
+        return None
+    verification = metadata.get("verification")
+    if not isinstance(verification, dict):
+        return None
+    return {"type": "verification", "llama_pack": {"verification": verification}}
 
 
 def _agent_tool_error_payload(exc: Exception) -> dict[str, Any]:
