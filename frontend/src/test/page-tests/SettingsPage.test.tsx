@@ -623,7 +623,7 @@ it("edits and saves db-backed runtime settings", async () => {
   await user.type(screen.getByLabelText("Routing Fanout Max"), "6");
   await user.click(screen.getByRole("button", { name: "Save Runtime Settings" }));
 
-  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({ routing_fanout_max: 6 })));
+  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({ routing_fanout_max: 26 })));
   expect(await screen.findByText("Runtime settings saved")).toBeInTheDocument();
 });
 

@@ -839,6 +839,10 @@ def test_threads_api_posts_message_with_agent_tool_runtime_fields(tmp_path):
             "tool_runtime": "agent",
             "tool_choice": "auto",
             "project_id": "project-1",
+            "node_roots": {
+                "test-node": "/test/path",
+                "test-node-two": "/test/path/two",
+            },
             "agent_tool_max_iterations": 4,
         },
     )

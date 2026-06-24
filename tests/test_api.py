@@ -4504,8 +4504,9 @@ def test_controller_chat_route_rejects_unknown_target_selector():
         "/lm-api/v1/chat/qwen",
         json={"messages": [{"role": "user", "content": "hi"}], "target": "node:missing"},
     )
+
     assert response.status_code == 409
-    assert "Unknown controller node: missing" in response.json()["detail"]
+    assert "Unknown controller node: missing" in response.json()["detail"]["message"]
 
 def test_gguf_library_routes():
     app = create_app(

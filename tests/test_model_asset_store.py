@@ -32,6 +32,8 @@ def test_resolve_target_url_reads_models_entry():
         downloads="sqlite+pysqlite:///tmp/downloads.db",
         benchmarks="sqlite+pysqlite:///tmp/benchmarks.db",
         models="sqlite+pysqlite:///tmp/models.db",
+        settings="sqlite+pysqlite:///tmp/settings.db",
+        projects="sqlite+pysqlite:///tmp/projects.db",
     )
 
     assert resolve_target_url("models", urls) == "sqlite+pysqlite:///tmp/models.db"

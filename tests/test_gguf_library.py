@@ -67,6 +67,7 @@ def test_gguf_library_lists_files_with_stable_ids(tmp_path):
             "model_catalog": None,
             "model_profiles": [],
             "model_deployments": [],
+            'model_capacity_ctx': None,
         }
     ]
 
@@ -131,6 +132,7 @@ def test_gguf_library_adds_file_as_runtime_model(tmp_path):
                 "kind": "default",
             }
         },
+        'capacity_ctx': None
     }
 
     # Verify DB is the source of truth (not config.models)

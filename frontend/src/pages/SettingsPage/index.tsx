@@ -455,41 +455,42 @@ export function SettingsPage() {
             </div>
             <div className="settings-grid">
               <FormField label="Controller Retention Days">
-                <input aria-label="Controller Retention Days" type="number" min={1} value={runtimeSettings.controller_retention_days} onChange={(event) => updateRuntimeNumber("controller_retention_days", event.target.value)} />
-                <span className="settings-source">{sourceFor(runtimeDocument, "controller_retention_days")}</span>
+                {sourceFor(runtimeDocument, "controller_retention_days")}
+                <input aria-label="Controller Retention Days" type="number" min={1} value={runtimeSettings && runtimeSettings.controller_retention_days ? runtimeSettings.controller_retention_days :30} onChange={(event) => updateRuntimeNumber("controller_retention_days", event.target.value)} />
+                <span className="settings-source">{sourceFor(runtimeDocument, "controller_retention_days") ?? "default"}</span>
               </FormField>
               <FormField label="Controller Archive Retention Days">
-                <input aria-label="Controller Archive Retention Days" type="number" min={1} value={runtimeSettings.controller_archive_retention_days} onChange={(event) => updateRuntimeNumber("controller_archive_retention_days", event.target.value)} />
+                <input aria-label="Controller Archive Retention Days" type="number" min={1} value={runtimeSettings && runtimeSettings.controller_archive_retention_days ? runtimeSettings.controller_archive_retention_days : 90} onChange={(event) => updateRuntimeNumber("controller_archive_retention_days", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_retention_days")}</span>
               </FormField>
               <FormField label="Controller Archive Directory">
-                <input aria-label="Controller Archive Directory" value={runtimeSettings.controller_archive_dir} onChange={(event) => updateRuntimeString("controller_archive_dir", event.target.value)} />
+                <input aria-label="Controller Archive Directory" value={runtimeSettings && runtimeSettings.controller_archive_dir ? runtimeSettings.controller_archive_dir : "./logs/archive"} onChange={(event) => updateRuntimeString("controller_archive_dir", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_dir")}</span>
               </FormField>
               <FormField label="Routing Fanout Enabled">
                 <label className="checkbox-label">
-                  <input aria-label="Routing Fanout Enabled" type="checkbox" checked={runtimeSettings.routing_fanout_enabled} onChange={(event) => updateRuntimeBoolean("routing_fanout_enabled", event.target.checked)} />
-                  <span>{runtimeSettings.routing_fanout_enabled ? "Enabled" : "Disabled"}</span>
+                  <input aria-label="Routing Fanout Enabled" type="checkbox" checked={runtimeSettings && runtimeSettings.routing_fanout_enabled ? runtimeSettings.routing_fanout_enabled : false} onChange={(event) => updateRuntimeBoolean("routing_fanout_enabled", event.target.checked)} />
+                  <span>{runtimeSettings && runtimeSettings.routing_fanout_enabled ? "Enabled" : "Disabled"}</span>
                 </label>
                 <span className="settings-source">{sourceFor(runtimeDocument, "routing_fanout_enabled")}</span>
               </FormField>
               <FormField label="Routing Fanout Max">
-                <input aria-label="Routing Fanout Max" type="number" min={1} max={32} value={runtimeSettings.routing_fanout_max} onChange={(event) => updateRuntimeNumber("routing_fanout_max", event.target.value)} />
+                <input aria-label="Routing Fanout Max" type="number" min={1} max={32} value={runtimeSettings && runtimeSettings.routing_fanout_max ? runtimeSettings.routing_fanout_max : 2} onChange={(event) => updateRuntimeNumber("routing_fanout_max", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "routing_fanout_max")}</span>
               </FormField>
               <FormField label="Agent Worker Enabled">
                 <label className="checkbox-label">
-                  <input aria-label="Agent Worker Enabled" type="checkbox" checked={runtimeSettings.agent_worker_enabled} onChange={(event) => updateRuntimeBoolean("agent_worker_enabled", event.target.checked)} />
-                  <span>{runtimeSettings.agent_worker_enabled ? "Enabled" : "Disabled"}</span>
+                  <input aria-label="Agent Worker Enabled" type="checkbox" checked={runtimeSettings && runtimeSettings.agent_worker_enabled ? runtimeSettings.agent_worker_enabled : false} onChange={(event) => updateRuntimeBoolean("agent_worker_enabled", event.target.checked)} />
+                  <span>{runtimeSettings && runtimeSettings.agent_worker_enabled ? "Enabled" : "Disabled"}</span>
                 </label>
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_worker_enabled")}</span>
               </FormField>
               <FormField label="Agent Worker Poll Interval Seconds">
-                <input aria-label="Agent Worker Poll Interval Seconds" type="number" min={1} value={runtimeSettings.agent_worker_poll_interval_seconds} onChange={(event) => updateRuntimeNumber("agent_worker_poll_interval_seconds", event.target.value)} />
+                <input aria-label="Agent Worker Poll Interval Seconds" type="number" min={1} value={runtimeSettings && runtimeSettings.agent_worker_poll_interval_seconds ? runtimeSettings.agent_worker_poll_interval_seconds : 2} onChange={(event) => updateRuntimeNumber("agent_worker_poll_interval_seconds", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_worker_poll_interval_seconds")}</span>
               </FormField>
               <FormField label="Agent Worker Max Jobs">
-                <input aria-label="Agent Worker Max Jobs" type="number" min={1} max={128} value={runtimeSettings.agent_worker_max_jobs} onChange={(event) => updateRuntimeNumber("agent_worker_max_jobs", event.target.value)} />
+                <input aria-label="Agent Worker Max Jobs" type="number" min={1} max={128} value={runtimeSettings && runtimeSettings.agent_worker_max_jobs ? runtimeSettings.agent_worker_max_jobs : 1} onChange={(event) => updateRuntimeNumber("agent_worker_max_jobs", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_worker_max_jobs")}</span>
               </FormField>
             </div>

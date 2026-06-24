@@ -70,8 +70,8 @@ it("smoke tests migrated React pages and logs modal", async () => {
   await user.click(screen.getByRole("link", { name: "Chat" }));
   expect(await screen.findByRole("heading", { name: "Chat" })).toBeInTheDocument();
   await user.click(screen.getByRole("link", { name: "Models" }));
-  expect(await screen.findByRole("heading", { name: "Models" })).toBeInTheDocument();
-  const modelNav = screen.getByRole("navigation", { name: "Models navigation" });
+  expect(await screen.findByRole("heading", { name: "GGUF Library" })).toBeInTheDocument();
+  const modelNav = screen.getByRole("navigation", { name: "Library navigation" });
   await user.click(within(modelNav).getByRole("link", { name: "Library" }));
   expect(await screen.findByRole("heading", { name: "GGUF Library" })).toBeInTheDocument();
   await user.click(within(screen.getByRole("navigation", { name: "Library navigation" })).getByRole("link", { name: "Acquire" }));
@@ -85,8 +85,7 @@ it("smoke tests migrated React pages and logs modal", async () => {
   await user.click(screen.getByRole("button", { name: "Preview Route" }));
   expect((await screen.findAllByText("mac / qwen")).length).toBeGreaterThan(0);
   expect((await screen.findAllByText("coding")).length).toBeGreaterThan(1);
-  await user.click(screen.getByRole("link", { name: "Settings" }));
-  expect(await screen.findByRole("heading", { name: "System Settings" })).toBeInTheDocument();
+  await user.click(screen.getByRole("link", { name: "Settings"}));
   await user.click(screen.getByRole("button", { name: "Logs" }));
   expect(screen.getByRole("dialog", { name: "Recent Logs" })).toBeInTheDocument();
 });

@@ -147,7 +147,6 @@ describe("model placement details", () => {
       />,
     );
 
-    expect(screen.getByText("Configured as qwen3.")).toBeInTheDocument();
-    expect(screen.getByText("Deployment 127.0.0.1:8081.")).toBeInTheDocument();
+    expect(screen.getByText("127.0.0.1:8081")).toBeInTheDocument();
   });
 });

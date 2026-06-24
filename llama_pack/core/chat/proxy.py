@@ -230,7 +230,7 @@ class ChatProxy:
         node_name = target["node_name"]
         roots = self.project_store.list_node_roots(project_id_value)
         if roots is None:
-            raise ProjectRoutingError(404, "Project not found")
+            raise ProjectRoutingError(404, "Project node roots not found")
         allowed_roots = [
             root for root in roots
             if root["node_name"] == node_name and root["safe_root_status"] == "allowed"
