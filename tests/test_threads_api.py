@@ -827,6 +827,27 @@ def test_threads_api_posts_message_with_agent_tool_runtime_fields(tmp_path):
         controller_request=fake_controller_request,
         chat_request=fake_chat_request,
     )
+    project = app.state.project_store.create_project(name="Project 1", root_hint="/repo")
+    app.state.project_store.upsert_node_root(
+        project_id=str(project["id"]),
+        node_name="linux-2080ti",
+        root_path="/repo",
+        safe_root_status="allowed",
+    )
+    snapshot = app.state.project_graph_store.create_snapshot(
+        project_id=str(project["id"]),
+        node_name="linux-2080ti",
+        root_path="/repo",
+        git_commit=None,
+    )
+    app.state.project_graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    app.state.project_graph_store.activate_snapshot(str(snapshot["id"]))
     client = TestClient(app)
     thread_id = client.post("/lm-api/v1/threads", json={"metadata": {"request_type": "coding"}}).json()["id"]
 
@@ -838,11 +859,7 @@ def test_threads_api_posts_message_with_agent_tool_runtime_fields(tmp_path):
             "model": "qwen",
             "tool_runtime": "agent",
             "tool_choice": "auto",
-            "project_id": "project-1",
-            "node_roots": {
-                "test-node": "/test/path",
-                "test-node-two": "/test/path/two",
-            },
+            "project_id": str(project["id"]),
             "agent_tool_max_iterations": 4,
         },
     )
@@ -860,7 +877,7 @@ def test_threads_api_posts_message_with_agent_tool_runtime_fields(tmp_path):
                 "tool_choice": "auto",
                 "tool_runtime": "agent",
                 "agent_tool_max_iterations": 4,
-                "project_id": "project-1",
+                "project_id": str(project["id"]),
                 "model": "qwen",
             },
         }
