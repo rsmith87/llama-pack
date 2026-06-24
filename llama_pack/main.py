@@ -29,6 +29,7 @@ from llama_pack.api.routes import (
     nodes,
     ollama_compat,
     openai_compat,
+    ocr,
     plugins,
     projects,
     quantizations,
@@ -84,6 +85,7 @@ from llama_pack.core.app.auth_policy import (
     should_validate_ui_session,
 )
 from llama_pack.core.plugins import load_plugins
+from llama_pack.core.ocr import create_ocr_service
 
 LM_API_PREFIX = "/lm-api/v1"
 
@@ -257,6 +259,7 @@ def _configure_app_state(
     app_config = app.state.runtime_settings_service.effective_config()
     app.state.config = app_config
     app.state.plugin_registry = load_plugins(app_config)
+    app.state.ocr_service = create_ocr_service(app_config.log_dir / "ocr")
     persistent_config = app_config.config_source not in {"(defaults)", "(in-memory)"}
     store = (
         JsonFileStore(app_config.log_dir / "controller_nodes_state.json")
@@ -380,6 +383,7 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.include_router(chat.router, prefix=LM_API_PREFIX)
     app.include_router(openai_compat.router)
     app.include_router(ollama_compat.router)
+    app.include_router(ocr.router, prefix=LM_API_PREFIX)
     app.include_router(conversions.router, prefix=LM_API_PREFIX)
     app.include_router(downloads.router, prefix=LM_API_PREFIX)
     app.include_router(quantizations.router, prefix=LM_API_PREFIX)

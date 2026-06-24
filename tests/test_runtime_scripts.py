@@ -118,9 +118,8 @@ def test_smoke_ocr_document_script_exposes_ppocrv5_defaults() -> None:
     assert "./models/ocr/pp-ocrv5-server/rec" in contents
     assert "PP-OCRv5_server_det" in contents
     assert "PP-OCRv5_server_rec" in contents
-    assert "PaddleOCR" in contents
-    assert "pypdfium2" in contents
-    assert "pip install pillow" in contents
+    assert "PaddleOcrModelConfig" in contents
+    assert "create_ocr_service" in contents
 
 
 def test_smoke_ocr_document_script_exposes_tesseract_engine() -> None:
@@ -129,8 +128,8 @@ def test_smoke_ocr_document_script_exposes_tesseract_engine() -> None:
 
     assert "--engine" in contents
     assert "tesseract" in contents
-    assert "pdftoppm" in contents
-    assert "shutil.which" in contents
+    assert "OcrEngineConfig" in contents
+    assert "create_ocr_service" in contents
 
 
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
