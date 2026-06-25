@@ -85,7 +85,7 @@ Example response:
     "openaiChatCompletions": true,
     "streaming": true,
     "localChatSessions": false,
-    "businessPlugin": false
+    "pluginAuth": false
   },
   "auth": {
     "methods": ["llama_pack_api_key", "external_api_key"],
@@ -104,10 +104,11 @@ Example response:
 }
 ```
 
-When the private `llama_pack_business` plugin is enabled and healthy enough for
-client login, discovery adds `llama_pack_business` to `auth.methods` and reports a
-`businessAuth` endpoint. Clients should treat absent capability fields as
-unsupported and should prefer `/v1/chat/completions` for end-user chat.
+When an enabled plugin declares healthy client auth metadata, discovery adds
+that plugin method to `auth.methods` and reports the plugin-owned auth endpoint
+under the manifest's configured endpoint key. Clients should treat absent
+capability fields as unsupported and should prefer `/v1/chat/completions` for
+end-user chat.
 
 External chat-only keys can call:
 

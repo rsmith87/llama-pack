@@ -190,8 +190,8 @@ export REQUESTS_CA_BUNDLE=/home/rsmith/llama-pack-certs/llama-pack-ca-chain.crt
 Use the local account path on each machine. On the Mac mini, for example:
 
 ```bash
-export SSL_CERT_FILE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export SSL_CERT_FILE=~/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=~/llama-pack-certs/llama-pack-ca-chain.crt
 ```
 
 ## Issue Node Certificates
@@ -275,7 +275,7 @@ scripts/renew_caddy_step_cert.sh \
   --ca-url https://pi-controller.local:8443 \
   --root ~/llama-pack-certs/ca-root.crt \
   --cert-dir /opt/homebrew/etc/caddy/certs \
-  --owner robertsmith \
+  --owner USER \
   --group staff \
   --expires-in 24h \
   --reload brew
@@ -331,15 +331,15 @@ renewal windows when it is running.
 For Homebrew Caddy on macOS, use the dedicated wrapper:
 
 ```bash
-/Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh
+/path/to/llama-pack/scripts/renew_caddy_mac_mini.sh
 ```
 
 For scheduled runs, prefer `launchd` over `cron`. Install the wrapper into a
 stable user path and point your LaunchAgent to it:
 
 ```bash
-install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \
-  /Users/robertsmith/bin/renew_caddy_mac_mini.sh
+install -m 755 /path/to/llama-pack/scripts/renew_caddy_mac_mini.sh \
+  /path/to/bin/renew_caddy_mac_mini.sh
 ```
 
 LaunchAgent location:
@@ -351,7 +351,7 @@ LaunchAgent location:
 `ProgramArguments` should execute:
 
 ```text
-/Users/robertsmith/bin/renew_caddy_mac_mini.sh
+/path/to/bin/renew_caddy_mac_mini.sh
 ```
 
 ## Install Certs For Caddy
@@ -391,7 +391,7 @@ sudo cp mac-mini.crt /opt/homebrew/etc/caddy/certs/mac-mini.crt
 sudo cp mac-mini.key /opt/homebrew/etc/caddy/certs/mac-mini.key
 cat mac-mini.crt ~/llama-pack-certs/intermediate_ca.crt > mac-mini-fullchain.crt
 sudo cp mac-mini-fullchain.crt /opt/homebrew/etc/caddy/certs/mac-mini-fullchain.crt
-sudo chown robertsmith:staff /opt/homebrew/etc/caddy/certs/mac-mini.key
+sudo chown USER:staff /opt/homebrew/etc/caddy/certs/mac-mini.key
 sudo chmod 644 /opt/homebrew/etc/caddy/certs/mac-mini.crt
 sudo chmod 644 /opt/homebrew/etc/caddy/certs/mac-mini-fullchain.crt
 sudo chmod 600 /opt/homebrew/etc/caddy/certs/mac-mini.key
@@ -512,8 +512,8 @@ Mac agent `.llama_pack.env`:
 ```bash
 export LLAMA_PACK_CONTROLLER_URL=https://pi-controller.local
 export LLAMA_PACK_AGENT_URL=https://mac-mini.local
-export SSL_CERT_FILE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export SSL_CERT_FILE=~/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=~/llama-pack-certs/llama-pack-ca-chain.crt
 ```
 
 Linux agent `.llama_pack.env`:
@@ -662,7 +662,7 @@ scripts/renew_caddy_step_cert.sh \
   --expires-in 24h \
   --force \
   [--cert-dir /etc/caddy/certs --reload systemd]      # Pi / Linux
-  [--cert-dir /opt/homebrew/etc/caddy/certs --owner robertsmith --group staff --reload brew]  # Mac
+  [--cert-dir /opt/homebrew/etc/caddy/certs --owner USER --group staff --reload brew]  # Mac
 ```
 
 ## Running step-ca As A Systemd Service
@@ -742,7 +742,7 @@ sudo journalctl -u llama-pack-renew-caddy-cert.service --no-pager -n 30
 
 Mac:
 ```bash
-cd /Users/robertsmith/Apps/llama-pack && scripts/renew_caddy_step_cert.sh \
+cd /path/to/llama-pack && scripts/renew_caddy_step_cert.sh \
   --name mac-mini \
   --leaf ~/llama-pack-certs/mac-mini.crt \
   --key ~/llama-pack-certs/mac-mini.key \
@@ -750,7 +750,7 @@ cd /Users/robertsmith/Apps/llama-pack && scripts/renew_caddy_step_cert.sh \
   --ca-url https://pi-controller.local:8443 \
   --root ~/llama-pack-certs/root_ca.crt \
   --cert-dir /opt/homebrew/etc/caddy/certs \
-  --owner robertsmith \
+  --owner USER \
   --group staff \
   --expires-in 24h \
   --reload brew \

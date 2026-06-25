@@ -16,7 +16,7 @@ class ClientCapabilities(BaseModel):
     streaming: bool = True
     localChatSessions: bool = False
     projectContext: bool = True
-    businessPlugin: bool = False
+    pluginAuth: bool = False
 
 
 class ClientAuthDiscovery(BaseModel):
@@ -37,7 +37,6 @@ class ClientEndpointDiscovery(BaseModel):
     models: str = "/lm-api/v1/models"
     pluginsStatus: str = "/lm-api/v1/plugins/status"
     docs: str = "/ui/docs"
-    businessAuth: str | None = None
 
 
 class ClientDiscoveryResponse(BaseModel):
@@ -52,35 +51,41 @@ class ClientDiscoveryResponse(BaseModel):
 @router.get("")
 async def client_discovery(request: Request) -> ClientDiscoveryResponse:
     config = request.app.state.config
-    business_enabled = await _business_plugin_available(request)
     auth_methods = ["llama_pack_api_key", "external_api_key"]
     endpoints = ClientEndpointDiscovery()
+    plugin_auth_endpoints = await _plugin_client_auth_endpoints(request)
 
-    if business_enabled:
-        auth_methods.append("llama_pack_business")
-        endpoints.businessAuth = "/lm-api/v1/plugins/llama_pack_business/auth/login"
+    for method, endpoint_key, endpoint in plugin_auth_endpoints:
+        auth_methods.append(method)
 
     return ClientDiscoveryResponse(
         version=_config_version(config),
         mode=config.mode,
-        capabilities=ClientCapabilities(businessPlugin=business_enabled),
+        capabilities=ClientCapabilities(pluginAuth=bool(plugin_auth_endpoints)),
         auth=ClientAuthDiscovery(methods=auth_methods),
-        endpoints={key: str(value) for key, value in endpoints.model_dump(exclude_none=True).items()},
+        endpoints={
+            **{key: str(value) for key, value in endpoints.model_dump(exclude_none=True).items()},
+            **{endpoint_key: endpoint for _method, endpoint_key, endpoint in plugin_auth_endpoints},
+        },
     )
 
 
-async def _business_plugin_available(request: Request) -> bool:
+async def _plugin_client_auth_endpoints(request: Request) -> list[tuple[str, str, str]]:
     registry = getattr(request.app.state, "plugin_registry", None)
     if registry is None:
-        return False
+        return []
     status_payload = await registry.status_payload_async()
-    record = next(
-        (item for item in status_payload.get("plugins", []) if item.get("id") == "llama_pack_business"),
-        None,
-    )
-    if record is None or record.get("status") != "enabled":
-        return False
-    return not list(record.get("errors", []) or [])
+    status_by_id = {item.get("id"): item for item in status_payload.get("plugins", [])}
+    endpoints: list[tuple[str, str, str]] = []
+    for record in registry.records.values():
+        client_auth = record.manifest.client_auth if record.manifest else None
+        status = status_by_id.get(record.id, {})
+        if client_auth is None or status.get("status") != "enabled":
+            continue
+        if list(status.get("errors", []) or []):
+            continue
+        endpoints.append((client_auth.method, client_auth.endpoint_key, client_auth.endpoint))
+    return endpoints
 
 
 def _config_version(config: Any) -> str:

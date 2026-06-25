@@ -36,6 +36,8 @@ agent_tools:
   enabled: true
   max_iterations: 4          # max tool-call rounds per request (1–16)
   tool_timeout_seconds: 10   # per-tool timeout in seconds
+  answer_verification_mode: warn
+  answer_verification_max_retries: 1
   safe_roots:
     - /path/to/allowed/root  # all file-system tools must resolve under a safe root
   tools:
@@ -44,6 +46,50 @@ agent_tools:
       description: What this tool does (shown to the LLM).
       # ... type-specific fields
 \`\`\`
+
+---
+
+## Final Answer Verification
+
+Project-graph chats can verify final answers before returning them. The verifier
+checks repository file paths and symbol-looking claims against the active project
+graph. In \`warn\` mode, the runtime asks the model to revise once when
+unverified claims are found. In \`strict\` mode, unresolved verifier failures can
+fail the request rather than returning an ungrounded answer.
+
+## Prompt Assembly
+
+Agent-tool chat prompts are assembled through
+\`llama_pack.core.agent_tools.prompt_builder.PromptBuilder\` before they are sent
+to \`AgentToolLoop\`. Prompt mutations for agent chats should live there rather
+than in routes, tool runtime loops, or UI-specific code.
+
+Current prompt inputs:
+
+- Project graph context: when a project graph is active, \`PromptBuilder\` adds a
+  system instruction telling the model to inspect indexed symbols,
+  relationships, routes, and React components before making codebase claims.
+- Previous-answer review context: when the latest user message asks to review,
+  verify, correct, or check a previous answer, \`PromptBuilder\` injects the
+  latest prior assistant answer in a \`<previous_assistant_answer>\` block. This
+  keeps self-review prompts grounded in the exact answer being reviewed instead
+  of conversational memory.
+
+Add future prompt inputs by extending \`PromptBuilder\` with a small, test-covered
+message transformation. Keep each transformation deterministic and based on
+explicit request, thread, or runtime context. Do not make prompt assembly depend
+on model output, and do not duplicate prompt-injection behavior in callers.
+
+Expected call flow for OpenAI-compatible agent chats:
+
+\`\`\`text
+openai_compat.openai_chat_completions
+  -> PromptBuilder.build_agent_messages(...)
+  -> AgentToolLoop.run(...)
+\`\`\`
+
+\`AgentToolLoop\` may still append verification retry messages during a turn, but
+initial request prompt shaping belongs in \`PromptBuilder\`.
 
 ---
 
@@ -98,7 +144,7 @@ configured root are rejected.
 read_project_file:
   type: file_read_dynamic
   description: Read a project or log file by relative path.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
   max_file_bytes: 524288
 \`\`\`
 
@@ -202,7 +248,7 @@ List files and directories under a configured path without shelling out.
 list_project_files:
   type: directory_list
   description: List top-level project structure.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
   recursive: true
   max_depth: 2
   max_entries: 200
@@ -230,7 +276,7 @@ Search file names under a configured root by glob pattern. Safe equivalent of
 find_python_files:
   type: file_search
   description: Find Python source files in the project.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
   glob: "**/*.py"
   max_entries: 200
   include_hidden: false
@@ -257,7 +303,7 @@ The agent provides a \`query\` argument at call time (defined via \`parameters\`
 search_project_code:
   type: text_search
   description: Search for text or symbols in project Python source files.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
   glob: "**/*.py"
   case_sensitive: false
   max_matches: 50
@@ -295,7 +341,7 @@ changed files.
 repo_status:
   type: git_status
   description: Show current git branch and changed files.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
 \`\`\`
 
 **Fields**
@@ -317,7 +363,7 @@ by \`max_lines\`.
 repo_diff:
   type: git_diff
   description: Show unstaged changes in the project repo.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
   max_lines: 300
 \`\`\`
 
@@ -339,7 +385,7 @@ Show recent commit metadata for a configured repository.
 repo_log:
   type: git_log
   description: Show recent commits in the project repo.
-  path: /Users/robertsmith/Apps/llama-pack
+  path: /path/to/llama-pack
   max_commits: 20
 \`\`\`
 
@@ -681,6 +727,16 @@ and scoring model.
       },
       {
         "level": 2,
+        "text": "Final Answer Verification",
+        "anchor": "final-answer-verification"
+      },
+      {
+        "level": 2,
+        "text": "Prompt Assembly",
+        "anchor": "prompt-assembly"
+      },
+      {
+        "level": 2,
         "text": "Tool Types",
         "anchor": "tool-types"
       },
@@ -790,7 +846,7 @@ and scoring model.
         "anchor": "tool-loop-evaluations"
       }
     ],
-    searchBody: "Agent Tools Agent tools give a coding agent structured, operator-controlled access to the local machine. Most tools are read-only; write-capable tools must be explicitly configured by the operator and are constrained by and per-tool limits. Each tool is a named YAML entry under with a and a that is shown to the LLM. Configuration skeleton --- Tool Types Run a fixed configured command and return stdout/stderr. Fields Field Default Description --- --- --- required Command array passed to the subprocess directly (no shell). Override the global timeout for this tool. --- Read a single configured file. Fields Field Default Description --- --- --- required File to read. Must resolve under . --- Read a file selected by the model under a configured root directory. The model must pass a relative argument; absolute paths and traversal outside the configured root are rejected. Example model arguments: Fields Field Default Description --- --- --- required Root directory for relative file reads. Must resolve under . Reject files larger than this limit before reading. --- Write, append, or create a single configured file. The model supplies only the argument; the destination path and write mode are fixed in YAML. Model arguments: Fields Field Default Description --- --- --- required File to write. Must resolve under . Parent directories are created if needed. , , or . fails if the file already exists. Reject content larger than this limit (1–1048576 bytes). --- Call a fixed HTTP endpoint and return the raw response body as text. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Override the global timeout. --- Call a fixed HTTP endpoint and return bounded parsed JSON. Returns a structured error if the response is not valid JSON. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Truncate response body before parsing. Override the global timeout. --- List files and directories under a configured path without shelling out. Fields Field Default Description --- --- --- required Directory to list. Must resolve under . Recurse into subdirectories. Max recursion depth when (0–32). Max entries to return (1–5000). Include dotfiles and hidden directories. --- Search file names under a configured root by glob pattern. Safe equivalent of or . Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern relative to . Include hidden files and directories. Max results to return (1–5000). --- Search file contents under a configured root. Safe equivalent of bounded . The agent provides a argument at call time (defined via ). Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern to filter which files to search. Case-sensitive matching. Treat as a compiled regex instead of a substring. Max total matches to return (1–2000). Skip files larger than this (bytes). --- Report read-only git state for a configured repository: current branch and changed files. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max changed files to return. Override the global timeout. --- Show the unstaged diff ( ) for a configured repository, bounded by . Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max diff lines to return (1–1000). Override the global timeout. --- Show recent commit metadata for a configured repository. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max commits to return (1–200). Override the global timeout. Returns , , , and for each commit. --- Report runtime health for locally managed model servers. Reads internal Llama Pack process state — no shell commands. Fields Field Default Description --- --- --- Max processes to return (1–5000). Returns , , , , and for each process. --- Return the last N lines of a configured log file without shelling out. Fields Field Default Description --- --- --- required Log file to read. Must resolve under . Max lines to return from the end of the file (1–1000). --- Run read-only SQL queries against one configured SQLite database, or against one of several configured databases selected by stem name. Only queries whose first non-comment token is or are allowed, and connections open in SQLite read-only mode. Single database: Multiple databases: Model arguments: For a single configured , omit : Fields Field Default Description --- --- --- optional SQLite database file. Required unless is set. Must resolve under . Multiple SQLite database files. The model chooses one with , using the file stem such as . Max rows to return (1–5000). --- Fetch a URL and return the page content. The agent provides the at call time. HTML is stripped to readable text by default using BeautifulSoup. Fields Field Default Description --- --- --- (open) If non-empty, only these domains and their subdomains are permitted. Strip HTML tags and extract visible text via BeautifulSoup. Truncate the response body before parsing (bytes). Override the global timeout. Built-in SSRF protection (always enforced, regardless of ): - Blocks , , - Blocks RFC 1918 private ranges: , , - Blocks link-local: , - Only and schemes are allowed ( , , etc. are rejected) --- Safety Rules - All path-based local tools ( , , , , , , , , , , and ) require to be set and will reject any path that does not resolve under a configured root. - is the only filesystem-mutating tool. It writes only to its configured , enforces , and rejects content larger than . - opens databases read-only and accepts only / queries after comments are stripped. - and URLs are fixed in YAML; the agent cannot supply or modify URLs at call time. - blocks loopback, private IP ranges, and non-http(s) schemes at all times. Set to further restrict which public sites the agent can reach. - reads in-memory state only — no subprocess or filesystem access. - Git tools are read-only status, diff, and log views. No commit, checkout, or push tools are implemented. --- Memory Tool Types These tools interact with the controller's semantic memory store (ChromaDB + ). They are only registered when the controller's memory subsystem is enabled and the store is not disabled. See for the config block. --- Write an observation or fact into the controller's memory store. The write is fire-and-forget — the tool returns immediately without waiting for the embedding and storage to complete. Near-identical entries (cosine similarity ≥ 0.92) are deduplicated server-side. Model arguments at call time: Fields (all optional in YAML — no static config beyond and ) Argument Default Description --- --- --- required The fact or observation to store. Must be non-empty. Memory tier: , , or . Optional topic label for grouping. Optional list of tag strings. --- Search the controller's memory store by semantic similarity and return the most relevant entries. The model provides the search query at call time. Model arguments at call time: Returns: Fields Argument Default Description --- --- --- required Natural language search query. Must be non-empty. store Max results to return (1–20). --- Tool-Loop Evaluations Use to run deterministic tool-loop evaluations against one or more local tool-capable models. The runner uses the same agent-local tool execution path as with , then writes an append-only JSONL history, a latest summary JSON file, and durable benchmark history for UI/API consumption. Default output paths are: - - The built-in cases use deterministic eval-only tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current synthetic presets cover: - short and long ordered tool sequences - avoiding unnecessary tool calls - recovery after a deterministic tool error - stopping after a tool reports that no more information is available - branch selection - exact tool argument preservation - order-insensitive fact gathering - helper/delegation-style synthesis Current real-world deterministic scenarios ask models to draft compact design documents from relevant project-like sources while avoiding unrelated scope. UI/API-triggered runs also include live workspace scenarios that use actual workspace tools in temporary seeded coding-agent workspaces and check the generated artifact content. Current live presets cover collaborative app design, CI failure triage, config migration planning, targeted bugfix planning, and PR review findings. Tool-loop case status can be , , or . means the model completed the loop, used the required tools, and produced the required artifact, but missed scoring details such as exact expected strings or artifact substrings. Missing required tools, tool errors, repeated tool calls, missing artifacts, and forbidden stale content remain . Run multiple models by repeating ; route to a specific controller node with ; run a single built-in case with . Node targets require a controller-mode config that defines the node. Running the command with an agent-mode config will resolve the model as local to that process instead of going through the controller. Runs started from the Tool Loop Evals UI call in agent mode or in controller mode, then persist summaries and case details in the benchmark database. See Tool-Loop Eval Presets for the preset roadmap and scoring model.",
+    searchBody: "Agent Tools Agent tools give a coding agent structured, operator-controlled access to the local machine. Most tools are read-only; write-capable tools must be explicitly configured by the operator and are constrained by and per-tool limits. Each tool is a named YAML entry under with a and a that is shown to the LLM. Configuration skeleton --- Final Answer Verification Project-graph chats can verify final answers before returning them. The verifier checks repository file paths and symbol-looking claims against the active project graph. In mode, the runtime asks the model to revise once when unverified claims are found. In mode, unresolved verifier failures can fail the request rather than returning an ungrounded answer. Prompt Assembly Agent-tool chat prompts are assembled through before they are sent to . Prompt mutations for agent chats should live there rather than in routes, tool runtime loops, or UI-specific code. Current prompt inputs: - Project graph context: when a project graph is active, adds a system instruction telling the model to inspect indexed symbols, relationships, routes, and React components before making codebase claims. - Previous-answer review context: when the latest user message asks to review, verify, correct, or check a previous answer, injects the latest prior assistant answer in a block. This keeps self-review prompts grounded in the exact answer being reviewed instead of conversational memory. Add future prompt inputs by extending with a small, test-covered message transformation. Keep each transformation deterministic and based on explicit request, thread, or runtime context. Do not make prompt assembly depend on model output, and do not duplicate prompt-injection behavior in callers. Expected call flow for OpenAI-compatible agent chats: may still append verification retry messages during a turn, but initial request prompt shaping belongs in . --- Tool Types Run a fixed configured command and return stdout/stderr. Fields Field Default Description --- --- --- required Command array passed to the subprocess directly (no shell). Override the global timeout for this tool. --- Read a single configured file. Fields Field Default Description --- --- --- required File to read. Must resolve under . --- Read a file selected by the model under a configured root directory. The model must pass a relative argument; absolute paths and traversal outside the configured root are rejected. Example model arguments: Fields Field Default Description --- --- --- required Root directory for relative file reads. Must resolve under . Reject files larger than this limit before reading. --- Write, append, or create a single configured file. The model supplies only the argument; the destination path and write mode are fixed in YAML. Model arguments: Fields Field Default Description --- --- --- required File to write. Must resolve under . Parent directories are created if needed. , , or . fails if the file already exists. Reject content larger than this limit (1–1048576 bytes). --- Call a fixed HTTP endpoint and return the raw response body as text. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Override the global timeout. --- Call a fixed HTTP endpoint and return bounded parsed JSON. Returns a structured error if the response is not valid JSON. Fields Field Default Description --- --- --- required Fixed endpoint URL. or . Truncate response body before parsing. Override the global timeout. --- List files and directories under a configured path without shelling out. Fields Field Default Description --- --- --- required Directory to list. Must resolve under . Recurse into subdirectories. Max recursion depth when (0–32). Max entries to return (1–5000). Include dotfiles and hidden directories. --- Search file names under a configured root by glob pattern. Safe equivalent of or . Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern relative to . Include hidden files and directories. Max results to return (1–5000). --- Search file contents under a configured root. Safe equivalent of bounded . The agent provides a argument at call time (defined via ). Fields Field Default Description --- --- --- required Root to search under. Must resolve under . required Glob pattern to filter which files to search. Case-sensitive matching. Treat as a compiled regex instead of a substring. Max total matches to return (1–2000). Skip files larger than this (bytes). --- Report read-only git state for a configured repository: current branch and changed files. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max changed files to return. Override the global timeout. --- Show the unstaged diff ( ) for a configured repository, bounded by . Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max diff lines to return (1–1000). Override the global timeout. --- Show recent commit metadata for a configured repository. Fields Field Default Description --- --- --- required Repository root. Must resolve under . Max commits to return (1–200). Override the global timeout. Returns , , , and for each commit. --- Report runtime health for locally managed model servers. Reads internal Llama Pack process state — no shell commands. Fields Field Default Description --- --- --- Max processes to return (1–5000). Returns , , , , and for each process. --- Return the last N lines of a configured log file without shelling out. Fields Field Default Description --- --- --- required Log file to read. Must resolve under . Max lines to return from the end of the file (1–1000). --- Run read-only SQL queries against one configured SQLite database, or against one of several configured databases selected by stem name. Only queries whose first non-comment token is or are allowed, and connections open in SQLite read-only mode. Single database: Multiple databases: Model arguments: For a single configured , omit : Fields Field Default Description --- --- --- optional SQLite database file. Required unless is set. Must resolve under . Multiple SQLite database files. The model chooses one with , using the file stem such as . Max rows to return (1–5000). --- Fetch a URL and return the page content. The agent provides the at call time. HTML is stripped to readable text by default using BeautifulSoup. Fields Field Default Description --- --- --- (open) If non-empty, only these domains and their subdomains are permitted. Strip HTML tags and extract visible text via BeautifulSoup. Truncate the response body before parsing (bytes). Override the global timeout. Built-in SSRF protection (always enforced, regardless of ): - Blocks , , - Blocks RFC 1918 private ranges: , , - Blocks link-local: , - Only and schemes are allowed ( , , etc. are rejected) --- Safety Rules - All path-based local tools ( , , , , , , , , , , and ) require to be set and will reject any path that does not resolve under a configured root. - is the only filesystem-mutating tool. It writes only to its configured , enforces , and rejects content larger than . - opens databases read-only and accepts only / queries after comments are stripped. - and URLs are fixed in YAML; the agent cannot supply or modify URLs at call time. - blocks loopback, private IP ranges, and non-http(s) schemes at all times. Set to further restrict which public sites the agent can reach. - reads in-memory state only — no subprocess or filesystem access. - Git tools are read-only status, diff, and log views. No commit, checkout, or push tools are implemented. --- Memory Tool Types These tools interact with the controller's semantic memory store (ChromaDB + ). They are only registered when the controller's memory subsystem is enabled and the store is not disabled. See for the config block. --- Write an observation or fact into the controller's memory store. The write is fire-and-forget — the tool returns immediately without waiting for the embedding and storage to complete. Near-identical entries (cosine similarity ≥ 0.92) are deduplicated server-side. Model arguments at call time: Fields (all optional in YAML — no static config beyond and ) Argument Default Description --- --- --- required The fact or observation to store. Must be non-empty. Memory tier: , , or . Optional topic label for grouping. Optional list of tag strings. --- Search the controller's memory store by semantic similarity and return the most relevant entries. The model provides the search query at call time. Model arguments at call time: Returns: Fields Argument Default Description --- --- --- required Natural language search query. Must be non-empty. store Max results to return (1–20). --- Tool-Loop Evaluations Use to run deterministic tool-loop evaluations against one or more local tool-capable models. The runner uses the same agent-local tool execution path as with , then writes an append-only JSONL history, a latest summary JSON file, and durable benchmark history for UI/API consumption. Default output paths are: - - The built-in cases use deterministic eval-only tools instead of the target agent's configured tools. This keeps runs comparable across nodes and models. Current synthetic presets cover: - short and long ordered tool sequences - avoiding unnecessary tool calls - recovery after a deterministic tool error - stopping after a tool reports that no more information is available - branch selection - exact tool argument preservation - order-insensitive fact gathering - helper/delegation-style synthesis Current real-world deterministic scenarios ask models to draft compact design documents from relevant project-like sources while avoiding unrelated scope. UI/API-triggered runs also include live workspace scenarios that use actual workspace tools in temporary seeded coding-agent workspaces and check the generated artifact content. Current live presets cover collaborative app design, CI failure triage, config migration planning, targeted bugfix planning, and PR review findings. Tool-loop case status can be , , or . means the model completed the loop, used the required tools, and produced the required artifact, but missed scoring details such as exact expected strings or artifact substrings. Missing required tools, tool errors, repeated tool calls, missing artifacts, and forbidden stale content remain . Run multiple models by repeating ; route to a specific controller node with ; run a single built-in case with . Node targets require a controller-mode config that defines the node. Running the command with an agent-mode config will resolve the model as local to that process instead of going through the controller. Runs started from the Tool Loop Evals UI call in agent mode or in controller mode, then persist summaries and case details in the benchmark database. See Tool-Loop Eval Presets for the preset roadmap and scoring model.",
   },
   {
     id: "api",
@@ -883,7 +939,7 @@ Example response:
     "openaiChatCompletions": true,
     "streaming": true,
     "localChatSessions": false,
-    "businessPlugin": false
+    "pluginAuth": false
   },
   "auth": {
     "methods": ["llama_pack_api_key", "external_api_key"],
@@ -902,10 +958,11 @@ Example response:
 }
 \`\`\`
 
-When the private \`llama_pack_business\` plugin is enabled and healthy enough for
-client login, discovery adds \`llama_pack_business\` to \`auth.methods\` and reports a
-\`businessAuth\` endpoint. Clients should treat absent capability fields as
-unsupported and should prefer \`/v1/chat/completions\` for end-user chat.
+When an enabled plugin declares healthy client auth metadata, discovery adds
+that plugin method to \`auth.methods\` and reports the plugin-owned auth endpoint
+under the manifest's configured endpoint key. Clients should treat absent
+capability fields as unsupported and should prefer \`/v1/chat/completions\` for
+end-user chat.
 
 External chat-only keys can call:
 
@@ -1512,7 +1569,7 @@ Response (\`200\`):
         "anchor": "memory-endpoints"
       }
     ],
-    searchBody: "API This page lists the main HTTP endpoints and documents the gateway surface for applications that call Llama Pack as a private AI backend. External Chat Compatibility Use an external app key with the OpenAI-compatible chat endpoint as the primary integration surface for other apps. External app keys are chat-only credentials: they can call the consumer completion APIs, but they cannot use admin, operator, node, model, auth, audit, or settings endpoints. On a controller, routes the call through using the same values as threaded chat, such as , , or . Llama Pack creates a durable thread by default and returns routing metadata in response headers: Send on later calls to append to the same durable record and keep thread affinity when the previous route is still eligible. The JSON response body stays OpenAI-compatible. Older Ollama clients can point at the compatibility route. The same external app key boundary applies here: preserves Ollama-style response bodies and streaming newline JSON, while still using controller routing and the same metadata headers. Successful external app calls write safe audit metadata, including key id, endpoint, request type, routed node, and model. Prompt and response text are not written to the audit event. The external app key list also stores a latest-use summary for each key: last used time, endpoint, route, node, model, and request type. Client Discovery Standalone clients should call before presenting setup or login options. The endpoint is public so a client can detect Llama Pack before it has credentials. Example response: When the private plugin is enabled and healthy enough for client login, discovery adds to and reports a endpoint. Clients should treat absent capability fields as unsupported and should prefer for end-user chat. External chat-only keys can call: - to retrieve an end-user-safe model list. - to retrieve the current client's auth method, chat capabilities, and usable model list. - to verify auth, route resolution, and non-streaming or streaming chat for setup flows. - for supported client project context actions. These routes intentionally avoid admin/runtime details from . For standalone end-user chat apps, prefer external app keys with the header. Use UI sessions for the built-in operator/admin UI. Plugin-provided auth modes should be discovered through client discovery and handled by plugin-owned routes. Example model list response: Example diagnostics request: Core Endpoints - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Setup assistant endpoints The setup assistant endpoints live under and support the UI-first bootstrap flow described in Setup. They are intentionally narrow: they report whether authentication still needs bootstrapping, create the first admin key only when no auth exists, and expose a secret-masked config snapshot for setup review. — Returns mode and bootstrap state: is false once either is configured or the auth store has at least one active key. — Creates the first admin key and an initial UI session. This endpoint succeeds only when static auth is not configured and the auth store has no active keys; later calls return . Response: The raw admin API key is returned once. The route also writes an audit event. — Returns a setup-oriented configuration snapshot with secrets masked as . It includes mode, log/config basics, memory settings, nodes, agent/controller URLs, worker settings, model library root, and the first configured model. See Model Downloads for the download workflow, history, logs, cancellation, and recommendations behavior. Controller Node Endpoints - - - - - - - - - - - - - - - - - - - The UI includes a Nodes page for controller mode that shows node reachability, heartbeat/config metadata, reported models, and remote model Start/Stop/Restart/Logs actions. Controller Orchestration Endpoints Controller orchestration endpoints are available in controller mode only: - - - - - - - - - - - - - - - - - - - - See Benchmarks for benchmark definitions, managed runs, metrics, and comparison behavior. Job types accepts a field that determines how the agent worker processes the job. — Single chat completion routed to one node. — Embed one or more strings via a model's embeddings endpoint. — Run a suite of prompt cases against a model, collecting per-case outputs and a summary artifact. Each case can override , , , and . Accepts 1–200 cases. The completed job has one artifact per case (with , , and error if the case failed) and one artifact. Cases that fail are recorded but do not abort the remaining cases. — Download a GGUF model repo or selected GGUF files from Hugging Face on the target worker node. The agent uses its configured destination and local Hugging Face credentials/environment. must be in format. and are optional relative paths. Progress events include , , , , and . Cancelling the orchestration job cancels the local download process cooperatively. — Download, verify, register, and optionally start a GGUF model on the target worker node. This is the controller-to-agent workflow for making a Hugging Face model usable on a specific agent. The worker emits progress stages for download progress, , , and when is true. Registration uses the agent's local model library configuration and persists config on agents that were started from a writable config file. — Transfer a GGUF file from one registered node to another. Most callers should start transfers through the controller helper endpoint rather than posting jobs directly. The helper validates both nodes, asks the source node to create a one-time transfer grant, creates the orchestration job, and targets it at the destination node's worker: The created job payload has this shape: and must differ. The only supported mode is ; the source manifest includes the selected GGUF plus non-GGUF sidecars in the same model directory and any configured file under the source model roots. The destination worker fetches the source manifest, then fetches each file with . Each destination write verifies file size and SHA-256 before replacing the temporary file. Existing matching files are skipped; conflicting existing files fail the job with . Transfer helper and status endpoints: - — Controller-only public entry point. Creates a source grant and a job targeted at . - — Lists recent jobs as transfer summaries. - — Returns one transfer summary, including , , , , , and when available. Source-agent transfer endpoints: - — Called by the controller on the source node. Creates an in-memory token grant for a source GGUF file and destination node. - — Called by the destination worker with the bearer token. Returns the source file manifest. - — Called by the destination worker with the bearer token. Streams one allowed file from the source node. The source-agent endpoints are not the normal public API for users. They are protected by the generated transfer token in addition to normal Llama Pack API authentication, and grants are held in source-node memory. Thread Endpoints Thread endpoints are available in controller mode. Threads maintain a durable conversation history; each turn records user, routing, and assistant events. - — Create a thread. - — List events. Add (admin only) to include routing decisions and workflow steps. - — Post a user message and receive a routed assistant reply. - — Same, but streams the reply as SSE. The first event is followed by token delta chunks. - — Run a multi-step workflow on the thread (see below). Workflow endpoint runs a linear chain of inference steps where each step's output becomes the next step's input. Each step is routed independently through the normal routing policy. Each step is an object with: Field Default Description --- --- --- required Display name for the step (recorded in events). required System-role message sent to the model for this step. workflow Override the model for this step only. workflow Override the routing target for this step only. Response: Public thread events show only and . Internal events include a event pair (status then ) for each step, plus a event per step. If a step fails, a event and a public event are appended and the endpoint returns an error — steps that have not yet run are skipped. Memory Endpoints Available on controller nodes when the memory subsystem is enabled ( in config). Both endpoints return if the store is disabled. — Write a memory entry. Accepts agent API keys. Deduplication runs automatically: if a near-identical entry already exists (cosine similarity ≥ 0.92) it is updated in place. Response ( ): — Semantic similarity search over stored memories. Response ( ):",
+    searchBody: "API This page lists the main HTTP endpoints and documents the gateway surface for applications that call Llama Pack as a private AI backend. External Chat Compatibility Use an external app key with the OpenAI-compatible chat endpoint as the primary integration surface for other apps. External app keys are chat-only credentials: they can call the consumer completion APIs, but they cannot use admin, operator, node, model, auth, audit, or settings endpoints. On a controller, routes the call through using the same values as threaded chat, such as , , or . Llama Pack creates a durable thread by default and returns routing metadata in response headers: Send on later calls to append to the same durable record and keep thread affinity when the previous route is still eligible. The JSON response body stays OpenAI-compatible. Older Ollama clients can point at the compatibility route. The same external app key boundary applies here: preserves Ollama-style response bodies and streaming newline JSON, while still using controller routing and the same metadata headers. Successful external app calls write safe audit metadata, including key id, endpoint, request type, routed node, and model. Prompt and response text are not written to the audit event. The external app key list also stores a latest-use summary for each key: last used time, endpoint, route, node, model, and request type. Client Discovery Standalone clients should call before presenting setup or login options. The endpoint is public so a client can detect Llama Pack before it has credentials. Example response: When an enabled plugin declares healthy client auth metadata, discovery adds that plugin method to and reports the plugin-owned auth endpoint under the manifest's configured endpoint key. Clients should treat absent capability fields as unsupported and should prefer for end-user chat. External chat-only keys can call: - to retrieve an end-user-safe model list. - to retrieve the current client's auth method, chat capabilities, and usable model list. - to verify auth, route resolution, and non-streaming or streaming chat for setup flows. - for supported client project context actions. These routes intentionally avoid admin/runtime details from . For standalone end-user chat apps, prefer external app keys with the header. Use UI sessions for the built-in operator/admin UI. Plugin-provided auth modes should be discovered through client discovery and handled by plugin-owned routes. Example model list response: Example diagnostics request: Core Endpoints - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - Setup assistant endpoints The setup assistant endpoints live under and support the UI-first bootstrap flow described in Setup. They are intentionally narrow: they report whether authentication still needs bootstrapping, create the first admin key only when no auth exists, and expose a secret-masked config snapshot for setup review. — Returns mode and bootstrap state: is false once either is configured or the auth store has at least one active key. — Creates the first admin key and an initial UI session. This endpoint succeeds only when static auth is not configured and the auth store has no active keys; later calls return . Response: The raw admin API key is returned once. The route also writes an audit event. — Returns a setup-oriented configuration snapshot with secrets masked as . It includes mode, log/config basics, memory settings, nodes, agent/controller URLs, worker settings, model library root, and the first configured model. See Model Downloads for the download workflow, history, logs, cancellation, and recommendations behavior. Controller Node Endpoints - - - - - - - - - - - - - - - - - - - The UI includes a Nodes page for controller mode that shows node reachability, heartbeat/config metadata, reported models, and remote model Start/Stop/Restart/Logs actions. Controller Orchestration Endpoints Controller orchestration endpoints are available in controller mode only: - - - - - - - - - - - - - - - - - - - - See Benchmarks for benchmark definitions, managed runs, metrics, and comparison behavior. Job types accepts a field that determines how the agent worker processes the job. — Single chat completion routed to one node. — Embed one or more strings via a model's embeddings endpoint. — Run a suite of prompt cases against a model, collecting per-case outputs and a summary artifact. Each case can override , , , and . Accepts 1–200 cases. The completed job has one artifact per case (with , , and error if the case failed) and one artifact. Cases that fail are recorded but do not abort the remaining cases. — Download a GGUF model repo or selected GGUF files from Hugging Face on the target worker node. The agent uses its configured destination and local Hugging Face credentials/environment. must be in format. and are optional relative paths. Progress events include , , , , and . Cancelling the orchestration job cancels the local download process cooperatively. — Download, verify, register, and optionally start a GGUF model on the target worker node. This is the controller-to-agent workflow for making a Hugging Face model usable on a specific agent. The worker emits progress stages for download progress, , , and when is true. Registration uses the agent's local model library configuration and persists config on agents that were started from a writable config file. — Transfer a GGUF file from one registered node to another. Most callers should start transfers through the controller helper endpoint rather than posting jobs directly. The helper validates both nodes, asks the source node to create a one-time transfer grant, creates the orchestration job, and targets it at the destination node's worker: The created job payload has this shape: and must differ. The only supported mode is ; the source manifest includes the selected GGUF plus non-GGUF sidecars in the same model directory and any configured file under the source model roots. The destination worker fetches the source manifest, then fetches each file with . Each destination write verifies file size and SHA-256 before replacing the temporary file. Existing matching files are skipped; conflicting existing files fail the job with . Transfer helper and status endpoints: - — Controller-only public entry point. Creates a source grant and a job targeted at . - — Lists recent jobs as transfer summaries. - — Returns one transfer summary, including , , , , , and when available. Source-agent transfer endpoints: - — Called by the controller on the source node. Creates an in-memory token grant for a source GGUF file and destination node. - — Called by the destination worker with the bearer token. Returns the source file manifest. - — Called by the destination worker with the bearer token. Streams one allowed file from the source node. The source-agent endpoints are not the normal public API for users. They are protected by the generated transfer token in addition to normal Llama Pack API authentication, and grants are held in source-node memory. Thread Endpoints Thread endpoints are available in controller mode. Threads maintain a durable conversation history; each turn records user, routing, and assistant events. - — Create a thread. - — List events. Add (admin only) to include routing decisions and workflow steps. - — Post a user message and receive a routed assistant reply. - — Same, but streams the reply as SSE. The first event is followed by token delta chunks. - — Run a multi-step workflow on the thread (see below). Workflow endpoint runs a linear chain of inference steps where each step's output becomes the next step's input. Each step is routed independently through the normal routing policy. Each step is an object with: Field Default Description --- --- --- required Display name for the step (recorded in events). required System-role message sent to the model for this step. workflow Override the model for this step only. workflow Override the routing target for this step only. Response: Public thread events show only and . Internal events include a event pair (status then ) for each step, plus a event per step. If a step fails, a event and a public event are appended and the endpoint returns an error — steps that have not yet run are skipped. Memory Endpoints Available on controller nodes when the memory subsystem is enabled ( in config). Both endpoints return if the store is disabled. — Write a memory entry. Accepts agent API keys. Deduplication runs automatically: if a near-identical entry already exists (cosine similarity ≥ 0.92) it is updated in place. Response ( ): — Semantic similarity search over stored memories. Response ( ):",
   },
   {
     id: "architecture",
@@ -2015,14 +2072,14 @@ step ca certificate mac-mini.local ~/llama-pack-certs/mac-mini.crt ~/llama-pack-
 **Step 3 — Rebuild the fullchain and reload Caddy** (run on the mac-mini):
 
 \`\`\`bash
-cd /Users/robertsmith/Apps/llama-pack
+cd /path/to/llama-pack
 scripts/renew_caddy_mac_mini.sh
 \`\`\`
 
 Wrapper script content (\`scripts/renew_caddy_mac_mini.sh\`):
 
 \`\`\`bash
-cd /Users/robertsmith/Apps/llama-pack
+cd /path/to/llama-pack
 scripts/renew_caddy_step_cert.sh \\
   --name mac-mini \\
   --leaf ~/llama-pack-certs/mac-mini.crt \\
@@ -2031,7 +2088,7 @@ scripts/renew_caddy_step_cert.sh \\
   --ca-url https://pi-controller.local:8443 \\
   --root ~/llama-pack-certs/root_ca.crt \\
   --cert-dir /opt/homebrew/etc/caddy/certs \\
-  --owner robertsmith \\
+  --owner USER \\
   --group staff \\
   --expires-in 24h \\
   --reload brew \\
@@ -2096,12 +2153,12 @@ If you move scheduling to \`launchd\` (recommended), copy the wrapper script to 
 stable user path first:
 
 \`\`\`bash
-install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \\
-  /Users/robertsmith/bin/renew_caddy_mac_mini.sh
+install -m 755 /path/to/llama-pack/scripts/renew_caddy_mac_mini.sh \\
+  /path/to/bin/renew_caddy_mac_mini.sh
 \`\`\`
 
 Then point your LaunchAgent \`ProgramArguments\` to:
-\`/Users/robertsmith/bin/renew_caddy_mac_mini.sh\`.
+\`/path/to/bin/renew_caddy_mac_mini.sh\`.
 `,
     headings: [
       {
@@ -2363,8 +2420,8 @@ export REQUESTS_CA_BUNDLE=/home/rsmith/llama-pack-certs/llama-pack-ca-chain.crt
 Use the local account path on each machine. On the Mac mini, for example:
 
 \`\`\`bash
-export SSL_CERT_FILE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export SSL_CERT_FILE=~/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=~/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 ## Issue Node Certificates
@@ -2448,7 +2505,7 @@ scripts/renew_caddy_step_cert.sh \\
   --ca-url https://pi-controller.local:8443 \\
   --root ~/llama-pack-certs/ca-root.crt \\
   --cert-dir /opt/homebrew/etc/caddy/certs \\
-  --owner robertsmith \\
+  --owner USER \\
   --group staff \\
   --expires-in 24h \\
   --reload brew
@@ -2504,15 +2561,15 @@ renewal windows when it is running.
 For Homebrew Caddy on macOS, use the dedicated wrapper:
 
 \`\`\`bash
-/Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh
+/path/to/llama-pack/scripts/renew_caddy_mac_mini.sh
 \`\`\`
 
 For scheduled runs, prefer \`launchd\` over \`cron\`. Install the wrapper into a
 stable user path and point your LaunchAgent to it:
 
 \`\`\`bash
-install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \\
-  /Users/robertsmith/bin/renew_caddy_mac_mini.sh
+install -m 755 /path/to/llama-pack/scripts/renew_caddy_mac_mini.sh \\
+  /path/to/bin/renew_caddy_mac_mini.sh
 \`\`\`
 
 LaunchAgent location:
@@ -2524,7 +2581,7 @@ LaunchAgent location:
 \`ProgramArguments\` should execute:
 
 \`\`\`text
-/Users/robertsmith/bin/renew_caddy_mac_mini.sh
+/path/to/bin/renew_caddy_mac_mini.sh
 \`\`\`
 
 ## Install Certs For Caddy
@@ -2564,7 +2621,7 @@ sudo cp mac-mini.crt /opt/homebrew/etc/caddy/certs/mac-mini.crt
 sudo cp mac-mini.key /opt/homebrew/etc/caddy/certs/mac-mini.key
 cat mac-mini.crt ~/llama-pack-certs/intermediate_ca.crt > mac-mini-fullchain.crt
 sudo cp mac-mini-fullchain.crt /opt/homebrew/etc/caddy/certs/mac-mini-fullchain.crt
-sudo chown robertsmith:staff /opt/homebrew/etc/caddy/certs/mac-mini.key
+sudo chown USER:staff /opt/homebrew/etc/caddy/certs/mac-mini.key
 sudo chmod 644 /opt/homebrew/etc/caddy/certs/mac-mini.crt
 sudo chmod 644 /opt/homebrew/etc/caddy/certs/mac-mini-fullchain.crt
 sudo chmod 600 /opt/homebrew/etc/caddy/certs/mac-mini.key
@@ -2685,8 +2742,8 @@ Mac agent \`.llama_pack.env\`:
 \`\`\`bash
 export LLAMA_PACK_CONTROLLER_URL=https://pi-controller.local
 export LLAMA_PACK_AGENT_URL=https://mac-mini.local
-export SSL_CERT_FILE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
-export REQUESTS_CA_BUNDLE=/Users/robertsmith/llama-pack-certs/llama-pack-ca-chain.crt
+export SSL_CERT_FILE=~/llama-pack-certs/llama-pack-ca-chain.crt
+export REQUESTS_CA_BUNDLE=~/llama-pack-certs/llama-pack-ca-chain.crt
 \`\`\`
 
 Linux agent \`.llama_pack.env\`:
@@ -2835,7 +2892,7 @@ scripts/renew_caddy_step_cert.sh \\
   --expires-in 24h \\
   --force \\
   [--cert-dir /etc/caddy/certs --reload systemd]      # Pi / Linux
-  [--cert-dir /opt/homebrew/etc/caddy/certs --owner robertsmith --group staff --reload brew]  # Mac
+  [--cert-dir /opt/homebrew/etc/caddy/certs --owner USER --group staff --reload brew]  # Mac
 \`\`\`
 
 ## Running step-ca As A Systemd Service
@@ -2915,7 +2972,7 @@ sudo journalctl -u llama-pack-renew-caddy-cert.service --no-pager -n 30
 
 Mac:
 \`\`\`bash
-cd /Users/robertsmith/Apps/llama-pack && scripts/renew_caddy_step_cert.sh \\
+cd /path/to/llama-pack && scripts/renew_caddy_step_cert.sh \\
   --name mac-mini \\
   --leaf ~/llama-pack-certs/mac-mini.crt \\
   --key ~/llama-pack-certs/mac-mini.key \\
@@ -2923,7 +2980,7 @@ cd /Users/robertsmith/Apps/llama-pack && scripts/renew_caddy_step_cert.sh \\
   --ca-url https://pi-controller.local:8443 \\
   --root ~/llama-pack-certs/root_ca.crt \\
   --cert-dir /opt/homebrew/etc/caddy/certs \\
-  --owner robertsmith \\
+  --owner USER \\
   --group staff \\
   --expires-in 24h \\
   --reload brew \\
@@ -3613,9 +3670,9 @@ only the top-level fields that belong to that group:
 
 \`\`\`yaml
 # config/runtime.yaml
-llama_server_bin: /Users/{user_name}/Apps/llama.cpp/build/bin/llama-server
-llama_cpp_dir: /Users/{user_name}/Apps/llama.cpp
-python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
+llama_server_bin: /home/USER/Apps/llama.cpp/build/bin/llama-server
+llama_cpp_dir: /home/USER/Apps/llama.cpp
+python_bin: /home/USER/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
@@ -3748,16 +3805,16 @@ Example:
 
 \`\`\`yaml
 mode: agent
-llama_server_bin: /Users/{user_name}/Apps/llama.cpp/build/bin/llama-server
-llama_cpp_dir: /Users/{user_name}/Apps/llama.cpp
-python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
+llama_server_bin: /home/USER/Apps/llama.cpp/build/bin/llama-server
+llama_cpp_dir: /home/USER/Apps/llama.cpp
+python_bin: /home/USER/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
 
 models:
   qwen-coder:
-    path: /Users/{user_name}/models/qwen-coder.gguf
+    path: /home/USER/models/qwen-coder.gguf
     port: 8081
     ctx: 16384
     gpu_layers: 999
@@ -4105,7 +4162,7 @@ agent_tools:
   tool_timeout_seconds: 10
   safe_roots:
     - ./logs
-    - /Users/{user_name}/Apps/llama-pack
+    - /home/USER/Apps/llama-pack
   tools:
     list_runtime_status:
       type: shell
@@ -4118,11 +4175,11 @@ agent_tools:
     read_project_file:
       type: file_read_dynamic
       description: Read a project or log file by relative path.
-      path: /Users/{user_name}/Apps/llama-pack
+      path: /home/USER/Apps/llama-pack
     list_project_files:
       type: directory_list
       description: List top-level and one-level-deep project files.
-      path: /Users/{user_name}/Apps/llama-pack
+      path: /home/USER/Apps/llama-pack
       recursive: true
       max_depth: 1
       max_entries: 200
@@ -5766,6 +5823,104 @@ See [api.md](api.md) for full request/response shapes.
     searchBody: "Multi-Agent Routing This document covers the thread event schema, fanout routing policy, and aggregation step introduced in the Multi-Agent Routing V2 feature set. Overview Thread mode routes each user message through the controller, which selects a target node and model, calls the agent, and records the full interaction as a series of typed events. The features described here extend that baseline to support routing a single user turn to multiple agents in parallel, recording each agent's output as internal events, and returning one aggregated public response. All three features are backward compatible. Existing single-node behavior is unchanged when fanout is not configured. --- Thread Event Schema ( ) Every event appended to a thread now carries a — a UUID generated at the start of each user turn and shared by all events that belong to that turn. This allows downstream tools and queries to group events by logical conversation turn rather than by wall-clock time. Event types Description -------------------- ---------- ------------- true The user's message and merged request metadata false Which node/model was chosen and why, with candidates false Request dispatched to a specific agent node (fanout only) false Raw response from a specific agent node (fanout only) false Combined outputs from all fanout agents before the final response true The final response returned to the caller true Routing or proxy failure and events are only emitted when fanout is active. In single-agent mode the is followed directly by . Fetching internal events Internal events (all non-public types) are accessible via the threads API with admin credentials: Non-admin callers receive only public events ( , , ). --- Fanout Routing Policy What it does When fanout is enabled, the routing policy selects a primary node using the normal deterministic priority order, then collects up to additional eligible nodes from the same request-type candidate list. The full set of targets is returned as on the . The layer then dispatches to each target concurrently (sequentially in the current implementation), records and events for each, aggregates the outputs, and publishes one . Configuration Add these two fields to your controller config: With and all three nodes running, a request fans out to all three in priority order (mac-mini first, then linux-2080ti, then workstation). Flag-off guarantee When (the default), is always an empty tuple and the service takes the original single-agent code path exactly. No internal , , or events are recorded. Fanout scope Fanout only applies to the routing path. Thread affinity, explicit targets, and the fallback path always return a single node regardless of the flag. --- Aggregation Step How it works When is non-empty, runs the following sequence for each target in order: 1. Appends an internal event with the node, model, and messages payload 2. Calls for that node 3. Appends an internal event with the response text (or an error marker if the call failed) After all targets have been attempted: 4. Appends one internal event containing the full list of outputs 5. Appends one public with all successful responses joined by Partial failures If one or more agents fail, their outputs are recorded as in the event and excluded from the public response. As long as at least one agent succeeds, the user receives a valid . If every agent fails, the public response text is . Example internal event sequence (2-node fanout) All seven events share the same . Aggregation strategy The current strategy is simple concatenation with a separator. The primary node's response appears first. A pluggable aggregation interface (where a separate model summarises the outputs) is planned for a later ticket. --- --- Startup Decision Engine (Ticket 9.1) Overview When the routing policy selects a candidate node where the model is not currently running (via the availability pass), it now also decides whether a new model instance should be started immediately. This decision is recorded on the as two new fields: Field Type Description --- --- --- when the model was not running at route time or (only set when is ) These fields surface in the internal event content alongside , , , and . Capacity check The policy calls in , which: 1. Reads for the target node. 2. If set, queries on the node and counts how many models are currently . 3. Returns (→ ) when . 4. Returns (→ ) when under the limit, or when is not set. Configuration What does today The current implementation records the decision as metadata — it does not automatically trigger . Acting on a decision is left to the caller or a future orchestration layer. The benchmark managed-lifecycle feature ( ) is an example of a caller that reads this kind of signal to drive the full lifecycle. --- Registry-Aware Placement (Ticket 9.2) Overview Previously, the availability pass only called , which returned a boolean. Now it queries , which returns one of three tiers: Return value Meaning --- --- Model entry exists in the agent's config (registered via library) GGUF file is on disk in the agent's library but not yet registered Model artifact is not present on this node Candidate scoring Within the availability pass, candidates are scored as follows: 1. Running — model is already loaded. Returned immediately (no startup needed). 2. Registered — model is configured on the node but not running. Preferred over . 3. GGUF present — file is on disk. Useful fallback when a model has been received via transfer but not yet registered. 4. None — node is excluded from consideration for this request. Within each tier, the existing order from the config is preserved. Route reason strings The field on the routing decision reflects the path taken: Reason Meaning --- --- Model was running; chosen via request-type priority Model was registered but not running; chosen via request-type GGUF file found but unregistered; chosen via request-type Legacy path (when is not wired) Model was running; chosen via fallback Model registered but not running; chosen via fallback GGUF present but unregistered; chosen via fallback Legacy fallback path Previous turn's node reused (model still running) Explicit target specified Example: received transfer routes to the right node Node just received a GGUF via model transfer. It is not registered. Node has no artifact. A request arrives: The internal event records in the candidate metadata. --- API reference These features use the existing threads endpoints — no new routes were added. See api.md for full request/response shapes.",
   },
   {
+    id: "ocr-engine-evaluation",
+    title: "OCR Engine Evaluation",
+    sourcePath: "docs/ocr-engine-evaluation.md",
+    content: `# OCR Engine Evaluation
+
+This repo should keep the shared OCR service as the baseline. The current
+service already supports Tesseract and the PP-OCRv5 detection/recognition pair
+through \`OcrEngineConfig\`. The recently updated PaddleOCR-VL options are
+promising document parsers, but they do not fit the current
+\`det_model\`/\`rec_model\` contract and should not replace the default until a
+local benchmark proves enough quality gain to justify a new runner.
+
+## Smallest Realistic Candidates
+
+| Candidate | Status in this repo | Exact repo config | Decision role |
+| --- | --- | --- | --- |
+| Tesseract | Runnable now | \`{"engine": "tesseract"}\` | Baseline and default |
+| PP-OCRv5 server det/rec | Runnable after model install | \`{"engine": "paddleocr", "det_model": "models/ocr/pp-ocrv5-server/det", "rec_model": "models/ocr/pp-ocrv5-server/rec", "det_model_name": "PP-OCRv5_server_det", "rec_model_name": "PP-OCRv5_server_rec"}\` | First challenger because it uses the current shared service |
+| PaddleOCR-VL 0.9B | Needs a new runner | \`{"engine": "paddleocr-vl", "model_dir": "models/ocr/paddleocr-vl-0.9b", "model_name": "PaddleOCR-VL-0.9B"}\` | Smallest VLM candidate |
+| PaddleOCR-VL 1.5 | Needs a new runner | \`{"engine": "paddleocr-vl", "model_dir": "models/ocr/paddleocr-vl-1.5", "model_name": "PaddleOCR-VL-1.5"}\` | Updated robustness candidate |
+| PaddleOCR-VL 1.6 | Needs a new runner | \`{"engine": "paddleocr-vl", "model_dir": "models/ocr/paddleocr-vl-1.6", "model_name": "PaddleOCR-VL-1.6"}\` | Preferred VLM challenger if adding a VLM path |
+
+## Recommendation
+
+Do not standardize on PaddleOCR-VL yet. Standardize operationally on the shared
+OCR service with Tesseract as the default and PP-OCRv5 as the first local
+challenger. Add a PaddleOCR-VL runner only if the evaluation harness shows that
+PaddleOCR-VL 1.6 materially beats PP-OCRv5 on the repo's real document set.
+
+The reason is practical: PaddleOCR-VL 0.9B, 1.5, and 1.6 are still 0.9B VLM
+document parsers, while this repo's current OCR contract is line-oriented OCR
+with optional PDF page rendering. Replacing the default now would combine a
+model decision with an integration-contract change.
+
+## Harness
+
+Print the exact candidate config without loading OCR engines:
+
+\`\`\`bash
+rtk uv run python scripts/evaluate_ocr_candidates.py --file samples/invoice.png --config-only
+\`\`\`
+
+Run the shared-service candidates on one or more files:
+
+\`\`\`bash
+rtk uv run python scripts/evaluate_ocr_candidates.py --file samples/invoice.png --candidate tesseract-baseline
+rtk uv run python scripts/evaluate_ocr_candidates.py --file samples/invoice.png --candidate tesseract-baseline --candidate ppocrv5-server
+\`\`\`
+
+Install the current PP-OCRv5 challenger models with:
+
+\`\`\`bash
+rtk scripts/install_ocr_model.sh
+\`\`\`
+
+The harness returns JSON with candidate metadata, elapsed seconds, extracted
+character count, item count, and errors. Use a representative local document set
+that includes scanned invoices, tables, photos of pages, low-contrast documents,
+and multilingual samples before changing the default.
+
+## Source Snapshot
+
+As of 2026-06-24, the smallest PaddleOCR-VL line remains 0.9B. PaddleOCR-VL
+1.5 was published on 2026-01-29 and reports 94.5% on OmniDocBench v1.5.
+PaddleOCR-VL 1.6 was published on 2026-06-02 and reports 96.33% on
+OmniDocBench v1.6. The original PaddleOCR-VL report describes the 0.9B model as
+supporting 109 languages and handling text, tables, formulas, and charts.
+`,
+    headings: [
+      {
+        "level": 1,
+        "text": "OCR Engine Evaluation",
+        "anchor": "ocr-engine-evaluation"
+      },
+      {
+        "level": 2,
+        "text": "Smallest Realistic Candidates",
+        "anchor": "smallest-realistic-candidates"
+      },
+      {
+        "level": 2,
+        "text": "Recommendation",
+        "anchor": "recommendation"
+      },
+      {
+        "level": 2,
+        "text": "Harness",
+        "anchor": "harness"
+      },
+      {
+        "level": 2,
+        "text": "Source Snapshot",
+        "anchor": "source-snapshot"
+      }
+    ],
+    searchBody: "OCR Engine Evaluation This repo should keep the shared OCR service as the baseline. The current service already supports Tesseract and the PP-OCRv5 detection/recognition pair through . The recently updated PaddleOCR-VL options are promising document parsers, but they do not fit the current / contract and should not replace the default until a local benchmark proves enough quality gain to justify a new runner. Smallest Realistic Candidates Candidate Status in this repo Exact repo config Decision role --- --- --- --- Tesseract Runnable now Baseline and default PP-OCRv5 server det/rec Runnable after model install First challenger because it uses the current shared service PaddleOCR-VL 0.9B Needs a new runner Smallest VLM candidate PaddleOCR-VL 1.5 Needs a new runner Updated robustness candidate PaddleOCR-VL 1.6 Needs a new runner Preferred VLM challenger if adding a VLM path Recommendation Do not standardize on PaddleOCR-VL yet. Standardize operationally on the shared OCR service with Tesseract as the default and PP-OCRv5 as the first local challenger. Add a PaddleOCR-VL runner only if the evaluation harness shows that PaddleOCR-VL 1.6 materially beats PP-OCRv5 on the repo's real document set. The reason is practical: PaddleOCR-VL 0.9B, 1.5, and 1.6 are still 0.9B VLM document parsers, while this repo's current OCR contract is line-oriented OCR with optional PDF page rendering. Replacing the default now would combine a model decision with an integration-contract change. Harness Print the exact candidate config without loading OCR engines: Run the shared-service candidates on one or more files: Install the current PP-OCRv5 challenger models with: The harness returns JSON with candidate metadata, elapsed seconds, extracted character count, item count, and errors. Use a representative local document set that includes scanned invoices, tables, photos of pages, low-contrast documents, and multilingual samples before changing the default. Source Snapshot As of 2026-06-24, the smallest PaddleOCR-VL line remains 0.9B. PaddleOCR-VL 1.5 was published on 2026-01-29 and reports 94.5% on OmniDocBench v1.5. PaddleOCR-VL 1.6 was published on 2026-06-02 and reports 96.33% on OmniDocBench v1.6. The original PaddleOCR-VL report describes the 0.9B model as supporting 109 languages and handling text, tables, formulas, and charts.",
+  },
+  {
     id: "pi-controller-topology",
     title: "Raspberry Pi Controller Topology",
     sourcePath: "docs/pi-controller-topology.md",
@@ -6475,6 +6630,7 @@ Field rules:
 - \`modes\`: optional list of \`agent\` and/or \`controller\`; defaults to both.
 - \`description\`: optional text.
 - \`frontend\`: optional static asset metadata.
+- \`client_auth\`: optional client discovery metadata for plugin-owned auth.
 - \`navigation\`, \`secondary_navigation\`, \`ui_routes\`: optional frontend route
   metadata.
 - \`config_schema\`: optional validation schema for plugin config.
@@ -6485,6 +6641,19 @@ Example controller-only plugin:
 modes:
   - controller
 \`\`\`
+
+Example plugin-owned client auth discovery metadata:
+
+\`\`\`yaml
+client_auth:
+  method: external_plugin_auth
+  endpoint: /lm-api/v1/plugins/external_plugin_auth/auth/login
+  endpoint_key: externalPluginAuth
+\`\`\`
+
+When the plugin is enabled and has no health errors, \`GET
+/lm-api/v1/client-discovery\` adds \`method\` to \`auth.methods\` and adds
+\`endpoint\` under \`endpoints[endpoint_key]\`.
 
 ## Config Schema
 
@@ -6804,10 +6973,9 @@ Frontend plugin shell behavior is covered in \`frontend/src/components/AppShell.
 
 ## Private Plugin Repositories
 
-Paid or private plugins should be tracked in separate private repositories.
+Private plugins should be tracked in separate private repositories.
 Keep this repository focused on the core runtime, public extension contracts,
-and the minimal \`hello_plugin\` sample. The \`llama_pack_business\` add-on is a paid
-private plugin and should not become a core runtime dependency.
+and the minimal \`hello_plugin\` sample.
 
 Recommended local development setup:
 
@@ -6817,7 +6985,7 @@ enabled_plugins:
 
 plugins:
   llama_pack_business:
-    path: /Users/robertsmith/Apps/llama-pack-business-plugin
+    path: /path/to/llama-pack-business-plugin
     enabled: true
     config:
       organization_name: Acme
@@ -6829,12 +6997,11 @@ above. It should carry its own implementation tests and CI, while this
 repository keeps fixture-based coverage for the generic plugin runtime and the
 public \`hello_plugin\` sample.
 
-Private plugins that provide end-user auth or chat policy, such as
-\`llama_pack_business\`, should expose their client-facing availability through core
-client discovery rather than requiring clients to scrape plugin status or know
-private route details. Core discovery should advertise plugin auth endpoints
-only when the plugin is enabled and not reporting errors that make the
-advertised feature unusable.
+Private plugins that provide end-user auth or chat policy should expose their
+client-facing availability through core client discovery rather than requiring
+clients to scrape plugin status or know private route details. Core discovery
+advertises plugin auth endpoints only when the plugin is enabled and not
+reporting errors that make the advertised feature unusable.
 
 ## Deferred Work
 
@@ -6925,7 +7092,7 @@ These are not part of the current plugin foundation:
         "anchor": "deferred-work"
       }
     ],
-    searchBody: "Plugin Author Guide Llama Pack plugins are trusted local Python packages loaded from configured filesystem paths. The initial plugin runtime is intentionally local-path only: there is no Python package entrypoint discovery, sandboxed execution, or remote frontend JavaScript. Use the checked-in as the reference sample. Paid or private plugins, including the private add-on, live outside this repository and are loaded from configured local paths. For a draft of the next plugin-page developer experience (template-first pages, external styles, and action-focused controllers), see Plugin Page Authoring v1 (Draft). Enable A Plugin Add the plugin id to and provide a matching entry: Plugins whose id is not enabled, whose configured entry is disabled, or whose runtime mode is incompatible are not registered. Failed and incompatible plugins are reported through . Layout Recommended local layout: The manifest points at an object with a method. Manifest Reference Required fields: Field rules: - : lowercase safe identifier matching . - : display name. - : plugin version string. - , , : currently use . - : import path relative to the plugin root. - : optional list of and/or ; defaults to both. - : optional text. - : optional static asset metadata. - , , : optional frontend route metadata. - : optional validation schema for plugin config. Example controller-only plugin: Config Schema Plugins can declare a small config schema. Core validates config before plugin registration; invalid config leaves the plugin disabled with a warning. Supported field types: - - - - Example: Secret values are passed to plugin code through , but are redacted as in status metadata. Do not log secrets from plugin code. Backend Extension API Minimal plugin object: Available methods: - : registers backend routes under . The default prefix is . Custom prefixes must stay inside the plugin namespace and must not collide with another plugin route prefix. - : appends primary frontend navigation metadata. - : appends scoped secondary navigation metadata for plugin pages. - : appends placeholder frontend route metadata. - : subscribes to in-process best-effort events. - : registers a policy hook. - : registers a dynamic health check for . - : returns a plugin-owned SQLite database handle rooted under . - : registers plugin migration metadata and optional explicit migration execution for a plugin-owned database. - : returns the plugin's configured config values. - : returns a for the plugin's private persistent state directory ( ). The directory is not created automatically; the plugin must call before writing to it (or delegate that to a store class). Use this path to locate plugin-owned SQLite databases or other data files. The directory is scoped to the runtime , keeping plugin data alongside other app state. Events Event subscribers receive an event envelope with stable metadata: Subscriber failures and timeouts are isolated: they do not stop other subscribers, but they are recorded in plugin health/status metadata. Current built-in event names include: - - - - - - Hooks Policy hooks run in deterministic registration order. Safety-sensitive hook failures reject the action. The initial hook is . It runs through the shared admission path before scheduler capacity is consumed, so it applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and threaded chat surfaces that route through the scheduler. Example: Health Checks Health checks can be sync or async. They may return one dict, a list of dicts, or . Use or for operator-visible issues. Exceptions are caught and reported as health errors. Migration Metadata Plugins can register migration targets for visibility: Core reports those targets at: Pending or missing migrations are also surfaced as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugins that need durable data should use plugin-owned databases under their private state directory, with plugin-owned schemas and migrations. Core provides the storage location and migration lifecycle contract, but does not import plugin models or place plugin tables in core databases. See Plugin Database Contract. Frontend Metadata The backend exposes enabled plugin metadata at: For new plugin UI, prefer . Each page declares a core UI route, an HTML fragment template under , an optional controller module under , and a title. Manifest example: Core serves static files from the declared static directory under: The React shell renders plugin navigation, scoped secondary navigation, and a generic plugin host page from . The host fetches the declared HTML fragment, inserts it into the plugin container, then loads the optional controller module and calls . Minimal page controller: The object exposes: - : current plugin id. - , , , and : scoped helpers for . - : navigate inside the core UI. - : request a plugin status refresh. Plugin frontend modules run in the core UI origin. Treat plugin frontend code as trusted extension code and keep private/paid plugin UI in the private plugin repository. Core provides a small stable CSS class contract for plugin pages: - - - - - - - - - - Plugin assets are served with , and the React plugin host appends a version/reload query string when importing plugin controllers, and styles. During development, plugin frontend asset changes should only require a browser reload or the plugin page's Reload button. Core frontend rebuilds are only needed when the public host contract changes. The shell also reads and shows administrator-facing alerts for failed, incompatible, warning, or error plugin states. Administrators can inspect configured plugins at . That page shows plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. Testing Plugins Backend plugin behavior should have focused tests in . Use isolated fixture plugins for failure, collision, config, hook, event, and migration edge cases. Use as the checked-in integration target for the happy path. Recommended coverage: - Core starts with no plugins. - Enabled plugin registers metadata and routes. - Disabled, failed, and incompatible plugins do not register routes. - Route namespace and collision failures are reported. - Static assets are served only from the declared static directory. - Path traversal is rejected. - Config schema validation disables invalid plugins. - Secret config values are redacted from status metadata. - Event and hook failures are isolated and reported. - Health checks appear in . - Migration metadata appears in . - Pending or missing migrations produce health warnings. - Plugin registration does not auto-run migrations. Frontend plugin shell behavior is covered in . Hello Plugin Walkthrough 1. Enable in controller config: 2. Start the controller. 3. Confirm backend route: 4. Confirm metadata: 5. Open the React UI on the controller. The nav item should appear in the section and route to a placeholder page. 6. Set to exercise the hook. Chat requests that route through should be rejected before scheduler capacity is consumed. Private Plugin Repositories Paid or private plugins should be tracked in separate private repositories. Keep this repository focused on the core runtime, public extension contracts, and the minimal sample. The add-on is a paid private plugin and should not become a core runtime dependency. Recommended local development setup: That private plugin uses the same manifest schema, backend extension API, frontend metadata contract, health checks, and migration metadata described above. It should carry its own implementation tests and CI, while this repository keeps fixture-based coverage for the generic plugin runtime and the public sample. Private plugins that provide end-user auth or chat policy, such as , should expose their client-facing availability through core client discovery rather than requiring clients to scrape plugin status or know private route details. Core discovery should advertise plugin auth endpoints only when the plugin is enabled and not reporting errors that make the advertised feature unusable. Deferred Work These are not part of the current plugin foundation: - Dynamic React of plugin frontend bundles. - Frontend bundle failure isolation beyond backend status alerts. - Remote plugin JavaScript or third-party asset origins. - Sandboxed plugin Python or JavaScript execution. - Auto-running plugin migrations on startup. - Plugin install/update/uninstall lifecycle commands. - Python package entrypoint discovery.",
+    searchBody: "Plugin Author Guide Llama Pack plugins are trusted local Python packages loaded from configured filesystem paths. The initial plugin runtime is intentionally local-path only: there is no Python package entrypoint discovery, sandboxed execution, or remote frontend JavaScript. Use the checked-in as the reference sample. Paid or private plugins, including the private add-on, live outside this repository and are loaded from configured local paths. For a draft of the next plugin-page developer experience (template-first pages, external styles, and action-focused controllers), see Plugin Page Authoring v1 (Draft). Enable A Plugin Add the plugin id to and provide a matching entry: Plugins whose id is not enabled, whose configured entry is disabled, or whose runtime mode is incompatible are not registered. Failed and incompatible plugins are reported through . Layout Recommended local layout: The manifest points at an object with a method. Manifest Reference Required fields: Field rules: - : lowercase safe identifier matching . - : display name. - : plugin version string. - , , : currently use . - : import path relative to the plugin root. - : optional list of and/or ; defaults to both. - : optional text. - : optional static asset metadata. - : optional client discovery metadata for plugin-owned auth. - , , : optional frontend route metadata. - : optional validation schema for plugin config. Example controller-only plugin: Example plugin-owned client auth discovery metadata: When the plugin is enabled and has no health errors, adds to and adds under . Config Schema Plugins can declare a small config schema. Core validates config before plugin registration; invalid config leaves the plugin disabled with a warning. Supported field types: - - - - Example: Secret values are passed to plugin code through , but are redacted as in status metadata. Do not log secrets from plugin code. Backend Extension API Minimal plugin object: Available methods: - : registers backend routes under . The default prefix is . Custom prefixes must stay inside the plugin namespace and must not collide with another plugin route prefix. - : appends primary frontend navigation metadata. - : appends scoped secondary navigation metadata for plugin pages. - : appends placeholder frontend route metadata. - : subscribes to in-process best-effort events. - : registers a policy hook. - : registers a dynamic health check for . - : returns a plugin-owned SQLite database handle rooted under . - : registers plugin migration metadata and optional explicit migration execution for a plugin-owned database. - : returns the plugin's configured config values. - : returns a for the plugin's private persistent state directory ( ). The directory is not created automatically; the plugin must call before writing to it (or delegate that to a store class). Use this path to locate plugin-owned SQLite databases or other data files. The directory is scoped to the runtime , keeping plugin data alongside other app state. Events Event subscribers receive an event envelope with stable metadata: Subscriber failures and timeouts are isolated: they do not stop other subscribers, but they are recorded in plugin health/status metadata. Current built-in event names include: - - - - - - Hooks Policy hooks run in deterministic registration order. Safety-sensitive hook failures reject the action. The initial hook is . It runs through the shared admission path before scheduler capacity is consumed, so it applies to native chat, OpenAI-compatible chat, Ollama-compatible chat, and threaded chat surfaces that route through the scheduler. Example: Health Checks Health checks can be sync or async. They may return one dict, a list of dicts, or . Use or for operator-visible issues. Exceptions are caught and reported as health errors. Migration Metadata Plugins can register migration targets for visibility: Core reports those targets at: Pending or missing migrations are also surfaced as warnings in . Core does not run plugin migrations during startup; migration execution is explicit through the plugin migration API. Plugins that need durable data should use plugin-owned databases under their private state directory, with plugin-owned schemas and migrations. Core provides the storage location and migration lifecycle contract, but does not import plugin models or place plugin tables in core databases. See Plugin Database Contract. Frontend Metadata The backend exposes enabled plugin metadata at: For new plugin UI, prefer . Each page declares a core UI route, an HTML fragment template under , an optional controller module under , and a title. Manifest example: Core serves static files from the declared static directory under: The React shell renders plugin navigation, scoped secondary navigation, and a generic plugin host page from . The host fetches the declared HTML fragment, inserts it into the plugin container, then loads the optional controller module and calls . Minimal page controller: The object exposes: - : current plugin id. - , , , and : scoped helpers for . - : navigate inside the core UI. - : request a plugin status refresh. Plugin frontend modules run in the core UI origin. Treat plugin frontend code as trusted extension code and keep private/paid plugin UI in the private plugin repository. Core provides a small stable CSS class contract for plugin pages: - - - - - - - - - - Plugin assets are served with , and the React plugin host appends a version/reload query string when importing plugin controllers, and styles. During development, plugin frontend asset changes should only require a browser reload or the plugin page's Reload button. Core frontend rebuilds are only needed when the public host contract changes. The shell also reads and shows administrator-facing alerts for failed, incompatible, warning, or error plugin states. Administrators can inspect configured plugins at . That page shows plugin status, health, frontend metadata, redacted config metadata, and registered migration targets. Testing Plugins Backend plugin behavior should have focused tests in . Use isolated fixture plugins for failure, collision, config, hook, event, and migration edge cases. Use as the checked-in integration target for the happy path. Recommended coverage: - Core starts with no plugins. - Enabled plugin registers metadata and routes. - Disabled, failed, and incompatible plugins do not register routes. - Route namespace and collision failures are reported. - Static assets are served only from the declared static directory. - Path traversal is rejected. - Config schema validation disables invalid plugins. - Secret config values are redacted from status metadata. - Event and hook failures are isolated and reported. - Health checks appear in . - Migration metadata appears in . - Pending or missing migrations produce health warnings. - Plugin registration does not auto-run migrations. Frontend plugin shell behavior is covered in . Hello Plugin Walkthrough 1. Enable in controller config: 2. Start the controller. 3. Confirm backend route: 4. Confirm metadata: 5. Open the React UI on the controller. The nav item should appear in the section and route to a placeholder page. 6. Set to exercise the hook. Chat requests that route through should be rejected before scheduler capacity is consumed. Private Plugin Repositories Private plugins should be tracked in separate private repositories. Keep this repository focused on the core runtime, public extension contracts, and the minimal sample. Recommended local development setup: That private plugin uses the same manifest schema, backend extension API, frontend metadata contract, health checks, and migration metadata described above. It should carry its own implementation tests and CI, while this repository keeps fixture-based coverage for the generic plugin runtime and the public sample. Private plugins that provide end-user auth or chat policy should expose their client-facing availability through core client discovery rather than requiring clients to scrape plugin status or know private route details. Core discovery advertises plugin auth endpoints only when the plugin is enabled and not reporting errors that make the advertised feature unusable. Deferred Work These are not part of the current plugin foundation: - Dynamic React of plugin frontend bundles. - Frontend bundle failure isolation beyond backend status alerts. - Remote plugin JavaScript or third-party asset origins. - Sandboxed plugin Python or JavaScript execution. - Auto-running plugin migrations on startup. - Plugin install/update/uninstall lifecycle commands. - Python package entrypoint discovery.",
   },
   {
     id: "setup",

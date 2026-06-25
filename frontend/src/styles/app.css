@@ -53,9 +53,6 @@
 }
 
 .model-card-detail-grid {
-  /*TODO: CHECK ON THIS LATER*/
-  /*display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));*/
   display: flex;
   flex-wrap: wrap;
   gap: 4px;

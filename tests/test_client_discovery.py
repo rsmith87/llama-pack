@@ -87,25 +87,25 @@ def test_configured_spitball_origin_can_preflight_context_budget(tmp_path: Path)
     assert "X-Llama-Pack-Key" in response.headers["access-control-allow-headers"]
 
 
-def test_client_discovery_does_not_advertise_missing_business_plugin(tmp_path: Path):
+def test_client_discovery_does_not_advertise_missing_plugin_auth(tmp_path: Path):
     config = discovery_config(tmp_path)
     client = TestClient(create_app(config=config))
 
     payload = client.get("/lm-api/v1/client-discovery").json()
 
-    assert payload["capabilities"]["businessPlugin"] is False
-    assert "llama_pack_business" not in payload["auth"]["methods"]
-    assert "businessAuth" not in payload["endpoints"]
+    assert payload["capabilities"]["pluginAuth"] is False
+    assert "external_plugin_auth" not in payload["auth"]["methods"]
+    assert "externalPluginAuth" not in payload["endpoints"]
 
 
-def test_client_discovery_advertises_enabled_business_plugin(tmp_path: Path):
-    plugin_dir = write_business_plugin(tmp_path)
+def test_client_discovery_advertises_enabled_plugin_auth(tmp_path: Path):
+    plugin_dir = write_client_auth_plugin(tmp_path)
     config = discovery_config(
         tmp_path,
         {
-            "enabled_plugins": ["llama_pack_business"],
+            "enabled_plugins": ["external_plugin_auth"],
             "plugins": {
-                "llama_pack_business": {
+                "external_plugin_auth": {
                     "path": str(plugin_dir),
                     "enabled": True,
                 }
@@ -116,36 +116,40 @@ def test_client_discovery_advertises_enabled_business_plugin(tmp_path: Path):
 
     payload = client.get("/lm-api/v1/client-discovery").json()
 
-    assert payload["capabilities"]["businessPlugin"] is True
-    assert "llama_pack_business" in payload["auth"]["methods"]
-    assert payload["endpoints"]["businessAuth"] == "/lm-api/v1/plugins/llama_pack_business/auth/login"
+    assert payload["capabilities"]["pluginAuth"] is True
+    assert "external_plugin_auth" in payload["auth"]["methods"]
+    assert payload["endpoints"]["externalPluginAuth"] == "/lm-api/v1/plugins/external_plugin_auth/auth/login"
 
 
-def test_client_discovery_hides_failed_business_plugin(tmp_path: Path):
-    plugin_dir = tmp_path / "llama_pack_business"
-    package_dir = plugin_dir / "llama_pack_business"
+def test_client_discovery_hides_failed_plugin_auth(tmp_path: Path):
+    plugin_dir = tmp_path / "external_plugin_auth"
+    package_dir = plugin_dir / "external_plugin_auth"
     package_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(
         textwrap.dedent(
             """
-            id: llama_pack_business
-            name: Llama Pack Business
+            id: external_plugin_auth
+            name: External Plugin Auth
             version: "1.0"
             requires_core: "1.0"
             backend_api_version: "1.0"
-            entrypoint: llama_pack_business.plugin:plugin
+            entrypoint: external_plugin_auth.plugin:plugin
+            client_auth:
+              method: external_plugin_auth
+              endpoint: /lm-api/v1/plugins/external_plugin_auth/auth/login
+              endpoint_key: externalPluginAuth
             """
         ).strip(),
         encoding="utf-8",
     )
     (package_dir / "__init__.py").write_text("", encoding="utf-8")
-    (package_dir / "plugin.py").write_text("raise RuntimeError('business plugin failed')\n", encoding="utf-8")
+    (package_dir / "plugin.py").write_text("raise RuntimeError('plugin auth failed')\n", encoding="utf-8")
     config = discovery_config(
         tmp_path,
         {
-            "enabled_plugins": ["llama_pack_business"],
+            "enabled_plugins": ["external_plugin_auth"],
             "plugins": {
-                "llama_pack_business": {
+                "external_plugin_auth": {
                     "path": str(plugin_dir),
                     "enabled": True,
                 }
@@ -156,17 +160,17 @@ def test_client_discovery_hides_failed_business_plugin(tmp_path: Path):
 
     payload = client.get("/lm-api/v1/client-discovery").json()
 
-    assert payload["capabilities"]["businessPlugin"] is False
-    assert "llama_pack_business" not in payload["auth"]["methods"]
-    assert "businessAuth" not in payload["endpoints"]
+    assert payload["capabilities"]["pluginAuth"] is False
+    assert "external_plugin_auth" not in payload["auth"]["methods"]
+    assert "externalPluginAuth" not in payload["endpoints"]
 
 
-def test_client_discovery_hides_business_plugin_with_health_error(tmp_path: Path):
-    plugin_dir = write_business_plugin(
+def test_client_discovery_hides_plugin_auth_with_health_error(tmp_path: Path):
+    plugin_dir = write_client_auth_plugin(
         tmp_path,
         register_body="""
         def health():
-            return {"level": "error", "message": "business auth unavailable"}
+            return {"level": "error", "message": "plugin auth unavailable"}
 
         context.add_health_check(health)
         """,
@@ -174,9 +178,9 @@ def test_client_discovery_hides_business_plugin_with_health_error(tmp_path: Path
     config = discovery_config(
         tmp_path,
         {
-            "enabled_plugins": ["llama_pack_business"],
+            "enabled_plugins": ["external_plugin_auth"],
             "plugins": {
-                "llama_pack_business": {
+                "external_plugin_auth": {
                     "path": str(plugin_dir),
                     "enabled": True,
                 }
@@ -187,24 +191,28 @@ def test_client_discovery_hides_business_plugin_with_health_error(tmp_path: Path
 
     payload = client.get("/lm-api/v1/client-discovery").json()
 
-    assert payload["capabilities"]["businessPlugin"] is False
-    assert "llama_pack_business" not in payload["auth"]["methods"]
-    assert "businessAuth" not in payload["endpoints"]
+    assert payload["capabilities"]["pluginAuth"] is False
+    assert "external_plugin_auth" not in payload["auth"]["methods"]
+    assert "externalPluginAuth" not in payload["endpoints"]
 
 
-def write_business_plugin(root: Path, *, register_body: str = "") -> Path:
-    plugin_dir = root / "llama_pack_business"
-    package_dir = plugin_dir / "llama_pack_business"
+def write_client_auth_plugin(root: Path, *, register_body: str = "") -> Path:
+    plugin_dir = root / "external_plugin_auth"
+    package_dir = plugin_dir / "external_plugin_auth"
     package_dir.mkdir(parents=True)
     (plugin_dir / "plugin.yaml").write_text(
         textwrap.dedent(
             """
-            id: llama_pack_business
-            name: Llama Pack Business
+            id: external_plugin_auth
+            name: External Plugin Auth
             version: "1.0"
             requires_core: "1.0"
             backend_api_version: "1.0"
-            entrypoint: llama_pack_business.plugin:plugin
+            entrypoint: external_plugin_auth.plugin:plugin
+            client_auth:
+              method: external_plugin_auth
+              endpoint: /lm-api/v1/plugins/external_plugin_auth/auth/login
+              endpoint_key: externalPluginAuth
             """
         ).strip(),
         encoding="utf-8",

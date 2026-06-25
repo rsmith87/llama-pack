@@ -15,7 +15,7 @@ cd "$REPO_DIR"
   --ca-url https://pi-controller.local:8443 \
   --root "$CERT_DIR/root_ca.crt" \
   --cert-dir /opt/homebrew/etc/caddy/certs \
-  --owner robertsmith \
+  --owner "${LLAMA_PACK_CADDY_CERT_OWNER:?Set LLAMA_PACK_CADDY_CERT_OWNER to the local Caddy certificate owner}" \
   --group staff \
   --expires-in 24h \
   --reload brew \

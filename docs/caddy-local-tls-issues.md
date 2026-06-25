@@ -87,14 +87,14 @@ step ca certificate mac-mini.local ~/llama-pack-certs/mac-mini.crt ~/llama-pack-
 **Step 3 — Rebuild the fullchain and reload Caddy** (run on the mac-mini):
 
 ```bash
-cd /Users/robertsmith/Apps/llama-pack
+cd /path/to/llama-pack
 scripts/renew_caddy_mac_mini.sh
 ```
 
 Wrapper script content (`scripts/renew_caddy_mac_mini.sh`):
 
 ```bash
-cd /Users/robertsmith/Apps/llama-pack
+cd /path/to/llama-pack
 scripts/renew_caddy_step_cert.sh \
   --name mac-mini \
   --leaf ~/llama-pack-certs/mac-mini.crt \
@@ -103,7 +103,7 @@ scripts/renew_caddy_step_cert.sh \
   --ca-url https://pi-controller.local:8443 \
   --root ~/llama-pack-certs/root_ca.crt \
   --cert-dir /opt/homebrew/etc/caddy/certs \
-  --owner robertsmith \
+  --owner USER \
   --group staff \
   --expires-in 24h \
   --reload brew \
@@ -168,9 +168,9 @@ If you move scheduling to `launchd` (recommended), copy the wrapper script to a
 stable user path first:
 
 ```bash
-install -m 755 /Users/robertsmith/Apps/llama-pack/scripts/renew_caddy_mac_mini.sh \
-  /Users/robertsmith/bin/renew_caddy_mac_mini.sh
+install -m 755 /path/to/llama-pack/scripts/renew_caddy_mac_mini.sh \
+  /path/to/bin/renew_caddy_mac_mini.sh
 ```
 
 Then point your LaunchAgent `ProgramArguments` to:
-`/Users/robertsmith/bin/renew_caddy_mac_mini.sh`.
+`/path/to/bin/renew_caddy_mac_mini.sh`.

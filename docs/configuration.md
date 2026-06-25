@@ -105,9 +105,9 @@ only the top-level fields that belong to that group:
 
 ```yaml
 # config/runtime.yaml
-llama_server_bin: /Users/{user_name}/Apps/llama.cpp/build/bin/llama-server
-llama_cpp_dir: /Users/{user_name}/Apps/llama.cpp
-python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
+llama_server_bin: /home/USER/Apps/llama.cpp/build/bin/llama-server
+llama_cpp_dir: /home/USER/Apps/llama.cpp
+python_bin: /home/USER/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
@@ -240,16 +240,16 @@ Example:
 
 ```yaml
 mode: agent
-llama_server_bin: /Users/{user_name}/Apps/llama.cpp/build/bin/llama-server
-llama_cpp_dir: /Users/{user_name}/Apps/llama.cpp
-python_bin: /Users/{user_name}/Apps/llama.cpp/.venv/bin/python
+llama_server_bin: /home/USER/Apps/llama.cpp/build/bin/llama-server
+llama_cpp_dir: /home/USER/Apps/llama.cpp
+python_bin: /home/USER/Apps/llama.cpp/.venv/bin/python
 hf_models_dirs:
   - /Volumes/4TB/HFModels
 log_dir: ./logs
 
 models:
   qwen-coder:
-    path: /Users/{user_name}/models/qwen-coder.gguf
+    path: /home/USER/models/qwen-coder.gguf
     port: 8081
     ctx: 16384
     gpu_layers: 999
@@ -597,7 +597,7 @@ agent_tools:
   tool_timeout_seconds: 10
   safe_roots:
     - ./logs
-    - /Users/{user_name}/Apps/llama-pack
+    - /home/USER/Apps/llama-pack
   tools:
     list_runtime_status:
       type: shell
@@ -610,11 +610,11 @@ agent_tools:
     read_project_file:
       type: file_read_dynamic
       description: Read a project or log file by relative path.
-      path: /Users/{user_name}/Apps/llama-pack
+      path: /home/USER/Apps/llama-pack
     list_project_files:
       type: directory_list
       description: List top-level and one-level-deep project files.
-      path: /Users/{user_name}/Apps/llama-pack
+      path: /home/USER/Apps/llama-pack
       recursive: true
       max_depth: 1
       max_entries: 200

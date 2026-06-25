@@ -54,6 +54,35 @@ class PluginFrontend(BaseModel):
         return value
 
 
+class PluginClientAuth(BaseModel):
+    method: str
+    endpoint: str
+    endpoint_key: str
+
+    @field_validator("method")
+    @classmethod
+    def validate_method(cls, value: str) -> str:
+        if not PLUGIN_ID_PATTERN.fullmatch(value):
+            raise ValueError(f"Invalid plugin client auth method {value!r}")
+        return value
+
+    @field_validator("endpoint")
+    @classmethod
+    def validate_endpoint(cls, value: str) -> str:
+        if not value.startswith("/lm-api/v1/plugins/"):
+            raise ValueError("Plugin client auth endpoints must stay under /lm-api/v1/plugins/")
+        if ".." in value.split("/"):
+            raise ValueError("Plugin client auth endpoints must not contain traversal segments")
+        return value
+
+    @field_validator("endpoint_key")
+    @classmethod
+    def validate_endpoint_key(cls, value: str) -> str:
+        if not re.fullmatch(r"^[a-z][A-Za-z0-9]*$", value):
+            raise ValueError(f"Invalid plugin client auth endpoint key {value!r}")
+        return value
+
+
 ConfigFieldType = Literal["string", "integer", "number", "boolean"]
 
 
@@ -99,6 +128,7 @@ class PluginManifest(BaseModel):
     modes: list[PluginMode] = Field(default_factory=lambda: ["agent", "controller"])
     config_schema: PluginConfigSchema | None = None
     frontend: PluginFrontend | None = None
+    client_auth: PluginClientAuth | None = None
     navigation: list[dict[str, Any]] = Field(default_factory=list)
     secondary_navigation: list[dict[str, Any]] = Field(default_factory=list)
     ui_routes: list[dict[str, Any]] = Field(default_factory=list)

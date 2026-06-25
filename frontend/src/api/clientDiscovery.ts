@@ -8,7 +8,7 @@ export type ClientDiscoveryResponse = {
     openaiChatCompletions: boolean;
     streaming: boolean;
     localChatSessions: boolean;
-    businessPlugin: boolean;
+    pluginAuth: boolean;
   };
   auth: {
     methods: string[];

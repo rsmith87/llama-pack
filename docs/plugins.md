@@ -78,6 +78,7 @@ Field rules:
 - `modes`: optional list of `agent` and/or `controller`; defaults to both.
 - `description`: optional text.
 - `frontend`: optional static asset metadata.
+- `client_auth`: optional client discovery metadata for plugin-owned auth.
 - `navigation`, `secondary_navigation`, `ui_routes`: optional frontend route
   metadata.
 - `config_schema`: optional validation schema for plugin config.
@@ -88,6 +89,19 @@ Example controller-only plugin:
 modes:
   - controller
 ```
+
+Example plugin-owned client auth discovery metadata:
+
+```yaml
+client_auth:
+  method: external_plugin_auth
+  endpoint: /lm-api/v1/plugins/external_plugin_auth/auth/login
+  endpoint_key: externalPluginAuth
+```
+
+When the plugin is enabled and has no health errors, `GET
+/lm-api/v1/client-discovery` adds `method` to `auth.methods` and adds
+`endpoint` under `endpoints[endpoint_key]`.
 
 ## Config Schema
 
@@ -407,10 +421,9 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
 
 ## Private Plugin Repositories
 
-Paid or private plugins should be tracked in separate private repositories.
+Private plugins should be tracked in separate private repositories.
 Keep this repository focused on the core runtime, public extension contracts,
-and the minimal `hello_plugin` sample. The `llama_pack_business` add-on is a paid
-private plugin and should not become a core runtime dependency.
+and the minimal `hello_plugin` sample.
 
 Recommended local development setup:
 
@@ -420,7 +433,7 @@ enabled_plugins:
 
 plugins:
   llama_pack_business:
-    path: /Users/robertsmith/Apps/llama-pack-business-plugin
+    path: /path/to/llama-pack-business-plugin
     enabled: true
     config:
       organization_name: Acme
@@ -432,12 +445,11 @@ above. It should carry its own implementation tests and CI, while this
 repository keeps fixture-based coverage for the generic plugin runtime and the
 public `hello_plugin` sample.
 
-Private plugins that provide end-user auth or chat policy, such as
-`llama_pack_business`, should expose their client-facing availability through core
-client discovery rather than requiring clients to scrape plugin status or know
-private route details. Core discovery should advertise plugin auth endpoints
-only when the plugin is enabled and not reporting errors that make the
-advertised feature unusable.
+Private plugins that provide end-user auth or chat policy should expose their
+client-facing availability through core client discovery rather than requiring
+clients to scrape plugin status or know private route details. Core discovery
+advertises plugin auth endpoints only when the plugin is enabled and not
+reporting errors that make the advertised feature unusable.
 
 ## Deferred Work
 
