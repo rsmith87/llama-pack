@@ -216,35 +216,45 @@ export function EmbeddingsPage() {
   const rows = useMemo(() => result?.data || [], [result]);
   const displayRows = useMemo(() => rows.map((row, index) => ({ row, input: submittedLines[index] || "-", index })), [rows, submittedLines]);
   const vectors = useMemo(() => rows.map(vector), [rows]);
+  const agentMode = overview?.mode === "agent";
   const controllerMemoryEnabled = overview?.mode === "controller";
   const memoryAvailable = Boolean(overview?.memory?.available);
+  const controllerEmbeddingAvailable = memoryAvailable || agentMode;
   const memoryModelPath = overview?.memory?.embedding_model_path || "";
   const memoryModelLabel = memoryModelPath.split("/").filter(Boolean).pop() || "controller memory model";
+  const fallbackSelectedModel = controllerEmbeddingAvailable
+    ? controllerMemoryModelOption
+    : models.length > 0 ? modelName(models[0]) : "";
+  const activeSelectedModel = selectedModel || fallbackSelectedModel;
 
   useEffect(() => {
-    if (memoryAvailable && !selectedModel) {
+    if (controllerEmbeddingAvailable && !selectedModel) {
       setSelectedModel(controllerMemoryModelOption);
       return;
     }
     if (!selectedModel && models.length > 0) setSelectedModel(modelName(models[0]));
-  }, [memoryAvailable, models, selectedModel]);
+  }, [controllerEmbeddingAvailable, models, selectedModel]);
 
   useEffect(() => {
     if (!routes.includes(target)) setTarget("auto");
   }, [routes, target]);
 
   useEffect(() => {
-    if (activeTab === "memory" && memoryAvailable) void loadMemoryEntries();
-  }, [activeTab, memoryAvailable]);
+    if (agentMode && activeTab !== "workbench") setActiveTab("workbench");
+  }, [activeTab, agentMode]);
+
+  useEffect(() => {
+    if (activeTab === "memory" && memoryAvailable && !agentMode) void loadMemoryEntries();
+  }, [activeTab, agentMode, memoryAvailable]);
 
   async function runEmbeddings(): Promise<void> {
     const lines = parseInputLines(input);
-    const useMemoryModel = selectedModel === controllerMemoryModelOption;
-    if (!selectedModel) {
+    const useMemoryModel = activeSelectedModel === controllerMemoryModelOption;
+    if (!activeSelectedModel) {
       setError("Select an embeddings model.");
       return;
     }
-    if (useMemoryModel && !memoryAvailable) {
+    if (useMemoryModel && !controllerEmbeddingAvailable) {
       setError("Controller memory model is not available.");
       return;
     }
@@ -256,7 +266,7 @@ export function EmbeddingsPage() {
     setStatus("Running embeddings...");
     const payload = useMemoryModel
       ? await createMemoryEmbeddings({ input: lines })
-      : await createEmbeddings(selectedModel, { input: lines, target });
+      : await createEmbeddings(activeSelectedModel, { input: lines, target });
     setSubmittedLines(lines);
     setResult(payload as EmbeddingsResult);
     setSimilarities([]);
@@ -386,7 +396,7 @@ export function EmbeddingsPage() {
     <div className="embeddings-page-react">
       <div className="page-heading">
         <div><span className="eyebrow">Vectors</span><h2>Embeddings & Memory</h2></div>
-        <span className="muted">Workbench embeddings plus controller semantic memory</span>
+        <span className="muted">{agentMode ? "Agent workbench using controller embeddings" : "Workbench embeddings plus controller semantic memory"}</span>
       </div>
       <ErrorBanner message={error} />
 
@@ -412,8 +422,8 @@ export function EmbeddingsPage() {
 
       <div className="embedding-tabs" role="tablist" aria-label="Embeddings page sections">
         <button type="button" role="tab" aria-selected={activeTab === "workbench"} className={activeTab === "workbench" ? "active" : ""} onClick={() => setActiveTab("workbench")}>Workbench</button>
-        <button type="button" role="tab" aria-selected={activeTab === "setup"} className={activeTab === "setup" ? "active" : ""} onClick={() => setActiveTab("setup")}>Model Setup</button>
-        <button type="button" role="tab" aria-selected={activeTab === "memory"} className={activeTab === "memory" ? "active" : ""} onClick={() => setActiveTab("memory")}>Controller Memory</button>
+        {!agentMode ? <button type="button" role="tab" aria-selected={activeTab === "setup"} className={activeTab === "setup" ? "active" : ""} onClick={() => setActiveTab("setup")}>Model Setup</button> : null}
+        {!agentMode ? <button type="button" role="tab" aria-selected={activeTab === "memory"} className={activeTab === "memory" ? "active" : ""} onClick={() => setActiveTab("memory")}>Controller Memory</button> : null}
       </div>
 
       {activeTab === "workbench" ? (
@@ -426,22 +436,22 @@ export function EmbeddingsPage() {
             <Panel title="Embeddings Workbench" eyebrow="Batch /v1/embeddings" className="side-panel">
               <div className="side-form">
                 <FormField label="Model">
-                  <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
-                    {memoryAvailable ? <option value={controllerMemoryModelOption}>Controller memory model ({memoryModelLabel})</option> : null}
+                  <select value={activeSelectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
+                    {controllerEmbeddingAvailable ? <option value={controllerMemoryModelOption}>{agentMode ? "Controller embedding model" : "Controller memory model"} ({memoryModelLabel})</option> : null}
                     {models.map((model) => <option key={modelName(model)} value={modelName(model)}>{modelName(model)}</option>)}
                   </select>
                 </FormField>
-                {selectedModel === controllerMemoryModelOption ? (
-                  <p className="embedding-workbench-hint">Use the configured controller memory model for a basic local embedding test.</p>
+                {activeSelectedModel === controllerMemoryModelOption ? (
+                  <p className="embedding-workbench-hint">{agentMode ? "Use the controller embedding model for this agent workbench test." : "Use the configured controller memory model for a basic local embedding test."}</p>
                 ) : null}
-                {selectedModel !== controllerMemoryModelOption ? (
+                {activeSelectedModel !== controllerMemoryModelOption ? (
                   <FormField label="Route">
                     <select value={target} onChange={(event) => setTarget(event.target.value)}>
                       {routes.map((route) => <option key={route} value={route}>{route}</option>)}
                     </select>
                   </FormField>
                 ) : null}
-                {!memoryAvailable && models.length === 0 ? (
+                {!controllerEmbeddingAvailable && models.length === 0 ? (
                   <p className="embedding-workbench-hint">No routed embedding models are installed. For the normal setup, enable controller memory and install all-MiniLM-L6-v2 with scripts/install_embedding_model.sh.</p>
                 ) : null}
                 <FormField label="Inputs">

@@ -2,10 +2,13 @@ from __future__ import annotations
 
 from typing import Any
 
+import httpx
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
-from llama_pack.api.dependencies import get_memory_store
+from llama_pack.api.dependencies import get_config, get_memory_store
+from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
+from llama_pack.core.config import AppConfig
 
 router = APIRouter(prefix="/memory")
 
@@ -89,13 +92,16 @@ async def memory_delete(
 @router.post("/embeddings")
 async def memory_embeddings(
     body: MemoryEmbeddingsRequest,
+    config: AppConfig = Depends(get_config),
     store: Any = Depends(get_memory_store),
 ) -> dict[str, Any]:
-    if store.disabled:
-        raise HTTPException(status_code=503, detail="Memory subsystem is not enabled on this node")
     inputs = [item.strip() for item in body.input if item.strip()]
     if not inputs:
         raise HTTPException(status_code=422, detail="input must contain at least one non-empty string")
+    if config.mode == "agent":
+        return await _controller_memory_embeddings(config, inputs)
+    if store.disabled:
+        raise HTTPException(status_code=503, detail="Memory subsystem is not enabled on this node")
     embeddings = await store.embeddings(inputs)
     if not embeddings:
         raise HTTPException(status_code=503, detail="Memory embedding model did not return vectors")
@@ -115,3 +121,23 @@ async def memory_embeddings(
         ],
         "usage": {"prompt_tokens": len(inputs), "total_tokens": len(inputs)},
     }
+
+
+async def _controller_memory_embeddings(config: AppConfig, inputs: list[str]) -> dict[str, Any]:
+    if not config.controller_url:
+        raise HTTPException(status_code=503, detail="Controller embeddings require controller_url in agent config")
+    url = f"{config.controller_url.rstrip('/')}/lm-api/v1/memory/embeddings"
+    headers = {LLAMA_PACK_API_KEY_HEADER: config.agent_api_key} if config.agent_api_key else {}
+    try:
+        async with httpx.AsyncClient(timeout=30, verify=True) as client:
+            response = await client.post(url, json={"input": inputs}, headers=headers)
+            response.raise_for_status()
+            payload = response.json()
+    except httpx.HTTPStatusError as exc:
+        detail = exc.response.text or str(exc)
+        raise HTTPException(status_code=exc.response.status_code, detail=detail) from exc
+    except httpx.HTTPError as exc:
+        raise HTTPException(status_code=503, detail=f"Controller embeddings request failed: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise HTTPException(status_code=502, detail="Controller embeddings response was not a JSON object")
+    return payload

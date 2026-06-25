@@ -356,20 +356,24 @@ class TestInjectMemories:
 # Memory write-back endpoint tests
 # ---------------------------------------------------------------------------
 
-def _make_app(tmp_path, *, memory_enabled=True):
+def _make_app(tmp_path, *, memory_enabled=True, app_config=None):
     """Build a test FastAPI app with a disabled memory store (endpoint still registered)."""
     from fastapi.testclient import TestClient
     from llama_pack.core.memory.store import ChromaMemoryStore
     from llama_pack.api.routes import memory as memory_routes
-    from llama_pack.api.dependencies import get_memory_store
+    from llama_pack.api.dependencies import get_config, get_memory_store
     from fastapi import FastAPI
 
     cfg = _make_memory_config(tmp_path, enabled=memory_enabled)
     store = ChromaMemoryStore(cfg)
+    if app_config is None:
+        from llama_pack.core.config import load_config
+        app_config = load_config({"mode": "controller"})
 
     app = FastAPI()
     app.include_router(memory_routes.router, prefix="/lm-api/v1")
     app.dependency_overrides[get_memory_store] = lambda: store
+    app.dependency_overrides[get_config] = lambda: app_config
     return TestClient(app), store
 
 
@@ -466,3 +470,68 @@ class TestMemoryEndpoint:
         client, _ = _make_app(tmp_path, memory_enabled=False)
         resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["alpha"]})
         assert resp.status_code == 503
+
+    def test_agent_embeddings_proxy_to_controller(self, tmp_path, monkeypatch):
+        from llama_pack.core.config import load_config
+
+        calls = []
+
+        class FakeResponse:
+            def __init__(self):
+                self.status_code = 200
+
+            def json(self):
+                return {
+                    "model": "all-MiniLM-L6-v2",
+                    "data": [{"object": "embedding", "index": 0, "embedding": [0.1, 0.2], "id": "memory-emb-0"}],
+                    "usage": {"prompt_tokens": 1, "total_tokens": 1},
+                }
+
+            def raise_for_status(self):
+                return None
+
+        class FakeAsyncClient:
+            def __init__(self, timeout, verify):
+                calls.append(("init", timeout, verify))
+
+            async def __aenter__(self):
+                return self
+
+            async def __aexit__(self, exc_type, exc, tb):
+                return None
+
+            async def post(self, url, json, headers):
+                calls.append(("post", url, json, headers))
+                return FakeResponse()
+
+        monkeypatch.setattr("llama_pack.api.routes.memory.httpx.AsyncClient", FakeAsyncClient)
+        client, _ = _make_app(
+            tmp_path,
+            app_config=load_config({
+                "mode": "agent",
+                "controller_url": "http://controller.local:9137",
+                "agent_api_key": "agent-secret",
+            }),
+        )
+
+        resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["alpha"]})
+
+        assert resp.status_code == 200
+        assert resp.json()["model"] == "all-MiniLM-L6-v2"
+        assert calls == [
+            ("init", 30, True),
+            (
+                "post",
+                "http://controller.local:9137/lm-api/v1/memory/embeddings",
+                {"input": ["alpha"]},
+                {"X-Llama-Pack-Key": "agent-secret"},
+            ),
+        ]
+
+    def test_agent_embeddings_without_controller_url_returns_503(self, tmp_path):
+        from llama_pack.core.config import load_config
+
+        client, _ = _make_app(tmp_path, app_config=load_config({"mode": "agent"}))
+        resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["alpha"]})
+        assert resp.status_code == 503
+        assert resp.json()["detail"] == "Controller embeddings require controller_url in agent config"

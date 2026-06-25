@@ -27,6 +27,21 @@ function controllerOverview() {
   };
 }
 
+function agentOverview() {
+  return {
+    mode: "agent",
+    memory: {
+      configured: false,
+      available: true,
+      path: "-",
+      embedding_model_path: "controller:all-MiniLM-L6-v2",
+      auto_inject: false,
+      top_k: 3,
+    },
+    nodes: { items: [] },
+  };
+}
+
 it("runs batch embeddings from trimmed line items and renders each result", async () => {
   vi.stubGlobal(
     "fetch",
@@ -90,6 +105,36 @@ it("runs workbench embeddings with the normal controller memory model when no ro
   })));
   expect(await screen.findByText("memory-emb-0")).toBeInTheDocument();
   expect(screen.getAllByText("all-MiniLM-L6-v2").length).toBeGreaterThan(0);
+});
+
+it("hides setup and controller memory tabs on agents while using controller embeddings", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson({ models: [] }))
+      .mockResolvedValueOnce(okJson(agentOverview()))
+      .mockResolvedValueOnce(okJson({
+        model: "all-MiniLM-L6-v2",
+        usage: { prompt_tokens: 1, total_tokens: 1 },
+        data: [{ id: "memory-emb-0", object: "embedding", index: 0, embedding: [1, 0] }],
+      })),
+  );
+  const user = userEvent.setup();
+
+  render(<EmbeddingsPage />);
+  expect(await screen.findByRole("tab", { name: "Workbench" })).toBeInTheDocument();
+  expect(screen.queryByRole("tab", { name: "Model Setup" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("tab", { name: "Controller Memory" })).not.toBeInTheDocument();
+  expect(screen.getByText("Use the controller embedding model for this agent workbench test.")).toBeInTheDocument();
+
+  await user.type(screen.getByLabelText("Inputs"), "alpha");
+  await user.click(screen.getByRole("button", { name: "Run" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/memory/embeddings", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ input: ["alpha"] }),
+  })));
+  expect(await screen.findByText("memory-emb-0")).toBeInTheDocument();
 });
 
 it("computes similarity, nearest neighbors, and quick clusters from returned vectors", async () => {
