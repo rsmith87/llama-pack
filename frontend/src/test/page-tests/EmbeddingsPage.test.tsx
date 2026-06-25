@@ -47,6 +47,7 @@ it("runs batch embeddings from trimmed line items and renders each result", asyn
   render(<EmbeddingsPage />);
   expect(await screen.findByText("Embeddings make text searchable by meaning, not just matching words.")).toBeInTheDocument();
   await user.type(await screen.findByLabelText("Inputs"), " alpha \n\n beta ");
+  await user.selectOptions(screen.getByLabelText("Model"), "nomic-embed");
   await user.selectOptions(screen.getByLabelText("Route"), "node:mac");
   await user.click(screen.getByRole("button", { name: "Run" }));
 
@@ -59,6 +60,36 @@ it("runs batch embeddings from trimmed line items and renders each result", asyn
   expect(screen.getByText("beta")).toBeInTheDocument();
   expect(screen.getAllByText("3")[0]).toBeInTheDocument();
   expect(screen.getAllByText("prompt=5, total=5")[0]).toBeInTheDocument();
+});
+
+it("runs workbench embeddings with the normal controller memory model when no routed models exist", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson({ models: [] }))
+      .mockResolvedValueOnce(okJson(controllerOverview()))
+      .mockResolvedValueOnce(okJson({
+        model: "all-MiniLM-L6-v2",
+        usage: { prompt_tokens: 2, total_tokens: 2 },
+        data: [
+          { id: "memory-emb-0", object: "embedding", index: 0, embedding: [1, 0] },
+          { id: "memory-emb-1", object: "embedding", index: 1, embedding: [0, 1] },
+        ],
+      })),
+  );
+  const user = userEvent.setup();
+
+  render(<EmbeddingsPage />);
+  expect(await screen.findByText("Use the configured controller memory model for a basic local embedding test.")).toBeInTheDocument();
+  await user.type(screen.getByLabelText("Inputs"), " alpha \n beta ");
+  await user.click(screen.getByRole("button", { name: "Run" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/memory/embeddings", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ input: ["alpha", "beta"] }),
+  })));
+  expect(await screen.findByText("memory-emb-0")).toBeInTheDocument();
+  expect(screen.getAllByText("all-MiniLM-L6-v2").length).toBeGreaterThan(0);
 });
 
 it("computes similarity, nearest neighbors, and quick clusters from returned vectors", async () => {

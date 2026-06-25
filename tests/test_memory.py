@@ -413,3 +413,20 @@ class TestMemoryEndpoint:
         client, _ = _make_app(tmp_path, memory_enabled=False)
         resp = client.post("/lm-api/v1/memory/search", json={"query": "anything"})
         assert resp.status_code == 503
+
+    def test_embeddings_returns_vectors_from_memory_model(self, tmp_path):
+        client, _ = _make_app(tmp_path)
+        resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["alpha", "beta"]})
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["model"] == "model"
+        assert data["data"][0]["object"] == "embedding"
+        assert data["data"][0]["index"] == 0
+        assert len(data["data"][0]["embedding"]) == 384
+        assert data["data"][1]["index"] == 1
+        assert data["usage"] == {"prompt_tokens": 2, "total_tokens": 2}
+
+    def test_embeddings_when_disabled_returns_503(self, tmp_path):
+        client, _ = _make_app(tmp_path, memory_enabled=False)
+        resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["alpha"]})
+        assert resp.status_code == 503

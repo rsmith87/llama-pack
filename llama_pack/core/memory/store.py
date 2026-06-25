@@ -98,6 +98,16 @@ class ChromaMemoryStore:
             logger.warning("ChromaMemoryStore.search failed: %s", exc)
             return []
 
+    async def embeddings(self, inputs: list[str]) -> list[list[float]]:
+        """Return normalized embeddings from the configured memory model."""
+        if self._disabled:
+            return []
+        try:
+            return await asyncio.to_thread(self._embeddings_sync, inputs)
+        except Exception as exc:
+            logger.warning("ChromaMemoryStore.embeddings failed: %s", exc)
+            return []
+
     async def write(
         self,
         text: str,
@@ -143,6 +153,9 @@ class ChromaMemoryStore:
     def _embed(self, text: str) -> list[float]:
         embedding = self._model.encode(text, normalize_embeddings=True)
         return embedding.tolist() if hasattr(embedding, "tolist") else list(embedding)
+
+    def _embeddings_sync(self, inputs: list[str]) -> list[list[float]]:
+        return [self._embed(text) for text in inputs]
 
     def _search_sync(self, query: str, top_k: int) -> list[dict[str, Any]]:
         count = self._collection.count()

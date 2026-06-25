@@ -30,3 +30,7 @@ export type MemorySearchResponse = {
   count: number;
   results: MemorySearchResult[];
 };
+
+export type MemoryEmbeddingsRequest = {
+  input: string[];
+};

@@ -2,7 +2,7 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import { createEmbeddings } from "../../api/embeddings";
 import { startDownload } from "../../api/downloads";
-import { searchMemory, writeMemory } from "../../api/memory";
+import { createMemoryEmbeddings, searchMemory, writeMemory } from "../../api/memory";
 import { listModels } from "../../api/models";
 import { getRuntimeOverview } from "../../api/runtime";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
@@ -32,6 +32,8 @@ type ControllerMemoryModel = {
 };
 
 type EmbeddingsTab = "workbench" | "setup" | "memory";
+
+const controllerMemoryModelOption = "__controller_memory__";
 
 const controllerMemoryModels: ControllerMemoryModel[] = [
   {
@@ -215,10 +217,16 @@ export function EmbeddingsPage() {
   const vectors = useMemo(() => rows.map(vector), [rows]);
   const controllerMemoryEnabled = overview?.mode === "controller";
   const memoryAvailable = Boolean(overview?.memory?.available);
+  const memoryModelPath = overview?.memory?.embedding_model_path || "";
+  const memoryModelLabel = memoryModelPath.split("/").filter(Boolean).pop() || "controller memory model";
 
   useEffect(() => {
+    if (memoryAvailable && !selectedModel) {
+      setSelectedModel(controllerMemoryModelOption);
+      return;
+    }
     if (!selectedModel && models.length > 0) setSelectedModel(modelName(models[0]));
-  }, [models, selectedModel]);
+  }, [memoryAvailable, models, selectedModel]);
 
   useEffect(() => {
     if (!routes.includes(target)) setTarget("auto");
@@ -226,8 +234,13 @@ export function EmbeddingsPage() {
 
   async function runEmbeddings(): Promise<void> {
     const lines = parseInputLines(input);
+    const useMemoryModel = selectedModel === controllerMemoryModelOption;
     if (!selectedModel) {
       setError("Select an embeddings model.");
+      return;
+    }
+    if (useMemoryModel && !memoryAvailable) {
+      setError("Controller memory model is not available.");
       return;
     }
     if (!lines.length) {
@@ -236,7 +249,9 @@ export function EmbeddingsPage() {
     }
     setError("");
     setStatus("Running embeddings...");
-    const payload = await createEmbeddings(selectedModel, { input: lines, target });
+    const payload = useMemoryModel
+      ? await createMemoryEmbeddings({ input: lines })
+      : await createEmbeddings(selectedModel, { input: lines, target });
     setSubmittedLines(lines);
     setResult(payload as EmbeddingsResult);
     setSimilarities([]);
@@ -394,14 +409,23 @@ export function EmbeddingsPage() {
               <div className="side-form">
                 <FormField label="Model">
                   <select value={selectedModel} onChange={(event) => setSelectedModel(event.target.value)}>
+                    {memoryAvailable ? <option value={controllerMemoryModelOption}>Controller memory model ({memoryModelLabel})</option> : null}
                     {models.map((model) => <option key={modelName(model)} value={modelName(model)}>{modelName(model)}</option>)}
                   </select>
                 </FormField>
-                <FormField label="Route">
-                  <select value={target} onChange={(event) => setTarget(event.target.value)}>
-                    {routes.map((route) => <option key={route} value={route}>{route}</option>)}
-                  </select>
-                </FormField>
+                {selectedModel === controllerMemoryModelOption ? (
+                  <p className="embedding-workbench-hint">Use the configured controller memory model for a basic local embedding test.</p>
+                ) : null}
+                {selectedModel !== controllerMemoryModelOption ? (
+                  <FormField label="Route">
+                    <select value={target} onChange={(event) => setTarget(event.target.value)}>
+                      {routes.map((route) => <option key={route} value={route}>{route}</option>)}
+                    </select>
+                  </FormField>
+                ) : null}
+                {!memoryAvailable && models.length === 0 ? (
+                  <p className="embedding-workbench-hint">No routed embedding models are installed. For the normal setup, enable controller memory and install all-MiniLM-L6-v2 with scripts/install_embedding_model.sh.</p>
+                ) : null}
                 <FormField label="Inputs">
                   <textarea value={input} onChange={(event) => setInput(event.target.value)} rows={10} placeholder="One input per line" />
                 </FormField>
@@ -462,7 +486,7 @@ export function EmbeddingsPage() {
         <div className="embeddings-tab-panel" role="tabpanel" aria-label="Model Setup">
         <div className="embedding-tab-intro">
           <strong>Embedding models power semantic search and retrieval.</strong>
-          <span>Use small sentence-transformers models for controller memory, and GGUF models when you want routed llama.cpp embedding inference.</span>
+          <span>Use small sentence-transformers models for the normal workbench path and controller memory. Use GGUF models only when you want routed llama.cpp embedding inference.</span>
         </div>
         <Panel title="Embedding Model Setup" eyebrow="Recommended downloads" className="span-all">
           <div className="embedding-recommendation-grid">

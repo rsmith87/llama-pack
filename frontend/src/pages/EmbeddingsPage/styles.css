@@ -144,6 +144,15 @@
   overflow-wrap: anywhere;
 }
 
+.embedding-workbench-hint {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--muted);
+  margin: 0;
+  padding: 10px;
+}
+
 .controller-memory-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
