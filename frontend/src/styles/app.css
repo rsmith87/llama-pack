@@ -1004,6 +1004,7 @@ textarea {
   color: var(--ink);
   border-radius: 4px;
   padding: 5px 10px;
+  width: 100%;
 }
 
 .form-field {

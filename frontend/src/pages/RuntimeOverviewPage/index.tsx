@@ -124,94 +124,97 @@ export function RuntimeOverviewPage() {
       <ErrorBanner message={error} />
 
       <div className="runtime-grid">
-        <Panel eyebrow="Runtime Router" title="Route Preview">
-          <p className="muted runtime-note">Preview model selection without sending a chat request.</p>
-          <div className="route-preview-form">
-            <FormField label="Task">
-              <input type="text" value={routeTask} onChange={(event) => setRouteTask(event.target.value)} />
-            </FormField>
-            <FormField label="Request type">
-              <select value={requestType} onChange={(event) => setRequestType(event.target.value)}>
-                <option value="general">general</option>
-                <option value="coding">coding</option>
-                <option value="summarization">summarization</option>
-                <option value="structured">structured</option>
-                <option value="planning">planning</option>
-              </select>
-            </FormField>
-            <FormField label="Min context">
-              <input inputMode="numeric" value={minContext} onChange={(event) => setMinContext(event.target.value)} placeholder="8192" />
-            </FormField>
-            <label className="route-preview-check">
-              <input type="checkbox" checked={needsJson} onChange={(event) => setNeedsJson(event.target.checked)} />
-              <span>Needs JSON schema</span>
-            </label>
-          </div>
-          <Button variant="primary" onClick={submitRoutePreview} disabled={previewLoading}>
-            {previewLoading ? "Previewing..." : "Preview Route"}
-          </Button>
-          <ErrorBanner message={previewError} />
-          {preview ? (
-            <div className="route-preview-result">
-              <div className="runtime-summary">
-                <div>
-                  <span className="muted">Selected</span>
-                  <strong>{preview.selected ? `${preview.selected.node} / ${preview.selected.model}` : "No match"}</strong>
-                </div>
-                <div>
-                  <span className="muted">Reason</span>
-                  <strong>{preview.selected?.reason || "-"}</strong>
-                </div>
-              </div>
-              <p className="muted runtime-note">{preview.explanation}</p>
-              {preview.selected?.model ? (
-                <Button
-                  type="button"
-                  onClick={() => navigate(`/ui/benchmarks?${benchmarkSearch(
-                    preview.selected?.model || "",
-                    preview.selected?.node ? `node:${preview.selected.node}` : "auto",
-                    preview.selected?.node || "",
-                    "runtime-preview",
-                  )}`)}
-                  aria-label={`Benchmark ${preview.selected.model}${preview.selected.node ? ` on ${preview.selected.node}` : ""}`}
-                >
-                  Benchmark
-                </Button>
-              ) : null}
-              {selectedCanStart ? (
-                <div className="route-preview-start">
-                  <span>Model is available but stopped.</span>
-                  <Button
-                    variant="success"
-                    onClick={() => void startSelectedRouteModel()}
-                    disabled={startingRoute === selectedRouteKey}
-                    aria-label={`Start ${preview.selected?.model} on ${preview.selected?.node}`}
-                  >
-                    {startingRoute === selectedRouteKey ? "Starting..." : "Start Model"}
-                  </Button>
-                </div>
-              ) : preview.selected?.startup_needed && preview.selected.startup_decision === "defer" ? (
-                <p className="muted runtime-note">Model is available but startup is deferred by node capacity.</p>
-              ) : null}
-              <DataTable
-                rows={preview.candidates || []}
-                emptyMessage="No route candidates."
-                getRowKey={(row, index) => `${row.node || "node"}-${row.model || index}`}
-                columns={[
-                  { key: "route", header: "Route", render: (row) => `${row.node || "-"} / ${row.model || "-"}` },
-                  { key: "eligible", header: "Eligible", render: (row) => yesNo(row.eligible) },
-                  { key: "score", header: "Score", render: (row) => String(row.score ?? 0) },
-                  { key: "source", header: "Source", render: (row) => String(row.source || "-") },
-                  { key: "running", header: "Running", render: (row) => yesNo(row.running) },
-                  { key: "startup", header: "Startup", render: (row) => row.startup_needed ? String(row.startup_decision || "-") : "-" },
-                  { key: "strengths", header: "Strengths", render: (row) => row.strengths?.join(", ") || "-" },
-                  { key: "cost_tier", header: "Cost", render: (row) => String(row.cost_tier || "-") },
-                  { key: "rejections", header: "Rejections", render: (row) => row.rejections?.join(", ") || "-" },
-                ]}
-              />
+        {overview?.mode === "controller" ? (
+          <Panel eyebrow="Runtime Router" title="Route Preview">
+            <p className="muted runtime-note">Preview model selection without sending a chat request.</p>
+            <div className="route-preview-form">
+              <FormField label="Task">
+                <input type="text" value={routeTask} onChange={(event) => setRouteTask(event.target.value)} />
+              </FormField>
+              <FormField label="Request type">
+                <select value={requestType} onChange={(event) => setRequestType(event.target.value)}>
+                  <option value="general">general</option>
+                  <option value="coding">coding</option>
+                  <option value="summarization">summarization</option>
+                  <option value="structured">structured</option>
+                  <option value="planning">planning</option>
+                </select>
+              </FormField>
+              <FormField label="Min context">
+                <input inputMode="numeric" value={minContext} onChange={(event) => setMinContext(event.target.value)} placeholder="8192" />
+              </FormField>
+              <label className="route-preview-check">
+                <input type="checkbox" checked={needsJson} onChange={(event) => setNeedsJson(event.target.checked)} />
+                <span>Needs JSON schema</span>
+              </label>
             </div>
-          ) : null}
-        </Panel>
+            <Button variant="primary" onClick={submitRoutePreview} disabled={previewLoading}>
+              {previewLoading ? "Previewing..." : "Preview Route"}
+            </Button>
+            <ErrorBanner message={previewError} />
+            {preview ? (
+              <div className="route-preview-result">
+                <div className="runtime-summary">
+                  <div>
+                    <span className="muted">Selected</span>
+                    <strong>{preview.selected ? `${preview.selected.node} / ${preview.selected.model}` : "No match"}</strong>
+                  </div>
+                  <div>
+                    <span className="muted">Reason</span>
+                    <strong>{preview.selected?.reason || "-"}</strong>
+                  </div>
+                </div>
+                <p className="muted runtime-note">{preview.explanation}</p>
+                {preview.selected?.model ? (
+                  <Button
+                    type="button"
+                    onClick={() => navigate(`/ui/benchmarks?${benchmarkSearch(
+                      preview.selected?.model || "",
+                      preview.selected?.node ? `node:${preview.selected.node}` : "auto",
+                      preview.selected?.node || "",
+                      "runtime-preview",
+                    )}`)}
+                    aria-label={`Benchmark ${preview.selected.model}${preview.selected.node ? ` on ${preview.selected.node}` : ""}`}
+                  >
+                    Benchmark
+                  </Button>
+                ) : null}
+                {selectedCanStart ? (
+                  <div className="route-preview-start">
+                    <span>Model is available but stopped.</span>
+                    <Button
+                      variant="success"
+                      onClick={() => void startSelectedRouteModel()}
+                      disabled={startingRoute === selectedRouteKey}
+                      aria-label={`Start ${preview.selected?.model} on ${preview.selected?.node}`}
+                    >
+                      {startingRoute === selectedRouteKey ? "Starting..." : "Start Model"}
+                    </Button>
+                  </div>
+                ) : preview.selected?.startup_needed && preview.selected.startup_decision === "defer" ? (
+                  <p className="muted runtime-note">Model is available but startup is deferred by node capacity.</p>
+                ) : null}
+                <DataTable
+                  rows={preview.candidates || []}
+                  emptyMessage="No route candidates."
+                  getRowKey={(row, index) => `${row.node || "node"}-${row.model || index}`}
+                  columns={[
+                    { key: "route", header: "Route", render: (row) => `${row.node || "-"} / ${row.model || "-"}` },
+                    { key: "eligible", header: "Eligible", render: (row) => yesNo(row.eligible) },
+                    { key: "score", header: "Score", render: (row) => String(row.score ?? 0) },
+                    { key: "source", header: "Source", render: (row) => String(row.source || "-") },
+                    { key: "running", header: "Running", render: (row) => yesNo(row.running) },
+                    { key: "startup", header: "Startup", render: (row) => row.startup_needed ? String(row.startup_decision || "-") : "-" },
+                    { key: "strengths", header: "Strengths", render: (row) => row.strengths?.join(", ") || "-" },
+                    { key: "cost_tier", header: "Cost", render: (row) => String(row.cost_tier || "-") },
+                    { key: "rejections", header: "Rejections", render: (row) => row.rejections?.join(", ") || "-" },
+                  ]}
+                />
+              </div>
+            ) : null}
+          </Panel>
+        ) : null}
+
 
         <Panel eyebrow="Local Runtime" title="Tool Runtime">
           <p className="muted runtime-note">{localToolNote}</p>
@@ -280,6 +283,7 @@ export function RuntimeOverviewPage() {
           <p className="muted runtime-path">{overview?.memory?.path || "No memory path configured."}</p>
         </Panel>
 
+        {overview?.mode === "controller" ? (
         <Panel eyebrow="Controller Runtime" title="Jobs And Threads">
           <div className="runtime-summary">
             <div><span className="muted">Jobs available</span><strong>{yesNo(overview?.jobs?.available)}</strong></div>
@@ -295,7 +299,9 @@ export function RuntimeOverviewPage() {
           </div>
           <ErrorBanner message={overview?.downloads?.error || ""} />
         </Panel>
+        ) : null}
 
+        {overview?.mode === "controller" ? (
         <Panel eyebrow="Controller Runtime" title="Node Capabilities">
           <div className="runtime-summary">
             <div><span className="muted">Available</span><strong>{yesNo(overview?.nodes?.available)}</strong></div>
@@ -329,6 +335,7 @@ export function RuntimeOverviewPage() {
             ]}
           />
         </Panel>
+        ) : null}
 
         {(overview?.running_models?.available || overview?.running_models?.error) && (
           <Panel eyebrow="Agent Runtime" title="Running Models">

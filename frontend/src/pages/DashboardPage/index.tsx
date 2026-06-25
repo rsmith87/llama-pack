@@ -211,7 +211,7 @@ export function DashboardPage() {
           <div><span className="label">Mode</span><strong>{mode}</strong></div>
           <div><span className="label">CPU</span><strong>{percent(metricPercent(data.health, "cpu_percent", "cpu"))}</strong></div>
           <div><span className="label">RAM</span><strong>{percent(metricPercent(data.health, "memory_percent", "ram"))}</strong></div>
-          <div><span className="label">VRAM</span><strong>{percent(metricPercent(data.health, "vram_percent", "vram"))}</strong></div>
+          <div><span className="label">VRAM</span><strong>{metricPercent(data.health, "vram_percent", "vram") ? percent(metricPercent(data.health, "vram_percent", "vram")) : 'unified'}</strong></div>
           <div>
             <span className="label">Configured</span>
             <strong>{data.health?.configured_models ?? (data.health as { models_configured?: number } | null)?.models_configured ?? data.localModels.length}</strong>

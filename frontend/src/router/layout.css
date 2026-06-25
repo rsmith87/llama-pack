@@ -33,7 +33,7 @@
 }
 
 .page-heading {
-  margin-bottom:20px;
+  margin-bottom: 0;
   display: flex;
   flex-wrap: nowrap;
   align-items: flex-end;
@@ -85,7 +85,7 @@
 
 .brand-lockup p,
 .panel p {
-  margin: 4px 0 0;
+  margin: 4px 0 10px;
   color: var(--muted);
 }
 
