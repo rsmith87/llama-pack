@@ -132,6 +132,55 @@ def test_smoke_ocr_document_script_exposes_tesseract_engine() -> None:
     assert "create_ocr_service" in contents
 
 
+def test_evaluate_ocr_candidates_script_lists_small_realistic_candidates() -> None:
+    script = ROOT_DIR / "scripts" / "evaluate_ocr_candidates.py"
+    contents = script.read_text(encoding="utf-8")
+
+    assert script.exists()
+    assert script.stat().st_mode & S_IXUSR
+    assert "tesseract-baseline" in contents
+    assert "ppocrv5-server" in contents
+    assert "paddleocr-vl-0.9b" in contents
+    assert "paddleocr-vl-1.5" in contents
+    assert "paddleocr-vl-1.6" in contents
+    assert "OcrEngineConfig" in contents
+    assert "create_ocr_service" in contents
+
+
+def test_evaluate_ocr_candidates_script_prints_config_only_json(tmp_path: Path) -> None:
+    script = ROOT_DIR / "scripts" / "evaluate_ocr_candidates.py"
+    sample_file = tmp_path / "invoice.png"
+    sample_file.write_bytes(b"fake-image")
+
+    result = subprocess.run(
+        [
+            "python3",
+            str(script),
+            "--file",
+            str(sample_file),
+            "--config-only",
+        ],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    payload = json.loads(result.stdout)
+
+    assert payload["files"] == [str(sample_file)]
+    assert payload["recommendation"] == "stay-tesseract-first-until-local-paddleocr-vl-benchmark-wins"
+    assert payload["candidates"][0]["id"] == "tesseract-baseline"
+    assert payload["candidates"][1]["shared_ocr_config"] == {
+        "engine": "paddleocr",
+        "det_model": "models/ocr/pp-ocrv5-server/det",
+        "rec_model": "models/ocr/pp-ocrv5-server/rec",
+        "det_model_name": "PP-OCRv5_server_det",
+        "rec_model_name": "PP-OCRv5_server_rec",
+    }
+    assert payload["candidates"][2]["integration_status"] == "requires-new-paddleocr-vl-runner"
+
+
 def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
     contents = read_script("start_frontend.sh")
 
@@ -229,6 +278,10 @@ def test_runtime_shell_scripts_parse_cleanly() -> None:
         subprocess.run(["bash", "-n", str(ROOT_DIR / script)], check=True)
 
     subprocess.run(["python3", "-m", "py_compile", str(ROOT_DIR / "scripts" / "smoke_ocr_document.py")], check=True)
+    subprocess.run(
+        ["python3", "-m", "py_compile", str(ROOT_DIR / "scripts" / "evaluate_ocr_candidates.py")],
+        check=True,
+    )
 
 
 def test_runtime_shell_scripts_are_executable() -> None:
@@ -249,6 +302,7 @@ def test_runtime_shell_scripts_are_executable() -> None:
         "scripts/install_llama_cpp.sh",
         "scripts/install_ocr_model.sh",
         "scripts/smoke_ocr_document.py",
+        "scripts/evaluate_ocr_candidates.py",
         "scripts/refresh_curated_catalog.py",
         "scripts/setup_llama_pack.py",
         "scripts/setup_llama_pack.sh",

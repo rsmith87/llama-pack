@@ -16,6 +16,7 @@ from llama_pack.core.chat.context_management import (
     summary_system_message,
 )
 from llama_pack.core.chat.internal_payload import SKIP_CONTEXT_MANAGEMENT_KEY, TRUSTED_CONTROLLER_TARGET_KEY
+from llama_pack.core.chat.prompt_safety import PromptSafetyScanner
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
@@ -68,6 +69,7 @@ class ChatProxy:
         self._capabilities = CapabilityInspector(process_manager, config)
         self._context_budget = ContextBudgetEstimator(process_manager, config)
         self._prompt_templates = PromptTemplateAdapter()
+        self._prompt_safety = PromptSafetyScanner()
 
     async def chat(self, model_name: str, payload: dict[str, Any]) -> dict[str, Any]:
         response, _ = await self.chat_with_meta(model_name, payload)
@@ -165,6 +167,7 @@ class ChatProxy:
 
     async def _build_request(self, model_name: str, payload: dict[str, Any], stream: bool) -> tuple[str, dict[str, Any], dict[str, str], bool, dict[str, str]]:
         payload = await self._summarize_ad_hoc_payload(model_name, payload)
+        self._require_prompt_safe(payload)
         self._context_budget.require_fits(model_name, payload)
         request_payload = {
             "messages": payload["messages"],
@@ -221,6 +224,15 @@ class ChatProxy:
         local_target = self._resolver.resolve_local_target(model_name)
         return local_target["url"], request_payload, {}, True, {"route": "local"}
 
+    def _require_prompt_safe(self, payload: dict[str, Any]) -> None:
+        messages = payload.get("messages")
+        if not isinstance(messages, list):
+            return
+        typed_messages = [message for message in messages if isinstance(message, dict)]
+        if len(typed_messages) != len(messages):
+            return
+        self._prompt_safety.require_safe_messages(typed_messages)
+
     def _require_project_ready_for_node(self, project_id: object, target: dict[str, str]) -> None:
         if project_id is None or target["kind"] != "remote":
             return
@@ -266,6 +278,7 @@ class ChatProxy:
         }
         if payload.get("target") is not None:
             summary_payload["target"] = payload["target"]
+        self._require_prompt_safe(summary_payload)
         url, request_payload, headers, verify_tls = await self._summary_request(model_name, summary_payload)
         logger.info(
             "ChatProxy summary request prepared model=%s mode=%s target=%s url=%s message_count=%d older_message_count=%d recent_message_count=%d prompt_tokens_before=%d summary_prompt_tokens=%d max_tokens=%s request_keys=%s verify_tls=%s",

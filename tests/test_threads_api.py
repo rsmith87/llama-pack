@@ -884,6 +884,59 @@ def test_threads_api_posts_message_with_agent_tool_runtime_fields(tmp_path):
     ]
 
 
+def test_threads_api_agent_tool_runtime_reports_missing_target_node_root(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+
+    async def fake_controller_request(method, url, api_key=None, verify_tls=True, json_body=None):
+        assert method == "GET"
+        if url == "http://linux/lm-api/v1/models":
+            return [{"name": "qwen", "running": True}]
+        raise AssertionError(f"unexpected controller request: {url}")
+
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append({"url": url, "payload": payload})
+        return {"choices": [{"message": {"content": "tool answer"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        ),
+        controller_request=fake_controller_request,
+        chat_request=fake_chat_request,
+    )
+    project = app.state.project_store.create_project(name="Project 1", root_hint="/repo")
+    client = TestClient(app)
+    thread_id = client.post("/lm-api/v1/threads", json={"metadata": {"request_type": "coding"}}).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages",
+        json={
+            "role": "user",
+            "content": "inspect project graph",
+            "model": "qwen",
+            "tool_runtime": "agent",
+            "tool_choice": "auto",
+            "project_id": str(project["id"]),
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Project has no allowed root for node linux-2080ti"
+    assert calls == []
+
+
 def test_threads_api_routes_to_node_with_recently_received_gguf_when_model_is_not_running(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
 

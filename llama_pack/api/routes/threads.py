@@ -5,6 +5,7 @@ from fastapi.responses import StreamingResponse
 
 from llama_pack.api.chat_error_contract import is_no_eligible_route_message, no_eligible_route_detail, thread_chat_error_detail
 from llama_pack.api.dependencies import get_thread_service
+from llama_pack.core.chat.proxy import ProjectRoutingError
 from llama_pack.core.threads.models import CompactThreadRequest, CreateThreadRequest, ThreadMessageRequest, WorkflowRunRequest
 from llama_pack.core.threads.service import ThreadChatError, ThreadService
 
@@ -98,6 +99,8 @@ async def post_message(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ProjectRoutingError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=exc.detail) from exc
     except ThreadChatError as exc:
         raise HTTPException(status_code=409, detail=thread_chat_error_detail(exc)) from exc
     except ValueError as exc:

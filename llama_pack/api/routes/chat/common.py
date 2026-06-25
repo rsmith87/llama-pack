@@ -18,6 +18,7 @@ from llama_pack.api.http_headers import (
 from llama_pack.api.chat_error_contract import model_not_running_detail
 from llama_pack.core.chat.profile_activation import ProfileActivationService
 from llama_pack.core.chat.context_budget import ContextBudgetExceededError
+from llama_pack.core.chat.prompt_safety import PromptSafetyViolationError, prompt_safety_http_detail
 from llama_pack.core.chat.proxy import ChatSummarizationError, ModelNotRunningError, ProjectRoutingError
 from llama_pack.core.runtime.process_manager import ProcessManager
 
@@ -132,6 +133,11 @@ def raise_context_budget_exception(exc: Exception) -> None:
 
 
 def raise_proxy_http_exception(exc: Exception) -> None:
+    if isinstance(exc, PromptSafetyViolationError):
+        raise HTTPException(
+            status_code=422,
+            detail=prompt_safety_http_detail(exc),
+        ) from exc
     if isinstance(exc, KeyError):
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     if isinstance(exc, ProjectRoutingError):
