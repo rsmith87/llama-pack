@@ -3847,6 +3847,41 @@ def test_chat_embeddings_route_validation_error():
     assert response.status_code == 422
 
 
+def test_chat_embeddings_route_rejects_api_key():
+    calls = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"object": "list", "model": "qwen", "data": [], "usage": {"prompt_tokens": 0, "total_tokens": 0}}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/chat/qwen/embeddings",
+        json={"input": ["api_key = abcdefghijklmnopqrstuvwxyz123456"], "target": "auto"},
+    )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == {
+        "error_type": "prompt_safety_violation",
+        "message": "Prompt contains sensitive data and was not sent to the model.",
+        "violations": [{"kind": "api_key", "path": "input[0]"}],
+    }
+    assert calls == []
+
+
 def test_controller_chat_route_proxies_to_node_chat_route():
     controller_calls = []
     chat_calls = []

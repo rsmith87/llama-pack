@@ -8,9 +8,11 @@ from pydantic import BaseModel, Field
 
 from llama_pack.api.dependencies import get_config, get_memory_store
 from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
+from llama_pack.core.chat.prompt_safety import PromptSafetyScanner, PromptSafetyViolationError, prompt_safety_http_detail
 from llama_pack.core.config import AppConfig
 
 router = APIRouter(prefix="/memory")
+_prompt_safety = PromptSafetyScanner()
 
 
 class MemoryWriteRequest(BaseModel):
@@ -40,6 +42,10 @@ async def memory_write(
     body: MemoryWriteRequest,
     store: Any = Depends(get_memory_store),
 ) -> MemoryWriteResponse:
+    try:
+        _prompt_safety.require_safe_text(body.text, "text")
+    except PromptSafetyViolationError as exc:
+        raise HTTPException(status_code=422, detail=prompt_safety_http_detail(exc)) from exc
     if store.disabled:
         raise HTTPException(status_code=503, detail="Memory subsystem is not enabled on this node")
     if body.tier not in {"permanent", "durable", "ephemeral"}:
@@ -98,6 +104,11 @@ async def memory_embeddings(
     inputs = [item.strip() for item in body.input if item.strip()]
     if not inputs:
         raise HTTPException(status_code=422, detail="input must contain at least one non-empty string")
+    try:
+        for index, item in enumerate(inputs):
+            _prompt_safety.require_safe_text(item, f"input[{index}]")
+    except PromptSafetyViolationError as exc:
+        raise HTTPException(status_code=422, detail=prompt_safety_http_detail(exc)) from exc
     if config.mode == "agent":
         return await _controller_memory_embeddings(config, inputs)
     if store.disabled:

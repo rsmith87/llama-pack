@@ -154,6 +154,55 @@ async def openai_client_session(request: Request, registry: NodeRegistry = Depen
     }
 
 
+@router.post("/client/diagnostics/setup")
+async def openai_client_setup_diagnostics(
+    body: ClientChatDiagnosticsRequest,
+    request: Request,
+    config: AppConfig = Depends(get_config),
+    registry: NodeRegistry = Depends(get_node_registry),
+    scheduler: ChatScheduler = Depends(get_chat_scheduler),
+    manager: ProcessManager = Depends(get_process_manager),
+    thread_service: ThreadService = Depends(get_thread_service),
+):
+    model_ids = _client_model_ids(await _client_safe_models(request, registry))
+    model_available = body.model in model_ids
+    if not model_available:
+        return _setup_diagnostic_payload(
+            body,
+            available_models=model_ids,
+            model_available=False,
+            chat_payload={
+                "ok": False,
+                "model": body.model,
+                "requestType": body.request_type,
+                "checks": {
+                    "auth": True,
+                    "modelUsable": False,
+                    "routeResolved": False,
+                    "chat": False,
+                    "streaming": False if body.stream else None,
+                },
+                "route": None,
+                "error": _setup_missing_model_error(body.model, model_ids),
+            },
+        )
+
+    chat_payload = await openai_client_chat_diagnostics(
+        body=body,
+        request=request,
+        config=config,
+        scheduler=scheduler,
+        manager=manager,
+        thread_service=thread_service,
+    )
+    return _setup_diagnostic_payload(
+        body,
+        available_models=model_ids,
+        model_available=True,
+        chat_payload=chat_payload,
+    )
+
+
 @router.post("/client/project-context/{action}")
 async def openai_client_project_context(
     action: Literal["summarize_project", "summarize_path", "refresh_context_item"],
@@ -838,6 +887,52 @@ def _diagnostic_payload(
         "checks": checks,
         "route": route,
         "error": error,
+    }
+
+
+def _setup_diagnostic_payload(
+    body: ClientChatDiagnosticsRequest,
+    *,
+    available_models: list[str],
+    model_available: bool,
+    chat_payload: dict[str, Any],
+) -> dict[str, Any]:
+    checks = dict(chat_payload["checks"])
+    checks["modelAvailable"] = model_available
+    return {
+        "ok": model_available and bool(chat_payload["ok"]),
+        "model": body.model,
+        "requestType": body.request_type,
+        "checks": {
+            "auth": checks["auth"],
+            "modelAvailable": checks["modelAvailable"],
+            "modelUsable": checks["modelUsable"],
+            "routeResolved": checks["routeResolved"],
+            "chat": checks["chat"],
+            "streaming": checks["streaming"],
+        },
+        "availableModels": available_models,
+        "route": chat_payload["route"],
+        "error": chat_payload["error"],
+    }
+
+
+def _client_model_ids(models: list[dict[str, Any]]) -> list[str]:
+    model_ids: list[str] = []
+    for model in models:
+        model_id = str(model.get("id") or "")
+        if model_id:
+            model_ids.append(model_id)
+    return model_ids
+
+
+def _setup_missing_model_error(model: str, available_models: list[str]) -> dict[str, Any]:
+    joined_models = ", ".join(available_models)
+    if not joined_models:
+        joined_models = "none"
+    return {
+        "status": 404,
+        "detail": f"Model {model} is not available to this client. Available models: {joined_models}.",
     }
 
 

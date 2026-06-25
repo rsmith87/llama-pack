@@ -44,6 +44,11 @@ class PromptSafetyScanner:
         if violations:
             raise PromptSafetyViolationError(violations)
 
+    def require_safe_text(self, text: str, path: str) -> None:
+        violations = self._scan_text(text, path)
+        if violations:
+            raise PromptSafetyViolationError(violations)
+
     def scan_messages(self, messages: list[dict[str, object]]) -> list[PromptSafetyViolation]:
         violations: list[PromptSafetyViolation] = []
         for message_index, message in enumerate(messages):

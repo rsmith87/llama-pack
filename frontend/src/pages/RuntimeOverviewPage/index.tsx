@@ -108,6 +108,8 @@ export function RuntimeOverviewPage() {
       && preview.selected.startup_needed
       && preview.selected.startup_decision === "start_now",
   );
+  console.log("OVERVIEW MODE");
+  console.log(overview);
   const localToolNote = overview?.mode === "controller"
     ? "This shows tools configured on the controller process. Agent-hosted tools are listed in Node Runtime Capabilities."
     : "This shows tools configured on this agent process.";

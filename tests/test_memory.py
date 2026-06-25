@@ -396,6 +396,16 @@ class TestMemoryEndpoint:
         resp = client.post("/lm-api/v1/memory/write", json={"text": "hello", "tier": "invalid"})
         assert resp.status_code == 422
 
+    def test_write_rejects_ssn(self, tmp_path):
+        client, _ = _make_app(tmp_path)
+        resp = client.post("/lm-api/v1/memory/write", json={"text": "user ssn is 123-45-6789", "tier": "durable"})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == {
+            "error_type": "prompt_safety_violation",
+            "message": "Prompt contains sensitive data and was not sent to the model.",
+            "violations": [{"kind": "ssn", "path": "text"}],
+        }
+
     def test_write_when_disabled_returns_503(self, tmp_path):
         client, _ = _make_app(tmp_path, memory_enabled=False)
         resp = client.post("/lm-api/v1/memory/write", json={"text": "hello", "tier": "durable"})
@@ -465,6 +475,16 @@ class TestMemoryEndpoint:
         assert len(data["data"][0]["embedding"]) == 384
         assert data["data"][1]["index"] == 1
         assert data["usage"] == {"prompt_tokens": 2, "total_tokens": 2}
+
+    def test_embeddings_rejects_credit_card(self, tmp_path):
+        client, _ = _make_app(tmp_path)
+        resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["card 4111 1111 1111 1111"]})
+        assert resp.status_code == 422
+        assert resp.json()["detail"] == {
+            "error_type": "prompt_safety_violation",
+            "message": "Prompt contains sensitive data and was not sent to the model.",
+            "violations": [{"kind": "credit_card", "path": "input[0]"}],
+        }
 
     def test_embeddings_when_disabled_returns_503(self, tmp_path):
         client, _ = _make_app(tmp_path, memory_enabled=False)

@@ -2,27 +2,20 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import { createKey, listKeys, revokeKey } from "../../api/auth";
 import {
-  generateApiKeys,
   getRuntimeSettings,
   getToolCatalog,
   listModelDisks,
-  listNodeAuth,
   patchRuntimeSettings,
   patchToolCatalog,
   type ModelDiskInfo,
-  type NodeAuthInfo,
   type RuntimeSettings,
   type RuntimeSettingsDocument,
   type ToolCatalog,
 } from "../../api/settings";
 import { DataTable, ErrorBanner, FormField, Panel, Button, StatusBadge } from "../../components/ui";
+import { useAppMode } from "../../features/appMode/appModeContext";
 import { useAuthSession } from "../../features/auth/authSession";
-import { downloadText } from "../../features/shared/helpers";
 import type { AuthKey } from "../../types/index";
-
-function shellQuote(value: string) {
-  return `'${String(value || "").replaceAll("'", "'\"'\"'")}'`;
-}
 
 function keyId(key: AuthKey) {
   return String(key.id || "");
@@ -104,15 +97,9 @@ function summaryValue(value: unknown): string {
 }
 
 export function SettingsPage() {
+  const appMode = useAppMode();
+  const isAgentMode = appMode === "agent";
   const { authUser, authRole } = useAuthSession();
-  const [mode, setMode] = useState("single");
-  const [logDir, setLogDir] = useState("./logs");
-  const [controllerUrl, setControllerUrl] = useState("http://<controller-ip>:9137");
-  const [controllerApiKey, setControllerApiKey] = useState("");
-  const [registrationKey, setRegistrationKey] = useState("");
-  const [agentApiKey, setAgentApiKey] = useState("");
-  const [agentName, setAgentName] = useState("local-agent");
-  const [agentUrl, setAgentUrl] = useState("http://127.0.0.1:9137");
   const [activePane, setActivePane] = useState("runtime");
   const [runtimeDocument, setRuntimeDocument] = useState<RuntimeSettingsDocument | null>(null);
   const [runtimeSettings, setRuntimeSettings] = useState<RuntimeSettings>(EMPTY_RUNTIME_SETTINGS);
@@ -139,27 +126,23 @@ export function SettingsPage() {
   const [runtimeStatus, setRuntimeStatus] = useState("");
   const [chatToolsStatus, setChatToolsStatus] = useState("");
   const [toolCatalogStatus, setToolCatalogStatus] = useState("");
-  const [prefix, setPrefix] = useState("llm");
-  const [tokenBytes, setTokenBytes] = useState(32);
-  const [keyCount, setKeyCount] = useState(1);
-  const [applyTarget, setApplyTarget] = useState("controller");
-  const [generated, setGenerated] = useState<{ keys?: string[] } | null>(null);
   const [authKeys, setAuthKeys] = useState<AuthKey[]>([]);
   const [keyUsername, setKeyUsername] = useState("");
   const [keyRole, setKeyRole] = useState("operator");
   const [createdKey, setCreatedKey] = useState<Record<string, unknown> | null>(null);
   const [disks, setDisks] = useState<ModelDiskInfo[]>([]);
-  const [nodeAuth, setNodeAuth] = useState<NodeAuthInfo[]>([]);
   const [error, setError] = useState("");
-  const [utilityStatus, setUtilityStatus] = useState("");
-  const paneLabels: Record<string, string> = {
-    runtime: "Runtime Settings",
+  const paneLabels = useMemo<Record<string, string>>(() => ({
+    runtime: isAgentMode ? "Agent Runtime" : "Runtime Settings",
     chatTools: "Chat Tools",
     toolCatalog: "Tool Catalog",
     storage: "Storage",
     access: "Access",
-    config: "Config Tools",
-  };
+  }), [isAgentMode]);
+  const visiblePanes = useMemo(
+    () => isAgentMode ? ["runtime", "chatTools", "storage"] : ["runtime", "chatTools", "toolCatalog", "storage", "access"],
+    [isAgentMode],
+  );
   const selectedTool = toolCatalog.tools.find((tool) => tool.name === selectedToolName) || toolCatalog.tools[0] || null;
   const toolTypes = Array.from(new Set(toolCatalog.tools.map((tool) => tool.type))).sort();
   const filteredTools = toolCatalog.tools.filter((tool) => {
@@ -177,19 +160,13 @@ export function SettingsPage() {
       .catch((err: unknown) => {
         if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load model disks.");
       });
-    void listNodeAuth()
-      .then((payload) => {
-        if (!cancelled) setNodeAuth(Array.isArray(payload) ? payload : []);
-      })
-      .catch((err: unknown) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : "Failed to load node auth diagnostics.");
-      });
     return () => {
       cancelled = true;
     };
   }, []);
 
   useEffect(() => {
+    if (isAgentMode) return;
     let cancelled = false;
     void getToolCatalog()
       .then((payload) => {
@@ -215,7 +192,13 @@ export function SettingsPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [isAgentMode]);
+
+  useEffect(() => {
+    if (!visiblePanes.includes(activePane)) {
+      setActivePane(visiblePanes[0]);
+    }
+  }, [activePane, visiblePanes]);
 
   useEffect(() => {
     let cancelled = false;
@@ -236,33 +219,6 @@ export function SettingsPage() {
       cancelled = true;
     };
   }, []);
-
-  const configYaml = useMemo(() => {
-    const lines = [`mode: ${mode}`, `log_dir: ${JSON.stringify(logDir || "./logs")}`, "models: {}"];
-    if (mode === "controller") {
-      lines.push("nodes:", `  ${agentName || "local-agent"}:`, `    url: ${JSON.stringify(agentUrl || "http://127.0.0.1:9000")}`, `    api_key: ${JSON.stringify(agentApiKey || "CHANGE_ME_AGENT_API_KEY")}`, "    verify_tls: true");
-    }
-    if (mode === "agent") {
-      lines.push(`controller_url: ${JSON.stringify(controllerUrl || "http://127.0.0.1:9137")}`, `controller_registration_key_outbound: ${JSON.stringify(registrationKey || "CHANGE_ME_REGISTRATION_KEY")}`);
-      if (controllerApiKey) lines.push(`controller_api_key: ${JSON.stringify(controllerApiKey)}`);
-    }
-    if (mode === "single" && controllerApiKey) lines.push(`api_key: ${JSON.stringify(controllerApiKey)}`);
-    return `${lines.join("\n")}\n`;
-  }, [agentApiKey, agentName, agentUrl, controllerApiKey, controllerUrl, logDir, mode, registrationKey]);
-
-  const envExports = useMemo(() => {
-    const lines = [`export LLAMA_PACK_CONFIG=config.yaml`, `export LLAMA_PACK_MODE=${mode}`];
-    if (mode === "agent") {
-      lines.push(`export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=${shellQuote(registrationKey || "CHANGE_ME_REGISTRATION_KEY")}`);
-      lines.push(`export LLAMA_PACK_CONTROLLER_URL=${shellQuote(controllerUrl || "http://127.0.0.1:9137")}`);
-      if (controllerApiKey) lines.push(`export LLAMA_PACK_CONTROLLER_API_KEY=${shellQuote(controllerApiKey)}`);
-    } else if (mode === "controller") {
-      lines.push(`export LLAMA_PACK_AGENT_API_KEY=${shellQuote(agentApiKey || "CHANGE_ME_AGENT_API_KEY")}`);
-    } else if (controllerApiKey) {
-      lines.push(`export LLAMA_PACK_API_KEY=${shellQuote(controllerApiKey)}`);
-    }
-    return `${lines.join("\n")}\n`;
-  }, [agentApiKey, controllerApiKey, controllerUrl, mode, registrationKey]);
 
   async function refreshAuthKeys() {
     if (authRole !== "admin") {
@@ -295,11 +251,6 @@ export function SettingsPage() {
     await refreshAuthKeys();
   }
 
-  async function generateKeys() {
-    setError("");
-    setGenerated(await generateApiKeys({ prefix, token_bytes: tokenBytes, count: keyCount }));
-  }
-
   function updateRuntimeNumber(key: keyof RuntimeSettings, value: string) {
     setRuntimeSettings((current) => ({ ...current, [key]: Number(value) }));
   }
@@ -320,10 +271,18 @@ export function SettingsPage() {
     setError("");
     setRuntimeStatus("");
     try {
-      const payload: RuntimeSettings = {
-        ...runtimeSettings,
+      const agentWorkerSettings = {
         agent_worker_labels: parseJsonObject(agentWorkerLabelsText, "Agent Worker Labels"),
         agent_worker_capacity: parseJsonObject(agentWorkerCapacityText, "Agent Worker Capacity"),
+      };
+      const payload: Partial<RuntimeSettings> = isAgentMode ? {
+        agent_worker_enabled: runtimeSettings.agent_worker_enabled,
+        agent_worker_poll_interval_seconds: runtimeSettings.agent_worker_poll_interval_seconds,
+        agent_worker_max_jobs: runtimeSettings.agent_worker_max_jobs,
+        ...agentWorkerSettings,
+      } : {
+        ...runtimeSettings,
+        ...agentWorkerSettings,
         client_cors_origins: clientCorsOriginsText.split("\n").map((item) => item.trim()).filter(Boolean),
       };
       const updated = await patchRuntimeSettings(payload);
@@ -395,44 +354,6 @@ export function SettingsPage() {
     }
   }
 
-  function applyFirstKey() {
-    const key = generated?.keys?.[0];
-    if (!key) {
-      setError("Generate keys first.");
-      return;
-    }
-    if (applyTarget === "registration") setRegistrationKey(key);
-    else if (applyTarget === "agent") setAgentApiKey(key);
-    else setControllerApiKey(key);
-  }
-
-  async function copyText(label: string, text: string) {
-    await globalThis.navigator.clipboard?.writeText(text);
-    setUtilityStatus(`${label} copied`);
-  }
-
-  function downloadConfigYaml() {
-    downloadText("config.yaml", configYaml, "application/x-yaml");
-    setUtilityStatus("config.yaml downloaded");
-  }
-
-  function downloadEnvExports() {
-    downloadText("llama-pack.env.sh", envExports, "text/x-shellscript");
-    setUtilityStatus("env.sh downloaded");
-  }
-
-  function outputUtilities() {
-    return (
-      <div className="modal-actions settings-utilities">
-        <Button type="button" onClick={() => void copyText("Config YAML", configYaml)}>Copy Config YAML</Button>
-        <Button type="button" onClick={downloadConfigYaml}>Download config.yaml</Button>
-        <Button type="button" onClick={() => void copyText("Env exports", envExports)}>Copy Env Exports</Button>
-        <Button type="button" onClick={downloadEnvExports}>Download env.sh</Button>
-        {utilityStatus ? <span className="muted">{utilityStatus}</span> : null}
-      </div>
-    );
-  }
-
   return (
     <div className="settings-page-react">
       <div className="page-heading">
@@ -442,7 +363,7 @@ export function SettingsPage() {
       <ErrorBanner message={error} />
       <Panel className="settings-panel">
         <div className="settings-tabs" role="tablist" aria-label="Settings Sections">
-          {["runtime", "chatTools", "toolCatalog", "storage", "access", "config"].map((pane) => (
+          {visiblePanes.map((pane) => (
             <button key={pane} type="button" className={`settings-tab ${activePane === pane ? "active" : ""}`} aria-selected={activePane === pane} onClick={() => setActivePane(pane)}>{paneLabels[pane]}</button>
           ))}
         </div>
@@ -450,34 +371,38 @@ export function SettingsPage() {
         {activePane === "runtime" ? (
           <div className="settings-pane active">
             <div className="settings-section-heading">
-              <h3>Runtime Settings</h3>
-              <span className="muted">Source: {sourceFor(runtimeDocument, "routing_fanout_max")}</span>
+              <h3>{paneLabels.runtime}</h3>
+              <span className="muted">Source: {sourceFor(runtimeDocument, isAgentMode ? "agent_worker_max_jobs" : "routing_fanout_max")}</span>
             </div>
             <div className="settings-grid">
-              <FormField label="Controller Retention Days">
-                {sourceFor(runtimeDocument, "controller_retention_days")}
-                <input aria-label="Controller Retention Days" type="number" min={1} value={runtimeSettings && runtimeSettings.controller_retention_days ? runtimeSettings.controller_retention_days :30} onChange={(event) => updateRuntimeNumber("controller_retention_days", event.target.value)} />
-                <span className="settings-source">{sourceFor(runtimeDocument, "controller_retention_days") ?? "default"}</span>
-              </FormField>
-              <FormField label="Controller Archive Retention Days">
-                <input aria-label="Controller Archive Retention Days" type="number" min={1} value={runtimeSettings && runtimeSettings.controller_archive_retention_days ? runtimeSettings.controller_archive_retention_days : 90} onChange={(event) => updateRuntimeNumber("controller_archive_retention_days", event.target.value)} />
-                <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_retention_days")}</span>
-              </FormField>
-              <FormField label="Controller Archive Directory">
-                <input aria-label="Controller Archive Directory" value={runtimeSettings && runtimeSettings.controller_archive_dir ? runtimeSettings.controller_archive_dir : "./logs/archive"} onChange={(event) => updateRuntimeString("controller_archive_dir", event.target.value)} />
-                <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_dir")}</span>
-              </FormField>
-              <FormField label="Routing Fanout Enabled">
-                <label className="checkbox-label">
-                  <input aria-label="Routing Fanout Enabled" type="checkbox" checked={runtimeSettings && runtimeSettings.routing_fanout_enabled ? runtimeSettings.routing_fanout_enabled : false} onChange={(event) => updateRuntimeBoolean("routing_fanout_enabled", event.target.checked)} />
-                  <span>{runtimeSettings && runtimeSettings.routing_fanout_enabled ? "Enabled" : "Disabled"}</span>
-                </label>
-                <span className="settings-source">{sourceFor(runtimeDocument, "routing_fanout_enabled")}</span>
-              </FormField>
-              <FormField label="Routing Fanout Max">
-                <input aria-label="Routing Fanout Max" type="number" min={1} max={32} value={runtimeSettings && runtimeSettings.routing_fanout_max ? runtimeSettings.routing_fanout_max : 2} onChange={(event) => updateRuntimeNumber("routing_fanout_max", event.target.value)} />
-                <span className="settings-source">{sourceFor(runtimeDocument, "routing_fanout_max")}</span>
-              </FormField>
+              {!isAgentMode ? (
+                <>
+                  <FormField label="Controller Retention Days">
+                    {sourceFor(runtimeDocument, "controller_retention_days")}
+                    <input aria-label="Controller Retention Days" type="number" min={1} value={runtimeSettings && runtimeSettings.controller_retention_days ? runtimeSettings.controller_retention_days :30} onChange={(event) => updateRuntimeNumber("controller_retention_days", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "controller_retention_days") ?? "default"}</span>
+                  </FormField>
+                  <FormField label="Controller Archive Retention Days">
+                    <input aria-label="Controller Archive Retention Days" type="number" min={1} value={runtimeSettings && runtimeSettings.controller_archive_retention_days ? runtimeSettings.controller_archive_retention_days : 90} onChange={(event) => updateRuntimeNumber("controller_archive_retention_days", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_retention_days")}</span>
+                  </FormField>
+                  <FormField label="Controller Archive Directory">
+                    <input aria-label="Controller Archive Directory" value={runtimeSettings && runtimeSettings.controller_archive_dir ? runtimeSettings.controller_archive_dir : "./logs/archive"} onChange={(event) => updateRuntimeString("controller_archive_dir", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_dir")}</span>
+                  </FormField>
+                  <FormField label="Routing Fanout Enabled">
+                    <label className="checkbox-label">
+                      <input aria-label="Routing Fanout Enabled" type="checkbox" checked={runtimeSettings && runtimeSettings.routing_fanout_enabled ? runtimeSettings.routing_fanout_enabled : false} onChange={(event) => updateRuntimeBoolean("routing_fanout_enabled", event.target.checked)} />
+                      <span>{runtimeSettings && runtimeSettings.routing_fanout_enabled ? "Enabled" : "Disabled"}</span>
+                    </label>
+                    <span className="settings-source">{sourceFor(runtimeDocument, "routing_fanout_enabled")}</span>
+                  </FormField>
+                  <FormField label="Routing Fanout Max">
+                    <input aria-label="Routing Fanout Max" type="number" min={1} max={32} value={runtimeSettings && runtimeSettings.routing_fanout_max ? runtimeSettings.routing_fanout_max : 2} onChange={(event) => updateRuntimeNumber("routing_fanout_max", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "routing_fanout_max")}</span>
+                  </FormField>
+                </>
+              ) : null}
               <FormField label="Agent Worker Enabled">
                 <label className="checkbox-label">
                   <input aria-label="Agent Worker Enabled" type="checkbox" checked={runtimeSettings && runtimeSettings.agent_worker_enabled ? runtimeSettings.agent_worker_enabled : false} onChange={(event) => updateRuntimeBoolean("agent_worker_enabled", event.target.checked)} />
@@ -503,10 +428,12 @@ export function SettingsPage() {
                 <textarea aria-label="Agent Worker Capacity" rows={5} value={agentWorkerCapacityText} onChange={(event) => setAgentWorkerCapacityText(event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_worker_capacity")}</span>
               </FormField>
-              <FormField label="Client CORS Origins">
-                <textarea aria-label="Client CORS Origins" rows={5} value={clientCorsOriginsText} onChange={(event) => setClientCorsOriginsText(event.target.value)} />
-                <span className="settings-source">{sourceFor(runtimeDocument, "client_cors_origins")}</span>
-              </FormField>
+              {!isAgentMode ? (
+                <FormField label="Client CORS Origins">
+                    <textarea aria-label="Client CORS Origins" rows={5} value={clientCorsOriginsText} onChange={(event) => setClientCorsOriginsText(event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "client_cors_origins")}</span>
+                </FormField>
+              ) : null}
             </div>
             <div className="modal-actions settings-utilities">
               <Button type="button" onClick={() => void saveRuntimeSettings()}>Save Runtime Settings</Button>
@@ -551,7 +478,7 @@ export function SettingsPage() {
           </div>
         ) : null}
 
-        {activePane === "toolCatalog" ? (
+        {activePane === "toolCatalog" && !isAgentMode ? (
           <div className="settings-pane active">
             <div className="settings-section-heading">
               <h3>Tool Catalog</h3>
@@ -641,43 +568,11 @@ export function SettingsPage() {
           </div>
         ) : null}
 
-        {activePane === "config" ? (
-          <div className="settings-pane active">
-            <p className="muted settings-pane-note">
-              Config Helper generates setup files and snippets. It does not modify the running service.
-            </p>
-            <div className="controller-filters settings-filters">
-              <FormField label="Log Directory"><input value={logDir} onChange={(event) => setLogDir(event.target.value)} /></FormField>
-              <FormField label="Mode"><select value={mode} onChange={(event) => setMode(event.target.value)}><option value="single">single</option><option value="controller">controller</option><option value="agent">agent</option></select></FormField>
-              <FormField label="Controller URL"><input value={controllerUrl} onChange={(event) => setControllerUrl(event.target.value)} /></FormField>
-            </div>
-            <div className="controller-filters settings-filters">
-              <FormField label="Controller API Key (Optional)"><input value={controllerApiKey} onChange={(event) => setControllerApiKey(event.target.value)} type="password" /></FormField>
-              <FormField label="Registration Key (Agent)"><input value={registrationKey} onChange={(event) => setRegistrationKey(event.target.value)} type="password" /></FormField>
-              <FormField label="Agent API Key (Controller Nodes)"><input value={agentApiKey} onChange={(event) => setAgentApiKey(event.target.value)} type="password" /></FormField>
-            </div>
-            <div className="controller-filters settings-filters">
-              <FormField label="Agent Name"><input value={agentName} onChange={(event) => setAgentName(event.target.value)} /></FormField>
-              <FormField label="Agent URL"><input value={agentUrl} onChange={(event) => setAgentUrl(event.target.value)} /></FormField>
-              <button className="primary" type="button">Update Preview</button>
-            </div>
-          </div>
-        ) : null}
-
-        {activePane === "access" ? (
+        {activePane === "access" && !isAgentMode ? (
           <div className="settings-pane active">
             <p className="muted settings-pane-note">
               Admin Keys manage operator access to this console. Gateway app keys live under Gateway, App Keys.
             </p>
-            <div className="controller-filters settings-filters">
-              <FormField label="Prefix"><input value={prefix} onChange={(event) => setPrefix(event.target.value)} /></FormField>
-              <FormField label="Random Bytes"><input type="number" min={16} max={128} value={tokenBytes} onChange={(event) => setTokenBytes(Number(event.target.value))} /></FormField>
-              <FormField label="Count"><input type="number" min={1} max={20} value={keyCount} onChange={(event) => setKeyCount(Number(event.target.value))} /></FormField>
-              <FormField label="Apply To"><select value={applyTarget} onChange={(event) => setApplyTarget(event.target.value)}><option value="controller">Controller API Key</option><option value="registration">Registration Key (Agent)</option><option value="agent">Agent API Key</option></select></FormField>
-              <button type="button" onClick={() => void generateKeys()}>Generate with Script</button>
-              <button type="button" onClick={applyFirstKey}>Apply First Key</button>
-            </div>
-            <pre className="detail-json">{generated ? JSON.stringify(generated, null, 2) : "No generated keys yet."}</pre>
             <div className="controller-filters settings-filters">
               <FormField label="Key username"><input value={keyUsername} onChange={(event) => setKeyUsername(event.target.value)} /></FormField>
               <FormField label="Key role"><select value={keyRole} onChange={(event) => setKeyRole(event.target.value)}><option value="operator">operator</option><option value="admin">admin</option><option value="viewer">viewer</option></select></FormField>
@@ -731,35 +626,6 @@ export function SettingsPage() {
                 { key: "total", header: "Total", render: (disk) => formatBytes(disk.total_bytes) },
                 { key: "available", header: "Available %", render: (disk) => `${Number(disk.available_percent || 0).toFixed(1)}%` },
                 { key: "warning", header: "Warning", render: (disk) => disk.error || disk.warning || "-" },
-              ]}
-            />
-          </div>
-        ) : null}
-
-        {activePane === "config" ? (
-          <div className="settings-pane active">
-            <p className="muted settings-pane-note">
-              Generated Files are copyable outputs from the helper fields; downloading them does not change server config.
-            </p>
-            {outputUtilities()}
-            <h3>Config YAML</h3>
-            <pre className="detail-json tall-json">{configYaml}</pre>
-            <h3>Env Exports</h3>
-            <pre className="detail-json">{envExports}</pre>
-            <h3>Node Auth Diagnostics</h3>
-            <DataTable
-              rows={nodeAuth}
-              emptyMessage="No node auth diagnostics."
-              getRowKey={(row, index) => row.node_name || String(index)}
-              columns={[
-                { key: "node_name", header: "Node", render: (row) => row.node_name },
-                { key: "effective_url", header: "Effective URL", render: (row) => row.effective_url },
-                { key: "effective_api_key_source", header: "Key Source", render: (row) => row.effective_api_key_source },
-                { key: "effective_api_key_present", header: "Effective Key", render: (row) => String(row.effective_api_key_present) },
-                { key: "configured_api_key_present", header: "Config Key", render: (row) => String(row.configured_api_key_present) },
-                { key: "override_api_key_present", header: "Override Key", render: (row) => String(row.override_api_key_present) },
-                { key: "override_present", header: "Override Row", render: (row) => String(row.override_present) },
-                { key: "verify_tls", header: "Verify TLS", render: (row) => String(row.verify_tls) },
               ]}
             />
           </div>

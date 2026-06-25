@@ -85,6 +85,7 @@ Example response:
     "openaiChatCompletions": true,
     "streaming": true,
     "localChatSessions": false,
+    "setupDiagnostics": true,
     "pluginAuth": false
   },
   "auth": {
@@ -96,10 +97,19 @@ Example response:
     "openaiChatCompletions": "/v1/chat/completions",
     "openaiModels": "/v1/models",
     "clientSession": "/v1/client/session",
+    "clientSetupDiagnostics": "/v1/client/diagnostics/setup",
     "clientChatDiagnostics": "/v1/client/diagnostics/chat",
     "models": "/lm-api/v1/models",
     "pluginsStatus": "/lm-api/v1/plugins/status",
     "docs": "/ui/docs"
+  },
+  "setup": {
+    "recommendedApp": "campfire",
+    "authMethod": "external_api_key",
+    "diagnosticsEndpoint": "/v1/client/diagnostics/setup",
+    "modelsEndpoint": "/v1/models",
+    "chatEndpoint": "/v1/chat/completions",
+    "requiredHeaders": ["X-Llama-Pack-Key"]
   }
 }
 ```
@@ -115,6 +125,8 @@ External chat-only keys can call:
 - `GET /v1/models` to retrieve an end-user-safe model list.
 - `GET /v1/client/session` to retrieve the current client's auth method, chat
   capabilities, and usable model list.
+- `POST /v1/client/diagnostics/setup` to verify auth, model availability,
+  route resolution, and chat in one setup request.
 - `POST /v1/client/diagnostics/chat` to verify auth, route resolution, and
   non-streaming or streaming chat for setup flows.
 - `POST /v1/client/project-context/{action}` for supported client project
@@ -164,6 +176,11 @@ curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \
   -d '{"model":"qwen","request_type":"coding","stream":false}'
 ```
 
+Campfire-style setup flows should prefer `/v1/client/diagnostics/setup` with
+the same request body. It returns `checks.auth`, `checks.modelAvailable`,
+`checks.routeResolved`, `checks.chat`, and `availableModels` so an external app
+can validate credentials, model selection, and chat routing in one pass.
+
 ## Core Endpoints
 
 - `GET /health`
@@ -182,6 +199,7 @@ curl -X POST http://127.0.0.1:9137/v1/client/diagnostics/chat \
 - `POST /v1/chat/completions`
 - `GET /v1/models`
 - `GET /v1/client/session`
+- `POST /v1/client/diagnostics/setup`
 - `POST /v1/client/diagnostics/chat`
 - `POST /api/chat`
 - `GET /chat/capabilities/{name}`

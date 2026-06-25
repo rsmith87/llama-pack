@@ -17,6 +17,7 @@ from llama_pack.api.routes.chat.common import (
 )
 from llama_pack.api.routes.compat_chat import compatibility_headers
 from llama_pack.core.chat.profile_activation import ProfileActivationService
+from llama_pack.core.chat.prompt_safety import PromptSafetyScanner, PromptSafetyViolationError, prompt_safety_http_detail
 from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 from llama_pack.core.config import AppConfig
@@ -26,6 +27,7 @@ from llama_pack.core.threads.service import ThreadChatError, ThreadService
 
 
 router = APIRouter(prefix="/chat")
+_prompt_safety = PromptSafetyScanner()
 
 
 def _route_headers(route: str, profile_headers: dict[str, str] | None = None) -> dict[str, str]:
@@ -44,8 +46,12 @@ async def chat_embeddings(
 ):
     try:
         values = [body.input] if isinstance(body.input, str) else body.input
+        for index, value in enumerate(values):
+            _prompt_safety.require_safe_text(value, f"input[{index}]")
         payload, meta = await proxy.embeddings_with_meta(model_name, values, body.target)
         return JSONResponse(content=payload, headers=_route_headers(meta.get("route", "unknown")))
+    except PromptSafetyViolationError as exc:
+        raise HTTPException(status_code=422, detail=prompt_safety_http_detail(exc)) from exc
     except Exception as exc:
         raise_proxy_http_exception(exc)
 

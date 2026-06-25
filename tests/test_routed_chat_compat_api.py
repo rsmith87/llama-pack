@@ -805,6 +805,67 @@ def test_external_app_key_can_run_non_streaming_chat_diagnostics(tmp_path):
     assert calls[0]["payload"]["messages"] == [{"role": "user", "content": "Llama Pack client diagnostic: reply with ok."}]
 
 
+def test_external_app_key_can_run_one_pass_setup_diagnostics(tmp_path):
+    app, calls, _ = _controller_app(tmp_path, chat_responses=["diagnostic ok"])
+    created = app.state.auth_store.create_external_key("Campfire", "http://localhost")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/diagnostics/setup",
+        json={"model": "qwen", "request_type": "coding", "stream": False},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is True
+    assert payload["checks"] == {
+        "auth": True,
+        "modelAvailable": True,
+        "modelUsable": True,
+        "routeResolved": True,
+        "chat": True,
+        "streaming": None,
+    }
+    assert payload["model"] == "qwen"
+    assert payload["requestType"] == "coding"
+    assert payload["availableModels"] == ["gemma", "qwen"]
+    assert payload["route"] == {"node": "linux-2080ti", "model": "qwen", "route": "node:linux-2080ti"}
+    assert payload["error"] is None
+    assert calls[0]["model_name"] == "qwen"
+
+
+def test_setup_diagnostics_reports_missing_model_without_chat(tmp_path):
+    app, calls, _ = _controller_app(tmp_path, chat_responses=["diagnostic ok"])
+    created = app.state.auth_store.create_external_key("Campfire", "http://localhost")
+    client = RawTestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created["key"]})
+
+    response = client.post(
+        "/v1/client/diagnostics/setup",
+        json={"model": "missing", "request_type": "coding", "stream": False},
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["ok"] is False
+    assert payload["checks"] == {
+        "auth": True,
+        "modelAvailable": False,
+        "modelUsable": False,
+        "routeResolved": False,
+        "chat": False,
+        "streaming": None,
+    }
+    assert payload["availableModels"] == ["gemma", "qwen"]
+    assert payload["route"] is None
+    assert payload["error"] == {
+        "status": 404,
+        "detail": "Model missing is not available to this client. Available models: gemma, qwen.",
+    }
+    assert calls == []
+
+
 def test_external_app_key_can_run_streaming_chat_diagnostics(tmp_path):
     app, _, stream_calls = _controller_app(tmp_path)
     created = app.state.auth_store.create_external_key("Home App", "https://home.local")

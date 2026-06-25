@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
 import { AuthSessionProvider, AUTH_TOKEN_STORAGE_KEY } from "../../features/auth/authSession";
+import { AppModeProvider, type AppMode } from "../../features/appMode/appModeContext";
 
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
@@ -37,9 +38,13 @@ function mockFetch(
   return { fetchMock, calls };
 }
 
-function renderWithAuth(token = "admin-token") {
+function renderWithAuth(token = "admin-token", appMode: AppMode = "controller") {
   localStorage.setItem(AUTH_TOKEN_STORAGE_KEY, token);
-  return render(<AuthSessionProvider><SettingsPage /></AuthSessionProvider>);
+  return render(
+    <AppModeProvider appMode={appMode}>
+      <AuthSessionProvider><SettingsPage /></AuthSessionProvider>
+    </AppModeProvider>,
+  );
 }
 
 function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> = {}) {
@@ -102,81 +107,44 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it("generates config and env exports from settings fields", async () => {
+it("keeps setup config tools out of settings", async () => {
   mockFetch(
     [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
     settingsRoutes(),
   );
-  const user = userEvent.setup();
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
   expect(screen.getByRole("heading", { name: "System Settings" })).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Config Tools" }));
-  expect(screen.getByText(/Config Helper generates setup files/)).toBeInTheDocument();
-  await user.selectOptions(screen.getByLabelText("Mode"), "agent");
-  await user.clear(screen.getByLabelText("Controller URL"));
-  await user.type(screen.getByLabelText("Controller URL"), "http://controller:9137");
-  await user.clear(screen.getByLabelText("Registration Key (Agent)"));
-  await user.type(screen.getByLabelText("Registration Key (Agent)"), "reg-key");
-  await user.click(screen.getByRole("button", { name: "Update Preview" }));
-
-  expect(screen.getByText(/mode: agent/)).toBeInTheDocument();
-  expect(screen.getByText(/controller_url: "http:\/\/controller:9137"/)).toBeInTheDocument();
-  expect(screen.getByText(/LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND='reg-key'/)).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Config Tools" })).not.toBeInTheDocument();
+  expect(screen.queryByText(/Config Helper generates setup files/)).not.toBeInTheDocument();
 });
 
-it("copies and downloads generated config utilities", async () => {
-  const createObjectURL = vi.fn(() => "blob:settings");
-  const revokeObjectURL = vi.fn();
-  const click = vi.fn();
-  const anchor = { href: "", download: "", click } as unknown as HTMLAnchorElement;
-  vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
-  const createElement = document.createElement.bind(document);
-  vi.spyOn(document, "createElement").mockImplementation((tagName: string, options?: ElementCreationOptions) => (
-    tagName === "a" ? anchor : createElement(tagName, options)
-  ));
+it("shows a smaller settings surface on agent nodes", async () => {
   mockFetch(
     [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
     settingsRoutes(),
   );
   const user = userEvent.setup();
 
-  renderWithAuth();
+  renderWithAuth("admin-token", "agent");
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Config Tools" }));
-  await user.click(screen.getByRole("button", { name: "Copy Config YAML" }));
-  expect(await screen.findByText("Config YAML copied")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Agent Runtime" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Chat Tools" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Storage" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Runtime Settings" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Tool Catalog" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Access" })).not.toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Config Tools" })).not.toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Agent Runtime" })).toBeInTheDocument();
+  expect(screen.getByLabelText("Agent Worker Enabled")).toBeInTheDocument();
+  expect(screen.getByLabelText("Agent Worker Poll Interval Seconds")).toBeInTheDocument();
+  expect(screen.getByLabelText("Agent Worker Max Jobs")).toBeInTheDocument();
+  expect(screen.queryByLabelText("Controller Retention Days")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Routing Fanout Max")).not.toBeInTheDocument();
 
-  await user.click(screen.getByRole("button", { name: "Download config.yaml" }));
-  expect(anchor.download).toBe("config.yaml");
-  expect(createObjectURL).toHaveBeenCalledWith(expect.any(Blob));
-  expect(click).toHaveBeenCalled();
-
-  await user.click(screen.getByRole("button", { name: "Copy Env Exports" }));
-  expect(await screen.findByText("Env exports copied")).toBeInTheDocument();
-
-  await user.click(screen.getByRole("button", { name: "Download env.sh" }));
-  expect(anchor.download).toBe("llama-pack.env.sh");
-});
-
-it("generates helper keys and applies the first generated key", async () => {
-  mockFetch([
-    () => okJson({ username: "admin", role: "admin", created_at: "now" }),
-    () => okJson({ keys: ["llm_generated"], count: 1 }),
-  ], settingsRoutes());
-  const user = userEvent.setup();
-
-  renderWithAuth();
-  await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Access" }));
-  await user.click(screen.getByRole("button", { name: "Generate with Script" }));
-
-  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/settings/api-keys/generate", expect.objectContaining({ method: "POST" })));
-  expect(await screen.findByText(/llm_generated/)).toBeInTheDocument();
-  await user.click(screen.getByRole("button", { name: "Apply First Key" }));
-  await user.click(screen.getByRole("button", { name: "Config Tools" }));
-  expect(screen.getByLabelText("Controller API Key (Optional)")).toHaveValue("llm_generated");
+  await user.click(screen.getByRole("button", { name: "Storage" }));
+  expect(await screen.findByText("No configured model disks.")).toBeInTheDocument();
 });
 
 it("shows the read-only tool catalog and inspector", async () => {
@@ -440,50 +408,6 @@ it("renders configured model disks in settings", async () => {
   expect(screen.getAllByText("low space")).toHaveLength(2);
   expect(screen.getByText("error")).toBeInTheDocument();
   expect(screen.getAllByText("Low space: less than 10 GB free headroom for model downloads.")).toHaveLength(2);
-});
-
-it("renders effective node auth diagnostics in settings", async () => {
-  mockFetch(
-    [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
-    {
-      ...settingsRoutes({
-        "/lm-api/v1/settings/disks": () => okJson([]),
-        "/lm-api/v1/settings/node-auth": () => okJson([
-        {
-          node_name: "pi",
-          effective_url: "https://pi-override.local",
-          effective_api_key_source: "config",
-          effective_api_key_present: true,
-          configured_api_key_present: true,
-          override_api_key_present: false,
-          override_present: true,
-          verify_tls: false,
-        },
-        {
-          node_name: "mac",
-          effective_url: "https://mac.local",
-          effective_api_key_source: "missing",
-          effective_api_key_present: false,
-          configured_api_key_present: false,
-          override_api_key_present: false,
-          override_present: false,
-          verify_tls: true,
-        },
-        ]),
-      }),
-    },
-  );
-  const user = userEvent.setup();
-
-  renderWithAuth();
-  await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Config Tools" }));
-
-  expect(await screen.findByText("Node Auth Diagnostics")).toBeInTheDocument();
-  expect(screen.getByText("pi")).toBeInTheDocument();
-  expect(screen.getByText("https://pi-override.local")).toBeInTheDocument();
-  expect(screen.getByText("config")).toBeInTheDocument();
-  expect(screen.getByText("missing")).toBeInTheDocument();
 });
 
 it("edits and saves db-backed runtime settings", async () => {
