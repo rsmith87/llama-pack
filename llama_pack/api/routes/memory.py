@@ -63,6 +63,29 @@ async def memory_search(
     return {"ok": True, "results": results, "count": len(results)}
 
 
+@router.get("/entries")
+async def memory_entries(
+    store: Any = Depends(get_memory_store),
+) -> dict[str, Any]:
+    if store.disabled:
+        raise HTTPException(status_code=503, detail="Memory subsystem is not enabled on this node")
+    entries = await store.entries()
+    return {"ok": True, "entries": entries, "count": len(entries)}
+
+
+@router.delete("/entries/{entry_id}")
+async def memory_delete(
+    entry_id: str,
+    store: Any = Depends(get_memory_store),
+) -> dict[str, Any]:
+    if store.disabled:
+        raise HTTPException(status_code=503, detail="Memory subsystem is not enabled on this node")
+    deleted = await store.delete(entry_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Memory entry not found: {entry_id}")
+    return {"ok": True, "id": entry_id, "deleted": True}
+
+
 @router.post("/embeddings")
 async def memory_embeddings(
     body: MemoryEmbeddingsRequest,

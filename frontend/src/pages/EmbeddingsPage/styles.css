@@ -171,6 +171,16 @@
   gap: 10px;
 }
 
+.memory-entries-panel {
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.memory-entries-panel p {
+  margin: 4px 0 0;
+}
+
 @media (max-width: 900px) {
   .embedding-status-strip,
   .embedding-explainer,

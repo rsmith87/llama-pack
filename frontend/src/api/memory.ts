@@ -1,5 +1,5 @@
-import { apiPost } from "./client";
-import type { EmbeddingsResponse, MemoryEmbeddingsRequest, MemorySearchRequest, MemorySearchResponse, MemoryWriteRequest, MemoryWriteResponse } from "../types/index";
+import { apiDelete, apiGet, apiPost } from "./client";
+import type { EmbeddingsResponse, MemoryDeleteResponse, MemoryEmbeddingsRequest, MemoryEntriesResponse, MemorySearchRequest, MemorySearchResponse, MemoryWriteRequest, MemoryWriteResponse } from "../types/index";
 
 export function writeMemory(payload: MemoryWriteRequest) {
   return apiPost<MemoryWriteResponse>("/memory/write", payload);
@@ -11,4 +11,12 @@ export function searchMemory(payload: MemorySearchRequest) {
 
 export function createMemoryEmbeddings(payload: MemoryEmbeddingsRequest) {
   return apiPost<EmbeddingsResponse>("/memory/embeddings", payload);
+}
+
+export function listMemoryEntries() {
+  return apiGet<MemoryEntriesResponse>("/memory/entries");
+}
+
+export function deleteMemoryEntry(entryId: string) {
+  return apiDelete<MemoryDeleteResponse>(`/memory/entries/${encodeURIComponent(entryId)}`);
 }

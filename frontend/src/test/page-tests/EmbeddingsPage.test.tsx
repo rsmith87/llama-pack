@@ -159,7 +159,13 @@ it("writes and searches controller memory when memory is available", async () =>
     vi.fn()
       .mockResolvedValueOnce(okJson([{ name: "embedder" }]))
       .mockResolvedValueOnce(okJson(controllerOverview()))
+      .mockResolvedValueOnce(okJson({ ok: true, count: 0, entries: [] }))
       .mockResolvedValueOnce(okJson({ ok: true, id: "mem-1" }))
+      .mockResolvedValueOnce(okJson({
+        ok: true,
+        count: 1,
+        entries: [{ id: "mem-1", text: "User prefers concise answers.", tier: "durable", topic: "preferences", tags: ["style", "brief"] }],
+      }))
       .mockResolvedValueOnce(okJson({
         ok: true,
         count: 1,
@@ -188,5 +194,46 @@ it("writes and searches controller memory when memory is available", async () =>
     method: "POST",
     body: JSON.stringify({ query: "answer style", top_k: 5 }),
   })));
+  await screen.findByText("Found 1 memory result.");
+  expect(screen.getAllByText("User prefers concise answers.").length).toBeGreaterThan(0);
+});
+
+it("lists controller memories with tiers and deletes selected entries", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce(okJson([{ name: "embedder" }]))
+      .mockResolvedValueOnce(okJson(controllerOverview()))
+      .mockResolvedValueOnce(okJson({
+        ok: true,
+        count: 2,
+        entries: [
+          { id: "mem-1", text: "User prefers concise answers.", tier: "durable", topic: "preferences", tags: ["style"] },
+          { id: "mem-2", text: "Temporary scratch note.", tier: "ephemeral", topic: "", tags: [] },
+        ],
+      }))
+      .mockResolvedValueOnce(okJson({ ok: true, id: "mem-2", deleted: true }))
+      .mockResolvedValueOnce(okJson({
+        ok: true,
+        count: 1,
+        entries: [
+          { id: "mem-1", text: "User prefers concise answers.", tier: "durable", topic: "preferences", tags: ["style"] },
+        ],
+      })),
+  );
+  const user = userEvent.setup();
+
+  render(<EmbeddingsPage />);
+  await user.click(await screen.findByRole("tab", { name: "Controller Memory" }));
+
   expect(await screen.findByText("User prefers concise answers.")).toBeInTheDocument();
+  expect(screen.getByText("Temporary scratch note.")).toBeInTheDocument();
+  expect(screen.getAllByText("durable").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("ephemeral").length).toBeGreaterThan(0);
+  expect(screen.queryByRole("button", { name: /Edit/i })).not.toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Delete memory mem-2" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/memory/entries/mem-2", expect.objectContaining({ method: "DELETE" })));
+  expect(await screen.findByText("Memory deleted: mem-2")).toBeInTheDocument();
 });

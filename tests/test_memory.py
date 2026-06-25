@@ -414,6 +414,42 @@ class TestMemoryEndpoint:
         resp = client.post("/lm-api/v1/memory/search", json={"query": "anything"})
         assert resp.status_code == 503
 
+    def test_entries_lists_written_memories(self, tmp_path):
+        client, store = _make_app(tmp_path)
+        import asyncio
+        entry_id = asyncio.run(store.write("user prefers concise answers", tier="durable", topic="preferences", tags=["style"]))
+
+        resp = client.get("/lm-api/v1/memory/entries")
+
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["ok"] is True
+        assert data["count"] == 1
+        assert data["entries"] == [{
+            "id": entry_id,
+            "text": "user prefers concise answers",
+            "tier": "durable",
+            "topic": "preferences",
+            "tags": ["style"],
+        }]
+
+    def test_delete_removes_memory_entry(self, tmp_path):
+        client, store = _make_app(tmp_path)
+        import asyncio
+        entry_id = asyncio.run(store.write("temporary note", tier="ephemeral"))
+
+        resp = client.delete(f"/lm-api/v1/memory/entries/{entry_id}")
+
+        assert resp.status_code == 200
+        assert resp.json() == {"ok": True, "id": entry_id, "deleted": True}
+        list_resp = client.get("/lm-api/v1/memory/entries")
+        assert list_resp.json()["entries"] == []
+
+    def test_delete_missing_memory_entry_returns_404(self, tmp_path):
+        client, _ = _make_app(tmp_path)
+        resp = client.delete("/lm-api/v1/memory/entries/missing")
+        assert resp.status_code == 404
+
     def test_embeddings_returns_vectors_from_memory_model(self, tmp_path):
         client, _ = _make_app(tmp_path)
         resp = client.post("/lm-api/v1/memory/embeddings", json={"input": ["alpha", "beta"]})

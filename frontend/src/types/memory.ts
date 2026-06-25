@@ -34,3 +34,23 @@ export type MemorySearchResponse = {
 export type MemoryEmbeddingsRequest = {
   input: string[];
 };
+
+export type MemoryEntry = {
+  id: string;
+  text: string;
+  tier: string;
+  topic: string;
+  tags: string[];
+};
+
+export type MemoryEntriesResponse = {
+  ok: boolean;
+  count: number;
+  entries: MemoryEntry[];
+};
+
+export type MemoryDeleteResponse = {
+  ok: boolean;
+  id: string;
+  deleted: boolean;
+};

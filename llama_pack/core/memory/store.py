@@ -108,6 +108,26 @@ class ChromaMemoryStore:
             logger.warning("ChromaMemoryStore.embeddings failed: %s", exc)
             return []
 
+    async def entries(self) -> list[dict[str, Any]]:
+        """Return all stored memory entries with user-facing metadata."""
+        if self._disabled:
+            return []
+        try:
+            return await asyncio.to_thread(self._entries_sync)
+        except Exception as exc:
+            logger.warning("ChromaMemoryStore.entries failed: %s", exc)
+            return []
+
+    async def delete(self, entry_id: str) -> bool:
+        """Delete a stored memory entry by id."""
+        if self._disabled:
+            return False
+        try:
+            return await asyncio.to_thread(self._delete_sync, entry_id)
+        except Exception as exc:
+            logger.warning("ChromaMemoryStore.delete failed: %s", exc)
+            return False
+
     async def write(
         self,
         text: str,
@@ -156,6 +176,27 @@ class ChromaMemoryStore:
 
     def _embeddings_sync(self, inputs: list[str]) -> list[list[float]]:
         return [self._embed(text) for text in inputs]
+
+    def _entries_sync(self) -> list[dict[str, Any]]:
+        result = self._collection.get(include=["documents", "metadatas"])
+        entries: list[dict[str, Any]] = []
+        for entry_id, document, metadata in zip(result["ids"], result["documents"], result["metadatas"]):
+            tags = metadata.get("tags", "")
+            entries.append({
+                "id": entry_id,
+                "text": document,
+                "tier": metadata.get("tier", "durable"),
+                "topic": metadata.get("topic") or "",
+                "tags": tags.split(",") if tags else [],
+            })
+        return entries
+
+    def _delete_sync(self, entry_id: str) -> bool:
+        existing = self._collection.get(ids=[entry_id], include=["metadatas"])
+        if not existing["ids"]:
+            return False
+        self._collection.delete(ids=[entry_id])
+        return True
 
     def _search_sync(self, query: str, top_k: int) -> list[dict[str, Any]]:
         count = self._collection.count()

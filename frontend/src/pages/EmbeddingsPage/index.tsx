@@ -2,14 +2,14 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import { createEmbeddings } from "../../api/embeddings";
 import { startDownload } from "../../api/downloads";
-import { createMemoryEmbeddings, searchMemory, writeMemory } from "../../api/memory";
+import { createMemoryEmbeddings, deleteMemoryEntry, listMemoryEntries, searchMemory, writeMemory } from "../../api/memory";
 import { listModels } from "../../api/models";
 import { getRuntimeOverview } from "../../api/runtime";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Panel, StatusBadge } from "../../components/ui";
 import { asModels, downloadText } from "../../features/shared/helpers";
 import type { LocalModel } from "../../types/models";
-import type { EmbeddingRow, EmbeddingsResult, MemorySearchResult, RuntimeOverview, SimilarityRow } from "../../types/index";
+import type { EmbeddingRow, EmbeddingsResult, MemoryEntry, MemorySearchResult, RuntimeOverview, SimilarityRow } from "../../types/index";
 import { modelName } from "../../features/models";
 
 type EmbeddingsPageData = {
@@ -206,6 +206,7 @@ export function EmbeddingsPage() {
   const [memoryQuery, setMemoryQuery] = useState("");
   const [memoryTopK, setMemoryTopK] = useState(5);
   const [memoryResults, setMemoryResults] = useState<MemorySearchResult[]>([]);
+  const [memoryEntries, setMemoryEntries] = useState<MemoryEntry[]>([]);
   const [memoryStatus, setMemoryStatus] = useState("");
   const [activeTab, setActiveTab] = useState<EmbeddingsTab>("workbench");
 
@@ -231,6 +232,10 @@ export function EmbeddingsPage() {
   useEffect(() => {
     if (!routes.includes(target)) setTarget("auto");
   }, [routes, target]);
+
+  useEffect(() => {
+    if (activeTab === "memory" && memoryAvailable) void loadMemoryEntries();
+  }, [activeTab, memoryAvailable]);
 
   async function runEmbeddings(): Promise<void> {
     const lines = parseInputLines(input);
@@ -350,6 +355,19 @@ export function EmbeddingsPage() {
     });
     setMemoryStatus(response.id ? `Memory written: ${response.id}` : response.detail || "Memory write completed.");
     setMemoryText("");
+    await loadMemoryEntries();
+  }
+
+  async function loadMemoryEntries(): Promise<void> {
+    const response = await listMemoryEntries();
+    setMemoryEntries(response.entries || []);
+  }
+
+  async function deleteMemory(entryId: string): Promise<void> {
+    setError("");
+    await deleteMemoryEntry(entryId);
+    setMemoryStatus(`Memory deleted: ${entryId}`);
+    await loadMemoryEntries();
   }
 
   async function runMemorySearch(): Promise<void> {
@@ -535,6 +553,7 @@ export function EmbeddingsPage() {
           ) : !memoryAvailable ? (
             <p className="muted">Memory is not available on this controller. Enable memory in controller config and install a controller memory model before writing or searching memories.</p>
           ) : (
+            <>
             <div className="controller-memory-grid">
               <div className="memory-form">
                 <FormField label="Memory text">
@@ -580,6 +599,33 @@ export function EmbeddingsPage() {
                 />
               </div>
             </div>
+            <div className="memory-entries-panel">
+              <div>
+                <strong>Stored memories</strong>
+                <p className="muted">Delete and recreate memories when the text or tier needs to change so the embedding index stays current.</p>
+              </div>
+              <DataTable
+                rows={memoryEntries}
+                emptyMessage="No stored memories yet."
+                getRowKey={(row) => row.id}
+                columns={[
+                  { key: "tier", header: "Tier", render: (row) => row.tier || "-" },
+                  { key: "topic", header: "Topic", render: (row) => row.topic || "-" },
+                  { key: "tags", header: "Tags", render: (row) => row.tags.length ? row.tags.join(", ") : "-" },
+                  { key: "text", header: "Text", render: (row) => row.text || "-" },
+                  {
+                    key: "actions",
+                    header: "Actions",
+                    render: (row) => (
+                      <Button variant="ghost" type="button" onClick={() => void deleteMemory(row.id)} aria-label={`Delete memory ${row.id}`}>
+                        Delete
+                      </Button>
+                    ),
+                  },
+                ]}
+              />
+            </div>
+            </>
           )}
           {memoryStatus ? <p className="muted">{memoryStatus}</p> : null}
         </Panel>
