@@ -70,7 +70,7 @@ export const pages: PageDefinition[] = [
   { key: "benchmarks", label: "Evaluate", path: "/ui/benchmarks", icon: "benchmark", section: "models", hideInModes: ["agent"], hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },
   { key: "runtime-overview", label: "Overview", path: "/ui/runtime", icon: "runtime", section: "runtime" },
   { key: "tool-loop-evals", label: "Tool Loop Evals", path: "/ui/tool-loop-evals", icon: "benchmark", section: "runtime" },
-  { key: "embeddings", label: "Embeddings", path: "/ui/embeddings", icon: "embeddings", section: "runtime" },
+  { key: "embeddings", label: "Embeddings", path: "/ui/embeddings", icon: "embeddings", section: "runtime", hideInModes: ["agent"] },
   { key: "plugins", label: "Plugins", path: "/ui/plugins", icon: "plugins", section: "plugins", hideInModes: ["agent"] },
   { key: "setup", label: "Setup", path: "/ui/setup", icon: "setup", section: "system" },
   { key: "settings", label: "Settings", path: "/ui/settings", icon: "settings", section: "system" },

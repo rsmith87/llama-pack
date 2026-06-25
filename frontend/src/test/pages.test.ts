@@ -59,6 +59,7 @@ describe("page route model", () => {
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("projects");
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("controller-ops");
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("audit");
+    expect(pagesForMode("agent").map((page) => page.key)).not.toContain("embeddings");
     expect(pagesForMode("controller").map((page) => page.key)).toEqual(pages.map((page) => page.key));
   });
 
@@ -82,7 +83,7 @@ describe("page route model", () => {
       { label: "Gateway", pages: ["chat"] },
       { label: "Operations", pages: ["dashboard"] },
       { label: "Models", pages: ["models"] },
-      { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals", "embeddings"] },
+      { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals"] },
       { label: "System", pages: ["setup", "settings", "docs"] },
     ]);
   });

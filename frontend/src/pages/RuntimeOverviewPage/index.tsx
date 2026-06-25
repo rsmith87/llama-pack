@@ -108,11 +108,86 @@ export function RuntimeOverviewPage() {
       && preview.selected.startup_needed
       && preview.selected.startup_decision === "start_now",
   );
-  console.log("OVERVIEW MODE");
-  console.log(overview);
   const localToolNote = overview?.mode === "controller"
     ? "This shows tools configured on the controller process. Agent-hosted tools are listed in Node Runtime Capabilities."
     : "This shows tools configured on this agent process.";
+  const isAgentMode = overview?.mode === "agent";
+
+  if (isAgentMode) {
+    return (
+      <div className="runtime-overview-page">
+        <div className="page-heading">
+          <div>
+            <span className="eyebrow">Runtime</span>
+            <h2>Agent Runtime</h2>
+          </div>
+          <span className="muted">Local serving status, model processes, tools, and capacity</span>
+        </div>
+        <ErrorBanner message={error} />
+
+        <div className="runtime-grid">
+          <Panel eyebrow="Agent Runtime" title="Worker">
+            <div className="runtime-summary worker-summary">
+              <div><span className="muted">Status</span><strong>{workerStatus(worker)}</strong></div>
+              <div><span className="muted">Node</span><strong>{worker?.node_name || "-"}</strong></div>
+              <div><span className="muted">Max jobs</span><strong>{worker?.max_jobs ?? "-"}</strong></div>
+              <div><span className="muted">Poll</span><strong>{worker?.poll_interval_seconds ?? "-"}s</strong></div>
+              <div><span className="muted">Executors</span><strong>{executorList(worker?.executors)}</strong></div>
+              <div><span className="muted">Controller</span><strong>{worker?.controller_url || "-"}</strong></div>
+            </div>
+            <div className="runtime-debug-lines">
+              <div><span className="muted">Claim</span><code>{worker?.claim_url || "-"}</code></div>
+            </div>
+          </Panel>
+
+          <Panel eyebrow="Agent Runtime" title="Running Models">
+            <div className="runtime-summary">
+              <div><span className="muted">Running</span><strong>{overview.running_models?.count ?? runningModels.length}</strong></div>
+            </div>
+            <ErrorBanner message={overview.running_models?.error || ""} />
+            <DataTable
+              rows={runningModels}
+              emptyMessage="No models running."
+              getRowKey={(row, index) => String(row.name || index)}
+              columns={[
+                { key: "name", header: "Model", render: (row) => String(row.name || "-") },
+                { key: "port", header: "Port", render: (row) => String(row.port ?? "-") },
+                { key: "profile_label", header: "Profile", render: (row) => String(row.profile_label || "-") },
+                { key: "profile_kind", header: "Kind", render: (row) => String(row.profile_kind || "-") },
+                { key: "resource_tier", header: "Tier", render: (row) => String(row.resource_tier || "-") },
+              ]}
+            />
+          </Panel>
+
+          <Panel eyebrow="Local Runtime" title="Local Tools">
+            <p className="muted runtime-note">{localToolNote}</p>
+            <div className="runtime-summary">
+              <div><span className="muted">Enabled</span><strong>{yesNo(overview.agent_tools?.enabled)}</strong></div>
+              <div><span className="muted">Tool count</span><strong>{overview.agent_tools?.tool_count ?? 0}</strong></div>
+              <div><span className="muted">Max iterations</span><strong>{overview.agent_tools?.max_iterations ?? "-"}</strong></div>
+            </div>
+            <DataTable
+              rows={tools}
+              emptyMessage="No agent tools configured."
+              getRowKey={(row, index) => String(row.name || index)}
+              columns={[
+                { key: "name", header: "Name", render: (row) => String(row.name || "-") },
+                { key: "type", header: "Type", render: (row) => String(row.type || "-") },
+                { key: "description", header: "Description", render: (row) => String(row.description || "-") },
+              ]}
+            />
+          </Panel>
+
+          <Panel eyebrow="Agent Runtime" title="Capacity">
+            <div className="runtime-debug-lines">
+              <div><span className="muted">Labels</span><code>{keyValueList(worker?.labels)}</code></div>
+              <div><span className="muted">Capacity</span><code>{keyValueList(worker?.capacity)}</code></div>
+            </div>
+          </Panel>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="runtime-overview-page">

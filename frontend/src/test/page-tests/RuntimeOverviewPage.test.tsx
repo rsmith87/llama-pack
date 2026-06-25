@@ -113,12 +113,17 @@ it("navigates to Benchmarks with the selected route preview model and node", asy
   await user.click(await screen.findByRole("button", { name: "Benchmark qwen-coder on linux" }));
 });
 
-it("renders agent worker status fields for transfer debugging", async () => {
+it("renders the reduced agent runtime surface", async () => {
   const fetchMock = vi.fn((url: string) => {
     if (url === "/lm-api/v1/runtime/overview") {
       return Promise.resolve(okJson({
         mode: "agent",
-        agent_tools: { enabled: true, tool_count: 1, tools: [], max_iterations: 4 },
+        agent_tools: {
+          enabled: true,
+          tool_count: 1,
+          tools: [{ name: "read_file", type: "file_read_dynamic", description: "Read a local file." }],
+          max_iterations: 4,
+        },
         memory: { configured: false, available: false, path: "./logs/agent_memory", auto_inject: true, top_k: 3 },
         jobs: { available: false, counts: {} },
         threads: { available: false, count: 0 },
@@ -137,6 +142,11 @@ it("renders agent worker status fields for transfer debugging", async () => {
           capacity: { gpu: 1, disk_gb: 500 },
           executors: { chat: true, embeddings: false, model_transfer: true },
         },
+        running_models: {
+          available: true,
+          count: 1,
+          items: [{ name: "qwen", port: 8081, profile_label: "fast", profile_kind: "chat", resource_tier: "gpu" }],
+        },
       }));
     }
     return Promise.resolve(okJson({}));
@@ -145,16 +155,27 @@ it("renders agent worker status fields for transfer debugging", async () => {
 
   render(<MemoryRouter><RuntimeOverviewPage /></MemoryRouter>);
 
+  expect(await screen.findByRole("heading", { name: "Agent Runtime" })).toBeInTheDocument();
   expect(await screen.findByText("Worker")).toBeInTheDocument();
+  expect(screen.getByText("Running Models")).toBeInTheDocument();
+  expect(screen.getByText("Local Tools")).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Capacity" })).toBeInTheDocument();
   expect(screen.getByText("agent-a")).toBeInTheDocument();
   expect(screen.getByText("Configured, idle")).toBeInTheDocument();
   expect(screen.getByText("chat, model transfer")).toBeInTheDocument();
   expect(screen.getByText("os=mac, transfer=enabled")).toBeInTheDocument();
   expect(screen.getByText("gpu=1, disk_gb=500")).toBeInTheDocument();
   expect(screen.getByText("http://controller/lm-api/v1/nodes/agent-a/work/claim")).toBeInTheDocument();
+  expect(screen.getByText("qwen")).toBeInTheDocument();
+  expect(screen.getByText("8081")).toBeInTheDocument();
+  expect(screen.getByText("read_file")).toBeInTheDocument();
+  expect(screen.queryByText("Semantic Memory")).not.toBeInTheDocument();
+  expect(screen.queryByText("Route Preview")).not.toBeInTheDocument();
+  expect(screen.queryByText("Jobs And Threads")).not.toBeInTheDocument();
+  expect(screen.queryByText("Node Capabilities")).not.toBeInTheDocument();
 });
 
-it("renders degraded runtime summary errors", async () => {
+it("renders agent running model errors without controller download errors", async () => {
   const fetchMock = vi.fn((url: string) => {
     if (url === "/lm-api/v1/runtime/overview") {
       return Promise.resolve(okJson({
@@ -185,6 +206,6 @@ it("renders degraded runtime summary errors", async () => {
   render(<MemoryRouter><RuntimeOverviewPage /></MemoryRouter>);
 
   expect(await screen.findByText("Runtime model status unavailable: models database schema is missing")).toBeInTheDocument();
-  expect(screen.getByText("Download status unavailable: download history query failed")).toBeInTheDocument();
+  expect(screen.queryByText("Download status unavailable: download history query failed")).not.toBeInTheDocument();
   expect(screen.getByText("Running Models")).toBeInTheDocument();
 });
