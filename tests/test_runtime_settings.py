@@ -63,6 +63,24 @@ def test_runtime_settings_patch_persists_database_overrides(tmp_path: Path):
     assert reloaded.settings.agent_worker_labels == {"gpu": "metal"}
 
 
+def test_runtime_settings_patch_persists_model_roots(tmp_path: Path):
+    config_root = tmp_path / "config-models"
+    database_root = tmp_path / "database-models"
+    config = load_config({"log_dir": str(tmp_path / "logs"), "hf_models_dirs": [str(config_root)]})
+    store = _store(tmp_path)
+    service = RuntimeSettingsService(config=config, store=store)
+
+    updated = service.patch(RuntimeSettingsPatch(hf_models_dirs=[database_root]), updated_by="admin")
+    reloaded = RuntimeSettingsService(config=config, store=store).get_document()
+    effective = RuntimeSettingsService(config=config, store=store).effective_config()
+
+    assert updated.settings.hf_models_dirs == [database_root]
+    assert updated.sources["hf_models_dirs"] == "database"
+    assert reloaded.settings.hf_models_dirs == [database_root]
+    assert effective.model_roots == [database_root]
+    assert config.model_roots == [config_root]
+
+
 def test_runtime_settings_patch_persists_agent_tool_controls(tmp_path: Path):
     config = load_config(
         {

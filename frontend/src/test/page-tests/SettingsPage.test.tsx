@@ -79,6 +79,7 @@ function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> =
   return {
     "/lm-api/v1/settings/runtime": () => okJson({
       settings: {
+        hf_models_dirs: ["/models/config"],
         controller_retention_days: 30,
         controller_archive_retention_days: 90,
         controller_archive_dir: "logs/archive",
@@ -99,6 +100,7 @@ function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> =
         ...COMPACTION_SETTINGS,
       },
       sources: {
+        hf_models_dirs: "config",
         controller_retention_days: "default",
         controller_archive_retention_days: "default",
         controller_archive_dir: "default",
@@ -442,6 +444,124 @@ it("renders configured model disks in settings", async () => {
   expect(screen.getAllByText("low space")).toHaveLength(2);
   expect(screen.getByText("error")).toBeInTheDocument();
   expect(screen.getAllByText("Low space: less than 10 GB free headroom for model downloads.")).toHaveLength(2);
+});
+
+it("edits and saves db-backed model roots from storage", async () => {
+  const savedPayloads: unknown[] = [];
+  vi.stubGlobal("fetch", vi.fn((input: RequestInfo | URL, options?: RequestInit) => {
+    const url = String(input);
+    if (url === "/lm-api/v1/settings/runtime" && options?.method === "PATCH") {
+      savedPayloads.push(JSON.parse(String(options.body)));
+      return Promise.resolve(okJson({
+        settings: {
+          hf_models_dirs: ["/models/config", "/models/second"],
+          controller_retention_days: 30,
+          controller_archive_retention_days: 90,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: false,
+          routing_fanout_max: 2,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 2,
+          agent_worker_max_jobs: 1,
+          agent_worker_labels: {},
+          agent_worker_capacity: {},
+          client_cors_origins: [],
+          agent_tools_enabled: false,
+          agent_tools_max_iterations: 4,
+          agent_tools_tool_timeout_seconds: 10,
+          agent_tools_answer_verification_mode: "warn",
+          agent_tools_answer_verification_max_retries: 1,
+          agent_tools_safe_roots: [],
+          ...COMPACTION_SETTINGS,
+        },
+        sources: {
+          hf_models_dirs: "database",
+          controller_retention_days: "default",
+          controller_archive_retention_days: "default",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "default",
+          routing_fanout_max: "default",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "default",
+          agent_worker_max_jobs: "default",
+          agent_worker_labels: "default",
+          agent_worker_capacity: "default",
+          client_cors_origins: "default",
+          agent_tools_enabled: "default",
+          agent_tools_max_iterations: "default",
+          agent_tools_tool_timeout_seconds: "default",
+          agent_tools_answer_verification_mode: "default",
+          agent_tools_answer_verification_max_retries: "default",
+          agent_tools_safe_roots: "default",
+          ...COMPACTION_SOURCES,
+        },
+      }) as Response);
+    }
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson(SETUP_STATUS_RESPONSE) as Response);
+    if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "admin", role: "admin", created_at: "now" }) as Response);
+    if (url === "/lm-api/v1/settings/disks" || url === "/lm-api/v1/settings/node-auth") return Promise.resolve(okJson([]) as Response);
+    if (url === "/lm-api/v1/settings/runtime") {
+      return Promise.resolve(okJson({
+        settings: {
+          hf_models_dirs: ["/models/config"],
+          controller_retention_days: 30,
+          controller_archive_retention_days: 90,
+          controller_archive_dir: "logs/archive",
+          routing_fanout_enabled: false,
+          routing_fanout_max: 2,
+          agent_worker_enabled: false,
+          agent_worker_poll_interval_seconds: 2,
+          agent_worker_max_jobs: 1,
+          agent_worker_labels: {},
+          agent_worker_capacity: {},
+          client_cors_origins: [],
+          agent_tools_enabled: false,
+          agent_tools_max_iterations: 4,
+          agent_tools_tool_timeout_seconds: 10,
+          agent_tools_answer_verification_mode: "warn",
+          agent_tools_answer_verification_max_retries: 1,
+          agent_tools_safe_roots: [],
+          ...COMPACTION_SETTINGS,
+        },
+        sources: {
+          hf_models_dirs: "config",
+          controller_retention_days: "default",
+          controller_archive_retention_days: "default",
+          controller_archive_dir: "default",
+          routing_fanout_enabled: "default",
+          routing_fanout_max: "default",
+          agent_worker_enabled: "default",
+          agent_worker_poll_interval_seconds: "default",
+          agent_worker_max_jobs: "default",
+          agent_worker_labels: "default",
+          agent_worker_capacity: "default",
+          client_cors_origins: "default",
+          agent_tools_enabled: "default",
+          agent_tools_max_iterations: "default",
+          agent_tools_tool_timeout_seconds: "default",
+          agent_tools_answer_verification_mode: "default",
+          agent_tools_answer_verification_max_retries: "default",
+          agent_tools_safe_roots: "default",
+          ...COMPACTION_SOURCES,
+        },
+      }) as Response);
+    }
+    return Promise.resolve(okJson({}) as Response);
+  }));
+  const user = userEvent.setup();
+
+  renderWithAuth();
+  await screen.findByText("admin (admin)");
+  await user.click(screen.getByRole("button", { name: "Storage" }));
+  expect(await screen.findByLabelText("Model Root 1")).toHaveValue("/models/config");
+  await user.click(screen.getByRole("button", { name: "Add Model Root" }));
+  await user.type(screen.getByLabelText("Model Root 2"), "/models/second");
+  await user.click(screen.getByRole("button", { name: "Save Model Roots" }));
+
+  await waitFor(() => expect(savedPayloads).toContainEqual({
+    hf_models_dirs: ["/models/config", "/models/second"],
+  }));
+  expect(await screen.findByText("Model roots saved")).toBeInTheDocument();
 });
 
 it("edits and saves db-backed runtime settings", async () => {

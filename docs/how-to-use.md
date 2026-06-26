@@ -131,6 +131,9 @@ hf_models_dir: /Volumes/4TB/HFModels
 ```
 
 If `hf_models_dirs` is present, it is used instead of the legacy single-root field.
+After first startup, admins can update the active local model roots from
+**System Settings -> Storage**. The UI stores those roots in the settings
+database and they override the YAML roots for that node until changed again.
 
 The setup UI's **Standalone** choice uses this same backend mode. It is a
 single-machine setup preset, not a third `mode:` value; do not write
@@ -541,7 +544,9 @@ curl -X POST http://127.0.0.1:9137/lm-api/v1/runtime/route-preview \
 The Settings page reads and writes durable runtime settings through
 `/lm-api/v1/settings/runtime`, and manages the agent tool catalog through
 `/lm-api/v1/settings/tool-catalog`. Settings are stored in the `settings`
-database target.
+database target. The Storage tab also writes local `hf_models_dirs` through
+runtime settings, so `config.yaml` can remain a bootstrap default while admins
+adjust model roots from the UI.
 
 Tool-loop evals are available from the Runtime section of the UI. Agent mode
 runs local evals at `/lm-api/v1/runtime/tool-loop-evals/run`; controller mode

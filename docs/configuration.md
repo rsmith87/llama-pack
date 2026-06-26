@@ -117,6 +117,11 @@ agent_url: ${LLAMA_PACK_AGENT_URL}
 heartbeat_interval_seconds: 30
 ```
 
+`hf_models_dirs` is the bootstrap/default list of local model roots. Admins can
+change the active roots for a running node from **System Settings -> Storage**;
+those UI changes are stored in the settings database and override this YAML
+field until updated again.
+
 ```yaml
 # config/auth.yaml
 agent_api_key: ${LLAMA_PACK_AGENT_API_KEY}

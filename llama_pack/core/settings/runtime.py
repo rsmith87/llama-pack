@@ -22,6 +22,7 @@ class UnsupportedRuntimeSettingError(ValueError):
 class RuntimeSettings(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    hf_models_dirs: list[Path]
     controller_retention_days: int = Field(ge=0)
     controller_archive_retention_days: int = Field(ge=1)
     controller_archive_dir: Path
@@ -65,6 +66,7 @@ class RuntimeSettings(BaseModel):
 class RuntimeSettingsPatch(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    hf_models_dirs: list[Path] | None = None
     controller_retention_days: int | None = Field(default=None, ge=0)
     controller_archive_retention_days: int | None = Field(default=None, ge=1)
     controller_archive_dir: Path | None = None
@@ -140,6 +142,7 @@ class AgentToolCatalogDocument(BaseModel):
 
 
 RUNTIME_SETTING_FIELDS: tuple[str, ...] = (
+    "hf_models_dirs",
     "controller_retention_days",
     "controller_archive_retention_days",
     "controller_archive_dir",

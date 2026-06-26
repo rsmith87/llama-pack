@@ -41,6 +41,7 @@ function formatBytes(value: number) {
 }
 
 const EMPTY_RUNTIME_SETTINGS: RuntimeSettings = {
+  hf_models_dirs: [],
   controller_retention_days: 30,
   controller_archive_retention_days: 90,
   controller_archive_dir: "./logs/archive",
@@ -100,6 +101,23 @@ function safeRootsText(value: string[] | undefined): string {
   return (value || []).join("\n");
 }
 
+function modelRootRows(value: string[] | undefined): string[] {
+  const roots = [...(value || [])];
+  return roots.length > 0 ? roots : [""];
+}
+
+function normalizedModelRoots(value: string[]): string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const item of value) {
+    const root = item.trim();
+    if (!root || seen.has(root)) continue;
+    roots.push(root);
+    seen.add(root);
+  }
+  return roots;
+}
+
 function jsonPreview(value: unknown): string {
   return JSON.stringify(value, null, 2);
 }
@@ -144,6 +162,7 @@ export function SettingsPage() {
   const [runtimeStatus, setRuntimeStatus] = useState("");
   const [chatToolsStatus, setChatToolsStatus] = useState("");
   const [toolCatalogStatus, setToolCatalogStatus] = useState("");
+  const [modelRootsStatus, setModelRootsStatus] = useState("");
   const [authKeys, setAuthKeys] = useState<AuthKey[]>([]);
   const [keyUsername, setKeyUsername] = useState("");
   const [keyRole, setKeyRole] = useState("operator");
@@ -282,6 +301,47 @@ export function SettingsPage() {
 
   function updateRuntimeString(key: keyof RuntimeSettings, value: string) {
     setRuntimeSettings((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateModelRoot(index: number, value: string) {
+    setRuntimeSettings((current) => {
+      const roots = modelRootRows(current.hf_models_dirs);
+      roots[index] = value;
+      return { ...current, hf_models_dirs: roots };
+    });
+  }
+
+  function addModelRoot() {
+    setRuntimeSettings((current) => ({ ...current, hf_models_dirs: [...modelRootRows(current.hf_models_dirs), ""] }));
+  }
+
+  function removeModelRoot(index: number) {
+    setRuntimeSettings((current) => {
+      const roots = modelRootRows(current.hf_models_dirs).filter((_, itemIndex) => itemIndex !== index);
+      return { ...current, hf_models_dirs: modelRootRows(roots) };
+    });
+  }
+
+  async function saveModelRoots() {
+    if (authRole !== "admin") {
+      setError("Admin role required.");
+      return;
+    }
+    setError("");
+    setModelRootsStatus("");
+    try {
+      const updated = await patchRuntimeSettings({
+        hf_models_dirs: normalizedModelRoots(runtimeSettings.hf_models_dirs),
+      });
+      setRuntimeDocument(updated);
+      setRuntimeSettings(updated.settings);
+      setModelRootsStatus("Model roots saved");
+      void listModelDisks()
+        .then((payload) => setDisks(Array.isArray(payload) ? payload : []))
+        .catch((err: unknown) => setError(err instanceof Error ? err.message : "Failed to load model disks."));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to save model roots.");
+    }
   }
 
   async function saveRuntimeSettings() {
@@ -711,6 +771,29 @@ export function SettingsPage() {
             <p className="muted settings-pane-note">
               Disks shows configured model roots with filesystem capacity and current space consumed under each root.
             </p>
+            <div className="settings-section-heading">
+              <h3>Local Model Roots</h3>
+              <span className="muted">Source: {sourceFor(runtimeDocument, "hf_models_dirs")}</span>
+            </div>
+            <div className="model-roots-editor">
+              {modelRootRows(runtimeSettings.hf_models_dirs).map((root, index) => (
+                <div className="model-root-row" key={index}>
+                  <FormField label={`Model Root ${index + 1}`}>
+                    <input
+                      aria-label={`Model Root ${index + 1}`}
+                      value={root}
+                      onChange={(event) => updateModelRoot(index, event.target.value)}
+                    />
+                  </FormField>
+                  <button type="button" aria-label={`Remove Model Root ${index + 1}`} onClick={() => removeModelRoot(index)}>Remove</button>
+                </div>
+              ))}
+              <div className="modal-actions settings-utilities">
+                <button type="button" onClick={addModelRoot}>Add Model Root</button>
+                <Button type="button" onClick={() => void saveModelRoots()}>Save Model Roots</Button>
+                {modelRootsStatus ? <span className="muted">{modelRootsStatus}</span> : null}
+              </div>
+            </div>
             <DataTable
               rows={disks}
               emptyMessage="No configured model disks."

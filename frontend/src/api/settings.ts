@@ -31,6 +31,7 @@ export type NodeAuthInfo = {
 export type JsonScalar = string | number | boolean | null;
 
 export type RuntimeSettings = {
+  hf_models_dirs: string[];
   controller_retention_days: number;
   controller_archive_retention_days: number;
   controller_archive_dir: string;
