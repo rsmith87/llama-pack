@@ -222,6 +222,26 @@ The Chat UI supports:
 - capability debug tools: full JSON detail + `Copy Capabilities JSON`
 - session save/load with persisted advanced defaults, including structured mode and schema/grammar text
 
+### Multi-User Chat
+
+Llama Pack supports multiple people using the same runtime when the hardware has enough capacity. Each person should sign in with a local account created by an admin:
+
+- Controller deployments: create local accounts on the controller. The controller is the user-facing gateway and routes chat to agents.
+- Standalone agent deployments: create local accounts on the agent when it has no `controller_url`, because that single process is the whole app.
+- Node agents behind a controller: do not create separate family/operator accounts on every agent. Human accounts are managed on the controller; agents use machine credentials for controller-to-agent calls.
+
+Saved chat sessions are scoped to the signed-in local account, so one user cannot list, load, overwrite, or delete another user's saved sessions. Test-chat browser sessions remain scoped per browser.
+
+Chat admission uses the signed-in account as the session identity. This means per-session limits apply per person rather than globally. Tune these settings in config for the available hardware:
+
+- `chat_max_active_per_target`
+- `chat_max_queue_per_target`
+- `chat_max_active_per_session`
+- `chat_max_queue_per_session`
+- `chat_admission_timeout_seconds`
+
+For llama.cpp KV slot isolation, authenticated non-admin users are assigned a stable slot per route/model/account when the chat request does not specify one. If a non-admin user tries to manually use a slot assigned to another account, Llama Pack rejects the request. Admins can still send an explicit `slot_id` for operational/debug work.
+
 Useful chat endpoints:
 
 - `POST /lm-api/v1/chat/{model}`

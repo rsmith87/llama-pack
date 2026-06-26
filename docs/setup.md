@@ -232,7 +232,15 @@ For manual setup, create the first admin key from the terminal:
 uv run python -m llama_pack.auth --config config.yaml create-admin {user_name}
 ```
 
-The command stores a hashed key in `log_dir/auth_store.db` and prints the raw API key once. Use that key in the UI login form, or send it as `X-Llama-Pack-Key` for API requests. To create more keys later, log in as an admin and use the auth key management UI/API.
+The command stores a hashed key in `log_dir/auth_store.db` and prints the raw API key once. Use that key in the UI login form, or send it as `X-Llama-Pack-Key` for API requests. To create more local accounts later, log in as an admin and use Settings, Local Accounts, or the auth key management API.
+
+Local accounts are owned by the user-facing Llama Pack instance:
+
+- In controller deployments, create family/operator accounts on the controller. Users should enter through the controller UI/API, and the controller routes chat to agents.
+- In standalone single-machine agent deployments with no `controller_url`, create local accounts on that agent because it is the whole app.
+- In node-agent deployments with `controller_url` configured, do not create family/operator accounts on each agent. Agents should use machine credentials such as `agent_api_key` and `nodes.<name>.api_key`; human accounts live on the controller.
+
+This keeps chat sessions, audit records, account revocation, and per-user runtime limits tied to one account source instead of drifting across nodes.
 
 There is no built-in `dev` login fallback. For local development, create a throwaway admin key with the same command.
 
