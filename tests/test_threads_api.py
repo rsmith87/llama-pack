@@ -602,6 +602,29 @@ def test_threads_api_creates_thread_and_posts_message(tmp_path):
     assert [event["event_type"] for event in public_events] == ["user_message", "assistant_message"]
 
 
+def test_threads_api_is_available_in_agent_mode_for_local_chat_ui(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+            }
+        )
+    )
+    client = TestClient(app)
+
+    thread_response = client.post(
+        "/lm-api/v1/threads",
+        json={"title": "Local chat"},
+    )
+
+    assert thread_response.status_code == 201
+    events_response = client.get(f"/lm-api/v1/threads/{thread_response.json()['id']}/events")
+    assert events_response.status_code == 200
+    assert events_response.json() == []
+
+
 def test_threads_api_compacts_thread_on_request(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     app = create_app(

@@ -3567,6 +3567,25 @@ def test_openai_compat_resolves_family_profile_before_proxying(tmp_path):
     assert manager.active_count("gemma:long") == 0
 
 
+def test_process_manager_does_not_mark_shared_port_models_running_from_unrelated_pid(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_catalog_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081)
+    _register_catalog_model(store, model_name="gemma", path="/models/gemma.gguf", port=8081)
+    manager = ProcessManager(config, catalog_service=catalog)
+
+    with patch.object(manager, "_find_pid_on_port", return_value=1234):
+        with patch.object(manager, "_pid_matches_model", side_effect=lambda pid, model_path: model_path == "/models/qwen.gguf"):
+            with patch("llama_pack.core.runtime.process_manager.os.kill", return_value=None):
+                with patch("llama_pack.core.runtime.process_manager._pid_is_zombie", return_value=False):
+                    statuses = manager.list_statuses()
+
+    by_name = {status["name"]: status for status in statuses}
+    assert by_name["qwen"]["running"] is True
+    assert by_name["qwen"]["process_state"] == "adopted"
+    assert by_name["gemma"]["running"] is False
+    assert by_name["gemma"]["process_state"] == "stopped"
+
+
 def test_openai_compat_chat_completions_stream_route_proxies_to_llama_server():
     calls = []
 

@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { ModelCard } from "../components/ModelCard";
 import { modelActionTargetLabel, modelPlacementDetails } from "../features/models";
+import { isActiveModel } from "../features/models/modelStatus";
 
 it("highlights stale startup failure cards and their logs action", () => {
   render(
@@ -19,6 +20,10 @@ it("highlights stale startup failure cards and their logs action", () => {
   const logsButton = screen.getByRole("button", { name: "View startup problem logs for qwen-local" });
   expect(logsButton).toHaveClass("model-logs-problem");
   expect(logsButton.closest(".library-card")).toHaveClass("problem");
+});
+
+it("does not mark stale pid-only model status as active", () => {
+  expect(isActiveModel({ running: false, pid: 1234, process_state: "stale" })).toBe(false);
 });
 
 it("expands model profile details from the card", async () => {

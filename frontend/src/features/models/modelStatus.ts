@@ -6,7 +6,9 @@ type ActiveModelLike = {
 };
 
 export function isActiveModel(model: ActiveModelLike): boolean {
-  return Boolean(model.pid || model.running || model.status === "running");
+  if (model.running === true || model.status === "running") return true;
+  if (model.running === false || model.status === "stopped" || model.process_state === "stale") return false;
+  return Boolean(model.pid);
 }
 
 export function isLoadingModel(model: ActiveModelLike): boolean {

@@ -400,6 +400,7 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.include_router(external_keys.router, prefix=LM_API_PREFIX)
     app.include_router(ui.api_router, prefix=LM_API_PREFIX)
     app.include_router(plugins.router, prefix=LM_API_PREFIX)
+    app.include_router(threads.router, prefix=LM_API_PREFIX)
     app.state.plugin_routers_included = set()
     for record in app.state.plugin_registry.records.values():
         if record.status != "enabled":
@@ -410,7 +411,6 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     if app_config.mode == "controller":
         app.include_router(benchmarks.router, prefix=LM_API_PREFIX)
         app.include_router(projects.router, prefix=LM_API_PREFIX)
-        app.include_router(threads.router, prefix=LM_API_PREFIX)
         app.include_router(jobs.router, prefix=LM_API_PREFIX)
         app.include_router(node_work.router, prefix=LM_API_PREFIX)
         app.include_router(memory.router, prefix=LM_API_PREFIX)

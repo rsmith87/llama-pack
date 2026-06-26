@@ -269,6 +269,8 @@ class ProcessManager:
         existing_pid = self._find_pid_on_port(model.port)
         if existing_pid is None:
             return None
+        if not self._pid_matches_model(existing_pid, model.path):
+            return None
         process = _AdoptedProcess(existing_pid)
         self._processes[name] = process
         self._adopted_processes.add(name)
@@ -347,6 +349,19 @@ class ProcessManager:
         except OSError:
             pass
         return None
+
+    def _pid_matches_model(self, pid: int, model_path: str) -> bool:
+        try:
+            result = subprocess.run(
+                ["ps", "-p", str(pid), "-o", "command="],
+                capture_output=True,
+                text=True,
+            )
+        except OSError:
+            return False
+        if result.returncode != 0:
+            return False
+        return model_path in result.stdout
 
 
 def _pid_is_zombie(pid: int) -> bool:
