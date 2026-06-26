@@ -1,5 +1,5 @@
 import "./styles.css";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createKey, listKeys, revokeKey } from "../../api/auth";
 import {
   getRuntimeSettings,
@@ -129,6 +129,38 @@ function summaryValue(value: unknown): string {
   return String(value);
 }
 
+function SettingSection({
+  title,
+  description,
+  badge,
+  badgeTone,
+  source,
+  children,
+}: {
+  title: string;
+  description: string;
+  badge: string;
+  badgeTone: "success" | "muted" | "warning";
+  source: string;
+  children: ReactNode;
+}) {
+  return (
+    <section className="settings-section" aria-label={title}>
+      <div className="settings-section-heading">
+        <div>
+          <div className="settings-section-title">
+            <h3>{title}</h3>
+            <StatusBadge tone={badgeTone}>{badge}</StatusBadge>
+          </div>
+          <p className="muted">{description}</p>
+        </div>
+        <span className="settings-source-chip">Source: {source}</span>
+      </div>
+      {children}
+    </section>
+  );
+}
+
 export function SettingsPage() {
   const appMode = useAppMode();
   const isAgentMode = appMode === "agent";
@@ -170,11 +202,18 @@ export function SettingsPage() {
   const [disks, setDisks] = useState<ModelDiskInfo[]>([]);
   const [error, setError] = useState("");
   const paneLabels = useMemo<Record<string, string>>(() => ({
-    runtime: isAgentMode ? "Agent Runtime" : "Runtime Settings",
-    chatTools: "Chat Tools",
+    runtime: isAgentMode ? "Agent Runtime" : "Runtime",
+    chatTools: "Tool Execution",
     toolCatalog: "Tool Catalog",
     storage: "Storage",
-    access: "Local Accounts",
+    access: "Access",
+  }), [isAgentMode]);
+  const paneDescriptions = useMemo<Record<string, string>>(() => ({
+    runtime: isAgentMode ? "Editable worker settings for this agent." : "Editable controller, routing, worker, and memory behavior.",
+    chatTools: "Editable limits for chat tool use.",
+    toolCatalog: "Read-only catalog inspection with advanced profile editing.",
+    storage: "Editable model roots plus disk diagnostics.",
+    access: "Local account and API key operations.",
   }), [isAgentMode]);
   const visiblePanes = useMemo(
     () => {
@@ -440,23 +479,31 @@ export function SettingsPage() {
   return (
     <div className="settings-page-react">
       <div className="page-heading">
-        <div><span className="eyebrow">System</span><h2>System Settings</h2></div>
+        <div><span className="eyebrow">System</span><h2>Settings</h2></div>
         <span className="muted">{authUser ? `${authUser} (${authRole || "operator"})` : "Not logged in"}</span>
       </div>
       <ErrorBanner message={error} />
       <Panel className="settings-panel">
-        <div className="settings-tabs" role="tablist" aria-label="Settings Sections">
+        <div className="settings-shell">
+        <nav className="settings-tabs" aria-label="Settings Sections">
           {visiblePanes.map((pane) => (
-            <button key={pane} type="button" className={`settings-tab ${activePane === pane ? "active" : ""}`} aria-selected={activePane === pane} onClick={() => setActivePane(pane)}>{paneLabels[pane]}</button>
+            <button key={pane} type="button" className={`settings-tab ${activePane === pane ? "active" : ""}`} aria-current={activePane === pane ? "page" : undefined} aria-label={paneLabels[pane]} onClick={() => setActivePane(pane)}>
+              <strong>{paneLabels[pane]}</strong>
+              <span>{paneDescriptions[pane]}</span>
+            </button>
           ))}
-        </div>
+        </nav>
+        <div className="settings-content">
 
         {activePane === "runtime" ? (
           <div className="settings-pane active">
-            <div className="settings-section-heading">
-              <h3>{paneLabels.runtime}</h3>
-              <span className="muted">Source: {sourceFor(runtimeDocument, isAgentMode ? "agent_worker_max_jobs" : "routing_fanout_max")}</span>
-            </div>
+            <SettingSection
+              title={isAgentMode ? "Agent Runtime" : "Runtime Settings"}
+              description={isAgentMode ? "Tune the local worker loop and capacity advertised by this agent." : "Set controller behavior that can change while the product is running."}
+              badge="Editable"
+              badgeTone="success"
+              source={sourceFor(runtimeDocument, isAgentMode ? "agent_worker_max_jobs" : "routing_fanout_max")}
+            >
             <div className="settings-grid">
               {!isAgentMode ? (
                 <>
@@ -518,12 +565,16 @@ export function SettingsPage() {
                 </FormField>
               ) : null}
             </div>
+            </SettingSection>
             {!isAgentMode ? (
               <>
-                <div className="settings-section-heading">
-                  <h3>Context Summarization</h3>
-                  <span className="muted">Source: {sourceFor(runtimeDocument, "context_summarization_enabled")}</span>
-                </div>
+                <SettingSection
+                  title="Memory and Context"
+                  description="Control when long chat context is summarized before it affects model performance."
+                  badge="Editable"
+                  badgeTone="success"
+                  source={sourceFor(runtimeDocument, "context_summarization_enabled")}
+                >
                 <div className="settings-grid">
                   <FormField label="Context Summarization Enabled">
                     <label className="checkbox-label">
@@ -549,10 +600,14 @@ export function SettingsPage() {
                     <span className="settings-source">{sourceFor(runtimeDocument, "context_summarization_max_tokens")}</span>
                   </FormField>
                 </div>
-                <div className="settings-section-heading">
-                  <h3>Thread History Compaction</h3>
-                  <span className="muted">Source: {sourceFor(runtimeDocument, "thread_history_compaction_enabled")}</span>
-                </div>
+                </SettingSection>
+                <SettingSection
+                  title="Thread History"
+                  description="Keep thread history compact while preserving recent messages for follow-up work."
+                  badge="Editable"
+                  badgeTone="success"
+                  source={sourceFor(runtimeDocument, "thread_history_compaction_enabled")}
+                >
                 <div className="settings-grid">
                   <FormField label="Thread History Compaction Enabled">
                     <label className="checkbox-label">
@@ -582,6 +637,7 @@ export function SettingsPage() {
                     <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_summary_item_max_chars")}</span>
                   </FormField>
                 </div>
+                </SettingSection>
               </>
             ) : null}
             <div className="modal-actions settings-utilities">
@@ -593,10 +649,13 @@ export function SettingsPage() {
 
         {activePane === "chatTools" ? (
           <div className="settings-pane active">
-            <div className="settings-section-heading">
-              <h3>Chat Tools</h3>
-              <span className="muted">Source: {sourceFor(runtimeDocument, "agent_tools_enabled")}</span>
-            </div>
+            <SettingSection
+              title="Tool Execution"
+              description="Set the runtime guardrails used when chat sessions call local tools."
+              badge="Editable"
+              badgeTone="success"
+              source={sourceFor(runtimeDocument, "agent_tools_enabled")}
+            >
             <div className="settings-grid">
               <FormField label="Agent Tools Enabled">
                 <label className="checkbox-label">
@@ -632,6 +691,7 @@ export function SettingsPage() {
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_tools_safe_roots")}</span>
               </FormField>
             </div>
+            </SettingSection>
             <div className="modal-actions settings-utilities">
               <Button type="button" onClick={() => void saveChatTools()}>Save Chat Tools</Button>
               {chatToolsStatus ? <span className="muted">{chatToolsStatus}</span> : null}
@@ -641,10 +701,13 @@ export function SettingsPage() {
 
         {activePane === "toolCatalog" && !isAgentMode ? (
           <div className="settings-pane active">
-            <div className="settings-section-heading">
-              <h3>Tool Catalog</h3>
-              <span className="muted">{toolCatalog.tool_count} configured tools</span>
-            </div>
+            <SettingSection
+              title="Tool Catalog"
+              description="Inspect the effective tool registry available to chat sessions."
+              badge="Read-only"
+              badgeTone="muted"
+              source={`${toolCatalog.tool_count} configured tools`}
+            >
             <div className="controller-filters settings-filters">
               <FormField label="Search Tools">
                 <input aria-label="Search Tools" value={toolSearch} onChange={(event) => setToolSearch(event.target.value)} />
@@ -706,6 +769,14 @@ export function SettingsPage() {
                 )}
               </div>
             </div>
+            </SettingSection>
+            <SettingSection
+              title="Tool Profiles"
+              description="Edit database-backed profile overrides without changing bootstrap configuration files."
+              badge="Advanced"
+              badgeTone="warning"
+              source={toolCatalog.active_profile || "none"}
+            >
             <div className="settings-grid settings-grid-wide tool-catalog-editors">
               <FormField label="Tool Definitions JSON">
                 <textarea aria-label="Tool Definitions JSON" rows={10} value={toolDefinitionsText} onChange={(event) => setToolDefinitionsText(event.target.value)} />
@@ -722,6 +793,7 @@ export function SettingsPage() {
                 </datalist>
               </FormField>
             </div>
+            </SettingSection>
             <div className="modal-actions settings-utilities">
               <Button type="button" onClick={() => void saveToolCatalog()}>Save Tool Catalog</Button>
               {toolCatalogStatus ? <span className="muted">{toolCatalogStatus}</span> : null}
@@ -737,9 +809,13 @@ export function SettingsPage() {
 
         {activePane === "access" && canManageLocalAccounts ? (
           <div className="settings-pane active">
-            <p className="muted settings-pane-note">
-              Local accounts manage human access to this console. Gateway app keys live under Gateway, App Keys.
-            </p>
+            <SettingSection
+              title="Local Accounts"
+              description="Manage human access to this console. Gateway app keys live under Gateway, App Keys."
+              badge="Operational"
+              badgeTone="warning"
+              source={authRole || "operator"}
+            >
             <div className="controller-filters settings-filters">
               <FormField label="Key username"><input value={keyUsername} onChange={(event) => setKeyUsername(event.target.value)} /></FormField>
               <FormField label="Key role"><select value={keyRole} onChange={(event) => setKeyRole(event.target.value)}><option value="operator">operator</option><option value="admin">admin</option><option value="viewer">viewer</option></select></FormField>
@@ -763,18 +839,19 @@ export function SettingsPage() {
                 } },
               ]}
             />
+            </SettingSection>
           </div>
         ) : null}
 
         {activePane === "storage" ? (
           <div className="settings-pane active">
-            <p className="muted settings-pane-note">
-              Disks shows configured model roots with filesystem capacity and current space consumed under each root.
-            </p>
-            <div className="settings-section-heading">
-              <h3>Local Model Roots</h3>
-              <span className="muted">Source: {sourceFor(runtimeDocument, "hf_models_dirs")}</span>
-            </div>
+            <SettingSection
+              title="Model Roots"
+              description="Configure the directories where this installation stores and discovers local models."
+              badge="Editable"
+              badgeTone="success"
+              source={sourceFor(runtimeDocument, "hf_models_dirs")}
+            >
             <div className="model-roots-editor">
               {modelRootRows(runtimeSettings.hf_models_dirs).map((root, index) => (
                 <div className="model-root-row" key={index}>
@@ -794,6 +871,14 @@ export function SettingsPage() {
                 {modelRootsStatus ? <span className="muted">{modelRootsStatus}</span> : null}
               </div>
             </div>
+            </SettingSection>
+            <SettingSection
+              title="Disk Diagnostics"
+              description="Read-only filesystem capacity and model consumption reported for configured roots."
+              badge="Read-only"
+              badgeTone="muted"
+              source="runtime probe"
+            >
             <DataTable
               rows={disks}
               emptyMessage="No configured model disks."
@@ -818,9 +903,11 @@ export function SettingsPage() {
                 { key: "warning", header: "Warning", render: (disk) => disk.error || disk.warning || "-" },
               ]}
             />
+            </SettingSection>
           </div>
         ) : null}
-
+        </div>
+        </div>
       </Panel>
     </div>
   );

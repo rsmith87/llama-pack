@@ -114,6 +114,8 @@ export function ChatPage() {
   const [status, setStatus] = useState("Ready");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
+  const [chatBootstrapLoaded, setChatBootstrapLoaded] = useState(false);
+  const [controllerChatUrl, setControllerChatUrl] = useState("");
   const [lastPrompt, setLastPrompt] = useState("");
   const [preset, setPreset] = useState(() => localStorage.getItem(CHAT_CONSTANTS.CHAT_PRESET_STORAGE_KEY) || "balanced");
   const [defaults, setDefaults] = useState<ChatDefaults>(() => PRESETS[localStorage.getItem(CHAT_CONSTANTS.CHAT_PRESET_STORAGE_KEY) || "balanced"] || PRESETS.balanced);
@@ -170,6 +172,7 @@ export function ChatPage() {
   }
 
   useEffect(() => {
+    void refreshChatBootstrap();
     void refreshModels();
     const profileTimer = window.setTimeout(() => void refreshProfileCatalog(), 300);
     return () => {
@@ -177,6 +180,22 @@ export function ChatPage() {
       abortRef.current?.abort();
     };
   }, []);
+
+  async function refreshChatBootstrap() {
+    try {
+      const response = await fetch("/lm-api/v1/chat/bootstrap", { credentials: "same-origin", headers: { Accept: "application/json" } });
+      if (!response.ok) throw new Error(`${response.status} ${response.statusText}: ${await response.text()}`);
+      const bootstrap = await response.json() as { mode?: string; controller_chat_url?: string };
+      if (bootstrap.mode === "agent" && bootstrap.controller_chat_url) {
+        setControllerChatUrl(bootstrap.controller_chat_url);
+        setStatus("Controller mode required");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to load chat bootstrap");
+    } finally {
+      setChatBootstrapLoaded(true);
+    }
+  }
 
   useEffect(() => {
     const el = transcriptRef.current;
@@ -558,6 +577,11 @@ export function ChatPage() {
   async function submitPrompt(content: string) {
     const trimmed = content.trim();
     if (pending || !trimmed) return;
+    if (!chatBootstrapLoaded) return;
+    if (controllerChatUrl) {
+      window.location.assign(controllerChatUrl);
+      return;
+    }
     const command = parseSlashCommand(trimmed);
     if (command?.name === "remember") {
       await submitRememberCommand(command.args);
@@ -804,8 +828,8 @@ export function ChatPage() {
   const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
   const targetOptions = ["auto", "local", target, ...runningModels.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
   const parsedCommand = parseSlashCommand(prompt);
-  const canSendCommand = Boolean(parsedCommand && prompt.trim() && !pending);
-  const canSendChat = Boolean(!noModelLoaded && selectedModel && prompt.trim() && !pending);
+  const canSendCommand = Boolean(chatBootstrapLoaded && parsedCommand && prompt.trim() && !pending);
+  const canSendChat = Boolean(chatBootstrapLoaded && !controllerChatUrl && !noModelLoaded && selectedModel && prompt.trim() && !pending);
   const canSend = canSendCommand || canSendChat;
 
   useEffect(() => {
@@ -873,7 +897,13 @@ export function ChatPage() {
 
           <Panel title="Transcript" eyebrow="Streaming response" className="chat-workbench-panel">
             <div ref={transcriptRef} className="chat-transcript" aria-live="polite">
-              {messages.length ? messages.map((message, index) => {
+              {controllerChatUrl ? (
+                <div className="test-chat-controller-launcher">
+                  <h2>Controller mode required</h2>
+                  <p>Routed chat conversations, sessions, and thread events are controller-owned.</p>
+                  <a className="btn btn-ghost" href={controllerChatUrl}>Open controller chat</a>
+                </div>
+              ) : messages.length ? messages.map((message, index) => {
                 const routeItems = routeExplanationItems(message);
                 return (
                   <article className={`chat-bubble chat-bubble-${message.role}`} key={`${message.role}-${index}`}>
@@ -1031,7 +1061,7 @@ export function ChatPage() {
               <FormField label="Conversation Request Type"><select value={conversationRequestType} onChange={(event) => setConversationRequestType(event.target.value)}><option value="general">General</option><option value="coding">Coding</option><option value="analysis">Analysis</option></select></FormField>
               <label className="checkbox-label"><input type="checkbox" checked={includeInternal} onChange={(event) => setIncludeInternal(event.target.checked)} />Include internal events</label>
               <div className="modal-actions">
-                <Button type="button" onClick={() => void createConversationFromUi()} disabled={pending}>New Conversation</Button>
+                <Button type="button" onClick={() => void createConversationFromUi()} disabled={pending || !chatBootstrapLoaded || Boolean(controllerChatUrl)}>New Conversation</Button>
                 <Button type="button" onClick={() => void refreshConversationEvents()} disabled={pending || !activeConversationId}>Refresh Conversation</Button>
               </div>
               <pre className="detail-json">{threadRouteDetail}</pre>

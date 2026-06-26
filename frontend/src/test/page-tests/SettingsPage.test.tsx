@@ -151,7 +151,8 @@ it("keeps setup config tools out of settings", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  expect(screen.getByRole("heading", { name: "System Settings" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Settings" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Runtime" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Config Tools" })).not.toBeInTheDocument();
   expect(screen.queryByText(/Config Helper generates setup files/)).not.toBeInTheDocument();
 });
@@ -166,10 +167,10 @@ it("shows local accounts on standalone agents", async () => {
   renderWithAuth("admin-token", "agent");
   await screen.findByText("admin (admin)");
   expect(screen.getByRole("button", { name: "Agent Runtime" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Chat Tools" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Tool Execution" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Storage" })).toBeInTheDocument();
-  expect(screen.getByRole("button", { name: "Local Accounts" })).toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Runtime Settings" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Access" })).toBeInTheDocument();
+  expect(screen.queryByRole("button", { name: "Runtime" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Tool Catalog" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Config Tools" })).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Agent Runtime" })).toBeInTheDocument();
@@ -251,8 +252,10 @@ it("shows the read-only tool catalog and inspector", async () => {
   await user.click(screen.getByRole("button", { name: "Tool Catalog" }));
 
   await waitFor(() => expect(screen.getAllByText("read_project_file").length).toBeGreaterThan(0));
+  expect(screen.getByText("Read-only")).toBeInTheDocument();
+  expect(screen.getByText("Advanced")).toBeInTheDocument();
   expect(screen.getAllByText("file_read_dynamic").length).toBeGreaterThan(0);
-  expect(screen.getByText("2 configured tools")).toBeInTheDocument();
+  expect(screen.getByText(/2 configured tools/)).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Inspect local_health" }));
   expect(screen.getByRole("heading", { name: "local_health" })).toBeInTheDocument();
   expect(screen.getByText("http://127.0.0.1:9137/health")).toBeInTheDocument();
@@ -344,7 +347,7 @@ it("edits and saves db-backed tool catalog profiles", async () => {
     tools: expect.objectContaining({ read_project_file: expect.objectContaining({ type: "file_read_dynamic" }) }),
   })));
   expect(await screen.findByText("Tool catalog saved")).toBeInTheDocument();
-  expect(screen.getByText("1 configured tools")).toBeInTheDocument();
+  expect(screen.getByText(/1 configured tools/)).toBeInTheDocument();
 });
 
 it("creates and revokes admin auth keys", async () => {
@@ -360,7 +363,8 @@ it("creates and revokes admin auth keys", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Local Accounts" }));
+  await user.click(screen.getByRole("button", { name: "Access" }));
+  expect(screen.getByRole("heading", { name: "Local Accounts" })).toBeInTheDocument();
   await user.click(screen.getByRole("button", { name: "Refresh Auth Keys" }));
   await user.type(screen.getByLabelText("Key username"), "service");
   await user.click(screen.getByRole("button", { name: "Create Auth Key" }));
@@ -432,6 +436,9 @@ it("renders configured model disks in settings", async () => {
   await screen.findByText("admin (admin)");
   await user.click(screen.getByRole("button", { name: "Storage" }));
 
+  expect(screen.getByRole("heading", { name: "Model Roots" })).toBeInTheDocument();
+  expect(screen.getByRole("heading", { name: "Disk Diagnostics" })).toBeInTheDocument();
+  expect(screen.getByText("Read-only")).toBeInTheDocument();
   expect(await screen.findByText("agent-a")).toBeInTheDocument();
   expect(screen.getByText("agent-b")).toBeInTheDocument();
   expect(screen.getByText("agent-c")).toBeInTheDocument();
@@ -837,8 +844,8 @@ it("edits and saves chat tool settings", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Chat Tools" }));
-  expect(await screen.findByRole("heading", { name: "Chat Tools" })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Tool Execution" }));
+  expect(await screen.findByRole("heading", { name: "Tool Execution" })).toBeInTheDocument();
   await user.click(screen.getByLabelText("Agent Tools Enabled"));
   await user.clear(screen.getByLabelText("Agent Tools Max Iterations"));
   await user.type(screen.getByLabelText("Agent Tools Max Iterations"), "9");

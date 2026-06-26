@@ -132,3 +132,14 @@ def test_chat_bootstrap(request: Request):
             path="/",
         )
     return response
+
+
+@api_router.get("/chat/bootstrap")
+def chat_bootstrap(request: Request):
+    config = request.app.state.config
+    controller_url = (config.controller_url or "").rstrip("/") if config.mode == "agent" else ""
+    return {
+        "mode": config.mode,
+        "controller_url": controller_url,
+        "controller_chat_url": f"{controller_url}/ui/chat" if controller_url else "",
+    }

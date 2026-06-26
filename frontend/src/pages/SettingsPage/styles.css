@@ -1,13 +1,97 @@
+.settings-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: minmax(210px, 260px) minmax(0, 1fr);
+  min-height: 560px;
+}
+
+.settings-tabs {
+  align-content: start;
+  background: color-mix(in srgb, var(--panel) 74%, var(--page));
+  border-right: 1px solid var(--line);
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 12px;
+}
+
+.settings-tabs button {
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  color: var(--ink);
+  cursor: pointer;
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 10px 12px;
+  text-align: left;
+}
+
+.settings-tabs button:hover,
+.settings-tabs button.active {
+  background: var(--button);
+  border-color: var(--line);
+}
+
+.settings-tabs button strong {
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.settings-tabs button span {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.settings-content {
+  min-width: 0;
+  padding: 16px;
+}
+
+.settings-section {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--panel) 96%, var(--page));
+  margin-bottom: 14px;
+  padding: 14px;
+}
+
 .settings-section-heading {
-  align-items: baseline;
+  align-items: flex-start;
   display: flex;
   gap: 12px;
   justify-content: space-between;
   margin-bottom: 14px;
 }
 
+.settings-section-heading p {
+  margin: 6px 0 0;
+}
+
+.settings-section-title {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
 .settings-section-heading h3 {
   margin: 0;
+}
+
+.settings-source-chip {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  flex: 0 0 auto;
+  font-size: 11px;
+  padding: 4px 8px;
 }
 
 .settings-grid {
@@ -95,6 +179,20 @@
 }
 
 @media (max-width: 900px) {
+  .settings-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .settings-tabs {
+    border-bottom: 1px solid var(--line);
+    border-right: 0;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  }
+
+  .settings-section-heading {
+    display: grid;
+  }
+
   .settings-tool-catalog {
     grid-template-columns: 1fr;
   }

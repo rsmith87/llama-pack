@@ -257,6 +257,34 @@ it("preselects model and route target from chat handoff query parameters", async
   expect(screen.getByLabelText("Conversation App")).toHaveValue("dashboard");
 });
 
+it("points agent-mode routed chat users to the controller chat page", async () => {
+  const fetchMock = vi.fn((url: string) => {
+    if (url === "/lm-api/v1/chat/bootstrap") {
+      return okJson({
+        mode: "agent",
+        controller_url: "http://controller.local:9137",
+        controller_chat_url: "http://controller.local:9137/ui/chat",
+      });
+    }
+    if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+    if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+    return okJson({});
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+
+  expect(await screen.findByRole("link", { name: "Open controller chat" })).toHaveAttribute(
+    "href",
+    "http://controller.local:9137/ui/chat",
+  );
+  await user.type(screen.getByLabelText("Prompt"), "Hello controller");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  expect(fetchMock).not.toHaveBeenCalledWith("/lm-api/v1/threads", expect.anything());
+});
+
 it("preselects the matching model family and default profile from a model card handoff", async () => {
   window.history.pushState({}, "", "/ui/chat?model=qwen-chat&target=auto&mode=direct&source=gguf-library");
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
@@ -578,9 +606,13 @@ it("sends advanced sampling, structured JSON schema, cache prompt, reasoning, an
 it("validates structured JSON schema before sending", async () => {
   vi.stubGlobal(
     "fetch",
-    vi.fn()
-      .mockResolvedValueOnce(okJson({ models: [{ name: "mistral", status: "running" }] }))
-      .mockResolvedValueOnce(okJson({ supports: { structured_output: { json_schema: true, grammar: true } } })),
+    vi.fn((url: string) => {
+      if (url === "/lm-api/v1/chat/bootstrap") return okJson({});
+      if (url === "/lm-api/v1/models") return okJson({ models: [{ name: "mistral", status: "running" }] });
+      if (url === "/lm-api/v1/models/profiles") return okJson({ families: [] });
+      if (url === "/lm-api/v1/chat/capabilities/mistral") return okJson({ supports: { structured_output: { json_schema: true, grammar: true } } });
+      return okJson({});
+    }),
   );
   const user = userEvent.setup();
 

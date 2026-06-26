@@ -250,6 +250,29 @@ def test_test_chat_bootstrap_on_agent_points_to_controller(tmp_path):
     }
 
 
+def test_chat_bootstrap_on_agent_points_to_controller_chat(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "controller_url": "http://controller.local:9137",
+            }
+        )
+    )
+    client = RawTestClient(app)
+
+    response = client.get("/lm-api/v1/chat/bootstrap")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "mode": "agent",
+        "controller_url": "http://controller.local:9137",
+        "controller_chat_url": "http://controller.local:9137/ui/chat",
+    }
+
+
 def test_test_chat_key_cannot_read_internal_thread_events(tmp_path):
     app = _controller_app(tmp_path)
     admin_key = app.state.auth_store.create_key("admin", "admin")["key"]
