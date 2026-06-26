@@ -10,6 +10,40 @@
   gap: var(--space-4, 1.5rem);
 }
 
+.agent-health-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-3, 1rem);
+}
+
+.agent-compact-list,
+.agent-action-list {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.agent-compact-list div,
+.agent-action-row {
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+  padding-top: 0.75rem;
+}
+
+.agent-action-row {
+  align-items: center;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.agent-action-row strong,
+.agent-action-row span,
+.agent-compact-list strong,
+.agent-compact-list span {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
 .runtime-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -102,9 +136,15 @@
 
 @media (max-width: 900px) {
   .runtime-grid,
+  .agent-health-grid,
   .runtime-summary,
   .worker-summary,
   .route-preview-form {
+    grid-template-columns: 1fr;
+  }
+
+  .agent-action-row {
+    align-items: stretch;
     grid-template-columns: 1fr;
   }
 }

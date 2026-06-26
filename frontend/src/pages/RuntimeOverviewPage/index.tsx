@@ -25,6 +25,7 @@ function keyValueList(values?: Record<string, unknown>) {
 }
 
 type WorkerOverview = NonNullable<RuntimeOverview["worker"]>;
+type RunningModelItems = NonNullable<RuntimeOverview["running_models"]>["items"];
 
 function executorList(executors?: WorkerOverview["executors"]) {
   const names = [
@@ -40,6 +41,74 @@ function workerStatus(worker?: WorkerOverview) {
   if (worker?.enabled) return "Configured, idle";
   if (worker?.configured_enabled) return "Misconfigured";
   return "Disabled";
+}
+
+type AgentAction = {
+  label: string;
+  detail: string;
+  buttonLabel: string;
+  path: string;
+};
+
+function agentModelStatus(overview: RuntimeOverview, runningModels: RunningModelItems) {
+  if (overview.running_models?.error) return "Needs attention";
+  const runningCount = overview.running_models?.count ?? runningModels?.length ?? 0;
+  return runningCount > 0 ? "Serving" : "No models running";
+}
+
+function agentControllerStatus(worker?: WorkerOverview) {
+  if (!worker?.controller_url) return "Not configured";
+  if (worker.running) return "Connected";
+  if (worker.configured_enabled) return "Configured, not polling";
+  return "Configured";
+}
+
+function agentActions(
+  overview: RuntimeOverview,
+  worker: RuntimeOverview["worker"],
+  runningModels: RunningModelItems,
+): AgentAction[] {
+  const actions: AgentAction[] = [];
+  const runningCount = overview.running_models?.count ?? runningModels?.length ?? 0;
+  if (overview.running_models?.error) {
+    actions.push({
+      label: "Fix model status",
+      detail: overview.running_models.error,
+      buttonLabel: "Open Settings",
+      path: "/ui/settings?section=runtime",
+    });
+  } else if (runningCount === 0) {
+    actions.push({
+      label: "Start a model",
+      detail: "No llama-server processes are running on this agent.",
+      buttonLabel: "Open Models",
+      path: "/ui/models",
+    });
+  }
+  if (!worker?.controller_url) {
+    actions.push({
+      label: "Set controller URL",
+      detail: "This agent cannot claim controller work until controller_url is configured.",
+      buttonLabel: "Open Settings",
+      path: "/ui/settings?section=runtime",
+    });
+  } else if (worker.configured_enabled && !worker.running) {
+    actions.push({
+      label: "Start worker polling",
+      detail: "Worker is enabled in config but is not currently claiming work.",
+      buttonLabel: "Open Settings",
+      path: "/ui/settings?section=runtime",
+    });
+  }
+  if (!worker?.executors?.chat && !worker?.executors?.embeddings && !worker?.executors?.model_transfer) {
+    actions.push({
+      label: "Enable worker executors",
+      detail: "No worker executors are advertised to the controller.",
+      buttonLabel: "Open Settings",
+      path: "/ui/settings?section=runtime",
+    });
+  }
+  return actions;
 }
 
 
@@ -114,6 +183,7 @@ export function RuntimeOverviewPage() {
   const isAgentMode = overview?.mode === "agent";
 
   if (isAgentMode) {
+    const actions = agentActions(overview, worker, runningModels);
     return (
       <div className="runtime-overview-page">
         <div className="page-heading">
@@ -121,70 +191,72 @@ export function RuntimeOverviewPage() {
             <span className="eyebrow">Runtime</span>
             <h2>Agent Runtime</h2>
           </div>
-          <span className="muted">Local serving status, model processes, tools, and capacity</span>
+          <span className="muted">Health checks and next actions for this agent node</span>
         </div>
         <ErrorBanner message={error} />
 
-        <div className="runtime-grid">
-          <Panel eyebrow="Agent Runtime" title="Worker">
-            <div className="runtime-summary worker-summary">
-              <div><span className="muted">Status</span><strong>{workerStatus(worker)}</strong></div>
-              <div><span className="muted">Node</span><strong>{worker?.node_name || "-"}</strong></div>
-              <div><span className="muted">Max jobs</span><strong>{worker?.max_jobs ?? "-"}</strong></div>
-              <div><span className="muted">Poll</span><strong>{worker?.poll_interval_seconds ?? "-"}s</strong></div>
-              <div><span className="muted">Executors</span><strong>{executorList(worker?.executors)}</strong></div>
-              <div><span className="muted">Controller</span><strong>{worker?.controller_url || "-"}</strong></div>
-            </div>
-            <div className="runtime-debug-lines">
-              <div><span className="muted">Claim</span><code>{worker?.claim_url || "-"}</code></div>
-            </div>
-          </Panel>
-
-          <Panel eyebrow="Agent Runtime" title="Running Models">
+        <div className="agent-health-grid">
+          <Panel eyebrow="Model Serving" title={agentModelStatus(overview, runningModels)}>
             <div className="runtime-summary">
-              <div><span className="muted">Running</span><strong>{overview.running_models?.count ?? runningModels.length}</strong></div>
+              <div><span className="muted">Running models</span><strong>{overview.running_models?.count ?? runningModels.length}</strong></div>
+              <div><span className="muted">Serving API</span><strong>{overview.running_models?.available ? "Reachable" : "Unavailable"}</strong></div>
             </div>
             <ErrorBanner message={overview.running_models?.error || ""} />
-            <DataTable
-              rows={runningModels}
-              emptyMessage="No models running."
-              getRowKey={(row, index) => String(row.name || index)}
-              columns={[
-                { key: "name", header: "Model", render: (row) => String(row.name || "-") },
-                { key: "port", header: "Port", render: (row) => String(row.port ?? "-") },
-                { key: "profile_label", header: "Profile", render: (row) => String(row.profile_label || "-") },
-                { key: "profile_kind", header: "Kind", render: (row) => String(row.profile_kind || "-") },
-                { key: "resource_tier", header: "Tier", render: (row) => String(row.resource_tier || "-") },
-              ]}
-            />
+            {runningModels.length ? (
+              <div className="agent-compact-list">
+                {runningModels.map((model, index) => (
+                  <div key={String(model.name || index)}>
+                    <strong>{String(model.name || "-")}</strong>
+                    <span className="muted">{model.port ? `:${model.port}` : "No port"} / {model.profile_label || model.profile_kind || "default"} / {model.resource_tier || "unclassified"}</span>
+                  </div>
+                ))}
+              </div>
+            ) : <p className="empty">No models running.</p>}
           </Panel>
 
-          <Panel eyebrow="Local Runtime" title="Local Tools">
-            <p className="muted runtime-note">{localToolNote}</p>
+          <Panel eyebrow="Controller" title={agentControllerStatus(worker)}>
             <div className="runtime-summary">
-              <div><span className="muted">Enabled</span><strong>{yesNo(overview.agent_tools?.enabled)}</strong></div>
-              <div><span className="muted">Tool count</span><strong>{overview.agent_tools?.tool_count ?? 0}</strong></div>
+              <div><span className="muted">URL</span><strong>{worker?.controller_url || "Missing"}</strong></div>
+              <div><span className="muted">Node name</span><strong>{worker?.node_name || "-"}</strong></div>
+            </div>
+            <p className="muted runtime-note">Work claim endpoint: {worker?.claim_url || "not available"}</p>
+          </Panel>
+
+          <Panel eyebrow="Worker" title={workerStatus(worker)}>
+            <div className="runtime-summary">
+              <div><span className="muted">Max jobs</span><strong>{worker?.max_jobs ?? "-"}</strong></div>
+              <div><span className="muted">Poll interval</span><strong>{worker?.poll_interval_seconds ?? "-"}s</strong></div>
+              <div><span className="muted">Executors</span><strong>{executorList(worker?.executors)}</strong></div>
+              <div><span className="muted">Capacity</span><strong>{keyValueList(worker?.capacity)}</strong></div>
+            </div>
+          </Panel>
+
+          <Panel eyebrow="Local Tools" title={overview.agent_tools?.enabled ? "Enabled" : "Disabled"}>
+            <div className="runtime-summary">
+              <div><span className="muted">Configured tools</span><strong>{overview.agent_tools?.tool_count ?? 0}</strong></div>
               <div><span className="muted">Max iterations</span><strong>{overview.agent_tools?.max_iterations ?? "-"}</strong></div>
             </div>
-            <DataTable
-              rows={tools}
-              emptyMessage="No agent tools configured."
-              getRowKey={(row, index) => String(row.name || index)}
-              columns={[
-                { key: "name", header: "Name", render: (row) => String(row.name || "-") },
-                { key: "type", header: "Type", render: (row) => String(row.type || "-") },
-                { key: "description", header: "Description", render: (row) => String(row.description || "-") },
-              ]}
-            />
-          </Panel>
-
-          <Panel eyebrow="Agent Runtime" title="Capacity">
-            <div className="runtime-debug-lines">
-              <div><span className="muted">Labels</span><code>{keyValueList(worker?.labels)}</code></div>
-              <div><span className="muted">Capacity</span><code>{keyValueList(worker?.capacity)}</code></div>
-            </div>
+            <p className="muted runtime-note">{tools.length ? tools.map((tool) => tool.name || tool.type || "unnamed").join(", ") : localToolNote}</p>
           </Panel>
         </div>
+
+        <Panel eyebrow="Operator Actions" title={actions.length ? "Next Actions" : "No Immediate Action"}>
+          {actions.length ? (
+            <div className="agent-action-list">
+              {actions.map((action) => (
+                <div className="agent-action-row" key={action.label}>
+                  <div>
+                    <strong>{action.label}</strong>
+                    <span className="muted">{action.detail}</span>
+                  </div>
+                  <Button type="button" onClick={() => navigate(action.path)}>{action.buttonLabel}</Button>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="empty">Model serving, controller connectivity, and worker polling look ready.</p>
+          )}
+        </Panel>
       </div>
     );
   }
