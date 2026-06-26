@@ -23,6 +23,7 @@ from llama_pack.api.http_headers import (
     compatibility_header_pairs,
 )
 from llama_pack.core.chat.scheduler import ChatAdmissionError
+from llama_pack.core.chat.slot_allocator import ChatSlotOwnershipError
 from llama_pack.core.chat.prompt_safety import PromptSafetyViolationError, prompt_safety_http_detail
 from llama_pack.core.chat.proxy import ProjectRoutingError
 from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
@@ -92,10 +93,13 @@ async def controller_chat(
 ) -> tuple[dict[str, Any], dict[str, str]]:
     payload = _with_admission_session(payload, request)
     if config.mode != "controller":
+        payload = _with_account_slot(payload, request, model)
         try:
             response, meta = await proxy.chat_with_meta(model, payload)
         except ChatAdmissionError as exc:
             raise CompatChatHTTPError(exc.status_code, str(exc), {}) from exc
+        except ChatSlotOwnershipError as exc:
+            raise CompatChatHTTPError(403, str(exc), {}) from exc
         except PromptSafetyViolationError as exc:
             raise CompatChatHTTPError(422, prompt_safety_http_detail(exc), {}) from exc
         return response, compatibility_headers(None, None, meta)
@@ -119,11 +123,14 @@ async def controller_chat(
         "target": compat["target"],
         TRUSTED_CONTROLLER_TARGET_KEY: True,
     }
+    request_payload = _with_account_slot(request_payload, request, compat["model"])
     request_payload = await _inject_memories(request.app.state.memory_store, config, request_payload)
     try:
         response, meta = await proxy.chat_with_meta(compat["model"], request_payload)
     except ChatAdmissionError as exc:
         raise CompatChatHTTPError(exc.status_code, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
+    except ChatSlotOwnershipError as exc:
+        raise CompatChatHTTPError(403, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
     except ProjectRoutingError as exc:
         service.record_compat_error(compat["thread_id"], exc)
         raise CompatChatHTTPError(exc.status_code, exc.detail, compatibility_headers(compat["thread_id"], compat["route"])) from exc
@@ -162,10 +169,13 @@ async def controller_stream(
 ) -> tuple[AsyncIterator[bytes], dict[str, str]]:
     payload = _with_admission_session(payload, request)
     if config.mode != "controller":
+        payload = _with_account_slot(payload, request, model)
         try:
             stream, meta = await proxy.stream_with_meta(model, payload)
         except ChatAdmissionError as exc:
             raise CompatChatHTTPError(exc.status_code, str(exc), {}) from exc
+        except ChatSlotOwnershipError as exc:
+            raise CompatChatHTTPError(403, str(exc), {}) from exc
         except PromptSafetyViolationError as exc:
             raise CompatChatHTTPError(422, prompt_safety_http_detail(exc), {}) from exc
         return stream, compatibility_headers(None, None, meta)
@@ -189,11 +199,14 @@ async def controller_stream(
         "target": compat["target"],
         TRUSTED_CONTROLLER_TARGET_KEY: True,
     }
+    request_payload = _with_account_slot(request_payload, request, compat["model"])
     request_payload = await _inject_memories(request.app.state.memory_store, config, request_payload)
     try:
         stream, meta = await proxy.stream_with_meta(compat["model"], request_payload)
     except ChatAdmissionError as exc:
         raise CompatChatHTTPError(exc.status_code, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
+    except ChatSlotOwnershipError as exc:
+        raise CompatChatHTTPError(403, str(exc), compatibility_headers(compat["thread_id"], compat["route"])) from exc
     except ProjectRoutingError as exc:
         service.record_compat_error(compat["thread_id"], exc)
         raise CompatChatHTTPError(exc.status_code, exc.detail, compatibility_headers(compat["thread_id"], compat["route"])) from exc
@@ -287,10 +300,32 @@ def _request_metadata(request_type: str | None, metadata: dict[str, Any] | None)
 
 
 def _with_admission_session(payload: dict[str, Any], request: Request) -> dict[str, Any]:
-    session_id = getattr(request.state, "test_chat_visitor_id", None)
+    session_id = getattr(request.state, "ui_account_id", None)
+    if not session_id:
+        session_id = getattr(request.state, "test_chat_visitor_id", None)
     if not session_id:
         return payload
     return {**payload, "_admission_session_id": session_id}
+
+
+def _with_account_slot(payload: dict[str, Any], request: Request, model_name: str) -> dict[str, Any]:
+    account_id = getattr(request.state, "ui_account_id", None)
+    if not account_id:
+        return payload
+    slot_id = request.app.state.chat_slot_allocator.assign_slot(
+        route_key=_slot_route_key(payload, model_name),
+        account_id=str(account_id),
+        requested_slot_id=payload.get("slot_id"),
+        admin=getattr(request.state, "ui_role", None) == "admin",
+    )
+    if slot_id is None:
+        return payload
+    return {**payload, "slot_id": slot_id}
+
+
+def _slot_route_key(payload: dict[str, Any], model_name: str) -> str:
+    target = str(payload.get("target", "auto")).strip().lower() or "auto"
+    return f"target:{target}:model:{model_name}"
 
 
 async def _inject_memories(

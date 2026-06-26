@@ -40,6 +40,10 @@ Send `thread_id` on later calls to append to the same durable record and keep
 thread affinity when the previous route is still eligible. The JSON response
 body stays OpenAI-compatible.
 
+External app keys also act as the account boundary for chat admission and
+llama.cpp KV slot assignment. Different app keys receive separate stable slots
+per route/model unless an admin explicitly supplies a slot for debugging.
+
 Older Ollama clients can point at the compatibility route. The same external
 app key boundary applies here:
 

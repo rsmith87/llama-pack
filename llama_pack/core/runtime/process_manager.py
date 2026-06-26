@@ -269,7 +269,7 @@ class ProcessManager:
         existing_pid = self._find_pid_on_port(model.port)
         if existing_pid is None:
             return None
-        if not self._pid_matches_model(existing_pid, model.path):
+        if self._port_has_multiple_identities(model.port) and not self._pid_matches_model(existing_pid, model.path):
             return None
         process = _AdoptedProcess(existing_pid)
         self._processes[name] = process
@@ -349,6 +349,16 @@ class ProcessManager:
         except OSError:
             pass
         return None
+
+    def _port_has_multiple_identities(self, port: int) -> bool:
+        matches = 0
+        for identity in self.catalog_service.list_model_identities():
+            if self._get_model(identity).port != port:
+                continue
+            matches += 1
+            if matches > 1:
+                return True
+        return False
 
     def _pid_matches_model(self, pid: int, model_path: str) -> bool:
         try:

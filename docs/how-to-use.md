@@ -243,7 +243,7 @@ Chat admission uses the signed-in account as the session identity. This means pe
 - `chat_max_queue_per_session`
 - `chat_admission_timeout_seconds`
 
-For llama.cpp KV slot isolation, authenticated non-admin users are assigned a stable slot per route/model/account when the chat request does not specify one. If a non-admin user tries to manually use a slot assigned to another account, Llama Pack rejects the request. Admins can still send an explicit `slot_id` for operational/debug work.
+For llama.cpp KV slot isolation, authenticated non-admin users are assigned a stable slot per route/model/account when the chat request does not specify one. External app keys using the OpenAI-compatible endpoint follow the same per-key boundary. If a non-admin user or external key tries to manually use a slot assigned to another account, Llama Pack rejects the request. Admins can still send an explicit `slot_id` for operational/debug work.
 
 Useful chat endpoints:
 

@@ -2256,6 +2256,54 @@ def test_openai_compat_chat_completions_route_proxies_to_llama_server():
     ]
 
 
+def test_openai_compat_external_keys_receive_account_scoped_slots_and_admission(tmp_path):
+    calls = []
+    admitted_sessions = []
+
+    async def fake_chat_request(url, payload):
+        calls.append((url, payload))
+        return {"choices": [{"message": {"role": "assistant", "content": "hello"}}]}
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+            }
+        ),
+        process_manager=StubProcessManager(running=True),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+        chat_request=fake_chat_request,
+    )
+    first_key = app.state.auth_store.create_external_key("First App", "http://first.example")["key"]
+    second_key = app.state.auth_store.create_external_key("Second App", "http://second.example")["key"]
+    app.state.plugin_registry.hooks.add_policy_hook(
+        "test_plugin",
+        "llama_pack.chat_admission",
+        lambda payload: admitted_sessions.append(payload.get("session_id")) or {"allowed": True},
+    )
+    client = TestClient(app)
+
+    first_response = client.post(
+        "/v1/chat/completions",
+        headers={"X-Llama-Pack-Key": first_key},
+        json={"model": "qwen", "messages": [{"role": "user", "content": "hi"}]},
+    )
+    second_response = client.post(
+        "/v1/chat/completions",
+        headers={"X-Llama-Pack-Key": second_key},
+        json={"model": "qwen", "messages": [{"role": "user", "content": "hi"}]},
+    )
+
+    assert first_response.status_code == 200
+    assert second_response.status_code == 200
+    assert [payload["slot_id"] for _, payload in calls] == [0, 1]
+    assert len(admitted_sessions) == 2
+    assert admitted_sessions[0] != admitted_sessions[1]
+
+
 def test_openai_compat_agent_tool_runtime_executes_local_tool_loop(tmp_path):
     calls = []
     status = tmp_path / "status.txt"
