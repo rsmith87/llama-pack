@@ -15,6 +15,8 @@ import {
 import { DataTable, ErrorBanner, FormField, Panel, Button, StatusBadge } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { useAuthSession } from "../../features/auth/authSession";
+import { useGlobalStatus } from "../../features/globalStatus/globalStatusContext";
+import { managesLocalAccounts, runtimeTopology } from "../../features/runtimeMode/runtimeMode";
 import type { AuthKey } from "../../types/index";
 
 function keyId(key: AuthKey) {
@@ -112,6 +114,9 @@ function summaryValue(value: unknown): string {
 export function SettingsPage() {
   const appMode = useAppMode();
   const isAgentMode = appMode === "agent";
+  const { controllerUrl } = useGlobalStatus();
+  const topology = runtimeTopology(appMode, controllerUrl);
+  const canManageLocalAccounts = managesLocalAccounts(topology);
   const { authUser, authRole } = useAuthSession();
   const [activePane, setActivePane] = useState("runtime");
   const [runtimeDocument, setRuntimeDocument] = useState<RuntimeSettingsDocument | null>(null);
@@ -150,11 +155,14 @@ export function SettingsPage() {
     chatTools: "Chat Tools",
     toolCatalog: "Tool Catalog",
     storage: "Storage",
-    access: "Access",
+    access: "Local Accounts",
   }), [isAgentMode]);
   const visiblePanes = useMemo(
-    () => isAgentMode ? ["runtime", "chatTools", "storage"] : ["runtime", "chatTools", "toolCatalog", "storage", "access"],
-    [isAgentMode],
+    () => {
+      const panes = isAgentMode ? ["runtime", "chatTools", "storage"] : ["runtime", "chatTools", "toolCatalog", "storage"];
+      return canManageLocalAccounts ? [...panes, "access"] : panes;
+    },
+    [canManageLocalAccounts, isAgentMode],
   );
   const selectedTool = toolCatalog.tools.find((tool) => tool.name === selectedToolName) || toolCatalog.tools[0] || null;
   const toolTypes = Array.from(new Set(toolCatalog.tools.map((tool) => tool.type))).sort();
@@ -661,10 +669,16 @@ export function SettingsPage() {
           </div>
         ) : null}
 
-        {activePane === "access" && !isAgentMode ? (
+        {topology === "node_agent" ? (
+          <p className="muted settings-pane-note">
+            User accounts are managed on the controller at {controllerUrl}.
+          </p>
+        ) : null}
+
+        {activePane === "access" && canManageLocalAccounts ? (
           <div className="settings-pane active">
             <p className="muted settings-pane-note">
-              Admin Keys manage operator access to this console. Gateway app keys live under Gateway, App Keys.
+              Local accounts manage human access to this console. Gateway app keys live under Gateway, App Keys.
             </p>
             <div className="controller-filters settings-filters">
               <FormField label="Key username"><input value={keyUsername} onChange={(event) => setKeyUsername(event.target.value)} /></FormField>

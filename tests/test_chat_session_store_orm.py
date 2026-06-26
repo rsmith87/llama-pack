@@ -90,3 +90,47 @@ def test_chat_session_store_filters_and_protects_visitor_sessions(tmp_path):
         raise AssertionError("visitor-b should not overwrite visitor-a's session")
 
     assert store.get_session(first["id"], visitor_id="visitor-a")["name"] == "Visitor A"
+
+
+def test_chat_session_store_filters_and_protects_owner_sessions(tmp_path):
+    prepare_chat_sessions_db(tmp_path / "owner-chat.db")
+    store = ChatSessionStoreOrm(db_path=tmp_path / "owner-chat.db")
+
+    first = store.save_session(
+        name="Owner A",
+        model="qwen",
+        target_selector="auto",
+        messages=[{"role": "user", "content": "a"}],
+        request_defaults={},
+        owner_id="key-a",
+    )
+    second = store.save_session(
+        name="Owner B",
+        model="qwen",
+        target_selector="auto",
+        messages=[{"role": "user", "content": "b"}],
+        request_defaults={},
+        owner_id="key-b",
+    )
+
+    assert [item["id"] for item in store.list_sessions(owner_id="key-a")] == [first["id"]]
+    assert [item["id"] for item in store.list_sessions(owner_id="key-b")] == [second["id"]]
+    assert store.get_session(first["id"], owner_id="key-b") is None
+    assert store.delete_session(first["id"], owner_id="key-b") is False
+
+    try:
+        store.save_session(
+            session_id=first["id"],
+            name="Overwrite",
+            model="qwen",
+            target_selector="auto",
+            messages=[],
+            request_defaults={},
+            owner_id="key-b",
+        )
+    except PermissionError:
+        pass
+    else:
+        raise AssertionError("owner-b should not overwrite owner-a's session")
+
+    assert store.get_session(first["id"], owner_id="key-a")["name"] == "Owner A"

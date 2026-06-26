@@ -154,7 +154,7 @@ it("keeps setup config tools out of settings", async () => {
   expect(screen.queryByText(/Config Helper generates setup files/)).not.toBeInTheDocument();
 });
 
-it("shows a smaller settings surface on agent nodes", async () => {
+it("shows local accounts on standalone agents", async () => {
   mockFetch(
     [() => okJson({ username: "admin", role: "admin", created_at: "now" })],
     settingsRoutes(),
@@ -166,9 +166,9 @@ it("shows a smaller settings surface on agent nodes", async () => {
   expect(screen.getByRole("button", { name: "Agent Runtime" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Chat Tools" })).toBeInTheDocument();
   expect(screen.getByRole("button", { name: "Storage" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Local Accounts" })).toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Runtime Settings" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Tool Catalog" })).not.toBeInTheDocument();
-  expect(screen.queryByRole("button", { name: "Access" })).not.toBeInTheDocument();
   expect(screen.queryByRole("button", { name: "Config Tools" })).not.toBeInTheDocument();
   expect(screen.getByRole("heading", { name: "Agent Runtime" })).toBeInTheDocument();
   expect(screen.getByLabelText("Agent Worker Enabled")).toBeInTheDocument();
@@ -358,7 +358,7 @@ it("creates and revokes admin auth keys", async () => {
 
   renderWithAuth();
   await screen.findByText("admin (admin)");
-  await user.click(screen.getByRole("button", { name: "Access" }));
+  await user.click(screen.getByRole("button", { name: "Local Accounts" }));
   await user.click(screen.getByRole("button", { name: "Refresh Auth Keys" }));
   await user.type(screen.getByLabelText("Key username"), "service");
   await user.click(screen.getByRole("button", { name: "Create Auth Key" }));

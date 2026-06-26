@@ -47,7 +47,7 @@ TARGET_REVISIONS = {
     "controller": "20260513_0001",
     "auth": "20260527_0001",
     "audit": "20260513_0003",
-    "chat_sessions": "20260523_0007",
+    "chat_sessions": "20260626_0009",
     "downloads": "20260523_0001",
     "benchmarks": "20260612_0006",
     "models": "20260614_0002",

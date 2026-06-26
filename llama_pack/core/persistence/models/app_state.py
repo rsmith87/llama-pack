@@ -47,6 +47,8 @@ class ChatSessionOrm(Base):
     __tablename__ = "chat_sessions"
 
     id: Mapped[str] = mapped_column(Text, primary_key=True)
+    owner_id: Mapped[str | None] = mapped_column(Text, nullable=True)
+    owner_username: Mapped[str | None] = mapped_column(Text, nullable=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
     model: Mapped[str] = mapped_column(Text, nullable=False)
     target_selector: Mapped[str] = mapped_column(Text, nullable=False, default="auto", server_default="auto")
@@ -56,6 +58,7 @@ class ChatSessionOrm(Base):
     updated_at: Mapped[str] = mapped_column(Text, nullable=False)
 
     __table_args__ = (
+        Index("idx_chat_sessions_owner_id", "owner_id"),
         Index("idx_chat_sessions_updated_at", "updated_at"),
     )
 

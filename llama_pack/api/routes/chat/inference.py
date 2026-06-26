@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from collections.abc import AsyncIterator
 
 from llama_pack.api.http_headers import LEGACY_LLAMA_MANAGER_ROUTE_HEADER, LLAMA_PACK_ROUTE_HEADER
-from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_thread_service
+from llama_pack.api.dependencies import get_chat_proxy, get_chat_scheduler, get_chat_slot_allocator, get_config, get_node_registry, get_process_manager, get_profile_activation_service, get_thread_service
 from llama_pack.api.routes.chat.common import (
     ChatRequestBody,
     EmbeddingsRequestBody,
@@ -20,6 +20,7 @@ from llama_pack.core.chat.profile_activation import ProfileActivationService
 from llama_pack.core.chat.prompt_safety import PromptSafetyScanner, PromptSafetyViolationError, prompt_safety_http_detail
 from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
+from llama_pack.core.chat.slot_allocator import ChatSlotAllocator, ChatSlotOwnershipError
 from llama_pack.core.config import AppConfig
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.runtime.process_manager import ProcessManager
@@ -126,6 +127,7 @@ async def chat(
     body: ChatRequestBody,
     request: Request,
     scheduler: ChatScheduler = Depends(get_chat_scheduler),
+    slot_allocator: ChatSlotAllocator = Depends(get_chat_slot_allocator),
     manager: ProcessManager = Depends(get_process_manager),
     profile_activation: ProfileActivationService = Depends(get_profile_activation_service),
 ):
@@ -133,9 +135,12 @@ async def chat(
         request_payload = body.model_dump()
         _add_admission_session(request_payload, request)
         resolved_model, profile_headers = resolve_profile_model(model_name, request_payload, profile_activation)
+        _assign_account_slot(request_payload, request, slot_allocator, resolved_model)
         with track_model_if_local(manager, resolved_model):
             payload, meta = await scheduler.chat_with_meta(resolved_model, request_payload)
         return JSONResponse(content=payload, headers=_route_headers(meta.get("route", "unknown"), profile_headers))
+    except ChatSlotOwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
@@ -149,6 +154,7 @@ async def chat_stream(
     body: ChatRequestBody,
     request: Request,
     scheduler: ChatScheduler = Depends(get_chat_scheduler),
+    slot_allocator: ChatSlotAllocator = Depends(get_chat_slot_allocator),
     manager: ProcessManager = Depends(get_process_manager),
     profile_activation: ProfileActivationService = Depends(get_profile_activation_service),
 ):
@@ -156,12 +162,15 @@ async def chat_stream(
         request_payload = body.model_dump()
         _add_admission_session(request_payload, request)
         resolved_model, profile_headers = resolve_profile_model(model_name, request_payload, profile_activation)
+        _assign_account_slot(request_payload, request, slot_allocator, resolved_model)
         stream, meta = await scheduler.stream_with_meta(resolved_model, request_payload)
         return StreamingResponse(
             _track_stream(manager, resolved_model, stream),
             media_type="text/event-stream",
             headers=_route_headers(meta.get("route", "unknown"), profile_headers),
         )
+    except ChatSlotOwnershipError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
     except ChatAdmissionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
     except Exception as exc:
@@ -176,6 +185,30 @@ async def _track_stream(manager: ProcessManager, model_name: str, stream: AsyncI
 
 
 def _add_admission_session(payload: dict, request: Request) -> None:
-    session_id = getattr(request.state, "test_chat_visitor_id", None)
+    session_id = getattr(request.state, "ui_account_id", None)
+    if not session_id:
+        session_id = getattr(request.state, "test_chat_visitor_id", None)
     if session_id:
         payload["_admission_session_id"] = session_id
+
+
+def _assign_account_slot(
+    payload: dict,
+    request: Request,
+    slot_allocator: ChatSlotAllocator,
+    model_name: str,
+) -> None:
+    account_id = getattr(request.state, "ui_account_id", None)
+    slot_id = slot_allocator.assign_slot(
+        route_key=_slot_route_key(payload, model_name),
+        account_id=str(account_id) if account_id else "",
+        requested_slot_id=payload.get("slot_id"),
+        admin=getattr(request.state, "ui_role", None) == "admin",
+    )
+    if slot_id is not None:
+        payload["slot_id"] = slot_id
+
+
+def _slot_route_key(payload: dict, model_name: str) -> str:
+    target = str(payload.get("target", "auto")).strip().lower() or "auto"
+    return f"target:{target}:model:{model_name}"

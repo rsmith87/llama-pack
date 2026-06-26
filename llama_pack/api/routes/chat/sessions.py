@@ -17,14 +17,35 @@ def _session_visitor_id(request: Request) -> str | None:
     return getattr(request.state, "test_chat_visitor_id", None)
 
 
+def _session_owner_id(request: Request) -> str | None:
+    if getattr(request.state, "ui_role", None) == "test_chat":
+        return None
+    value = getattr(request.state, "ui_account_id", None)
+    return str(value) if value else None
+
+
+def _session_owner_username(request: Request) -> str | None:
+    if getattr(request.state, "ui_role", None) == "test_chat":
+        return None
+    value = getattr(request.state, "ui_user", None)
+    return str(value) if value else None
+
+
 @router.get("/sessions")
 async def list_chat_sessions(request: Request, store: Any = Depends(get_chat_session_store)):
-    return store.list_sessions(visitor_id=_session_visitor_id(request))
+    return store.list_sessions(
+        visitor_id=_session_visitor_id(request),
+        owner_id=_session_owner_id(request),
+    )
 
 
 @router.get("/sessions/{session_id}")
 async def get_chat_session(session_id: str, request: Request, store: Any = Depends(get_chat_session_store)):
-    payload = store.get_session(session_id, visitor_id=_session_visitor_id(request))
+    payload = store.get_session(
+        session_id,
+        visitor_id=_session_visitor_id(request),
+        owner_id=_session_owner_id(request),
+    )
     if payload is None:
         raise HTTPException(status_code=404, detail="Session not found")
     return payload
@@ -45,6 +66,8 @@ async def save_chat_session(
             messages=[item.model_dump() for item in body.messages],
             request_defaults=body.request_defaults,
             visitor_id=_session_visitor_id(request),
+            owner_id=_session_owner_id(request),
+            owner_username=_session_owner_username(request),
         )
     except PermissionError as exc:
         raise HTTPException(status_code=404, detail="Session not found") from exc
@@ -56,7 +79,11 @@ async def delete_chat_session(
     request: Request,
     store: Any = Depends(get_chat_session_store),
 ):
-    deleted = store.delete_session(session_id, visitor_id=_session_visitor_id(request))
+    deleted = store.delete_session(
+        session_id,
+        visitor_id=_session_visitor_id(request),
+        owner_id=_session_owner_id(request),
+    )
     if not deleted:
         raise HTTPException(status_code=404, detail="Session not found")
     return {"deleted": True, "id": session_id}

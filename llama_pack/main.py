@@ -44,6 +44,7 @@ from llama_pack.api.http_headers import get_request_api_key, request_api_key_hea
 from llama_pack.core.config import AppConfig, load_config
 from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.chat.scheduler import ChatScheduler
+from llama_pack.core.chat.slot_allocator import ChatSlotAllocator
 from llama_pack.core.memory.store import ChromaMemoryStore
 from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
 from llama_pack.core.model_assets.conversions import ConversionManager
@@ -305,6 +306,7 @@ def _configure_app_state(
         hooks=app.state.plugin_registry.hooks,
         event_bus=app.state.plugin_registry.events,
     )
+    app.state.chat_slot_allocator = ChatSlotAllocator()
     app.state.thread_service = ThreadService(
         config=app_config,
         store=ThreadStore(default_state_dir(app_config) / "threads.db"),
@@ -458,6 +460,7 @@ def _register_middleware(app: FastAPI) -> None:
 
         if resolved_key is not None:
             request.state.ui_key_id = resolved_key.get("id")
+            request.state.ui_account_id = resolved_key.get("id")
             request.state.ui_user = resolved_key.get("username", "api-key")
             request.state.ui_role = resolved_key.get("role", "operator")
             if is_viewer_forbidden(path, request.state.ui_role):
@@ -469,6 +472,7 @@ def _register_middleware(app: FastAPI) -> None:
             return await call_next(request)
 
         if configured_key_ok:
+            request.state.ui_account_id = None
             request.state.ui_user = "agent-api-key"
             request.state.ui_role = "admin"
             return await call_next(request)
@@ -483,6 +487,8 @@ def _register_middleware(app: FastAPI) -> None:
             if expires_at and datetime.now(UTC) > datetime.fromisoformat(expires_at):
                 app.state.ui_sessions.pop(token, None)
                 return JSONResponse(status_code=401, content={"detail": "Session expired"})
+            request.state.ui_account_id = session.get("key_id")
+            request.state.ui_key_id = session.get("key_id")
             request.state.ui_user = session["username"]
             request.state.ui_role = session.get("role", "operator")
             if is_viewer_forbidden(path, request.state.ui_role):

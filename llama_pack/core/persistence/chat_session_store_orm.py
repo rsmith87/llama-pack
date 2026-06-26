@@ -41,7 +41,7 @@ class ChatSessionStoreOrm:
         self.engine = create_persistence_engine(db_url)
         self.session_factory = create_session_factory(self.engine)
 
-    def list_sessions(self, *, visitor_id: str | None = None) -> list[dict[str, object]]:
+    def list_sessions(self, *, visitor_id: str | None = None, owner_id: str | None = None) -> list[dict[str, object]]:
         with session_scope(self.session_factory) as session:
             rows = session.execute(
                 select(ChatSessionOrm).order_by(ChatSessionOrm.updated_at.desc())
@@ -51,23 +51,34 @@ class ChatSessionStoreOrm:
             request_defaults = json.loads(row.request_defaults_json)
             if visitor_id is not None and request_defaults.get(VISITOR_SESSION_KEY) != visitor_id:
                 continue
+            if owner_id is not None and row.owner_id != owner_id:
+                continue
             payloads.append({
                 "id": row.id,
                 "name": row.name,
                 "model": row.model,
                 "target_selector": row.target_selector,
+                "owner_username": row.owner_username,
                 "created_at": row.created_at,
                 "updated_at": row.updated_at,
             })
         return payloads
 
-    def get_session(self, session_id: str, *, visitor_id: str | None = None) -> dict[str, object] | None:
+    def get_session(
+        self,
+        session_id: str,
+        *,
+        visitor_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> dict[str, object] | None:
         with session_scope(self.session_factory) as session:
             row = session.execute(select(ChatSessionOrm).where(ChatSessionOrm.id == session_id)).scalar_one_or_none()
         if row is None:
             return None
         request_defaults = json.loads(row.request_defaults_json)
         if visitor_id is not None and request_defaults.get(VISITOR_SESSION_KEY) != visitor_id:
+            return None
+        if owner_id is not None and row.owner_id != owner_id:
             return None
         return {
             "id": row.id,
@@ -76,6 +87,7 @@ class ChatSessionStoreOrm:
             "target_selector": row.target_selector,
             "messages": json.loads(row.messages_json),
             "request_defaults": _public_request_defaults(request_defaults),
+            "owner_username": row.owner_username,
             "created_at": row.created_at,
             "updated_at": row.updated_at,
         }
@@ -90,6 +102,8 @@ class ChatSessionStoreOrm:
         request_defaults: dict[str, object],
         session_id: str | None = None,
         visitor_id: str | None = None,
+        owner_id: str | None = None,
+        owner_username: str | None = None,
     ) -> dict[str, object]:
         now = datetime.now(UTC).isoformat()
         sid = session_id or str(uuid.uuid4())
@@ -103,9 +117,13 @@ class ChatSessionStoreOrm:
                 existing_defaults = json.loads(existing.request_defaults_json)
                 if existing_defaults.get(VISITOR_SESSION_KEY) != visitor_id:
                     raise PermissionError("Session not found")
+            if existing is not None and owner_id is not None and existing.owner_id != owner_id:
+                raise PermissionError("Session not found")
             if existing is None:
                 row = ChatSessionOrm(
                     id=sid,
+                    owner_id=owner_id,
+                    owner_username=owner_username,
                     name=name,
                     model=model,
                     target_selector=target_selector,
@@ -116,6 +134,8 @@ class ChatSessionStoreOrm:
                 )
                 session.add(row)
             else:
+                existing.owner_id = owner_id
+                existing.owner_username = owner_username
                 existing.name = name
                 existing.model = model
                 existing.target_selector = target_selector
@@ -123,12 +143,18 @@ class ChatSessionStoreOrm:
                 existing.request_defaults_json = json.dumps(request_defaults_to_save)
                 existing.updated_at = now
 
-        payload = self.get_session(sid, visitor_id=visitor_id)
+        payload = self.get_session(sid, visitor_id=visitor_id, owner_id=owner_id)
         if payload is None:
             raise RuntimeError("Failed to save chat session")
         return payload
 
-    def delete_session(self, session_id: str, *, visitor_id: str | None = None) -> bool:
+    def delete_session(
+        self,
+        session_id: str,
+        *,
+        visitor_id: str | None = None,
+        owner_id: str | None = None,
+    ) -> bool:
         with session_scope(self.session_factory) as session:
             row = session.execute(select(ChatSessionOrm).where(ChatSessionOrm.id == session_id)).scalar_one_or_none()
             if row is None:
@@ -137,5 +163,7 @@ class ChatSessionStoreOrm:
                 request_defaults = json.loads(row.request_defaults_json)
                 if request_defaults.get(VISITOR_SESSION_KEY) != visitor_id:
                     return False
+            if owner_id is not None and row.owner_id != owner_id:
+                return False
             result = session.execute(delete(ChatSessionOrm).where(ChatSessionOrm.id == session_id))
         return (result.rowcount or 0) > 0

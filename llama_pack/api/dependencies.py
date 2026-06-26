@@ -12,6 +12,7 @@ if TYPE_CHECKING:
     from llama_pack.core.chat.profile_activation import ProfileActivationService
     from llama_pack.core.chat.proxy import ChatProxy
     from llama_pack.core.chat.scheduler import ChatScheduler
+    from llama_pack.core.chat.slot_allocator import ChatSlotAllocator
     from llama_pack.core.memory.store import ChromaMemoryStore
     from llama_pack.core.model_assets.catalog_service import ModelCatalogService
     from llama_pack.core.model_assets.conversions import ConversionManager
@@ -61,6 +62,10 @@ def get_chat_proxy(request: Request) -> ChatProxy:
 
 def get_chat_scheduler(request: Request) -> ChatScheduler:
     return request.app.state.chat_scheduler
+
+
+def get_chat_slot_allocator(request: Request) -> ChatSlotAllocator:
+    return request.app.state.chat_slot_allocator
 
 
 def get_memory_store(request: Request) -> ChromaMemoryStore:

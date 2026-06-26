@@ -170,6 +170,40 @@ def test_test_chat_bootstrap_reuses_existing_browser_session_boundary(tmp_path):
     assert [item["id"] for item in client.get("/lm-api/v1/chat/sessions").json()] == [saved.json()["id"]]
 
 
+def test_local_account_chat_sessions_are_scoped_per_logged_in_key(tmp_path):
+    app = _controller_app(tmp_path)
+    alice_key = app.state.auth_store.create_key("alice", "operator")["key"]
+    bob_key = app.state.auth_store.create_key("bob", "operator")["key"]
+    client = RawTestClient(app)
+
+    alice_login = client.post("/lm-api/v1/auth/login", json={"username": "alice", "api_key": alice_key})
+    bob_login = client.post("/lm-api/v1/auth/login", json={"username": "bob", "api_key": bob_key})
+
+    alice_headers = {"X-UI-Session": alice_login.json()["token"]}
+    bob_headers = {"X-UI-Session": bob_login.json()["token"]}
+    saved = client.post(
+        "/lm-api/v1/chat/sessions",
+        headers=alice_headers,
+        json={"name": "Alice private", "model": "qwen", "target": "auto", "messages": []},
+    )
+    session_id = saved.json()["id"]
+
+    assert alice_login.status_code == 200
+    assert bob_login.status_code == 200
+    assert saved.status_code == 200
+    assert [item["id"] for item in client.get("/lm-api/v1/chat/sessions", headers=alice_headers).json()] == [session_id]
+    assert client.get(f"/lm-api/v1/chat/sessions/{session_id}", headers=alice_headers).status_code == 200
+    assert client.get("/lm-api/v1/chat/sessions", headers=bob_headers).json() == []
+    assert client.get(f"/lm-api/v1/chat/sessions/{session_id}", headers=bob_headers).status_code == 404
+    assert client.delete(f"/lm-api/v1/chat/sessions/{session_id}", headers=bob_headers).status_code == 404
+    assert client.post(
+        "/lm-api/v1/chat/sessions",
+        headers=bob_headers,
+        json={"id": session_id, "name": "Overwrite", "model": "qwen", "target": "auto", "messages": []},
+    ).status_code == 404
+    assert client.get(f"/lm-api/v1/chat/sessions/{session_id}", headers=alice_headers).json()["name"] == "Alice private"
+
+
 def test_test_chat_bootstrap_does_not_start_session_for_unscoped_key(tmp_path):
     app = _controller_app(tmp_path)
     client = RawTestClient(app)

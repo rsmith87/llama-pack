@@ -41,6 +41,7 @@ def login(body: LoginRequest, request: Request):
     expires_at = (datetime.now(UTC) + timedelta(hours=SESSION_TTL_HOURS)).isoformat()
     request.app.state.ui_sessions[token] = {
         "username": body.username,
+        "key_id": resolved["id"] if resolved else None,
         "created_at": datetime.now(UTC).isoformat(),
         "expires_at": expires_at,
         "role": role,
@@ -63,6 +64,7 @@ def me(request: Request):
         "username": session["username"],
         "created_at": session["created_at"],
         "role": session.get("role", "operator"),
+        "key_id": session.get("key_id"),
     }
 
 
