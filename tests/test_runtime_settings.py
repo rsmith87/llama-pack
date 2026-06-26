@@ -71,6 +71,8 @@ def test_runtime_settings_patch_persists_agent_tool_controls(tmp_path: Path):
                 "enabled": False,
                 "max_iterations": 4,
                 "tool_timeout_seconds": 10.0,
+                "answer_verification_mode": "warn",
+                "answer_verification_max_retries": 1,
                 "safe_roots": [str(tmp_path)],
                 "tools": {},
             },
@@ -84,6 +86,8 @@ def test_runtime_settings_patch_persists_agent_tool_controls(tmp_path: Path):
             agent_tools_enabled=True,
             agent_tools_max_iterations=8,
             agent_tools_tool_timeout_seconds=12.5,
+            agent_tools_answer_verification_mode="strict",
+            agent_tools_answer_verification_max_retries=2,
             agent_tools_safe_roots=[tmp_path / "workspace"],
         ),
         updated_by="admin",
@@ -93,12 +97,63 @@ def test_runtime_settings_patch_persists_agent_tool_controls(tmp_path: Path):
     assert updated.settings.agent_tools_enabled is True
     assert updated.settings.agent_tools_max_iterations == 8
     assert updated.settings.agent_tools_tool_timeout_seconds == 12.5
+    assert updated.settings.agent_tools_answer_verification_mode == "strict"
+    assert updated.settings.agent_tools_answer_verification_max_retries == 2
     assert updated.settings.agent_tools_safe_roots == [tmp_path / "workspace"]
     assert effective.agent_tools.enabled is True
     assert effective.agent_tools.max_iterations == 8
     assert effective.agent_tools.tool_timeout_seconds == 12.5
+    assert effective.agent_tools.answer_verification_mode == "strict"
+    assert effective.agent_tools.answer_verification_max_retries == 2
     assert effective.agent_tools.safe_roots == [tmp_path / "workspace"]
     assert config.agent_tools.enabled is False
+    assert config.agent_tools.answer_verification_mode == "warn"
+
+
+def test_runtime_settings_patch_persists_context_and_thread_compaction(tmp_path: Path):
+    config = load_config(
+        {
+            "log_dir": str(tmp_path / "logs"),
+            "context_summarization_trigger_ratio": 0.75,
+            "thread_history_min_prompt_tokens": 6000,
+        }
+    )
+    store = _store(tmp_path)
+    service = RuntimeSettingsService(config=config, store=store)
+
+    updated = service.patch(
+        RuntimeSettingsPatch(
+            context_summarization_enabled=False,
+            context_summarization_trigger_ratio=0.80,
+            context_summarization_target_ratio=0.60,
+            context_summarization_recent_messages=6,
+            context_summarization_max_tokens=1024,
+            thread_history_compaction_enabled=False,
+            thread_history_context_ratio=0.45,
+            thread_history_min_prompt_tokens=5000,
+            thread_history_recent_messages=8,
+            thread_history_summary_max_chars=3000,
+            thread_history_summary_item_max_chars=280,
+        ),
+        updated_by="admin",
+    )
+    effective = RuntimeSettingsService(config=config, store=store).effective_config()
+
+    assert updated.settings.context_summarization_enabled is False
+    assert updated.settings.context_summarization_trigger_ratio == 0.80
+    assert updated.settings.context_summarization_target_ratio == 0.60
+    assert updated.settings.context_summarization_recent_messages == 6
+    assert updated.settings.context_summarization_max_tokens == 1024
+    assert updated.settings.thread_history_compaction_enabled is False
+    assert updated.settings.thread_history_context_ratio == 0.45
+    assert updated.settings.thread_history_min_prompt_tokens == 5000
+    assert updated.settings.thread_history_recent_messages == 8
+    assert updated.settings.thread_history_summary_max_chars == 3000
+    assert updated.settings.thread_history_summary_item_max_chars == 280
+    assert effective.context_summarization_enabled is False
+    assert effective.context_summarization_trigger_ratio == 0.80
+    assert effective.thread_history_min_prompt_tokens == 5000
+    assert config.context_summarization_trigger_ratio == 0.75
 
 
 def test_runtime_settings_patch_rejects_empty_patch(tmp_path: Path):

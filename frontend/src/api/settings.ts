@@ -42,9 +42,22 @@ export type RuntimeSettings = {
   agent_worker_labels: Record<string, JsonScalar>;
   agent_worker_capacity: Record<string, JsonScalar>;
   client_cors_origins: string[];
+  context_summarization_enabled: boolean;
+  context_summarization_trigger_ratio: number;
+  context_summarization_target_ratio: number;
+  context_summarization_recent_messages: number;
+  context_summarization_max_tokens: number;
+  thread_history_compaction_enabled: boolean;
+  thread_history_context_ratio: number;
+  thread_history_min_prompt_tokens: number;
+  thread_history_recent_messages: number;
+  thread_history_summary_max_chars: number;
+  thread_history_summary_item_max_chars: number;
   agent_tools_enabled: boolean;
   agent_tools_max_iterations: number;
   agent_tools_tool_timeout_seconds: number;
+  agent_tools_answer_verification_mode: "off" | "warn" | "strict";
+  agent_tools_answer_verification_max_retries: number;
   agent_tools_safe_roots: string[];
 };
 

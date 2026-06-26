@@ -1832,6 +1832,8 @@ def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
                     "enabled": False,
                     "max_iterations": 4,
                     "tool_timeout_seconds": 10.0,
+                    "answer_verification_mode": "warn",
+                    "answer_verification_max_retries": 1,
                     "safe_roots": [str(tmp_path)],
                     "tools": {},
                 },
@@ -1850,6 +1852,8 @@ def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
             "agent_tools_enabled": True,
             "agent_tools_max_iterations": 6,
             "agent_tools_tool_timeout_seconds": 15.5,
+            "agent_tools_answer_verification_mode": "strict",
+            "agent_tools_answer_verification_max_retries": 2,
             "agent_tools_safe_roots": [str(tmp_path / "workspace")],
         },
         headers={"X-UI-Session": "admin-token"},
@@ -1858,8 +1862,48 @@ def test_settings_runtime_patch_persists_agent_tool_controls(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["settings"]["agent_tools_enabled"] is True
+    assert response.json()["settings"]["agent_tools_answer_verification_mode"] == "strict"
+    assert response.json()["settings"]["agent_tools_answer_verification_max_retries"] == 2
     assert response.json()["sources"]["agent_tools_enabled"] == "database"
     assert reloaded.json()["settings"]["agent_tools_safe_roots"] == [str(tmp_path / "workspace")]
+
+
+def test_settings_runtime_patch_persists_compaction_controls(tmp_path):
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path / "logs"),
+                "context_summarization_trigger_ratio": 0.75,
+                "thread_history_min_prompt_tokens": 6000,
+            }
+        ),
+        process_manager=StubProcessManager(),
+        conversion_manager=StubConversionManager(),
+        gguf_library=StubGgufLibrary(),
+    )
+    app.state.ui_sessions["admin-token"] = {"username": "admin-user", "role": "admin"}
+    client = TestClient(app)
+
+    response = client.patch(
+        "/lm-api/v1/settings/runtime",
+        json={
+            "context_summarization_enabled": False,
+            "context_summarization_trigger_ratio": 0.8,
+            "thread_history_compaction_enabled": False,
+            "thread_history_min_prompt_tokens": 5000,
+        },
+        headers={"X-UI-Session": "admin-token"},
+    )
+    reloaded = client.get("/lm-api/v1/settings/runtime")
+
+    assert response.status_code == 200
+    assert response.json()["settings"]["context_summarization_enabled"] is False
+    assert response.json()["settings"]["context_summarization_trigger_ratio"] == 0.8
+    assert response.json()["settings"]["thread_history_compaction_enabled"] is False
+    assert response.json()["settings"]["thread_history_min_prompt_tokens"] == 5000
+    assert response.json()["sources"]["context_summarization_trigger_ratio"] == "database"
+    assert reloaded.json()["settings"]["thread_history_min_prompt_tokens"] == 5000
 
 
 def test_settings_tool_catalog_lists_effective_agent_tools(tmp_path):

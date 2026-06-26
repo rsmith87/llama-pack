@@ -47,6 +47,34 @@ function renderWithAuth(token = "admin-token", appMode: AppMode = "controller") 
   );
 }
 
+const COMPACTION_SETTINGS = {
+  context_summarization_enabled: true,
+  context_summarization_trigger_ratio: 0.75,
+  context_summarization_target_ratio: 0.55,
+  context_summarization_recent_messages: 4,
+  context_summarization_max_tokens: 768,
+  thread_history_compaction_enabled: true,
+  thread_history_context_ratio: 0.55,
+  thread_history_min_prompt_tokens: 6000,
+  thread_history_recent_messages: 4,
+  thread_history_summary_max_chars: 2000,
+  thread_history_summary_item_max_chars: 240,
+};
+
+const COMPACTION_SOURCES = {
+  context_summarization_enabled: "default",
+  context_summarization_trigger_ratio: "default",
+  context_summarization_target_ratio: "default",
+  context_summarization_recent_messages: "default",
+  context_summarization_max_tokens: "default",
+  thread_history_compaction_enabled: "default",
+  thread_history_context_ratio: "default",
+  thread_history_min_prompt_tokens: "default",
+  thread_history_recent_messages: "default",
+  thread_history_summary_max_chars: "default",
+  thread_history_summary_item_max_chars: "default",
+};
+
 function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> = {}) {
   return {
     "/lm-api/v1/settings/runtime": () => okJson({
@@ -65,7 +93,10 @@ function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> =
         agent_tools_enabled: false,
         agent_tools_max_iterations: 4,
         agent_tools_tool_timeout_seconds: 10,
+        agent_tools_answer_verification_mode: "warn",
+        agent_tools_answer_verification_max_retries: 1,
         agent_tools_safe_roots: [],
+        ...COMPACTION_SETTINGS,
       },
       sources: {
         controller_retention_days: "default",
@@ -82,7 +113,10 @@ function settingsRoutes(extra: Record<string, () => ReturnType<typeof okJson>> =
         agent_tools_enabled: "default",
         agent_tools_max_iterations: "default",
         agent_tools_tool_timeout_seconds: "default",
+        agent_tools_answer_verification_mode: "default",
+        agent_tools_answer_verification_max_retries: "default",
         agent_tools_safe_roots: "default",
+        ...COMPACTION_SOURCES,
       },
     }),
     "/lm-api/v1/settings/disks": () => okJson([]),
@@ -431,7 +465,10 @@ it("edits and saves db-backed runtime settings", async () => {
           agent_tools_enabled: false,
           agent_tools_max_iterations: 4,
           agent_tools_tool_timeout_seconds: 10,
+          agent_tools_answer_verification_mode: "warn",
+          agent_tools_answer_verification_max_retries: 1,
           agent_tools_safe_roots: [],
+          ...COMPACTION_SETTINGS,
         },
         sources: {
           controller_retention_days: "database",
@@ -448,7 +485,10 @@ it("edits and saves db-backed runtime settings", async () => {
           agent_tools_enabled: "default",
           agent_tools_max_iterations: "default",
           agent_tools_tool_timeout_seconds: "default",
+          agent_tools_answer_verification_mode: "default",
+          agent_tools_answer_verification_max_retries: "default",
           agent_tools_safe_roots: "default",
+          ...COMPACTION_SOURCES,
         },
       }),
     }),
@@ -473,7 +513,10 @@ it("edits and saves db-backed runtime settings", async () => {
           agent_tools_enabled: false,
           agent_tools_max_iterations: 4,
           agent_tools_tool_timeout_seconds: 10,
+          agent_tools_answer_verification_mode: "warn",
+          agent_tools_answer_verification_max_retries: 1,
           agent_tools_safe_roots: [],
+          ...COMPACTION_SETTINGS,
         },
         sources: {
           controller_retention_days: "database",
@@ -490,7 +533,10 @@ it("edits and saves db-backed runtime settings", async () => {
           agent_tools_enabled: "default",
           agent_tools_max_iterations: "default",
           agent_tools_tool_timeout_seconds: "default",
+          agent_tools_answer_verification_mode: "default",
+          agent_tools_answer_verification_max_retries: "default",
           agent_tools_safe_roots: "default",
+          ...COMPACTION_SOURCES,
         },
       }) as Response);
     }
@@ -514,7 +560,10 @@ it("edits and saves db-backed runtime settings", async () => {
           agent_tools_enabled: false,
           agent_tools_max_iterations: 4,
           agent_tools_tool_timeout_seconds: 10,
+          agent_tools_answer_verification_mode: "warn",
+          agent_tools_answer_verification_max_retries: 1,
           agent_tools_safe_roots: [],
+          ...COMPACTION_SETTINGS,
         },
         sources: {
           controller_retention_days: "database",
@@ -531,7 +580,10 @@ it("edits and saves db-backed runtime settings", async () => {
           agent_tools_enabled: "default",
           agent_tools_max_iterations: "default",
           agent_tools_tool_timeout_seconds: "default",
+          agent_tools_answer_verification_mode: "default",
+          agent_tools_answer_verification_max_retries: "default",
           agent_tools_safe_roots: "default",
+          ...COMPACTION_SOURCES,
         },
       }) as Response);
     }
@@ -545,9 +597,21 @@ it("edits and saves db-backed runtime settings", async () => {
   expect(screen.getAllByText("database").length).toBeGreaterThan(0);
   await user.clear(screen.getByLabelText("Routing Fanout Max"));
   await user.type(screen.getByLabelText("Routing Fanout Max"), "6");
+  await user.click(screen.getByLabelText("Context Summarization Enabled"));
+  await user.clear(screen.getByLabelText("Context Summarization Trigger Ratio"));
+  await user.type(screen.getByLabelText("Context Summarization Trigger Ratio"), "0.8");
+  await user.click(screen.getByLabelText("Thread History Compaction Enabled"));
+  await user.clear(screen.getByLabelText("Thread History Min Prompt Tokens"));
+  await user.type(screen.getByLabelText("Thread History Min Prompt Tokens"), "5000");
   await user.click(screen.getByRole("button", { name: "Save Runtime Settings" }));
 
-  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({ routing_fanout_max: 26 })));
+  await waitFor(() => expect(savedPayloads).toContainEqual(expect.objectContaining({
+    routing_fanout_max: 26,
+    context_summarization_enabled: false,
+    context_summarization_trigger_ratio: 0.8,
+    thread_history_compaction_enabled: false,
+    thread_history_min_prompt_tokens: 5000,
+  })));
   expect(await screen.findByText("Runtime settings saved")).toBeInTheDocument();
 });
 
@@ -573,7 +637,10 @@ it("edits and saves chat tool settings", async () => {
           agent_tools_enabled: true,
           agent_tools_max_iterations: 9,
           agent_tools_tool_timeout_seconds: 18,
+          agent_tools_answer_verification_mode: "strict",
+          agent_tools_answer_verification_max_retries: 2,
           agent_tools_safe_roots: ["/tmp/tools", "/var/log"],
+          ...COMPACTION_SETTINGS,
         },
         sources: {
           controller_retention_days: "default",
@@ -590,7 +657,10 @@ it("edits and saves chat tool settings", async () => {
           agent_tools_enabled: "database",
           agent_tools_max_iterations: "database",
           agent_tools_tool_timeout_seconds: "database",
+          agent_tools_answer_verification_mode: "database",
+          agent_tools_answer_verification_max_retries: "database",
           agent_tools_safe_roots: "database",
+          ...COMPACTION_SOURCES,
         },
       }) as Response);
     }
@@ -614,7 +684,10 @@ it("edits and saves chat tool settings", async () => {
           agent_tools_enabled: false,
           agent_tools_max_iterations: 4,
           agent_tools_tool_timeout_seconds: 10,
+          agent_tools_answer_verification_mode: "warn",
+          agent_tools_answer_verification_max_retries: 1,
           agent_tools_safe_roots: ["/tmp/tools"],
+          ...COMPACTION_SETTINGS,
         },
         sources: {
           controller_retention_days: "default",
@@ -631,7 +704,10 @@ it("edits and saves chat tool settings", async () => {
           agent_tools_enabled: "config",
           agent_tools_max_iterations: "config",
           agent_tools_tool_timeout_seconds: "config",
+          agent_tools_answer_verification_mode: "config",
+          agent_tools_answer_verification_max_retries: "config",
           agent_tools_safe_roots: "config",
+          ...COMPACTION_SOURCES,
         },
       }) as Response);
     }
@@ -648,6 +724,9 @@ it("edits and saves chat tool settings", async () => {
   await user.type(screen.getByLabelText("Agent Tools Max Iterations"), "9");
   await user.clear(screen.getByLabelText("Agent Tools Timeout Seconds"));
   await user.type(screen.getByLabelText("Agent Tools Timeout Seconds"), "18");
+  await user.selectOptions(screen.getByLabelText("Answer Verification Mode"), "strict");
+  await user.clear(screen.getByLabelText("Answer Verification Max Retries"));
+  await user.type(screen.getByLabelText("Answer Verification Max Retries"), "2");
   await user.clear(screen.getByLabelText("Agent Tools Safe Roots"));
   await user.type(screen.getByLabelText("Agent Tools Safe Roots"), "/tmp/tools\n/var/log");
   await user.click(screen.getByRole("button", { name: "Save Chat Tools" }));
@@ -656,6 +735,8 @@ it("edits and saves chat tool settings", async () => {
     agent_tools_enabled: true,
     agent_tools_max_iterations: 9,
     agent_tools_tool_timeout_seconds: 18,
+    agent_tools_answer_verification_mode: "strict",
+    agent_tools_answer_verification_max_retries: 2,
     agent_tools_safe_roots: ["/tmp/tools", "/var/log"],
   })));
   expect(await screen.findByText("Chat tool settings saved")).toBeInTheDocument();

@@ -33,9 +33,22 @@ class RuntimeSettings(BaseModel):
     agent_worker_labels: dict[str, JsonScalar]
     agent_worker_capacity: dict[str, JsonScalar]
     client_cors_origins: list[str]
+    context_summarization_enabled: bool
+    context_summarization_trigger_ratio: float = Field(gt=0, le=1)
+    context_summarization_target_ratio: float = Field(gt=0, le=1)
+    context_summarization_recent_messages: int = Field(ge=1, le=100)
+    context_summarization_max_tokens: int = Field(ge=64, le=8192)
+    thread_history_compaction_enabled: bool
+    thread_history_context_ratio: float = Field(gt=0, le=1)
+    thread_history_min_prompt_tokens: int = Field(ge=1)
+    thread_history_recent_messages: int = Field(ge=1, le=100)
+    thread_history_summary_max_chars: int = Field(ge=100)
+    thread_history_summary_item_max_chars: int = Field(ge=20)
     agent_tools_enabled: bool
     agent_tools_max_iterations: int = Field(ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     agent_tools_tool_timeout_seconds: float = Field(gt=0)
+    agent_tools_answer_verification_mode: Literal["off", "warn", "strict"]
+    agent_tools_answer_verification_max_retries: int = Field(ge=0, le=2)
     agent_tools_safe_roots: list[Path]
 
     @field_validator("agent_worker_labels", "agent_worker_capacity", mode="before")
@@ -63,9 +76,22 @@ class RuntimeSettingsPatch(BaseModel):
     agent_worker_labels: dict[str, JsonScalar] | None = None
     agent_worker_capacity: dict[str, JsonScalar] | None = None
     client_cors_origins: list[str] | None = None
+    context_summarization_enabled: bool | None = None
+    context_summarization_trigger_ratio: float | None = Field(default=None, gt=0, le=1)
+    context_summarization_target_ratio: float | None = Field(default=None, gt=0, le=1)
+    context_summarization_recent_messages: int | None = Field(default=None, ge=1, le=100)
+    context_summarization_max_tokens: int | None = Field(default=None, ge=64, le=8192)
+    thread_history_compaction_enabled: bool | None = None
+    thread_history_context_ratio: float | None = Field(default=None, gt=0, le=1)
+    thread_history_min_prompt_tokens: int | None = Field(default=None, ge=1)
+    thread_history_recent_messages: int | None = Field(default=None, ge=1, le=100)
+    thread_history_summary_max_chars: int | None = Field(default=None, ge=100)
+    thread_history_summary_item_max_chars: int | None = Field(default=None, ge=20)
     agent_tools_enabled: bool | None = None
     agent_tools_max_iterations: int | None = Field(default=None, ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     agent_tools_tool_timeout_seconds: float | None = Field(default=None, gt=0)
+    agent_tools_answer_verification_mode: Literal["off", "warn", "strict"] | None = None
+    agent_tools_answer_verification_max_retries: int | None = Field(default=None, ge=0, le=2)
     agent_tools_safe_roots: list[Path] | None = None
 
     @field_validator("agent_worker_labels", "agent_worker_capacity", mode="before")
@@ -125,9 +151,22 @@ RUNTIME_SETTING_FIELDS: tuple[str, ...] = (
     "agent_worker_labels",
     "agent_worker_capacity",
     "client_cors_origins",
+    "context_summarization_enabled",
+    "context_summarization_trigger_ratio",
+    "context_summarization_target_ratio",
+    "context_summarization_recent_messages",
+    "context_summarization_max_tokens",
+    "thread_history_compaction_enabled",
+    "thread_history_context_ratio",
+    "thread_history_min_prompt_tokens",
+    "thread_history_recent_messages",
+    "thread_history_summary_max_chars",
+    "thread_history_summary_item_max_chars",
     "agent_tools_enabled",
     "agent_tools_max_iterations",
     "agent_tools_tool_timeout_seconds",
+    "agent_tools_answer_verification_mode",
+    "agent_tools_answer_verification_max_retries",
     "agent_tools_safe_roots",
 )
 AGENT_TOOLS_TOOLS_KEY = "agent_tools_tools"
@@ -222,6 +261,8 @@ class RuntimeSettingsService:
             "enabled": data.pop("agent_tools_enabled"),
             "max_iterations": data.pop("agent_tools_max_iterations"),
             "tool_timeout_seconds": data.pop("agent_tools_tool_timeout_seconds"),
+            "answer_verification_mode": data.pop("agent_tools_answer_verification_mode"),
+            "answer_verification_max_retries": data.pop("agent_tools_answer_verification_max_retries"),
             "safe_roots": data.pop("agent_tools_safe_roots"),
             "tools": catalog.tools,
         }
@@ -242,6 +283,8 @@ class RuntimeSettingsService:
                 "agent_tools_enabled": self.config.agent_tools.enabled,
                 "agent_tools_max_iterations": self.config.agent_tools.max_iterations,
                 "agent_tools_tool_timeout_seconds": self.config.agent_tools.tool_timeout_seconds,
+                "agent_tools_answer_verification_mode": self.config.agent_tools.answer_verification_mode,
+                "agent_tools_answer_verification_max_retries": self.config.agent_tools.answer_verification_max_retries,
                 "agent_tools_safe_roots": list(self.config.agent_tools.safe_roots),
             }
         )
@@ -257,6 +300,8 @@ class RuntimeSettingsService:
                     "agent_tools_enabled": defaults.agent_tools.enabled,
                     "agent_tools_max_iterations": defaults.agent_tools.max_iterations,
                     "agent_tools_tool_timeout_seconds": defaults.agent_tools.tool_timeout_seconds,
+                    "agent_tools_answer_verification_mode": defaults.agent_tools.answer_verification_mode,
+                    "agent_tools_answer_verification_max_retries": defaults.agent_tools.answer_verification_max_retries,
                     "agent_tools_safe_roots": list(defaults.agent_tools.safe_roots),
                 }[key]
                 sources[key] = "default" if config_value == default_value else "config"

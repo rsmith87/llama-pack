@@ -1,13 +1,20 @@
 .projects-page-react {
   display: grid;
   gap: 16px;
+  min-width: 0;
 }
 
 .projects-layout {
   display: grid;
-  grid-template-columns: minmax(320px, 0.9fr) minmax(420px, 1.4fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.4fr);
   gap: 16px;
   align-items: start;
+  min-width: 0;
+}
+
+.projects-layout > .panel,
+.projects-detail-stack {
+  min-width: 0;
 }
 
 .projects-create-form,
@@ -16,26 +23,56 @@
   display: grid;
   gap: 12px;
   margin-bottom: 16px;
+  min-width: 0;
 }
 
 .projects-root-form {
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.4fr) minmax(140px, 0.6fr) auto;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.4fr) minmax(0, 0.6fr) auto;
   align-items: end;
 }
 
 .projects-edit-form {
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
   align-items: end;
 }
 
 .projects-create-form {
-  grid-template-columns: minmax(160px, 0.8fr) minmax(220px, 1.2fr) auto;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr) auto;
   align-items: end;
 }
 
 .projects-detail-stack {
   display: grid;
   gap: 12px;
+}
+
+.projects-create-form > *,
+.projects-edit-form > *,
+.projects-root-form > *,
+.projects-graph-panel > *,
+.projects-symbol-search-form > * {
+  min-width: 0;
+}
+
+.projects-page-react .table-wrap {
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.projects-page-react .data-table {
+  width: 100%;
+  table-layout: fixed;
+}
+
+.projects-page-react .data-table th,
+.projects-page-react .data-table td {
+  overflow-wrap: anywhere;
+}
+
+.projects-page-react .data-table th:last-child,
+.projects-page-react .data-table td:last-child {
+  width: 96px;
 }
 
 .projects-graph-panel {

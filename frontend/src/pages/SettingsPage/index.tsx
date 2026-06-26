@@ -50,9 +50,22 @@ const EMPTY_RUNTIME_SETTINGS: RuntimeSettings = {
   agent_worker_labels: {},
   agent_worker_capacity: {},
   client_cors_origins: [],
+  context_summarization_enabled: true,
+  context_summarization_trigger_ratio: 0.75,
+  context_summarization_target_ratio: 0.55,
+  context_summarization_recent_messages: 4,
+  context_summarization_max_tokens: 768,
+  thread_history_compaction_enabled: true,
+  thread_history_context_ratio: 0.55,
+  thread_history_min_prompt_tokens: 6000,
+  thread_history_recent_messages: 4,
+  thread_history_summary_max_chars: 2000,
+  thread_history_summary_item_max_chars: 240,
   agent_tools_enabled: false,
   agent_tools_max_iterations: 4,
   agent_tools_tool_timeout_seconds: 10,
+  agent_tools_answer_verification_mode: "warn",
+  agent_tools_answer_verification_max_retries: 1,
   agent_tools_safe_roots: [],
 };
 
@@ -310,6 +323,8 @@ export function SettingsPage() {
         agent_tools_enabled: runtimeSettings.agent_tools_enabled,
         agent_tools_max_iterations: runtimeSettings.agent_tools_max_iterations,
         agent_tools_tool_timeout_seconds: runtimeSettings.agent_tools_tool_timeout_seconds,
+        agent_tools_answer_verification_mode: runtimeSettings.agent_tools_answer_verification_mode,
+        agent_tools_answer_verification_max_retries: runtimeSettings.agent_tools_answer_verification_max_retries,
         agent_tools_safe_roots: agentToolsSafeRootsText.split("\n").map((item) => item.trim()).filter(Boolean),
       });
       setRuntimeDocument(updated);
@@ -435,6 +450,72 @@ export function SettingsPage() {
                 </FormField>
               ) : null}
             </div>
+            {!isAgentMode ? (
+              <>
+                <div className="settings-section-heading">
+                  <h3>Context Summarization</h3>
+                  <span className="muted">Source: {sourceFor(runtimeDocument, "context_summarization_enabled")}</span>
+                </div>
+                <div className="settings-grid">
+                  <FormField label="Context Summarization Enabled">
+                    <label className="checkbox-label">
+                      <input aria-label="Context Summarization Enabled" type="checkbox" checked={runtimeSettings.context_summarization_enabled} onChange={(event) => updateRuntimeBoolean("context_summarization_enabled", event.target.checked)} />
+                      <span>{runtimeSettings.context_summarization_enabled ? "Enabled" : "Disabled"}</span>
+                    </label>
+                    <span className="settings-source">{sourceFor(runtimeDocument, "context_summarization_enabled")}</span>
+                  </FormField>
+                  <FormField label="Context Summarization Trigger Ratio">
+                    <input aria-label="Context Summarization Trigger Ratio" type="number" min={0.01} max={1} step="0.01" value={runtimeSettings.context_summarization_trigger_ratio} onChange={(event) => updateRuntimeNumber("context_summarization_trigger_ratio", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "context_summarization_trigger_ratio")}</span>
+                  </FormField>
+                  <FormField label="Context Summarization Target Ratio">
+                    <input aria-label="Context Summarization Target Ratio" type="number" min={0.01} max={1} step="0.01" value={runtimeSettings.context_summarization_target_ratio} onChange={(event) => updateRuntimeNumber("context_summarization_target_ratio", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "context_summarization_target_ratio")}</span>
+                  </FormField>
+                  <FormField label="Context Summarization Recent Messages">
+                    <input aria-label="Context Summarization Recent Messages" type="number" min={1} max={100} value={runtimeSettings.context_summarization_recent_messages} onChange={(event) => updateRuntimeNumber("context_summarization_recent_messages", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "context_summarization_recent_messages")}</span>
+                  </FormField>
+                  <FormField label="Context Summarization Max Tokens">
+                    <input aria-label="Context Summarization Max Tokens" type="number" min={64} max={8192} value={runtimeSettings.context_summarization_max_tokens} onChange={(event) => updateRuntimeNumber("context_summarization_max_tokens", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "context_summarization_max_tokens")}</span>
+                  </FormField>
+                </div>
+                <div className="settings-section-heading">
+                  <h3>Thread History Compaction</h3>
+                  <span className="muted">Source: {sourceFor(runtimeDocument, "thread_history_compaction_enabled")}</span>
+                </div>
+                <div className="settings-grid">
+                  <FormField label="Thread History Compaction Enabled">
+                    <label className="checkbox-label">
+                      <input aria-label="Thread History Compaction Enabled" type="checkbox" checked={runtimeSettings.thread_history_compaction_enabled} onChange={(event) => updateRuntimeBoolean("thread_history_compaction_enabled", event.target.checked)} />
+                      <span>{runtimeSettings.thread_history_compaction_enabled ? "Enabled" : "Disabled"}</span>
+                    </label>
+                    <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_compaction_enabled")}</span>
+                  </FormField>
+                  <FormField label="Thread History Context Ratio">
+                    <input aria-label="Thread History Context Ratio" type="number" min={0.01} max={1} step="0.01" value={runtimeSettings.thread_history_context_ratio} onChange={(event) => updateRuntimeNumber("thread_history_context_ratio", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_context_ratio")}</span>
+                  </FormField>
+                  <FormField label="Thread History Min Prompt Tokens">
+                    <input aria-label="Thread History Min Prompt Tokens" type="number" min={1} value={runtimeSettings.thread_history_min_prompt_tokens} onChange={(event) => updateRuntimeNumber("thread_history_min_prompt_tokens", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_min_prompt_tokens")}</span>
+                  </FormField>
+                  <FormField label="Thread History Recent Messages">
+                    <input aria-label="Thread History Recent Messages" type="number" min={1} max={100} value={runtimeSettings.thread_history_recent_messages} onChange={(event) => updateRuntimeNumber("thread_history_recent_messages", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_recent_messages")}</span>
+                  </FormField>
+                  <FormField label="Thread History Summary Max Chars">
+                    <input aria-label="Thread History Summary Max Chars" type="number" min={100} value={runtimeSettings.thread_history_summary_max_chars} onChange={(event) => updateRuntimeNumber("thread_history_summary_max_chars", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_summary_max_chars")}</span>
+                  </FormField>
+                  <FormField label="Thread History Summary Item Max Chars">
+                    <input aria-label="Thread History Summary Item Max Chars" type="number" min={20} value={runtimeSettings.thread_history_summary_item_max_chars} onChange={(event) => updateRuntimeNumber("thread_history_summary_item_max_chars", event.target.value)} />
+                    <span className="settings-source">{sourceFor(runtimeDocument, "thread_history_summary_item_max_chars")}</span>
+                  </FormField>
+                </div>
+              </>
+            ) : null}
             <div className="modal-actions settings-utilities">
               <Button type="button" onClick={() => void saveRuntimeSettings()}>Save Runtime Settings</Button>
               {runtimeStatus ? <span className="muted">{runtimeStatus}</span> : null}
@@ -463,6 +544,18 @@ export function SettingsPage() {
               <FormField label="Agent Tools Timeout Seconds">
                 <input aria-label="Agent Tools Timeout Seconds" type="number" min={1} step="0.5" value={runtimeSettings.agent_tools_tool_timeout_seconds} onChange={(event) => updateRuntimeNumber("agent_tools_tool_timeout_seconds", event.target.value)} />
                 <span className="settings-source">{sourceFor(runtimeDocument, "agent_tools_tool_timeout_seconds")}</span>
+              </FormField>
+              <FormField label="Answer Verification Mode">
+                <select aria-label="Answer Verification Mode" value={runtimeSettings.agent_tools_answer_verification_mode} onChange={(event) => updateRuntimeString("agent_tools_answer_verification_mode", event.target.value)}>
+                  <option value="off">off</option>
+                  <option value="warn">warn</option>
+                  <option value="strict">strict</option>
+                </select>
+                <span className="settings-source">{sourceFor(runtimeDocument, "agent_tools_answer_verification_mode")}</span>
+              </FormField>
+              <FormField label="Answer Verification Max Retries">
+                <input aria-label="Answer Verification Max Retries" type="number" min={0} max={2} value={runtimeSettings.agent_tools_answer_verification_max_retries} onChange={(event) => updateRuntimeNumber("agent_tools_answer_verification_max_retries", event.target.value)} />
+                <span className="settings-source">{sourceFor(runtimeDocument, "agent_tools_answer_verification_max_retries")}</span>
               </FormField>
             </div>
             <div className="settings-grid settings-grid-wide">
