@@ -112,6 +112,8 @@ class RoutingPolicy:
         explicit_target: str,
         previous_route: dict[str, Any] | None,
     ) -> RouteDecision:
+        if self.config.mode != "controller":
+            return await self._choose_local_agent(requested_model, previous_route)
         if explicit_target.startswith("node:"):
             node_name = explicit_target.removeprefix("node:")
             return await self._choose_explicit_node(node_name, requested_model)
@@ -149,6 +151,40 @@ class RoutingPolicy:
             return fallback
 
         raise ValueError("No eligible running model found")
+
+    async def _choose_local_agent(
+        self,
+        requested_model: str | None,
+        previous_route: dict[str, Any] | None,
+    ) -> RouteDecision:
+        model = requested_model or self._previous_route_model(previous_route) or self._single_local_model()
+        if model is None:
+            raise ValueError("No eligible running model found")
+        candidate = {"node": "local", "model": model, "source": "local"}
+        if await self._candidate_model_running(candidate):
+            candidate["model_running"] = True
+            return RouteDecision(
+                node="local",
+                model=model,
+                strategy="deterministic",
+                reason="local_agent",
+                candidates=(candidate,),
+            )
+        candidate["model_running"] = False
+        raise ValueError("No eligible running model found")
+
+    def _previous_route_model(self, previous_route: dict[str, Any] | None) -> str | None:
+        if not previous_route:
+            return None
+        model = previous_route.get("model")
+        if isinstance(model, str) and model:
+            return model
+        return None
+
+    def _single_local_model(self) -> str | None:
+        if len(self.config.models) != 1:
+            return None
+        return next(iter(self.config.models))
 
     def _annotate_decision(
         self,

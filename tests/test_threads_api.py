@@ -49,6 +49,13 @@ class RecordingChatProxy:
         return _stream(), {"route": payload["target"]}
 
 
+class LocalProcessManager:
+    def status(self, name):
+        if name != "qwen":
+            raise KeyError(name)
+        return {"name": name, "running": True, "port": 8081}
+
+
 def _config():
     return load_config(
         {
@@ -623,6 +630,57 @@ def test_threads_api_is_available_in_agent_mode_for_local_chat_ui(tmp_path):
     events_response = client.get(f"/lm-api/v1/threads/{thread_response.json()['id']}/events")
     assert events_response.status_code == 200
     assert events_response.json() == []
+
+
+def test_threads_stream_api_routes_to_local_agent_model(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    calls = []
+
+    def fake_chat_stream_request(url, payload):
+        calls.append((url, payload))
+
+        async def stream():
+            yield b'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        return stream()
+
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "models": {"qwen": {"path": "/models/qwen.gguf", "port": 8081}},
+            }
+        ),
+        process_manager=LocalProcessManager(),
+        chat_stream_request=fake_chat_stream_request,
+    )
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"title": "Local chat", "default_model": "qwen"},
+    ).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages/stream",
+        json={"role": "user", "content": "hello", "model": "qwen"},
+    )
+
+    assert response.status_code == 200
+    assert "data: [DONE]" in response.text
+    assert calls == [
+        (
+            "http://127.0.0.1:8081/v1/chat/completions",
+            {
+                "messages": [{"role": "user", "content": "hello"}],
+                "temperature": 0.7,
+                "max_tokens": 512,
+                "stream": True,
+                "chat_template_kwargs": {"enable_thinking": False},
+            },
+        )
+    ]
 
 
 def test_threads_api_compacts_thread_on_request(tmp_path):

@@ -129,6 +129,17 @@ async def _thread_model_running(registry: NodeRegistry, node: str, model: str) -
     return any(item.get("name") == model and item.get("running") is True for item in models if isinstance(item, dict))
 
 
+def _local_thread_model_running(process_manager: ProcessManager, model: str) -> bool:
+    try:
+        status = process_manager.status(model)
+    except KeyError:
+        return False
+    status_data: Any = status.to_dict() if hasattr(status, "to_dict") else status
+    if not isinstance(status_data, dict):
+        raise TypeError(f"Local model status response for model {model} must be a dict")
+    return bool(status_data.get("running"))
+
+
 async def _thread_model_available(registry: NodeRegistry, node: str, model: str) -> bool:
     try:
         models = await registry.request_node(node, "GET", f"{LM_API_PREFIX}/models")
@@ -311,7 +322,11 @@ def _configure_app_state(
         config=app_config,
         store=ThreadStore(default_state_dir(app_config) / "threads.db"),
         chat_proxy=app.state.chat_scheduler,
-        model_running=lambda node, model: _thread_model_running(app.state.node_registry, node, model),
+        model_running=(
+            (lambda node, model: _local_thread_model_running(app.state.process_manager, model))
+            if app_config.mode != "controller"
+            else (lambda node, model: _thread_model_running(app.state.node_registry, node, model))
+        ),
         model_available=lambda node, model: _thread_model_available(app.state.node_registry, node, model),
         model_artifact_presence=lambda node, model: _thread_model_artifact_presence(
             app.state.node_registry, app.state.model_catalog_service, node, model
