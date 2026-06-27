@@ -1,0 +1,44 @@
+.workflows-page {
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+}
+
+.workflows-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.workflows-header h1,
+.workflows-grid h2 {
+  margin: 0;
+}
+
+.workflows-header h1 {
+  font-size: 24px;
+}
+
+.workflows-grid {
+  display: grid;
+  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.workflow-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-row {
+  border: 1px solid var(--border-color, #d5d8df);
+  border-radius: 8px;
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+}
+
+.workflow-row span {
+  color: var(--muted-text, #5f6673);
+  font-size: 13px;
+}

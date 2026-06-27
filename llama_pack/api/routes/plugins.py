@@ -25,18 +25,35 @@ async def plugin_status(request: Request):
 
 @router.post("/{plugin_id}/activate")
 async def activate_plugin(plugin_id: str, request: Request):
+    existing = request.app.state.plugin_registry.records.get(plugin_id)
+    if existing is not None:
+        await request.app.state.stop_plugin_background_tasks(existing)
     try:
         record = load_configured_plugin(request.app.state.plugin_registry, request.app.state.config, plugin_id)
     except KeyError as exc:
         raise HTTPException(status_code=404, detail="Plugin is not configured") from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    try:
+        await request.app.state.start_plugin_background_tasks(record)
+    except Exception as exc:
+        await request.app.state.stop_plugin_background_tasks(record)
+        request.app.state.plugin_registry.mark_failed(plugin_id, f"Plugin background task startup failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Plugin background task startup failed: {exc}") from exc
     _include_plugin_routers(request.app, record)
     return _record_payload(record)
 
 
 @router.post("/{plugin_id}/deactivate")
 async def deactivate_plugin(plugin_id: str, request: Request):
+    existing = request.app.state.plugin_registry.records.get(plugin_id)
+    if existing is None:
+        raise HTTPException(status_code=404, detail="Plugin is not configured")
+    try:
+        await request.app.state.stop_plugin_background_tasks(existing)
+    except Exception as exc:
+        request.app.state.plugin_registry.mark_failed(plugin_id, f"Plugin background task shutdown failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Plugin background task shutdown failed: {exc}") from exc
     record = request.app.state.plugin_registry.deactivate(plugin_id)
     if record is None:
         raise HTTPException(status_code=404, detail="Plugin is not configured")

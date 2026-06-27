@@ -96,6 +96,7 @@ Manual setup, migrations, admin keys, smoke tests, and test commands are in
 - [Raspberry Pi Controller Topology](docs/pi-controller-topology.md): current Pi controller deployment notes and smoke checks.
 - [Frontend](docs/frontend.md): React development workflow.
 - [Plugins](docs/plugins.md): plugin manifest, backend/frontend extension APIs, testing, and hello-world walkthrough.
+- [Workflows](docs/workflows.md): optional `llama_pack_workflows` plugin for Llama Pack-specific automations.
 - [Architecture](docs/architecture.md): contributor-focused code map and review guide.
 
 ## Common Commands

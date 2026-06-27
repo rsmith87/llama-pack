@@ -16,6 +16,14 @@ from llama_pack.core.plugins.migrations import PluginMigrationTarget
 
 
 @dataclass
+class PluginBackgroundTask:
+    id: str
+    start: Callable[[Any], Any]
+    stop: Callable[[Any], Any]
+    running: bool = False
+
+
+@dataclass
 class PluginRecord:
     id: str
     name: str
@@ -26,6 +34,7 @@ class PluginRecord:
     errors: list[str] = field(default_factory=list)
     health: list[dict[str, str]] = field(default_factory=list)
     health_checks: list[Callable[[], Any]] = field(default_factory=list)
+    background_tasks: list[PluginBackgroundTask] = field(default_factory=list)
     migration_targets: list[PluginMigrationTarget] = field(default_factory=list)
     config: dict[str, Any] = field(default_factory=dict)
     routers: list[tuple[str, APIRouter]] = field(default_factory=list)

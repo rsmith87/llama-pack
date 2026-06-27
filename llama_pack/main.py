@@ -89,6 +89,7 @@ from llama_pack.core.app.auth_policy import (
     should_validate_ui_session,
 )
 from llama_pack.core.plugins import load_plugins
+from llama_pack.core.plugins.registry import PluginRecord
 from llama_pack.core.ocr import create_ocr_service
 
 LM_API_PREFIX = "/lm-api/v1"
@@ -104,6 +105,55 @@ async def _controller_sweeper_loop(app: FastAPI, interval_seconds: int = 15) -> 
             await asyncio.wait_for(stop_event.wait(), timeout=interval_seconds)
         except TimeoutError:
             continue
+
+
+async def _run_plugin_lifecycle_callback(callback: Callable[[Any], Any], app: FastAPI) -> None:
+    result = callback(app)
+    if asyncio.iscoroutine(result) or isinstance(result, Awaitable):
+        await result
+
+
+async def _start_plugin_background_tasks(app: FastAPI, record: PluginRecord) -> None:
+    if record.status != "enabled":
+        return
+    for task in record.background_tasks:
+        if task.running:
+            continue
+        await _run_plugin_lifecycle_callback(task.start, app)
+        task.running = True
+
+
+async def _stop_plugin_background_tasks(app: FastAPI, record: PluginRecord) -> None:
+    stop_error: BaseException | None = None
+    for task in reversed(record.background_tasks):
+        if not task.running:
+            continue
+        try:
+            await _run_plugin_lifecycle_callback(task.stop, app)
+        except BaseException as exc:
+            if stop_error is None:
+                stop_error = exc
+        finally:
+            task.running = False
+    if stop_error is not None:
+        raise stop_error
+
+
+async def _start_enabled_plugin_background_tasks(app: FastAPI) -> None:
+    for record in app.state.plugin_registry.records.values():
+        await _start_plugin_background_tasks(app, record)
+
+
+async def _stop_all_plugin_background_tasks(app: FastAPI) -> None:
+    stop_error: BaseException | None = None
+    for record in reversed(list(app.state.plugin_registry.records.values())):
+        try:
+            await _stop_plugin_background_tasks(app, record)
+        except BaseException as exc:
+            if stop_error is None:
+                stop_error = exc
+    if stop_error is not None:
+        raise stop_error
 
 
 def _build_orchestrator(config: AppConfig) -> Orchestrator | None:
@@ -398,6 +448,8 @@ def _configure_app_state(
     app.state.controller_sweeper_interval_seconds = 15
     app.state.ui_sessions = {}
     app.state.test_chat_sessions = {}
+    app.state.start_plugin_background_tasks = lambda record: _start_plugin_background_tasks(app, record)
+    app.state.stop_plugin_background_tasks = lambda record: _stop_plugin_background_tasks(app, record)
 
 
 def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
@@ -570,25 +622,34 @@ def _append_vary_origin(value: str) -> str:
 def _register_lifespan(app: FastAPI) -> None:
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        await app.state.heartbeat_client.start()
-        await app.state.agent_worker.start()
-        if app.state.config.mode == "controller" and app.state.orchestrator is not None:
-            app.state.controller_sweeper_stop_event.clear()
-            app.state.controller_sweeper_task = asyncio.create_task(
-                _controller_sweeper_loop(
-                    app, interval_seconds=app.state.controller_sweeper_interval_seconds
-                )
-            )
         try:
+            await app.state.heartbeat_client.start()
+            await app.state.agent_worker.start()
+            await _start_enabled_plugin_background_tasks(app)
+            if app.state.config.mode == "controller" and app.state.orchestrator is not None:
+                app.state.controller_sweeper_stop_event.clear()
+                app.state.controller_sweeper_task = asyncio.create_task(
+                    _controller_sweeper_loop(
+                        app, interval_seconds=app.state.controller_sweeper_interval_seconds
+                    )
+                )
             yield
         finally:
-            sweeper_task = app.state.controller_sweeper_task
-            if sweeper_task is not None:
-                app.state.controller_sweeper_stop_event.set()
-                await sweeper_task
-                app.state.controller_sweeper_task = None
-            await app.state.agent_worker.stop()
-            await app.state.heartbeat_client.stop()
+            plugin_stop_error: BaseException | None = None
+            try:
+                await _stop_all_plugin_background_tasks(app)
+            except BaseException as exc:
+                plugin_stop_error = exc
+            finally:
+                sweeper_task = app.state.controller_sweeper_task
+                if sweeper_task is not None:
+                    app.state.controller_sweeper_stop_event.set()
+                    await sweeper_task
+                    app.state.controller_sweeper_task = None
+                await app.state.agent_worker.stop()
+                await app.state.heartbeat_client.stop()
+            if plugin_stop_error is not None:
+                raise plugin_stop_error
 
     app.router.lifespan_context = lifespan
 

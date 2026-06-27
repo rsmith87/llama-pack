@@ -510,6 +510,114 @@ def test_plugin_can_be_deactivated_at_runtime(tmp_path: Path):
     assert client.get("/lm-api/v1/plugins/status").json()["plugins"][0]["status"] == "disabled"
 
 
+def test_background_task_lifecycle_starts_and_stops_with_app(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "background_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                state_dir = context.get_state_dir()
+
+                async def start(app):
+                    state_dir.mkdir(parents=True, exist_ok=True)
+                    (state_dir / "started.txt").write_text("started", encoding="utf-8")
+
+                async def stop(app):
+                    state_dir.mkdir(parents=True, exist_ok=True)
+                    (state_dir / "stopped.txt").write_text("stopped", encoding="utf-8")
+
+                context.add_background_task("writer", start=start, stop=stop)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    state_dir = tmp_path / "logs" / "plugins" / "background_plugin" / "state"
+
+    with authenticated_client(app) as client:
+        assert client.get("/lm-api/v1/plugins/status").status_code == 200
+        assert (state_dir / "started.txt").read_text(encoding="utf-8") == "started"
+        assert not (state_dir / "stopped.txt").exists()
+
+    assert (state_dir / "stopped.txt").read_text(encoding="utf-8") == "stopped"
+
+
+def test_deactivation_stops_background_tasks(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "deactivation_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                state_dir = context.get_state_dir()
+
+                def start(app):
+                    state_dir.mkdir(parents=True, exist_ok=True)
+                    (state_dir / "started.txt").write_text("started", encoding="utf-8")
+
+                def stop(app):
+                    state_dir.mkdir(parents=True, exist_ok=True)
+                    (state_dir / "stopped.txt").write_text("stopped", encoding="utf-8")
+
+                context.add_background_task("writer", start=start, stop=stop)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    state_dir = tmp_path / "logs" / "plugins" / "deactivation_plugin" / "state"
+
+    with authenticated_client(app) as client:
+        assert (state_dir / "started.txt").read_text(encoding="utf-8") == "started"
+        response = client.post("/lm-api/v1/plugins/deactivation_plugin/deactivate")
+
+        assert response.status_code == 200
+        assert response.json()["status"] == "disabled"
+        assert (state_dir / "stopped.txt").read_text(encoding="utf-8") == "stopped"
+
+
+def test_deactivation_continues_stopping_background_tasks_after_error(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "stop_error_plugin",
+        body="""
+        class Plugin:
+            def register(self, context):
+                state_dir = context.get_state_dir()
+
+                def start_first(app):
+                    state_dir.mkdir(parents=True, exist_ok=True)
+                    (state_dir / "first-started.txt").write_text("started", encoding="utf-8")
+
+                def stop_first(app):
+                    (state_dir / "first-stopped.txt").write_text("stopped", encoding="utf-8")
+
+                def start_second(app):
+                    (state_dir / "second-started.txt").write_text("started", encoding="utf-8")
+
+                def stop_second(app):
+                    (state_dir / "second-stopped.txt").write_text("stopped", encoding="utf-8")
+                    raise RuntimeError("second stop failed")
+
+                context.add_background_task("first", start=start_first, stop=stop_first)
+                context.add_background_task("second", start=start_second, stop=stop_second)
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    state_dir = tmp_path / "logs" / "plugins" / "stop_error_plugin" / "state"
+
+    with authenticated_client(app) as client:
+        response = client.post("/lm-api/v1/plugins/stop_error_plugin/deactivate")
+
+        assert response.status_code == 500
+        assert "second stop failed" in response.json()["detail"]
+        assert (state_dir / "first-stopped.txt").read_text(encoding="utf-8") == "stopped"
+        assert (state_dir / "second-stopped.txt").read_text(encoding="utf-8") == "stopped"
+
+
 @pytest.mark.asyncio
 async def test_runtime_deactivation_removes_plugin_hooks_and_events(tmp_path: Path):
     plugin_dir = write_plugin(

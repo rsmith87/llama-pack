@@ -1,0 +1,19 @@
+id: llama_pack_workflows
+name: Llama Pack Workflows
+version: "0.1.0"
+requires_core: "1.0"
+backend_api_version: "1.0"
+frontend_api_version: "1.0"
+entrypoint: llama_pack_workflows.plugin:plugin
+description: Template-based automations and reusable AI workflows for Llama Pack resources.
+modes:
+  - controller
+frontend:
+  static_dir: llama_pack_workflows/static
+  style_entries:
+    - workflows.css
+  pages:
+    - route: /ui/plugins/llama_pack_workflows
+      template: templates/workflows.html
+      controller: controllers/workflows.js
+      title: Workflows

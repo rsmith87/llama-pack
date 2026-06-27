@@ -9,7 +9,7 @@ from fastapi import APIRouter
 from llama_pack.core.plugins.databases import PluginDatabase, resolve_plugin_database
 from llama_pack.core.plugins.events import EventEnvelope
 from llama_pack.core.plugins.migrations import PluginMigrationTarget, normalize_migration_directory
-from llama_pack.core.plugins.registry import PluginRecord, PluginRegistry
+from llama_pack.core.plugins.registry import PluginBackgroundTask, PluginRecord, PluginRegistry
 
 
 class PluginContext:
@@ -53,6 +53,11 @@ class PluginContext:
 
     def add_health_check(self, handler: Callable[[], Any]) -> None:
         self.record.health_checks.append(handler)
+
+    def add_background_task(self, task_id: str, *, start: Callable[[Any], Any], stop: Callable[[Any], Any]) -> None:
+        if any(task.id == task_id for task in self.record.background_tasks):
+            raise ValueError(f"Plugin background task collision: {task_id}")
+        self.record.background_tasks.append(PluginBackgroundTask(id=task_id, start=start, stop=stop))
 
     def add_migration_target(
         self,

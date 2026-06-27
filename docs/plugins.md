@@ -169,6 +169,11 @@ Available `PluginContext` methods:
 - `add_policy_hook(hook_name, handler)`: registers a policy hook.
 - `add_health_check(handler)`: registers a dynamic health check for
   `/lm-api/v1/plugins/status`.
+- `add_background_task(task_id, start=..., stop=...)`: registers a cooperative
+  plugin task lifecycle. `start(app)` runs when the enabled plugin starts with
+  the FastAPI app or is activated at runtime. `stop(app)` runs during app
+  shutdown or before runtime deactivation disables the plugin. Task ids must be
+  unique within the plugin.
 - `get_database(name="main")`: returns a plugin-owned SQLite database handle
   rooted under `{log_dir}/plugins/{plugin_id}/state/`.
 - `add_migration_target(...)`: registers plugin migration metadata and optional
@@ -180,6 +185,28 @@ Available `PluginContext` methods:
   before writing to it (or delegate that to a store class). Use this path to
   locate plugin-owned SQLite databases or other data files. The directory is
   scoped to the runtime `log_dir`, keeping plugin data alongside other app state.
+
+Background task callbacks can be synchronous or asynchronous. They receive the
+FastAPI app object so they can read app state, and they must cooperate with
+shutdown by stopping their own worker, watcher, or subscription before returning.
+
+```python
+class Plugin:
+    def register(self, context):
+        state_dir = context.get_state_dir()
+
+        async def start(app):
+            state_dir.mkdir(parents=True, exist_ok=True)
+            (state_dir / "started.txt").write_text("started", encoding="utf-8")
+
+        async def stop(app):
+            (state_dir / "stopped.txt").write_text("stopped", encoding="utf-8")
+
+        context.add_background_task("writer", start=start, stop=stop)
+
+
+plugin = Plugin()
+```
 
 ## Events
 
