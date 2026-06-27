@@ -204,8 +204,15 @@ can validate credentials, model selection, and chat routing in one pass.
 - `GET /v1/models`
 - `GET /v1/client/session`
 - `POST /v1/client/diagnostics/setup`
+- `POST /v1/client/project-context/{action}`
+- `GET /v1/client/projects`
+- `POST /v1/client/projects`
+- `PATCH /v1/client/projects/{project_id}`
+- `GET /v1/client/projects/{project_id}/node-roots`
+- `PUT /v1/client/projects/{project_id}/node-roots`
 - `POST /v1/client/diagnostics/chat`
 - `POST /api/chat`
+- `POST /ocr/files`
 - `GET /chat/capabilities/{name}`
 - `POST /chat/{name}/inspect`
 - `POST /chat/{name}/embeddings`
@@ -216,10 +223,18 @@ can validate credentials, model selection, and chat routing in one pass.
 - `GET /chat/sessions/{session_id}`
 - `POST /chat/sessions`
 - `DELETE /chat/sessions/{session_id}`
+- `GET /library/catalog/models`
+- `GET /library/assets`
+- `GET /library/assets/{asset_id}/provenance`
+- `DELETE /library/assets/missing`
+- `GET /library/profiles`
+- `GET /library/deployments`
 - `GET /library/ggufs`
 - `POST /library/ggufs/{file_id}/add-model`
+- `PATCH /library/ggufs/{asset_ref}`
 - `DELETE /library/ggufs/{file_id}`
 - `DELETE /library/models/{name}`
+- `PATCH /library/models/{name}`
 - `GET /conversions/models`
 - `POST /conversions/{name}/start`
 - `GET /conversions/{name}`
@@ -236,6 +251,8 @@ can validate credentials, model selection, and chat routing in one pass.
 - `GET /downloads/{download_id}/logs/stream?lines=200`
 - `POST /downloads/{download_id}/cancel`
 - `DELETE /downloads/{download_id}`
+- `POST /offline/readiness`
+- `POST /offline/distribute`
 - `GET /quantizations/files`
 - `GET /quantizations/{file_id}`
 - `POST /quantizations/{file_id}/start`
@@ -274,6 +291,59 @@ can validate credentials, model selection, and chat routing in one pass.
 - `POST /external-keys`
 - `POST /external-keys/{key_id}/revoke`
 - `GET /external-keys/{key_id}/analytics`
+- `GET /plugins/enabled`
+- `GET /plugins/status`
+- `POST /plugins/{plugin_id}/activate`
+- `POST /plugins/{plugin_id}/deactivate`
+- `GET /plugins/{plugin_id}/migrations/status`
+- `POST /plugins/{plugin_id}/migrations/{target_id}/upgrade`
+
+All paths in this section are relative to `/lm-api/v1` unless they already
+start with `/v1`, `/api`, or root `/health`.
+
+## File OCR Endpoint
+
+`POST /ocr/files` extracts text from an uploaded document or image through the
+configured OCR service. The request is multipart form data:
+
+- `file`: uploaded file.
+- `engine`: optional OCR engine selection.
+- `language`: optional language hint.
+- `detect_rotation`: optional boolean.
+
+The route writes temporary upload data outside the repository and returns the
+OCR service result. Use it through the UI or an authenticated API client; it is
+not part of the OpenAI-compatible external chat surface.
+
+## Offline Setup Endpoints
+
+Offline setup endpoints support preparing or distributing assets for machines
+that cannot reach external package/model sources directly:
+
+- `POST /offline/readiness` — checks whether the requested nodes and assets are
+  ready for an offline setup operation.
+- `POST /offline/distribute` — creates orchestration work to distribute the
+  requested offline setup payload.
+
+These endpoints are part of the Llama Pack management API, not the external
+chat compatibility API.
+
+## Plugin Management Endpoints
+
+Plugin management endpoints expose configured plugin state and migration
+operations:
+
+- `GET /plugins/enabled`
+- `GET /plugins/status`
+- `POST /plugins/{plugin_id}/activate`
+- `POST /plugins/{plugin_id}/deactivate`
+- `GET /plugins/{plugin_id}/migrations/status`
+- `POST /plugins/{plugin_id}/migrations/{target_id}/upgrade`
+
+Enabled plugins can also register their own API routers. Core mounts those
+routes under `/lm-api/v1/plugins/{plugin_route_prefix}`. For plugin authoring,
+frontend metadata, health checks, and migration metadata, see
+[Plugins](plugins.md).
 
 ### Setup assistant endpoints
 
@@ -377,6 +447,17 @@ Controller orchestration endpoints are available in controller mode only:
 - `POST /nodes/{node}/work/{attempt_id}/progress`
 - `POST /nodes/{node}/work/{attempt_id}/complete`
 - `POST /nodes/{node}/work/{attempt_id}/fail`
+- `GET /nodes/{node}/work/jobs/{job_id}/cancellation`
+- `GET /projects`
+- `POST /projects`
+- `GET /projects/{project_id}`
+- `PATCH /projects/{project_id}`
+- `GET /projects/{project_id}/node-roots`
+- `PUT /projects/{project_id}/node-roots`
+- `POST /projects/{project_id}/graph/index`
+- `GET /projects/{project_id}/graph/status`
+- `GET /projects/{project_id}/graph/overview`
+- `POST /projects/{project_id}/graph/query`
 - `GET /benchmarks/definitions`
 - `POST /benchmarks/definitions`
 - `GET /benchmarks/runs`
@@ -386,6 +467,15 @@ Controller orchestration endpoints are available in controller mode only:
 
 See [Benchmarks](benchmarks.md) for benchmark definitions, managed runs,
 metrics, and comparison behavior.
+
+Project endpoints are controller-only. They back project records, per-node root
+bindings, code graph indexing, graph status/overview reads, and graph queries.
+The OpenAI-compatible client project routes under `/v1/client/projects*` expose
+the subset intended for external client integrations.
+
+Node work endpoints are worker-facing controller routes. Agents use them to
+claim orchestration attempts, report progress, complete or fail attempts, and
+check cancellation state for a claimed job.
 
 ### Job types
 

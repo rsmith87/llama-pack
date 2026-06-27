@@ -54,17 +54,33 @@ Both modes share the same codebase and routes; mode-specific routes enforce beha
 
 ## Testing Strategy
 
-- `tests/test_api.py`: broad route contracts, auth boundaries, setup assistant behavior, model/library operations, downloads, quantizations, node proxying, and compatibility routes.
-- `tests/test_config.py` and `tests/test_alembic_config.py`: config loading, split config files, environment expansion, defaults, save behavior, and migration target URL resolution.
-- `tests/test_process_manager.py`, `tests/test_runtime_overview.py`, and `tests/test_runtime_scripts.py`: local process lifecycle, runtime overview/route preview payloads, and helper script behavior.
-- `tests/test_orchestration_store.py`, `tests/test_execution_substrate.py`, `tests/test_orchestration_orm_models.py`, and `tests/test_persistence_dto.py`: durable jobs, attempts, events, worker contracts, DTO mapping, retries, cancellation, and terminal-state behavior.
-- `tests/test_thread_store.py`, `tests/test_threads_api.py`, and `tests/test_thread_routing_policy.py`: durable threads, event visibility, workflow execution, route decisions, affinity, startup decisions, and fanout routing.
-- `tests/test_agent_tools.py`: configured tool adapters, safe-root enforcement, bounded output, tool-loop behavior, memory tools, and write/query constraints.
-- `tests/test_downloads.py`, `tests/test_benchmark_api.py`, `tests/test_benchmark_store_orm.py`, `tests/test_model_transfers.py`, and `tests/test_model_transfer_smoke.py`: model asset downloads, benchmark definitions/runs, transfer manifests, transfer execution, and smoke-script coverage.
-- `tests/test_gguf_library.py`, `tests/test_conversions.py`, `tests/test_quantizations.py`, and `tests/test_model_transfers.py`: model library scanning, conversion/quantization workflows, sidecar handling, and model file movement.
-- `tests/test_agent_heartbeat.py`, `tests/test_node_registry.py`, `tests/test_linux_agent_smoke.py`, and `tests/test_routed_chat_compat_api.py`: node registration, heartbeat, controller routing, Linux agent smoke behavior, and external chat compatibility.
-- Persistence stores have focused ORM tests, including auth, audit, chat sessions, app state, benchmark, and database infrastructure coverage.
-- Frontend/static packaging is covered by `tests/test_frontend_tests.py`, `tests/test_ui_static_serving.py`, and `tests/test_package_data.py`, with React/Vite tests invoked through the Python suite.
+Run the full suite with:
+
+```bash
+rtk uv run pytest tests/
+```
+
+Use focused tests around the subsystem you change:
+
+- API and auth route contracts.
+- Config loading, split config files, environment expansion, and Alembic target
+  resolution.
+- Runtime process management, route preview, and helper scripts.
+- Durable orchestration jobs, attempts, events, worker contracts, and
+  cancellation.
+- Threads, route decisions, startup decisions, fanout routing, and workflow
+  execution.
+- Agent tools, safe-root enforcement, bounded output, tool loops, and memory
+  tools.
+- Model assets: downloads, transfers, GGUF library scanning, conversion,
+  quantization, sidecars, and model movement.
+- Node registration, heartbeat, controller routing, Linux agent smoke behavior,
+  and external chat compatibility.
+- Persistence stores and ORM infrastructure.
+- Frontend/static packaging through the Python wrapper tests, plus direct
+  Vitest commands from [Frontend Development](frontend.md).
+
+`AGENTS.md` keeps the current focused command list for agent workflows.
 
 ## Plugin Runtime
 

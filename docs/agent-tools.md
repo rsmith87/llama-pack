@@ -52,7 +52,7 @@ Current prompt inputs:
   keeps self-review prompts grounded in the exact answer being reviewed instead
   of conversational memory.
 
-Add future prompt inputs by extending `PromptBuilder` with a small, test-covered
+Add prompt inputs by extending `PromptBuilder` with a small, test-covered
 message transformation. Keep each transformation deterministic and based on
 explicit request, thread, or runtime context. Do not make prompt assembly depend
 on model output, and do not duplicate prompt-injection behavior in callers.
@@ -688,5 +688,5 @@ Loop Evals UI call `/lm-api/v1/runtime/tool-loop-evals/run` in agent mode or
 `/lm-api/v1/runtime/tool-loop-evals/node-run` in controller mode, then persist
 summaries and case details in the benchmark database.
 
-See [Tool-Loop Eval Presets](tool-loop-eval-presets.md) for the preset roadmap
-and scoring model.
+This section is the current reference for built-in presets and the scoring
+model.

@@ -461,8 +461,8 @@ LLAMA_PACK_CONFIG=raspberry-pi-controller.config.yaml uvicorn llama_pack.main:ap
 
 Agents should run `scripts/onboard_agent.sh --controller-url "$LLAMA_PACK_CONTROLLER_URL" --agent-url "$LLAMA_PACK_AGENT_URL"`, or manually keep `controller_url` as `${LLAMA_PACK_CONTROLLER_URL}`, keep `agent_url` as `${LLAMA_PACK_AGENT_URL}`, and send the same registration key through `controller_registration_key_outbound`.
 
-For the current Raspberry Pi controller topology and smoke checks, see
-[Raspberry Pi Controller Topology](pi-controller-topology.md).
+For historical Raspberry Pi topology notes and smoke checks, see
+[Raspberry Pi Controller Topology](archive/pi-controller-topology.md).
 
 ## Optional Security And Registration Fields
 
@@ -579,9 +579,14 @@ transparent to the agent — it sees a normal chat request with enriched context
 - `agent_worker_labels`: labels advertised to the controller claim matcher.
 - `agent_worker_capacity`: numeric/string capacity advertised to the controller claim matcher.
 
-Agent workers must be registered/configured on the controller under `nodes.<name>` with an `api_key`. The agent sends its `agent_api_key` as `X-Llama-Pack-Key` when claiming or updating work; unknown nodes and nodes without an API key are rejected.
+Agent workers must be registered/configured on the controller under
+`nodes.<name>` with an `api_key`. The agent sends its `agent_api_key` as
+`X-Llama-Pack-Key` when claiming or updating work; unknown nodes and nodes
+without an API key are rejected.
 
-The first typed worker contract is `llm.generate`. It is intentionally narrow and reuses the existing chat payload shape (`model`, `messages`, sampling fields, structured-output fields, `reasoning`, and optional `target`/`requirements`). Future typed contracts are tracked in `superpowers/plans/2026-05-12-execution-substrate.md`.
+Typed worker contracts include `llm.generate`, `llm.embed`, `llm.batch`,
+`model.download`, `model.install`, and `model.transfer`. See
+[API: Job types](api.md#job-types) for payload shapes.
 
 ## Model Capability Hints
 
@@ -593,8 +598,6 @@ Optional chat capability hint fields per model:
 - `speculative`: optional model-level speculative decoding block. The first supported mode is `mtp`.
   `draft_model_path` maps to `--model-draft`. `draft_max` maps to `--spec-draft-n-max` and `draft_min` maps to `--spec-draft-n-min`.
   For `speculative.mode: mtp`, `supports_mtp` must be `true`.
-- Advanced speculative controls such as probability thresholds and backend-sampling are intentionally deferred to a future advanced speculative configuration pass.
-- A future model source enhancement should allow storing Hugging Face repository metadata such as `hf_repo` so Llama Pack can support repo-aware launch behavior and later check for model updates.
 - `extra_args`: capability fallback infers structured output support when args include tokens like `json-schema` or `grammar`.
 - `reasoning` and `reasoning_budget`: configure llama.cpp reasoning mode and budget for supported models.
 - `vision` and `mmproj`: mark multimodal models and point to the matching projector file.
@@ -603,6 +606,15 @@ Optional chat capability hint fields per model:
   Each profile can override `ctx`, `port`, `gpu_layers`, `host`, and
   `extra_args`, and can include forward-looking metadata such as `kind`,
   `kv_cache_policy`, `resource_tier`, `strengths`, and `cost_tier`.
+
+Current limitations:
+
+- Advanced speculative controls such as probability thresholds and
+  backend-sampling are not modeled as first-class config fields. Use
+  `extra_args` for llama.cpp flags that are not represented above.
+- Model source metadata such as Hugging Face repository id is not a first-class
+  model config field. Download and provenance workflows track source details in
+  the model asset databases.
 
 ## Agent-Local Tool Calling
 
@@ -678,8 +690,8 @@ curl -s http://127.0.0.1:9137/v1/chat/completions \
 ```
 
 Streaming managed-tool requests are rejected in v1. Controllers do not execute
-tools yet; future controller delegation should forward tool-capable turns to a
-selected agent and let that agent run this same local loop.
+tools directly; send tool-capable requests to an agent with
+`tool_runtime: "agent"`.
 
 Windows paths work in YAML:
 

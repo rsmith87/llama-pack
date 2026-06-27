@@ -1,7 +1,7 @@
 # Caddy Local TLS — Incidents & Troubleshooting Notes
 
 Real-world issues encountered running the Llama Pack local TLS setup.
-See [caddy-local-tls.md](caddy-local-tls.md) for the full setup and renewal
+See [caddy-local-tls.md](../caddy-local-tls.md) for the full setup and renewal
 reference.
 
 ---

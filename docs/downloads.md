@@ -6,8 +6,9 @@ configured model library. Downloads are started through the UI or the
 
 ## Prerequisites
 
-- Configure at least one model library root with `hf_models_dirs` or the legacy
-  `hf_models_dir`. Downloads use the first configured root.
+- Configure at least one model library root with `hf_models_dirs`. Downloads
+  use the first configured root. The older `hf_models_dir` field is still read
+  for compatibility, but new configs should use `hf_models_dirs`.
 - Run the downloads migration before starting the app:
 
 ```bash

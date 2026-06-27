@@ -145,93 +145,27 @@ Behavior:
 - Update the matching chat control.
 - Add a system transcript message confirming the switch.
 
-## Recommended Next Commands
+## Non-Current Command Ideas
 
-### `/route <task>`
+The commands below are not current user-facing behavior. Keep them out of UI
+help until the parser, handler, tests, and backend capability checks are
+implemented.
 
-Preview router selection for a task without sending a chat message.
-
-Suggested behavior:
-
-- Reuse the runtime route preview endpoint.
-- Show selected node/model, reason, running/startup status, and rejected
-  candidates.
-- Do not start models automatically.
-
-### `/target <auto|local|node:name>`
-
-Switch the chat route target.
-
-Suggested behavior:
-
-- Validate the target against known local and node targets.
-- Update the chat target selector.
-- Add a system transcript message confirming the new target.
-
-### `/clear`
-
-Clear the visible transcript.
-
-Suggested behavior:
-
-- Run the same action as the Clear button.
-- Reject while a response is streaming.
-- Do not delete saved sessions or thread history.
-
-### `/save [name]`
-
-Save the current chat session.
-
-Suggested behavior:
-
-- If a name is provided, use it as the session name.
-- If no name is provided, use the current session name logic.
-- Reuse the existing chat session save API.
-
-## Later Commands
-
-### `/forget confirm <id>`
-
-Delete a specific memory entry after the preview step shows candidate IDs. This
-needs a backend delete API and explicit confirmation because deletion is
-destructive.
-
-### `/embed <text>`
-
-Generate an embedding for text and show model, dimensions, usage, and a short
-vector preview. This is mostly useful for education and debugging.
-
-### `/similar <left> | <right>`
-
-Embed two snippets and show cosine similarity. The separator should be explicit
-so parsing remains simple.
-
-### `/models`
-
-Show running chat-capable models and their targets.
-
-### `/nodes`
-
-Show reachable nodes and basic runtime capability status.
-
-### `/capabilities`
-
-Show selected model capabilities such as tools, embeddings, vision, KV slots,
-and structured output support.
-
-### `/slots`
-
-List KV slots for the selected model and target.
-
-### `/slot clear <id>`
-
-Clear one KV slot. This should require confirmation because it changes runtime
-state.
-
-### `/eval <name>`
-
-Run a named evaluation against the selected model/profile. This should integrate
-with the tool-loop evals workflow when that workflow exposes a stable API.
+| Command | Intended behavior |
+|---|---|
+| `/route <task>` | Preview route selection without sending a chat message. |
+| `/target <auto\|local\|node:name>` | Switch the chat route target. |
+| `/clear` | Clear the visible transcript without deleting saved sessions or thread history. |
+| `/save [name]` | Save the current chat session. |
+| `/forget confirm <id>` | Delete a memory entry after explicit confirmation. |
+| `/embed <text>` | Generate an embedding and show model, dimensions, usage, and a short vector preview. |
+| `/similar <left> \| <right>` | Embed two snippets and show cosine similarity. |
+| `/models` | Show running chat-capable models and their targets. |
+| `/nodes` | Show reachable nodes and basic runtime capability status. |
+| `/capabilities` | Show selected model capabilities. |
+| `/slots` | List KV slots for the selected model and target. |
+| `/slot clear <id>` | Clear one KV slot after confirmation. |
+| `/eval <name>` | Run a named evaluation against the selected model/profile. |
 
 ## Registry Shape
 

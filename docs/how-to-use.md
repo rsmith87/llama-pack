@@ -5,28 +5,23 @@ with an operations console. A controller provides the stable API surface for
 your apps, while agents run on model hosts and manage local `llama-server`
 processes.
 
-For the current Raspberry Pi controller deployment snapshot and smoke checks,
-see [Raspberry Pi Controller Topology](pi-controller-topology.md).
+Archived deployment snapshots, incident notes, and one-off evaluations live in
+`docs/archive/`.
 
 ## 1. Install
 
-From this project directory:
+For guided setup, script-first controller/agent onboarding, manual setup,
+migrations, admin bootstrap, smoke checks, and test commands, start with
+[Setup](setup.md).
+
+From this project directory, the normal dependency sync is:
 
 ```bash
 uv sync
 ```
 
-On Windows PowerShell:
-
-```powershell
-py -3.12 -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -e ".[dev]"
-```
-
 Prefer `uv sync` on macOS and Linux because it uses the checked-in `uv.lock`.
-For pip-based installs, use an explicit supported interpreter and invoke pip as
-`python -m pip` from the activated environment.
+For pip-based installs and Windows notes, see [Setup](setup.md).
 
 Windows support is currently limited to manual Python environment setup and
 agent-style operation. There is no separate Windows checklist in this docs set.
@@ -497,37 +492,14 @@ config, and starting it when requested.
 
 ## 14. Run Tests
 
-Full test suite:
+The canonical test commands are maintained in [Setup](setup.md#testing).
 
 ```bash
 uv run pytest -v
 ```
 
-The pytest suite installs `frontend` dependencies with `npm ci` before
-running the React frontend unit tests, so `frontend/node_modules` does not need
-to be checked in.
-
-React frontend unit tests:
-
-```bash
-cd frontend
-npm ci
-npm test
-```
-
-React production build:
-
-```bash
-cd frontend
-npm run build
-```
-
-The Vite build writes static assets to `llama_pack/ui/react`, which is
-included in Python package data for release builds.
-
-Frontend development workflow:
-
-- `docs/frontend.md`
+For React tests, production builds, and local Vite development, see
+[Frontend Development](frontend.md).
 
 ## 15. Runtime, Settings, And Tool-Loop Evals
 

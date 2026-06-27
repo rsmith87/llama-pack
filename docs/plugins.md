@@ -9,9 +9,8 @@ Use the checked-in `plugins/hello_plugin/` as the reference sample. Paid or
 private plugins, including the private `llama_pack_business` add-on, live outside
 this repository and are loaded from configured local paths.
 
-For a draft of the next plugin-page developer experience (template-first pages,
-external styles, and action-focused controllers), see
-[Plugin Page Authoring v1 (Draft)](plugin-page-authoring-v1.md).
+For the template-first plugin page contract, see
+[Plugin Page Authoring v1](plugin-page-authoring-v1.md).
 
 ## Enable A Plugin
 
@@ -79,8 +78,9 @@ Field rules:
 - `description`: optional text.
 - `frontend`: optional static asset metadata.
 - `client_auth`: optional client discovery metadata for plugin-owned auth.
-- `navigation`, `secondary_navigation`, `ui_routes`: optional frontend route
-  metadata.
+- `navigation`, `secondary_navigation`: optional frontend navigation metadata.
+- `ui_routes`: legacy frontend route metadata. New plugin pages should use
+  `frontend.pages`.
 - `config_schema`: optional validation schema for plugin config.
 
 Example controller-only plugin:
@@ -164,7 +164,8 @@ Available `PluginContext` methods:
 - `add_navigation_item(item)`: appends primary frontend navigation metadata.
 - `add_secondary_navigation_item(item)`: appends scoped secondary navigation
   metadata for plugin pages.
-- `add_ui_route(item)`: appends placeholder frontend route metadata.
+- `add_ui_route(item)`: appends legacy frontend route metadata. Prefer
+  declaring new routes with `frontend.pages` in the manifest.
 - `subscribe(event_name, handler)`: subscribes to in-process best-effort events.
 - `add_policy_hook(hook_name, handler)`: registers a policy hook.
 - `add_health_check(handler)`: registers a dynamic health check for
@@ -537,8 +538,9 @@ Frontend plugin shell behavior is covered in `frontend/src/components/AppShell.t
    curl http://127.0.0.1:9137/lm-api/v1/plugins/hello_plugin/migrations/status
    ```
 
-5. Open the React UI on the controller. The `Hello` nav item should appear in
-   the `Plugins` section and route to a placeholder page.
+5. Open the React UI on the controller. The `Hello Plugin` nav item should
+   appear in the `Plugins` section and route to the hosted template-backed page
+   declared in `frontend.pages`.
 
 6. Set `reject_chat: true` to exercise the `llama_pack.chat_admission` hook. Chat
    requests that route through `ChatScheduler` should be rejected before

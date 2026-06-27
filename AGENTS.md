@@ -67,6 +67,10 @@ When changing dependencies, update the relevant manifest and lockfile together.
 Do not hand-edit lockfiles unless the task is specifically about lockfile
 repair.
 
+Treat this version table as a quick orientation aid. When dependency versions
+matter for a change, verify them against `uv.lock` and
+`frontend/package-lock.json` before editing docs or code.
+
 ## Common Commands
 
 Run the full Python test suite with:

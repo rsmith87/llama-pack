@@ -22,7 +22,7 @@ foundation for a private agent runtime.
 
 ## Quick Start
 
-Guided setup:
+Guided setup is the recommended first run:
 
 ```bash
 scripts/setup_llama_pack.sh
@@ -32,44 +32,8 @@ The wizard asks whether this machine is a controller, agent, or single-machine
 setup, then runs dependency sync, onboarding, optional llama.cpp setup, and
 optional service startup.
 
-Script-first controller:
-
-```bash
-uv sync
-scripts/onboard_controller.sh
-scripts/start_controller.sh
-```
-
-The controller onboarding script writes `.llama_pack.env`, including
-`LLAMA_PACK_CONTROLLER_REGISTRATION_KEY`. Give that registration key to each
-agent as `LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND`.
-
-Script-first agent:
-
-```bash
-uv sync
-scripts/install_llama_cpp.sh --backend auto
-cp .llama_pack.env.example .llama_pack.env
-# Edit .llama_pack.env:
-# - set LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND to the controller's
-#   LLAMA_PACK_CONTROLLER_REGISTRATION_KEY
-# - set LLAMA_PACK_CONTROLLER_URL to the controller URL
-# - set LLAMA_PACK_AGENT_URL to this agent's URL
-set -a
-source .llama_pack.env
-set +a
-scripts/onboard_agent.sh \
-  --node linux-2080ti \
-  --controller-url "$LLAMA_PACK_CONTROLLER_URL" \
-  --agent-url "$LLAMA_PACK_AGENT_URL"
-scripts/start_agent.sh
-```
-
-The onboarding scripts write local secrets to `.llama_pack.env`, which is
-ignored by git. The start/stop helper scripts source that file automatically.
-
-Manual setup, migrations, admin keys, smoke tests, and test commands are in
-[Setup](docs/setup.md).
+Script-first controller/agent setup, manual setup, migrations, admin keys,
+smoke tests, and test commands are in [Setup](docs/setup.md).
 
 ## What It Does
 
@@ -93,7 +57,6 @@ Manual setup, migrations, admin keys, smoke tests, and test commands are in
 - [Model Downloads](docs/downloads.md): Hugging Face GGUF download workflow, history, logs, cancellation, and recommendations.
 - [Benchmarks](docs/benchmarks.md): benchmark definitions, managed runs, result metrics, and comparisons.
 - [How To Use](docs/how-to-use.md): longer end-to-end operating guide.
-- [Raspberry Pi Controller Topology](docs/pi-controller-topology.md): current Pi controller deployment notes and smoke checks.
 - [Frontend](docs/frontend.md): React development workflow.
 - [Plugins](docs/plugins.md): plugin manifest, backend/frontend extension APIs, testing, and hello-world walkthrough.
 - [Workflows](docs/workflows.md): optional `llama_pack_workflows` plugin for Llama Pack-specific automations.
@@ -103,24 +66,15 @@ Manual setup, migrations, admin keys, smoke tests, and test commands are in
 
 ```bash
 uv sync
+scripts/setup_llama_pack.sh
 scripts/start_controller.sh
 scripts/start_agent.sh
 scripts/stop_server.sh
 scripts/kill_apps.sh --dry-run
-scripts/regenerate_key.sh --type controller-registration
-scripts/regenerate_key.sh --type agent-api --node linux-2080ti --agent-url "$LLAMA_PACK_AGENT_URL"
-uv run pytest -v
 ```
 
-Prefer `uv sync` for local setup. It uses `uv.lock` and avoids relying on a
-shell-specific `python` or `pip` executable. If you need a pip-based install,
-use an explicit supported interpreter, for example:
-
-```bash
-python3.12 -m venv .venv
-source .venv/bin/activate
-python -m pip install -e ".[dev]"
-```
+See [Setup](docs/setup.md) for key rotation, tests, and pip-based install
+fallbacks.
 
 ## External Chat Endpoints
 

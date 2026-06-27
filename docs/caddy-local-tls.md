@@ -609,6 +609,25 @@ controller's Python environment must trust the same CA chain.
 `step ca renew` only works while the cert is still valid. If a cert has already
 expired, renew is blocked and you must re-issue from scratch.
 
+When the controller logs a TLS verification error while proxying to an agent,
+the broken certificate is usually on the **target node**, not necessarily on the
+controller where the error appears. Check every node's served certificate before
+reissuing anything:
+
+```bash
+for h in pi-controller.local mac-mini.local linux-2080ti.local; do
+  echo "=== $h ==="
+  echo | openssl s_client -servername "$h" -connect "$h:443" 2>/dev/null \
+    | openssl x509 -noout -subject -dates
+done
+```
+
+If Python/httpx reports `unable to get local issuer certificate` but the cert
+dates look valid, verify that Caddy is serving the fullchain instead of only the
+leaf certificate. The fullchain must be the node leaf certificate followed by
+the intermediate CA certificate. See the archived incident note for the original
+failure pattern: [Caddy Local TLS Incidents](archive/caddy-local-tls-issues.md).
+
 **Step 1 — Make sure `step-ca` is running on the Pi:**
 
 ```bash

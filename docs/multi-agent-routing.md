@@ -126,13 +126,15 @@ All seven events share the same `turn_id`.
 
 ### Aggregation strategy
 
-The current strategy is simple concatenation with a `---` separator. The primary node's response appears first. A pluggable aggregation interface (where a separate model summarises the outputs) is planned for a later ticket.
+The current strategy is simple concatenation with a `---` separator. The
+primary node's response appears first. There is no model-based aggregation
+step in the current routing path.
 
 ---
 
 ---
 
-## Startup Decision Engine (Ticket 9.1)
+## Startup Decision Engine
 
 ### Overview
 
@@ -170,11 +172,14 @@ nodes:
 
 ### What `startup_decision` does today
 
-The current implementation records the decision as metadata — it does **not** automatically trigger `POST /models/{name}/start`. Acting on a `"start_now"` decision is left to the caller or a future orchestration layer. The benchmark managed-lifecycle feature (`managed_load`) is an example of a caller that reads this kind of signal to drive the full lifecycle.
+The current implementation records the decision as metadata. It does **not**
+automatically trigger `POST /models/{name}/start`. The benchmark
+managed-lifecycle feature (`managed_load`) is an example of a caller that reads
+this signal to drive the full lifecycle.
 
 ---
 
-## Registry-Aware Placement (Ticket 9.2)
+## Registry-Aware Placement
 
 ### Overview
 
