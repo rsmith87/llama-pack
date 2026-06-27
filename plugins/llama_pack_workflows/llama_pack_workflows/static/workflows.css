@@ -11,7 +11,8 @@
 }
 
 .workflows-header h1,
-.workflows-grid h2 {
+.workflows-grid h2,
+.workflow-form h2 {
   margin: 0;
 }
 
@@ -23,6 +24,52 @@
   display: grid;
   gap: 16px;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.workflow-form {
+  border: 1px solid var(--border-color, #d5d8df);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.workflow-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.workflow-form input,
+.workflow-form select,
+.workflow-form textarea {
+  border: 1px solid var(--border-color, #d5d8df);
+  border-radius: 6px;
+  font: inherit;
+  padding: 8px;
+}
+
+.workflow-form textarea {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  resize: vertical;
+}
+
+.workflow-checkbox {
+  align-items: center;
+  display: flex !important;
+  font-weight: 500 !important;
+}
+
+.workflow-form-actions {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.workflow-form-actions span {
+  color: var(--muted-text, #5f6673);
+  font-size: 13px;
 }
 
 .workflow-list {

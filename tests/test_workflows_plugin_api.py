@@ -192,5 +192,8 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert migration_upgrade.status_code == 200
         assert "data-workflow-action" in controller.text
         assert "export function mountPage" in controller.text
+        assert "host.apiGet" in controller.text
+        assert "host.apiPost" in controller.text
+        assert "fetch(" not in controller.text
         assert migration_status.json()["targets"][0]["head_revision"] == "001_workflows"
         assert migration_upgrade.json()["target"]["status"] == "current"

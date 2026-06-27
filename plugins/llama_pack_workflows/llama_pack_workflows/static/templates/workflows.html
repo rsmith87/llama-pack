@@ -3,6 +3,33 @@
     <h1>Workflows</h1>
     <button type="button" data-workflow-action="refresh">Refresh</button>
   </header>
+  <form class="workflow-form" data-workflow-form="create">
+    <h2>Create Workflow</h2>
+    <label>
+      Name
+      <input name="name" required maxlength="120" placeholder="Daily summary" />
+    </label>
+    <label>
+      Description
+      <input name="description" maxlength="500" placeholder="Reusable workflow for a recurring task" />
+    </label>
+    <label>
+      Template
+      <select name="template_id" data-workflow-template-select required></select>
+    </label>
+    <label>
+      Parameters JSON
+      <textarea name="parameters_json" data-workflow-parameters rows="7" required></textarea>
+    </label>
+    <label class="workflow-checkbox">
+      <input name="enabled" type="checkbox" checked />
+      Enabled
+    </label>
+    <div class="workflow-form-actions">
+      <button type="submit">Create</button>
+      <span data-workflow-status></span>
+    </div>
+  </form>
   <section class="workflows-grid">
     <div>
       <h2>Templates</h2>
