@@ -242,14 +242,31 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-trigger-type" in template.text
         assert 'value="schedule_daily"' in template.text
         assert 'value="schedule_interval"' in template.text
+        assert "data-workflow-parameter-panel" in template.text
+        assert "data-workflow-content" in template.text
+        assert "data-workflow-steps" in template.text
+        assert "data-workflow-action=\"add-step\"" in template.text
+        assert "data-workflow-action=\"toggle-advanced\"" in template.text
+        assert "name=\"model\"" in template.text
+        assert "name=\"target\"" in template.text
+        assert "parameters_json" not in template.text
         assert "data-workflow-action" in controller.text
         assert "data-workflow-action=\"cancel-edit\"" in template.text
         assert "export function mountPage" in controller.text
+        assert "buildParameters" in controller.text
+        assert "addStepField" in controller.text
         assert 'data-workflow-action="edit"' in controller.text
         assert "populateForm" in controller.text
         assert "buildTriggers" in controller.text
         assert "host.apiGet" in controller.text
         assert "host.apiPost" in controller.text
         assert "fetch(" not in controller.text
+        assert "var(--card)" in style.text
+        assert "var(--line)" in style.text
+        assert "var(--ink)" in style.text
+        assert "var(--muted)" in style.text
+        assert "#fff" not in style.text
+        assert "#d5d8df" not in style.text
+        assert "#5f6673" not in style.text
         assert migration_status.json()["targets"][0]["head_revision"] == "001_workflows"
         assert migration_upgrade.json()["target"]["status"] == "current"

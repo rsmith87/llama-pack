@@ -27,9 +27,10 @@
 }
 
 .workflow-form {
-  background: var(--panel-bg, #fff);
-  border: 1px solid var(--border-color, #d5d8df);
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 8px;
+  color: var(--ink);
   display: grid;
   gap: 10px;
   padding: 14px;
@@ -45,8 +46,10 @@
 .workflow-form input,
 .workflow-form select,
 .workflow-form textarea {
-  border: 1px solid var(--border-color, #d5d8df);
+  background: var(--button);
+  border: 1px solid var(--line);
   border-radius: 6px;
+  color: var(--ink);
   font: inherit;
   padding: 8px;
 }
@@ -57,7 +60,7 @@
 }
 
 .workflow-trigger-section {
-  border: 1px solid var(--border-color, #d5d8df);
+  border: 1px solid var(--line);
   border-radius: 8px;
   display: grid;
   gap: 10px;
@@ -69,6 +72,39 @@
   font-size: 13px;
   font-weight: 700;
   padding: 0 4px;
+}
+
+.workflow-parameter-panel {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+}
+
+.workflow-steps-header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.workflow-step-list {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-step-row {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.workflow-advanced-fields {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
 }
 
 .workflow-checkbox {
@@ -85,7 +121,7 @@
 }
 
 .workflow-form-actions span {
-  color: var(--muted-text, #5f6673);
+  color: var(--muted);
   font-size: 13px;
 }
 
@@ -95,9 +131,10 @@
 }
 
 .workflow-row {
-  background: var(--panel-bg, #fff);
-  border: 1px solid var(--border-color, #d5d8df);
+  background: var(--card);
+  border: 1px solid var(--line);
   border-radius: 8px;
+  color: var(--ink);
   display: flex;
   gap: 10px;
   justify-content: space-between;
@@ -120,14 +157,16 @@
 .workflow-row-actions button,
 .workflow-form-actions button,
 .workflows-header button {
-  border: 1px solid var(--border-color, #d5d8df);
+  background: var(--button);
+  border: 1px solid var(--line);
   border-radius: 6px;
+  color: var(--ink);
   cursor: pointer;
   font: inherit;
   padding: 6px 10px;
 }
 
 .workflow-row span {
-  color: var(--muted-text, #5f6673);
+  color: var(--muted);
   font-size: 13px;
 }

@@ -50,9 +50,91 @@ function setEditing(root, editing) {
 
 function syncTemplateDefaults(root) {
   const select = root.querySelector("[data-workflow-template-select]");
-  const parameters = root.querySelector("[data-workflow-parameters]");
-  if (!select || !parameters) return;
-  parameters.value = JSON.stringify(defaultParameters(select.value), null, 2);
+  if (!select) return;
+  setParameterFields(root, select.value, defaultParameters(select.value));
+}
+
+function setParameterPanel(root, templateId) {
+  const panels = root.querySelectorAll("[data-workflow-parameter-panel]");
+  for (const panel of panels) {
+    panel.hidden = panel.dataset.workflowParameterPanel !== templateId;
+  }
+}
+
+function clearSteps(root) {
+  const steps = root.querySelector("[data-workflow-steps]");
+  if (steps) steps.innerHTML = "";
+}
+
+function addStepField(root, label, instructions) {
+  const steps = root.querySelector("[data-workflow-steps]");
+  if (!steps) return;
+  const row = document.createElement("div");
+  row.className = "workflow-step-row";
+  row.innerHTML = `
+    <label>
+      Label
+      <input name="step_label" value="${escapeHtml(label)}" />
+    </label>
+    <label>
+      Instructions
+      <textarea name="step_instructions" rows="3">${escapeHtml(instructions)}</textarea>
+    </label>
+    <button type="button" data-workflow-action="remove-step">Remove</button>
+  `;
+  steps.appendChild(row);
+}
+
+function setParameterFields(root, templateId, parameters) {
+  const form = root.querySelector("[data-workflow-form='create']");
+  if (!form) return;
+  setParameterPanel(root, templateId);
+  if (templateId === "thread_prompt_chain") {
+    form.elements.content.value = String(parameters.content || "");
+    form.elements.model.value = String(parameters.model || "auto");
+    form.elements.target.value = String(parameters.target || "auto");
+    clearSteps(root);
+    const steps = Array.isArray(parameters.steps) && parameters.steps.length > 0
+      ? parameters.steps
+      : [{ label: "summarize", instructions: "Summarize in five bullets." }];
+    for (const step of steps) {
+      addStepField(root, String(step.label || ""), String(step.instructions || ""));
+    }
+  }
+  if (templateId === "scheduled_benchmark") {
+    form.elements.benchmark_id.value = String(parameters.benchmark_id || "");
+    form.elements.models.value = Array.isArray(parameters.models) ? parameters.models.join(", ") : "";
+  }
+}
+
+function buildParameters(root, data) {
+  const templateId = String(data.get("template_id") || "");
+  if (templateId === "thread_prompt_chain") {
+    const stepRows = root.querySelectorAll(".workflow-step-row");
+    const steps = [];
+    for (const row of stepRows) {
+      const label = String(row.querySelector("[name='step_label']")?.value || "").trim();
+      const instructions = String(row.querySelector("[name='step_instructions']")?.value || "").trim();
+      if (label || instructions) steps.push({ label, instructions });
+    }
+    return {
+      content: String(data.get("content") || ""),
+      steps,
+      model: String(data.get("model") || "auto"),
+      target: String(data.get("target") || "auto"),
+    };
+  }
+  if (templateId === "scheduled_benchmark") {
+    const models = String(data.get("models") || "")
+      .split(",")
+      .map((item) => item.trim())
+      .filter((item) => item);
+    return {
+      benchmark_id: String(data.get("benchmark_id") || ""),
+      models,
+    };
+  }
+  return {};
 }
 
 function resetForm(root, form) {
@@ -61,6 +143,7 @@ function resetForm(root, form) {
   setEditing(root, false);
   syncTemplateDefaults(root);
   syncTriggerFields(root);
+  hideAdvanced(root);
 }
 
 function syncTriggerFields(root) {
@@ -70,6 +153,16 @@ function syncTriggerFields(root) {
   if (!triggerType || !dailyField || !intervalField) return;
   dailyField.hidden = triggerType.value !== "schedule_daily";
   intervalField.hidden = triggerType.value !== "schedule_interval";
+}
+
+function hideAdvanced(root) {
+  const advanced = root.querySelector("[data-workflow-advanced]");
+  if (advanced) advanced.hidden = true;
+}
+
+function toggleAdvanced(root) {
+  const advanced = root.querySelector("[data-workflow-advanced]");
+  if (advanced) advanced.hidden = !advanced.hidden;
 }
 
 function workflowTriggerOption(workflow) {
@@ -92,7 +185,7 @@ function populateForm(root, workflow) {
   form.elements.name.value = workflow.name;
   form.elements.description.value = workflow.description;
   form.elements.template_id.value = workflow.template_id;
-  form.elements.parameters_json.value = JSON.stringify(workflow.parameters, null, 2);
+  setParameterFields(root, workflow.template_id, workflow.parameters);
   form.elements.trigger_type.value = trigger.type;
   form.elements.daily_time.value = trigger.dailyTime;
   form.elements.interval_minutes.value = trigger.intervalMinutes;
@@ -121,8 +214,12 @@ async function refreshWorkflows(root, host) {
     if (selected) select.value = selected;
     if (!select.value && templates.templates.length > 0) select.value = templates.templates[0].id;
   }
-  const parameters = root.querySelector("[data-workflow-parameters]");
-  if (parameters && !parameters.value) syncTemplateDefaults(root);
+  const selectedTemplate = select?.value || "thread_prompt_chain";
+  setParameterPanel(root, selectedTemplate);
+  const form = root.querySelector("[data-workflow-form='create']");
+  if (form && !form.elements.workflow_id.value && !form.elements.content.value && !form.elements.benchmark_id.value) {
+    setParameterFields(root, selectedTemplate, defaultParameters(selectedTemplate));
+  }
   renderList("workflow-templates", templates.templates, (item) => `<strong>${item.name}</strong><span>${item.description}</span>`);
   renderList("workflow-definitions", workflows.workflows, (item) => `
     <div class="workflow-row-main">
@@ -159,14 +256,13 @@ function buildTriggers(data) {
 
 async function createWorkflow(root, host, form) {
   const data = new FormData(form);
-  const parametersJson = String(data.get("parameters_json") || "{}");
   const workflowId = String(data.get("workflow_id") || "");
   const body = {
     name: String(data.get("name") || ""),
     description: String(data.get("description") || ""),
     template_id: String(data.get("template_id") || ""),
     enabled: data.get("enabled") === "on",
-    parameters: JSON.parse(parametersJson),
+    parameters: buildParameters(root, data),
     triggers: buildTriggers(data),
   };
   if (workflowId) {
@@ -226,6 +322,20 @@ export function mountPage(root, host) {
   };
   const templateChanged = () => syncTemplateDefaults(root);
   const triggerChanged = () => syncTriggerFields(root);
+  const formAction = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.workflowAction;
+    if (action === "add-step") {
+      addStepField(root, "", "");
+    }
+    if (action === "remove-step") {
+      target.closest(".workflow-step-row")?.remove();
+    }
+    if (action === "toggle-advanced") {
+      toggleAdvanced(root);
+    }
+  };
   const cancelEdit = () => {
     if (!form) return;
     resetForm(root, form);
@@ -245,6 +355,7 @@ export function mountPage(root, host) {
   refreshButton?.addEventListener("click", refresh);
   cancelButton?.addEventListener("click", cancelEdit);
   definitions?.addEventListener("click", workflowAction);
+  form?.addEventListener("click", formAction);
   form?.addEventListener("submit", submit);
   templateSelect?.addEventListener("change", templateChanged);
   triggerType?.addEventListener("change", triggerChanged);
@@ -255,6 +366,7 @@ export function mountPage(root, host) {
     refreshButton?.removeEventListener("click", refresh);
     cancelButton?.removeEventListener("click", cancelEdit);
     definitions?.removeEventListener("click", workflowAction);
+    form?.removeEventListener("click", formAction);
     form?.removeEventListener("submit", submit);
     templateSelect?.removeEventListener("change", templateChanged);
     triggerType?.removeEventListener("change", triggerChanged);

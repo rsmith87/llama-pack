@@ -18,10 +18,38 @@
       Template
       <select name="template_id" data-workflow-template-select required></select>
     </label>
-    <label>
-      Parameters JSON
-      <textarea name="parameters_json" data-workflow-parameters rows="7" required></textarea>
-    </label>
+    <section class="workflow-parameter-panel" data-workflow-parameter-panel="thread_prompt_chain">
+      <label>
+        Content
+        <textarea name="content" data-workflow-content rows="4" required></textarea>
+      </label>
+      <div class="workflow-steps-header">
+        <strong>Steps</strong>
+        <button type="button" data-workflow-action="add-step">Add Step</button>
+      </div>
+      <div class="workflow-step-list" data-workflow-steps></div>
+      <button type="button" data-workflow-action="toggle-advanced">Advanced</button>
+      <div class="workflow-advanced-fields" data-workflow-advanced hidden>
+        <label>
+          Model
+          <input name="model" value="auto" />
+        </label>
+        <label>
+          Target
+          <input name="target" value="auto" />
+        </label>
+      </div>
+    </section>
+    <section class="workflow-parameter-panel" data-workflow-parameter-panel="scheduled_benchmark" hidden>
+      <label>
+        Benchmark ID
+        <input name="benchmark_id" />
+      </label>
+      <label>
+        Models
+        <input name="models" placeholder="qwen, mistral" />
+      </label>
+    </section>
     <fieldset class="workflow-trigger-section">
       <legend>Trigger</legend>
       <label>
