@@ -71,11 +71,9 @@ jobs:
               prepare_auth_db,
               prepare_controller_db,
           )
-          from tests.persistence_db_setup import TARGET_REVISIONS
           from llama_pack.core.persistence.db_infra import create_persistence_engine, sqlite_url_for_path
           from llama_pack.core.persistence.alembic_config import Base
           from llama_pack.core.persistence.models.app_state import (
-              ApiKeyOrm, AuditEventOrm, ChatSessionOrm,
               ModelDownloadOrm, BenchmarkDefinitionOrm, BenchmarkRunOrm, BenchmarkRunSampleOrm,
           )
           from sqlalchemy import Column, MetaData, String, Table, delete
@@ -85,6 +83,18 @@ jobs:
               "alembic_version",
               MetaData(),
               Column("version_num", String(32), primary_key=True),
+          )
+          LEGACY_CHAT_SESSIONS = Table(
+              "chat_sessions",
+              MetaData(),
+              Column("id", String, primary_key=True),
+              Column("name", String, nullable=False),
+              Column("model", String, nullable=False),
+              Column("target_selector", String, nullable=False),
+              Column("messages_json", String, nullable=False),
+              Column("request_defaults_json", String, nullable=False),
+              Column("created_at", String, nullable=False),
+              Column("updated_at", String, nullable=False),
           )
 
           def _write(db_path, tables, revision):
@@ -104,7 +114,7 @@ jobs:
           prepare_audit_db(base / 'audit.db')
           # Simulate pre-split chat_sessions.db with all old tables
           _write(base / 'chat_sessions.db', [
-              ChatSessionOrm.__table__,
+              LEGACY_CHAT_SESSIONS,
               ModelDownloadOrm.__table__,
               BenchmarkDefinitionOrm.__table__,
               BenchmarkRunOrm.__table__,
@@ -135,7 +145,7 @@ jobs:
               'controller.db': '20260513_0001',
               'auth.db': '20260527_0001',
               'audit.db': '20260513_0003',
-              'chat_sessions.db': '20260523_0007',
+              'chat_sessions.db': '20260626_0009',
               'downloads.db': '20260523_0001',
               'benchmarks.db': '20260612_0007',
               'models.db': '20260615_0001',
