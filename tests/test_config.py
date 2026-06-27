@@ -54,6 +54,20 @@ def test_example_network_configs_use_env_placeholders_for_lan_urls():
         assert "LLAMA" + "_MANAGER_" not in text, config_file.name
 
 
+def test_config_rejects_invalid_offline_allowed_cidr():
+    with pytest.raises(ValueError) as exc_info:
+        load_config({"offline_allowed_cidrs": ["not-a-cidr"]})
+
+    assert "offline_allowed_cidrs" in str(exc_info.value)
+
+
+def test_config_rejects_empty_offline_allowed_host():
+    with pytest.raises(ValueError) as exc_info:
+        load_config({"offline_allowed_hosts": [""]})
+
+    assert "offline_allowed_hosts entries must not be empty" in str(exc_info.value)
+
+
 def test_load_config_expands_env_var_placeholders_in_nested_values(tmp_path, monkeypatch):
     config_file = tmp_path / "config.yaml"
     config_file.write_text(

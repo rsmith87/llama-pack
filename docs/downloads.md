@@ -24,6 +24,15 @@ alembic -x db=downloads upgrade downloads@head
 - For gated Hugging Face repos, sign in with `hf auth login` and accept the
   model terms on Hugging Face before starting the download.
 
+## Offline Preparation
+
+Hugging Face downloads require `offline_mode: false`. For an offline deployment,
+download the selected GGUF once while online, then use the offline
+readiness/distribution API to copy the artifact to LAN nodes through the
+existing model transfer workflow. After readiness reports the required nodes are
+ready, enable `offline_mode` to block public internet-dependent Llama Pack
+operations while preserving controller-to-agent LAN traffic.
+
 ## Destination Layout
 
 Downloads write under the first configured model root. Repository IDs are

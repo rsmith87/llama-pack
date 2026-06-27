@@ -28,6 +28,7 @@ if TYPE_CHECKING:
     from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
     from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
     from llama_pack.core.runtime.process_manager import ProcessManager
+    from llama_pack.core.runtime.network_security import NetworkPolicy
     from llama_pack.core.settings.runtime import RuntimeSettingsService
     from llama_pack.core.threads.service import ThreadService
 
@@ -54,6 +55,10 @@ def get_quantization_manager(request: Request) -> QuantizationManager:
 
 def get_node_registry(request: Request) -> NodeRegistry:
     return request.app.state.node_registry
+
+
+def get_network_policy(request: Request) -> NetworkPolicy:
+    return request.app.state.network_policy
 
 
 def get_chat_proxy(request: Request) -> ChatProxy:

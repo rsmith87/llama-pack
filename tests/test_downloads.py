@@ -2,13 +2,18 @@ from pathlib import Path
 from datetime import UTC, datetime
 
 import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 
+from llama_pack.api.dependencies import get_download_manager
+from llama_pack.api.routes.downloads import router as downloads_router
 from llama_pack.core.config import load_config
 from llama_pack.core.model_assets.downloads import DownloadManager
 from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.recommendations import recommend_downloads
 from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
+from llama_pack.core.runtime.network_security import OfflineNetworkBlockedError
 from tests.persistence_db_setup import prepare_downloads_db, prepare_models_db
 
 
@@ -179,6 +184,70 @@ def test_download_manager_lists_remote_gguf_quants(tmp_path):
             "repo_type": "model",
         }
     ]
+
+
+class OfflineDownloadManager:
+    def list_remote_quants(self, repo_id, revision=None):
+        raise OfflineNetworkBlockedError(
+            "Blocked outbound request to 'huggingface.co' for list Hugging Face quants: offline_mode is enabled."
+        )
+
+
+def test_download_quants_maps_offline_block_to_409():
+    app = FastAPI()
+    app.include_router(downloads_router, prefix="/lm-api/v1")
+    app.dependency_overrides[get_download_manager] = lambda: OfflineDownloadManager()
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/downloads/owner/model/quants")
+
+    assert response.status_code == 409
+    assert "offline_mode is enabled" in response.json()["detail"]
+
+
+def test_download_manager_blocks_remote_quants_in_offline_mode(tmp_path):
+    manager, _store, api = make_manager(
+        tmp_path,
+        config_overrides={"offline_mode": True},
+        files=[FakeRepoFile("model.Q4_K_M.gguf", 100)],
+    )
+
+    with pytest.raises(OfflineNetworkBlockedError):
+        manager.list_remote_quants("owner/model")
+
+    assert api.calls == []
+
+
+def test_download_manager_blocks_start_before_process_spawn_in_offline_mode(tmp_path):
+    spawned = False
+
+    def fake_popen(command, **kwargs):
+        nonlocal spawned
+        spawned = True
+        return FakeProcess()
+
+    manager, store, api = make_manager(
+        tmp_path,
+        config_overrides={"offline_mode": True},
+        popen=fake_popen,
+    )
+
+    with pytest.raises(OfflineNetworkBlockedError):
+        manager.start("owner/model", triggered_by="tester")
+
+    assert spawned is False
+    assert store.created == []
+    assert api.calls == []
+
+
+def test_download_manager_recommendations_do_not_call_hf_api_in_offline_mode(tmp_path):
+    manager, _store, api = make_manager(tmp_path, config_overrides={"offline_mode": True})
+
+    payload = manager.recommendations({"memory_gb": 64})
+
+    assert payload["offline_mode"] is True
+    assert "blocked" in str(payload["message"]).lower()
+    assert api.calls == []
 
 
 def test_download_manager_prefers_quant_directory_over_model_name(tmp_path):

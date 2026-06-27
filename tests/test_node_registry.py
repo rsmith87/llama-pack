@@ -2,6 +2,7 @@ import pytest
 
 from llama_pack.core.config import NodeConfig, load_config
 from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.core.runtime.network_security import NetworkPolicy, OfflineNetworkBlockedError
 from llama_pack.storage.db import InMemoryStore
 from llama_pack.api.routes.nodes.common import stream_node_request
 
@@ -23,6 +24,45 @@ def test_dynamic_nodes_and_heartbeats_persist_via_store():
     assert restored_nodes[0]["name"] == "win"
     assert restored_nodes[0]["registration"] == "dynamic"
     assert restored_nodes[0]["last_heartbeat"] is not None
+
+
+@pytest.mark.asyncio
+async def test_node_registry_blocks_public_node_url_in_offline_mode():
+    config = load_config(
+        {
+            "mode": "controller",
+            "offline_mode": True,
+            "nodes": {},
+        }
+    )
+    registry = NodeRegistry(config, network_policy=NetworkPolicy(config))
+    registry.register_node("public-node", NodeConfig(url="https://public.example.com:9000", api_key="secret"))
+
+    with pytest.raises(OfflineNetworkBlockedError):
+        await registry.request_node("public-node", "GET", "/lm-api/v1/models")
+
+
+@pytest.mark.asyncio
+async def test_node_registry_allows_private_node_url_in_offline_mode():
+    captured = {}
+
+    async def fake_request(method, url, api_key, verify_tls, json_body=None):
+        captured["url"] = url
+        return {"ok": True}
+
+    config = load_config(
+        {
+            "mode": "controller",
+            "offline_mode": True,
+            "nodes": {"lan-node": {"url": "http://192.168.1.20:9000", "api_key": "secret"}},
+        }
+    )
+    registry = NodeRegistry(config, request=fake_request, network_policy=NetworkPolicy(config))
+
+    result = await registry.request_node("lan-node", "GET", "/lm-api/v1/models")
+
+    assert result == {"ok": True}
+    assert captured["url"] == "http://192.168.1.20:9000/lm-api/v1/models"
 
 
 def test_registering_static_node_preserves_static_credentials_and_registration():

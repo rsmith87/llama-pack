@@ -2730,6 +2730,64 @@ def _make_http_json_config(tmp_path, url, *, method="GET", max_response_bytes=65
     )
 
 
+def _make_http_config(tmp_path, url):
+    return load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "offline_mode": True,
+            "agent_tools": {
+                "enabled": True,
+                "tools": {
+                    "fetch_text": {
+                        "type": "http",
+                        "description": "Fetch text endpoint.",
+                        "url": url,
+                        "method": "GET",
+                    }
+                },
+            },
+        }
+    )
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_http_blocks_public_url_in_offline_mode(tmp_path):
+    config = _make_http_config(tmp_path, "https://example.com/data")
+
+    result = await ToolExecutor(config).execute("fetch_text", {}, request_id="req-1", model="qwen")
+
+    assert result["ok"] is False
+    assert "offline_mode is enabled" in str(result["error"])
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_http_json_blocks_public_url_in_offline_mode(tmp_path):
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "offline_mode": True,
+            "agent_tools": {
+                "enabled": True,
+                "tools": {
+                    "health_check": {
+                        "type": "http_json",
+                        "description": "Check health endpoint.",
+                        "url": "https://example.com/data",
+                        "method": "GET",
+                    }
+                },
+            },
+        }
+    )
+
+    result = await ToolExecutor(config).execute("health_check", {}, request_id="req-1", model="qwen")
+
+    assert result["ok"] is False
+    assert "offline_mode is enabled" in str(result["error"])
+
+
 @pytest.mark.asyncio
 @respx.mock
 async def test_tool_executor_http_json_returns_parsed_data(tmp_path):
@@ -2974,6 +3032,38 @@ def _make_web_fetch_config(tmp_path, *, allowed_domains=None):
             },
         }
     )
+
+
+@pytest.mark.asyncio
+async def test_tool_executor_web_fetch_blocks_public_url_in_offline_mode(tmp_path):
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "offline_mode": True,
+            "agent_tools": {
+                "enabled": True,
+                "tools": {
+                    "browse": {
+                        "type": "web_fetch",
+                        "description": "Fetch a web page.",
+                        "strip_html": True,
+                        "parameters": {
+                            "type": "object",
+                            "properties": {"url": {"type": "string"}},
+                            "required": ["url"],
+                            "additionalProperties": False,
+                        },
+                    }
+                },
+            },
+        }
+    )
+
+    result = await ToolExecutor(config).execute("browse", {"url": "https://example.com"}, request_id="req-1", model="qwen")
+
+    assert result["ok"] is False
+    assert "offline_mode is enabled" in str(result["error"])
 
 
 @pytest.mark.asyncio

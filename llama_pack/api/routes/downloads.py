@@ -9,6 +9,7 @@ from llama_pack.core.config import AppConfig
 from llama_pack.core.model_assets.downloads import DownloadManager
 from llama_pack.core.runtime.health_check import health_payload
 from llama_pack.core.runtime.log_stream import stream_log_file
+from llama_pack.core.runtime.network_security import OfflineNetworkBlockedError
 
 
 class StartDownloadRequest(BaseModel):
@@ -42,6 +43,8 @@ def remote_quants_by_query(
 ):
     try:
         return manager.list_remote_quants(repo_id, revision=revision)
+    except OfflineNetworkBlockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -64,6 +67,8 @@ def remote_quants(
 ):
     try:
         return manager.list_remote_quants(repo_id, revision=revision)
+    except OfflineNetworkBlockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -81,6 +86,8 @@ def start_download(
         include_file = body.include_file if body else None
         mmproj_file = body.mmproj_file if body else None
         return manager.start(repo_id, triggered_by=actor, revision=revision, include_file=include_file, mmproj_file=mmproj_file)
+    except OfflineNetworkBlockedError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
 

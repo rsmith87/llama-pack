@@ -1,5 +1,5 @@
 import "./styles.css";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { loadDashboardData } from "../../api/health";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer } from "../../api/library";
@@ -17,6 +17,7 @@ import { benchmarkSearch } from "../../features/benchmarks/handoff";
 import type { TransferState } from "../../types/nodes";
 import { SendModelModal } from "../../components/SendModelModal";
 import { modelName, statusTone } from "../../features/models";
+import { isActiveModel } from "../../features/models/modelStatus";
 import { librarySelectionSearch } from "../../features/ggufLibrary";
 import { TIMERS } from "../../constants";
 import { 
@@ -48,6 +49,17 @@ function chatSearch(model: string, target: string, mode: "direct" | "thread", so
   params.set("mode", mode);
   params.set("source", source);
   return params.toString();
+}
+
+function runningFirstModels(models: LocalModel[]): LocalModel[] {
+  return models
+    .map((model, index) => ({ model, index }))
+    .sort((a, b) => {
+      const runningDelta = Number(isActiveModel(b.model)) - Number(isActiveModel(a.model));
+      if (runningDelta !== 0) return runningDelta;
+      return a.index - b.index;
+    })
+    .map(({ model }) => model);
 }
 
 export function DashboardPage() {
@@ -127,6 +139,7 @@ export function DashboardPage() {
 
   const mode = data.health?.mode || "unknown";
   const isController = mode === "controller";
+  const carouselModels = useMemo(() => runningFirstModels(data.localModels), [data.localModels]);
   const nodeRecords = asNodeRecords(data.nodes);
   const controllerNodes = (() => {
     const byName = new Map<string, DashboardData["nodes"][number]>();
@@ -298,7 +311,7 @@ export function DashboardPage() {
             <EmptyState message="No local models reported." />
           ) : (
             <ModelCarousel
-              items={data.localModels}
+              items={carouselModels}
               slidesPerView={3}
               renderItem={(item, index) =>
                 renderModelCard(item as LocalModel, `${modelName(item as LocalModel)}-${index}`)

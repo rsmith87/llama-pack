@@ -9,6 +9,7 @@ from bs4 import BeautifulSoup, NavigableString, Tag
 
 from llama_pack.core.agent_tools.common import MAX_RESULT_CHARS, truncate
 from llama_pack.core.config.models import AgentToolDefinitionConfig, AppConfig
+from llama_pack.core.runtime.network_security import NetworkPolicy, OfflineNetworkBlockedError
 
 _SSRF_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "::1"}
 _PRIVATE_NETWORKS = [
@@ -107,6 +108,7 @@ def _extract_text(html: str) -> str:
 class WebFetchToolAdapter:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
+        self.network_policy = NetworkPolicy(config)
 
     async def execute(self, tool: AgentToolDefinitionConfig, arguments: dict[str, object]) -> dict[str, object]:
         url = str(arguments.get("url") or "").strip()
@@ -116,6 +118,11 @@ class WebFetchToolAdapter:
         parsed = urlparse(url)
         if parsed.scheme not in {"http", "https"}:
             return {"ok": False, "error": f"web_fetch only supports http/https, got: {parsed.scheme!r}"}
+
+        try:
+            self.network_policy.assert_url_allowed(url, "agent web_fetch tool")
+        except OfflineNetworkBlockedError as exc:
+            return {"ok": False, "error": str(exc)}
 
         hostname = parsed.hostname or ""
         ssrf_err = _check_ssrf(hostname)

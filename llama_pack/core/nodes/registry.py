@@ -8,6 +8,7 @@ import httpx
 
 from llama_pack.api.http_headers import LLAMA_PACK_API_KEY_HEADER
 from llama_pack.core.config import AppConfig, NodeConfig
+from llama_pack.core.runtime.network_security import NetworkPolicy
 
 
 ControllerRequest = Callable[[str, str, str | None, bool, dict[str, Any] | None], Awaitable[dict[str, Any]]]
@@ -24,8 +25,10 @@ class NodeRegistry:
         config: AppConfig,
         request: ControllerRequest | None = None,
         store: NodeStateStore | None = None,
+        network_policy: NetworkPolicy | None = None,
     ):
         self.config = config
+        self.network_policy = network_policy or NetworkPolicy(config)
         self._request = request or self._default_request
         self._uses_default_request = request is None
         self._store = store
@@ -86,6 +89,7 @@ class NodeRegistry:
         node = self._get_node(node_name)
         base_url = _validated_base_url(node_name, node.url)
         url = f"{base_url}/{path.lstrip('/')}"
+        self.network_policy.assert_url_allowed(url, f"node request to {node_name}")
         if self._uses_default_request:
             return await self._default_request(method, url, node.api_key, node.verify_tls, json_body, timeout=timeout)
         if json_body is None:

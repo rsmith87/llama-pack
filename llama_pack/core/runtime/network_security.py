@@ -1,11 +1,34 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import ipaddress
+from dataclasses import dataclass
 import os
 from urllib.parse import urlparse
 
 from llama_pack.core.config import AppConfig, NodeConfig
+
+
+IPNetwork = ipaddress.IPv4Network | ipaddress.IPv6Network
+
+
+DEFAULT_ALLOWED_NETWORKS: tuple[IPNetwork, ...] = tuple(
+    ipaddress.ip_network(value)
+    for value in (
+        "127.0.0.0/8",
+        "10.0.0.0/8",
+        "172.16.0.0/12",
+        "192.168.0.0/16",
+        "169.254.0.0/16",
+        "::1/128",
+        "fc00::/7",
+        "fe80::/10",
+    )
+)
+LOCALHOST_NAMES = frozenset({"localhost"})
+
+
+class OfflineNetworkBlockedError(PermissionError):
+    pass
 
 
 @dataclass(frozen=True)
@@ -24,6 +47,56 @@ class RuntimeDiagnostic:
             "evidence": self.evidence,
             "action": self.action,
         }
+
+
+@dataclass(frozen=True)
+class NetworkPolicy:
+    offline_mode: bool
+    allowed_hosts: frozenset[str]
+    allowed_networks: tuple[IPNetwork, ...]
+
+    def __init__(self, config: AppConfig):
+        object.__setattr__(self, "offline_mode", config.offline_mode)
+        object.__setattr__(self, "allowed_hosts", frozenset(_allowed_hosts(config)))
+        configured_networks = tuple(ipaddress.ip_network(cidr, strict=False) for cidr in config.offline_allowed_cidrs)
+        object.__setattr__(self, "allowed_networks", (*DEFAULT_ALLOWED_NETWORKS, *configured_networks))
+
+    def is_url_allowed(self, url: str) -> bool:
+        if not self.offline_mode:
+            return True
+        parsed = urlparse(url)
+        hostname = parsed.hostname
+        if hostname is None:
+            return False
+        normalized = hostname.lower().strip("[]")
+        if normalized in LOCALHOST_NAMES or normalized in self.allowed_hosts:
+            return True
+        try:
+            address = ipaddress.ip_address(normalized)
+        except ValueError:
+            return False
+        return any(address in network for network in self.allowed_networks)
+
+    def assert_url_allowed(self, url: str, purpose: str) -> None:
+        if self.is_url_allowed(url):
+            return
+        parsed = urlparse(url)
+        host = parsed.hostname or "missing hostname"
+        raise OfflineNetworkBlockedError(
+            f"Blocked outbound request to {host!r} for {purpose}: offline_mode is enabled. "
+            "Use offline_allowed_hosts or offline_allowed_cidrs only if this destination is intentionally reachable without public internet."
+        )
+
+
+def _allowed_hosts(config: AppConfig) -> set[str]:
+    hosts = {host.lower().strip() for host in config.offline_allowed_hosts}
+    for url in [config.controller_url, config.agent_url, *(node.url for node in config.nodes.values())]:
+        if not url:
+            continue
+        parsed = urlparse(url)
+        if parsed.hostname:
+            hosts.add(parsed.hostname.lower().strip("[]"))
+    return hosts
 
 
 def network_security_diagnostics(config: AppConfig) -> list[RuntimeDiagnostic]:

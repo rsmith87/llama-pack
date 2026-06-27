@@ -131,6 +131,28 @@ it("renders local models as GGUF-style cards with runtime actions", async () => 
   expect(screen.getAllByText("mac-mini").length).toBeGreaterThan(0);
 });
 
+it("shows running models first in the dashboard model carousel", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn()
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "agent", configured_models: 3 }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [
+        { name: "stopped-a", status: "stopped" },
+        { name: "running-b", status: "running" },
+        { name: "stopped-c", status: "stopped" },
+      ] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) }),
+  );
+
+  renderDashboardPage();
+
+  await screen.findByText("running-b");
+  const modelActions = screen.getAllByRole("button", { name: /^Open / })
+    .map((button) => button.getAttribute("aria-label"))
+    .filter((label): label is string => Boolean(label?.startsWith("Open ")));
+  expect(modelActions).toEqual(["Open running-b", "Open stopped-a", "Open stopped-c"]);
+});
+
 it("marks startup-failed models and points users to logs", async () => {
   vi.stubGlobal(
     "fetch",

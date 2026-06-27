@@ -15,6 +15,7 @@ from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.persistence.model_download_store_orm import ModelDownloadStoreOrm
 from llama_pack.core.model_assets.recommendations import _quant_from_path as recommendation_quant_from_path
 from llama_pack.core.model_assets.recommendations import recommend_downloads
+from llama_pack.core.runtime.network_security import NetworkPolicy
 
 
 PopenFactory = Callable[..., subprocess.Popen]
@@ -36,6 +37,7 @@ class DownloadManager:
         hf_api: Any | None = None,
         inventory_service: ModelAssetInventoryService | None = None,
         disk_usage: DiskUsageFactory = shutil.disk_usage,
+        network_policy: NetworkPolicy | None = None,
     ):
         self.config = config
         self.store = store
@@ -43,6 +45,7 @@ class DownloadManager:
         self._hf_api = hf_api
         self.inventory_service = inventory_service
         self._disk_usage = disk_usage
+        self.network_policy = network_policy or NetworkPolicy(config)
         self._processes: dict[str, subprocess.Popen] = {}
         self._log_handles: dict[str, IO[bytes]] = {}
         self._recommendations_cache: tuple[float, dict[str, object]] | None = None
@@ -64,6 +67,12 @@ class DownloadManager:
         return sorted(candidates.values(), key=lambda x: str(x["repo_id"]).lower())
 
     def recommendations(self, system: dict[str, Any] | None) -> dict[str, object]:
+        if self.config.offline_mode:
+            return {
+                "recommendations": [],
+                "offline_mode": True,
+                "message": "Download recommendations that require public Hugging Face access are blocked because offline_mode is enabled.",
+            }
         cache_ttl_seconds = 3600
         now = time.monotonic()
         if self._recommendations_cache is not None:
@@ -80,6 +89,7 @@ class DownloadManager:
 
     def list_remote_quants(self, repo_id: str, *, revision: str | None = None) -> list[dict[str, object]]:
         repo_id = self._normalize_repo_id(repo_id)
+        self._assert_huggingface_allowed(f"list Hugging Face quants for {repo_id}")
         files = self._list_repo_tree(repo_id, revision=revision)
         quants = []
         mmprojs = []
@@ -110,6 +120,7 @@ class DownloadManager:
         mmproj_file: str | None = None,
     ) -> dict[str, object]:
         repo_id = self._normalize_repo_id(repo_id)
+        self._assert_huggingface_allowed(f"start Hugging Face download for {repo_id}")
         include_file = self._normalize_include_file(include_file)
         mmproj_file = self._normalize_include_file(mmproj_file)
         revision = revision.strip() if revision else None
@@ -363,6 +374,9 @@ class DownloadManager:
 
     def _ensure_repo_access(self, repo_id: str, *, revision: str | None = None) -> None:
         self._list_repo_tree(repo_id, revision=revision)
+
+    def _assert_huggingface_allowed(self, purpose: str) -> None:
+        self.network_policy.assert_url_allowed("https://huggingface.co", purpose)
 
     def _list_repo_tree(self, repo_id: str, *, revision: str | None = None) -> list[Any]:
         try:

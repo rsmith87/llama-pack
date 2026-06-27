@@ -27,6 +27,7 @@ from llama_pack.api.routes import (
     models,
     node_work,
     nodes,
+    offline,
     ollama_compat,
     openai_compat,
     ocr,
@@ -54,11 +55,13 @@ from llama_pack.core.model_assets.models_db import ModelAssetInventoryService
 from llama_pack.core.model_assets.downloads import DownloadManager
 from llama_pack.core.model_assets.transfers import TransferManager
 from llama_pack.core.nodes.registry import NodeRegistry
+from llama_pack.core.runtime.network_security import NetworkPolicy
 from llama_pack.core.runtime.process_manager import ProcessManager
 from llama_pack.core.model_assets.quantizations import QuantizationManager
 from llama_pack.core.orchestration.store_orm import OrchestrationStoreOrm
 from llama_pack.core.orchestration.repo import OrchestrationRepo
 from llama_pack.core.orchestration.orchestrator import Orchestrator
+from llama_pack.core.offline.setup import OfflineSetupService
 from llama_pack.core.threads.service import ThreadService
 from llama_pack.core.threads.store import ThreadStore
 from llama_pack.core.nodes.worker import AgentWorker
@@ -270,6 +273,7 @@ def _configure_app_state(
     app.state.runtime_settings_service = RuntimeSettingsService(config=app_config, store=app.state.settings_store)
     app_config = app.state.runtime_settings_service.effective_config()
     app.state.config = app_config
+    app.state.network_policy = NetworkPolicy(app_config)
     app.state.plugin_registry = load_plugins(app_config)
     app.state.ocr_service = create_ocr_service(app_config.log_dir / "ocr")
     persistent_config = app_config.config_source not in {"(defaults)", "(in-memory)"}
@@ -280,8 +284,14 @@ def _configure_app_state(
         if app_config.mode == "controller"
         else None
     )
-    app.state.node_registry = NodeRegistry(app_config, request=controller_request, store=store)
+    app.state.node_registry = NodeRegistry(
+        app_config,
+        request=controller_request,
+        store=store,
+        network_policy=app.state.network_policy,
+    )
     app.state.orchestrator = _build_orchestrator(app_config)
+    app.state.offline_setup_service = OfflineSetupService(app.state.node_registry, app.state.orchestrator)
     app.state.chat_session_store = ChatSessionStoreOrm(db_url=auth_urls.chat_sessions)
     app.state.model_download_store = ModelDownloadStoreOrm(db_url=auth_urls.downloads)
     try:
@@ -358,6 +368,7 @@ def _configure_app_state(
         app_config,
         app.state.model_download_store,
         inventory_service=app.state.model_asset_inventory_service,
+        network_policy=app.state.network_policy,
     )
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     app.state.project_store = ProjectStoreOrm(db_url=auth_urls.projects)
@@ -403,6 +414,7 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     app.include_router(ocr.router, prefix=LM_API_PREFIX)
     app.include_router(conversions.router, prefix=LM_API_PREFIX)
     app.include_router(downloads.router, prefix=LM_API_PREFIX)
+    app.include_router(offline.router, prefix=LM_API_PREFIX)
     app.include_router(quantizations.router, prefix=LM_API_PREFIX)
     app.include_router(runtime.router, prefix=LM_API_PREFIX)
     app.include_router(settings.router, prefix=LM_API_PREFIX)

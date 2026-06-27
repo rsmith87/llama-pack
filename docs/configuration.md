@@ -63,6 +63,25 @@ nodes:
     url: ${LLAMA_PACK_WINDOWS_2080TI_AGENT_URL}
 ```
 
+## Offline Mode
+
+`offline_mode` blocks Llama Pack public outbound network calls while preserving
+loopback, private LAN ranges, configured controller/agent URLs, configured node
+URLs, and explicit allowlist entries.
+
+```yaml
+offline_mode: true
+offline_allowed_hosts:
+  - mirror.example.internal
+offline_allowed_cidrs:
+  - 100.64.0.0/10
+```
+
+Use this after required model artifacts have been downloaded and distributed to
+the nodes that need them. Hugging Face downloads and remote lookup helpers
+require `offline_mode: false`. This is app-level enforcement, not an operating
+system firewall.
+
 ## Split Config Files
 
 For small installs, a single `config.yaml` is still fine. For controllers,

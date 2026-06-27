@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import ipaddress
 from pathlib import Path
 import re
 from typing import Any, Literal
@@ -251,6 +252,9 @@ class AppConfig(BaseModel):
     routing_fanout_enabled: bool = False
     routing_fanout_max: int = 2
     routing_plugin_path: str | None = None
+    offline_mode: bool = False
+    offline_allowed_hosts: list[str] = Field(default_factory=list)
+    offline_allowed_cidrs: list[str] = Field(default_factory=list)
     client_cors_origins: list[str] = Field(default_factory=list)
     enabled_plugins: list[str] = Field(default_factory=list)
     plugins: dict[str, PluginConfig] = Field(default_factory=dict)
@@ -302,6 +306,18 @@ class AppConfig(BaseModel):
             if not PLUGIN_ID_PATTERN.fullmatch(plugin_id):
                 raise ValueError(f"Invalid plugin id {plugin_id!r}")
         return value
+
+    @model_validator(mode="after")
+    def validate_offline_network_config(self) -> "AppConfig":
+        for host in self.offline_allowed_hosts:
+            if not host.strip():
+                raise ValueError("offline_allowed_hosts entries must not be empty")
+        for cidr in self.offline_allowed_cidrs:
+            try:
+                ipaddress.ip_network(cidr, strict=False)
+            except ValueError as exc:
+                raise ValueError(f"offline_allowed_cidrs contains invalid CIDR {cidr!r}: {exc}") from exc
+        return self
 
     @property
     def model_roots(self) -> list[Path]:
