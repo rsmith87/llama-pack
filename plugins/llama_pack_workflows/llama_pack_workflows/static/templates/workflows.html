@@ -21,6 +21,25 @@
       Parameters JSON
       <textarea name="parameters_json" data-workflow-parameters rows="7" required></textarea>
     </label>
+    <fieldset class="workflow-trigger-section">
+      <legend>Trigger</legend>
+      <label>
+        Type
+        <select name="trigger_type" data-workflow-trigger-type required>
+          <option value="manual">Manual</option>
+          <option value="schedule_daily">Daily</option>
+          <option value="schedule_interval">Interval</option>
+        </select>
+      </label>
+      <label data-workflow-trigger-field="daily">
+        Run time
+        <input name="daily_time" type="time" value="09:00" />
+      </label>
+      <label data-workflow-trigger-field="interval">
+        Every
+        <input name="interval_minutes" type="number" min="1" step="1" value="60" />
+      </label>
+    </fieldset>
     <label class="workflow-checkbox">
       <input name="enabled" type="checkbox" checked />
       Enabled

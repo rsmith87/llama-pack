@@ -55,6 +55,21 @@
   resize: vertical;
 }
 
+.workflow-trigger-section {
+  border: 1px solid var(--border-color, #d5d8df);
+  border-radius: 8px;
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 10px;
+}
+
+.workflow-trigger-section legend {
+  font-size: 13px;
+  font-weight: 700;
+  padding: 0 4px;
+}
+
 .workflow-checkbox {
   align-items: center;
   display: flex !important;

@@ -182,16 +182,22 @@ def test_manual_run_executes_thread_prompt_chain(tmp_path: Path):
 def test_workflows_plugin_static_assets_load(tmp_path: Path):
     with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
         style = client.get("/plugin-assets/llama_pack_workflows/workflows.css")
+        template = client.get("/plugin-assets/llama_pack_workflows/templates/workflows.html")
         controller = client.get("/plugin-assets/llama_pack_workflows/controllers/workflows.js")
         migration_status = client.get("/lm-api/v1/plugins/llama_pack_workflows/migrations/status")
         migration_upgrade = client.post("/lm-api/v1/plugins/llama_pack_workflows/migrations/main/upgrade")
 
         assert style.status_code == 200
+        assert template.status_code == 200
         assert controller.status_code == 200
         assert migration_status.status_code == 200
         assert migration_upgrade.status_code == 200
+        assert "data-workflow-trigger-type" in template.text
+        assert 'value="schedule_daily"' in template.text
+        assert 'value="schedule_interval"' in template.text
         assert "data-workflow-action" in controller.text
         assert "export function mountPage" in controller.text
+        assert "buildTriggers" in controller.text
         assert "host.apiGet" in controller.text
         assert "host.apiPost" in controller.text
         assert "fetch(" not in controller.text
