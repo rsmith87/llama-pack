@@ -53,6 +53,20 @@ function escapeHtml(value) {
   return element.innerHTML;
 }
 
+function workflowIcon(name) {
+  const icons = {
+    total: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8h12M6 12h12M6 16h8"/><path d="M4 5h16v14H4z"/></svg>`,
+    enabled: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 12 3 3 5-6"/><path d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z"/></svg>`,
+    timers: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 7v5l3 2"/><path d="M19 12a7 7 0 1 1-14 0 7 7 0 0 1 14 0Z"/><path d="M9 2h6"/></svg>`,
+    failed: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 9 6 6m0-6-6 6"/><path d="M12 3a9 9 0 1 1 0 18 9 9 0 0 1 0-18Z"/></svg>`,
+    trigger: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v4M12 17v4M3 12h4M17 12h4"/><path d="M8 8h8v8H8z"/></svg>`,
+    template: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5M9 13h6M9 17h4"/></svg>`,
+    step: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/></svg>`,
+    output: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 19h14"/><path d="M12 5v10"/><path d="m8 11 4 4 4-4"/></svg>`,
+  };
+  return icons[name] || icons.step;
+}
+
 function formatTemplateName(templateId, templates) {
   const template = templates.find((item) => item.id === templateId);
   return template ? template.name : templateId;
@@ -98,10 +112,10 @@ function renderSummary(root, workflows, runs) {
   const timerCount = workflows.filter(isScheduledWorkflow).length;
   const failedCount = runs.filter((item) => item.status === "failed").length;
   summary.innerHTML = `
-    <div><span>Total</span><strong>${workflows.length}</strong></div>
-    <div><span>Enabled</span><strong>${enabledCount}</strong></div>
-    <div><span>Timers</span><strong>${timerCount}</strong></div>
-    <div><span>Failed runs</span><strong>${failedCount}</strong></div>
+    <div class="total"><span class="workflow-summary-icon">${workflowIcon("total")}</span><span>Total</span><strong>${workflows.length}</strong></div>
+    <div class="enabled"><span class="workflow-summary-icon">${workflowIcon("enabled")}</span><span>Enabled</span><strong>${enabledCount}</strong></div>
+    <div class="timers"><span class="workflow-summary-icon">${workflowIcon("timers")}</span><span>Timers</span><strong>${timerCount}</strong></div>
+    <div class="failed"><span class="workflow-summary-icon">${workflowIcon("failed")}</span><span>Failed runs</span><strong>${failedCount}</strong></div>
   `;
 }
 
@@ -119,22 +133,26 @@ function renderDiagram(root, workflow, templates) {
   title.textContent = workflow.name;
   subtitle.textContent = workflow.description || "No description provided.";
   const stepNodes = describeWorkflowSteps(workflow).map((step, index) => `
-    <div class="workflow-diagram-node">
+    <div class="workflow-diagram-node step">
+      <span class="workflow-diagram-icon">${workflowIcon("step")}</span>
       <span>Step ${index + 1}</span>
       <strong>${escapeHtml(step)}</strong>
     </div>
   `).join("");
   diagram.innerHTML = `
-    <div class="workflow-diagram-node">
+    <div class="workflow-diagram-node trigger">
+      <span class="workflow-diagram-icon">${workflowIcon("trigger")}</span>
       <span>Trigger</span>
       <strong>${escapeHtml(describeTrigger(workflow))}</strong>
     </div>
-    <div class="workflow-diagram-node">
+    <div class="workflow-diagram-node template">
+      <span class="workflow-diagram-icon">${workflowIcon("template")}</span>
       <span>Template</span>
       <strong>${escapeHtml(formatTemplateName(workflow.template_id, templates))}</strong>
     </div>
     ${stepNodes}
-    <div class="workflow-diagram-node">
+    <div class="workflow-diagram-node output">
+      <span class="workflow-diagram-icon">${workflowIcon("output")}</span>
       <span>Output</span>
       <strong>Run record</strong>
     </div>
