@@ -14,8 +14,9 @@ from llama_pack.core.chat.context_management import (
     summary_prompt_messages,
     summary_system_message,
 )
-from llama_pack.core.config.models import AppConfig
 from llama_pack.core.chat.internal_payload import SKIP_CONTEXT_MANAGEMENT_KEY, TRUSTED_CONTROLLER_TARGET_KEY
+from llama_pack.core.config.models import AppConfig
+from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 
@@ -37,6 +38,7 @@ class ThreadService:
         model_available: ModelAvailable | None = None,
         model_artifact_presence: ModelArtifactPresence | None = None,
         node_startup_allowed: NodeStartupAllowed | None = None,
+        event_bus: EventBus | None = None,
     ) -> None:
         self.config = config
         self.store = store
@@ -50,6 +52,7 @@ class ThreadService:
         )
         self._turn_locks: dict[str, asyncio.Lock] = {}
         self._turn_locks_guard = asyncio.Lock()
+        self.event_bus = event_bus
 
     async def acquire_turn_lock(self, thread_id: str) -> asyncio.Lock:
         async with self._turn_locks_guard:
@@ -104,7 +107,7 @@ class ThreadService:
         turn_id = str(uuid4())
         requested_model = self._requested_model(model, model_family, context_profile)
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="user_message",
             role="user",
@@ -115,7 +118,7 @@ class ThreadService:
         try:
             self._require_thread_node_target(thread_id, target)
         except ValueError as exc:
-            self._append_error(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
             raise ThreadChatError(thread_id, "ROUTING_ERROR", str(exc)) from exc
 
         try:
@@ -126,7 +129,7 @@ class ThreadService:
                 previous_route=previous_route,
             )
         except ValueError as exc:
-            self._append_error(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
             raise ThreadChatError(thread_id, "ROUTING_ERROR", str(exc)) from exc
 
         route = {
@@ -137,7 +140,7 @@ class ThreadService:
             "strategy": decision.strategy,
             "reason": decision.reason,
         }
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="routing_decision",
             role=None,
@@ -240,6 +243,46 @@ class ThreadService:
         self.store.get_thread(thread_id)
         return self.store.list_events(thread_id, include_internal=include_internal)
 
+    async def _append_event_async(
+        self,
+        *,
+        thread_id: str,
+        event_type: str,
+        role: str | None,
+        content: dict[str, Any],
+        public: bool,
+        turn_id: str | None = None,
+        route: dict[str, Any] | None = None,
+        agent_node: str | None = None,
+        model: str | None = None,
+        error_code: str | None = None,
+        error_detail: str | None = None,
+    ) -> dict[str, Any]:
+        event = self.store.append_event(
+            thread_id=thread_id,
+            event_type=event_type,
+            role=role,
+            content=content,
+            public=public,
+            turn_id=turn_id,
+            route=route,
+            agent_node=agent_node,
+            model=model,
+            error_code=error_code,
+            error_detail=error_detail,
+        )
+        await self._publish_thread_event(event)
+        return event
+
+    async def _publish_thread_event(self, event: dict[str, Any]) -> None:
+        if self.event_bus is None:
+            return
+        await self.event_bus.emit(
+            _plugin_thread_event_type(str(event["event_type"]), event.get("content")),
+            payload=_plugin_thread_event_payload(event),
+            correlation_id=str(event.get("turn_id") or event["id"]),
+        )
+
     async def compact_thread_async(
         self,
         thread_id: str,
@@ -263,7 +306,7 @@ class ThreadService:
                 previous_route=previous_route,
             )
         except ValueError as exc:
-            self._append_error(thread_id, "ROUTING_ERROR", exc)
+            await self._append_error_async(thread_id, "ROUTING_ERROR", exc)
             raise
 
         route = {
@@ -274,7 +317,7 @@ class ThreadService:
             "strategy": decision.strategy,
             "reason": decision.reason,
         }
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="routing_decision",
             role=None,
@@ -354,7 +397,7 @@ class ThreadService:
         ]
         turn_id = str(uuid4())
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="user_message",
             role="user",
@@ -365,7 +408,7 @@ class ThreadService:
         try:
             self._require_thread_node_target(thread_id, target)
         except ValueError as exc:
-            self._append_error(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
             raise
 
         try:
@@ -376,7 +419,7 @@ class ThreadService:
                 previous_route=previous_route,
             )
         except ValueError as exc:
-            self._append_error(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
             raise
 
         route = {
@@ -388,7 +431,7 @@ class ThreadService:
             "reason": decision.reason,
         }
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="routing_decision",
             role=None,
@@ -468,10 +511,10 @@ class ThreadService:
             )
             assistant_content = raw_response["choices"][0]["message"]["content"]
         except Exception as exc:
-            self._append_error(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
             raise
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="assistant_message",
             role="assistant",
@@ -546,7 +589,7 @@ class ThreadService:
                 },
             )
         except Exception as exc:
-            self._append_error(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
             raise
 
         async def _generate() -> AsyncIterator[bytes]:
@@ -581,13 +624,13 @@ class ThreadService:
                                     pass
                     yield chunk
             except Exception as exc:
-                self._append_error(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
+                await self._append_error_async(thread_id, "CHAT_PROXY_ERROR", exc, turn_id=turn_id)
                 err_event = json.dumps({"type": "error", "error": str(exc)})
                 yield f"data: {err_event}\n\n".encode()
                 yield b"data: [DONE]\n\n"
                 return
 
-            self.store.append_event(
+            await self._append_event_async(
                 thread_id=thread_id,
                 event_type="assistant_message",
                 role="assistant",
@@ -626,12 +669,15 @@ class ThreadService:
                 "strategy": target.strategy,
                 "reason": target.reason,
             }
-            self._append_agent_request(
+            await self._append_event_async(
                 thread_id=thread_id,
+                event_type="agent_request",
+                role=None,
+                content={"node": target.node, "model": target.model, "messages": messages},
+                public=False,
                 turn_id=turn_id,
-                node=target.node,
+                agent_node=target.node,
                 model=target.model,
-                messages=messages,
             )
             try:
                 raw_response, response_meta = await self.chat_proxy.chat_with_meta(
@@ -639,27 +685,33 @@ class ThreadService:
                     {"messages": messages, "target": f"node:{target.node}", TRUSTED_CONTROLLER_TARGET_KEY: True},
                 )
                 content = raw_response["choices"][0]["message"]["content"]
-                self._append_agent_response(
+                await self._append_event_async(
                     thread_id=thread_id,
+                    event_type="agent_response",
+                    role=None,
+                    content={"text": content},
+                    public=False,
                     turn_id=turn_id,
-                    node=target.node,
-                    model=target.model,
-                    content=content,
                     route=target_route,
+                    agent_node=target.node,
+                    model=target.model,
                 )
                 agent_outputs.append({"node": target.node, "model": target.model, "content": content})
             except Exception as exc:
-                self._append_agent_response(
+                await self._append_event_async(
                     thread_id=thread_id,
+                    event_type="agent_response",
+                    role=None,
+                    content={"text": f"[error: {exc}]"},
+                    public=False,
                     turn_id=turn_id,
-                    node=target.node,
-                    model=target.model,
-                    content=f"[error: {exc}]",
                     route=target_route,
+                    agent_node=target.node,
+                    model=target.model,
                 )
                 agent_outputs.append({"node": target.node, "model": target.model, "error": str(exc)})
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="aggregation",
             role=None,
@@ -671,7 +723,7 @@ class ThreadService:
         successful = [o["content"] for o in agent_outputs if "content" in o]
         aggregated = "\n\n---\n\n".join(successful) if successful else "[no successful agent responses]"
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="assistant_message",
             role="assistant",
@@ -898,7 +950,7 @@ class ThreadService:
             response, response_meta = await self.chat_proxy.chat_with_meta(model, summary_payload)
             summary = assistant_summary_content(response)
         except Exception as exc:
-            self._append_error(thread_id, "CONTEXT_SUMMARY_ERROR", exc, turn_id=turn_id)
+            await self._append_error_async(thread_id, "CONTEXT_SUMMARY_ERROR", exc, turn_id=turn_id)
             raise ThreadChatError(
                 thread_id,
                 "CONTEXT_SUMMARY_ERROR",
@@ -908,7 +960,7 @@ class ThreadService:
         all_covered_event_ids = [*covered_event_ids, *[event["id"] for event in events_to_summarize]]
         compacted_messages = [summary_system_message(summary), *[self._event_message(event) for event in recent_events]]
         prompt_tokens_after = estimate_prompt_tokens({"messages": compacted_messages})
-        summary_event = self.store.append_event(
+        summary_event = await self._append_event_async(
             thread_id=thread_id,
             event_type="history_summary",
             role=None,
@@ -1004,6 +1056,18 @@ class ThreadService:
             error_detail=str(exc),
         )
 
+    async def _append_error_async(self, thread_id: str, error_code: str, exc: Exception, turn_id: str | None = None) -> None:
+        await self._append_event_async(
+            thread_id=thread_id,
+            event_type="error",
+            role=None,
+            content={"text": str(exc)},
+            public=True,
+            turn_id=turn_id,
+            error_code=error_code,
+            error_detail=str(exc),
+        )
+
     def _latest_user_text(self, messages: list[dict[str, Any]]) -> str:
         for message in reversed(messages):
             if message.get("role") != "user":
@@ -1033,7 +1097,7 @@ class ThreadService:
         request_metadata = {**thread.get("metadata", {}), **(metadata or {})}
         turn_id = str(uuid4())
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="user_message",
             role="user",
@@ -1055,12 +1119,12 @@ class ThreadService:
                     requested_model=step_model,
                     explicit_target=step_target,
                     previous_route=None,
-                )
+            )
             except ValueError as exc:
-                self._append_error(thread_id, "WORKFLOW_ROUTING_ERROR", exc, turn_id=turn_id)
+                await self._append_error_async(thread_id, "WORKFLOW_ROUTING_ERROR", exc, turn_id=turn_id)
                 raise
 
-            self.store.append_event(
+            await self._append_event_async(
                 thread_id=thread_id,
                 event_type="workflow_step",
                 role=None,
@@ -1089,7 +1153,7 @@ class ThreadService:
                 )
                 step_output = raw_response["choices"][0]["message"]["content"]
             except Exception as exc:
-                self.store.append_event(
+                await self._append_event_async(
                     thread_id=thread_id,
                     event_type="workflow_step",
                     role=None,
@@ -1097,10 +1161,10 @@ class ThreadService:
                     public=False,
                     turn_id=turn_id,
                 )
-                self._append_error(thread_id, "WORKFLOW_STEP_ERROR", exc, turn_id=turn_id)
+                await self._append_error_async(thread_id, "WORKFLOW_STEP_ERROR", exc, turn_id=turn_id)
                 raise
 
-            self.store.append_event(
+            await self._append_event_async(
                 thread_id=thread_id,
                 event_type="workflow_step",
                 role=None,
@@ -1124,7 +1188,7 @@ class ThreadService:
         last = step_results[-1]
         route = {"node": last["node"], "model": last["model"], "strategy": "workflow", "reason": "workflow_final_step"}
 
-        self.store.append_event(
+        await self._append_event_async(
             thread_id=thread_id,
             event_type="assistant_message",
             role="assistant",
@@ -1163,3 +1227,49 @@ def _history_summary_text(content: Any, max_chars: int) -> str:
         text = str(content)
     collapsed = " ".join(text.split())
     return collapsed[:max_chars]
+
+
+def _plugin_thread_event_type(event_type: str, content: dict[str, Any] | None) -> str:
+    if event_type == "workflow_step":
+        status = (content or {}).get("status")
+        if status == "running":
+            return "llama_pack.thread.workflow_step.started"
+        if status == "complete":
+            return "llama_pack.thread.workflow_step.completed"
+        if status == "failed":
+            return "llama_pack.thread.workflow_step.failed"
+    return f"llama_pack.thread.{event_type}.created"
+
+
+def _plugin_thread_event_payload(event: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "event_id": event["id"],
+        "thread_id": event["thread_id"],
+        "event_type": event["event_type"],
+        "turn_id": event.get("turn_id"),
+        "role": event.get("role"),
+        "public": bool(event.get("public")),
+        "route": event.get("route"),
+        "agent_node": event.get("agent_node"),
+        "model": event.get("model"),
+        "error_code": event.get("error_code"),
+        "error_detail": event.get("error_detail"),
+        "content": _bounded_plugin_content(event.get("content") or {}),
+        "created_at": event["created_at"],
+    }
+
+
+def _bounded_plugin_content(content: dict[str, Any]) -> dict[str, Any]:
+    bounded: dict[str, Any] = {}
+    for key, value in content.items():
+        if key in {"raw_response", "messages"}:
+            continue
+        if isinstance(value, str):
+            bounded[key] = value[:1000]
+        elif isinstance(value, list):
+            bounded[key] = value[:20]
+        elif isinstance(value, dict):
+            bounded[key] = {str(item_key): item_value for item_key, item_value in list(value.items())[:20]}
+        else:
+            bounded[key] = value
+    return bounded

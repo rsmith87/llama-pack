@@ -1,3 +1,14 @@
+const SUPPORTED_EVENT_TRIGGERS = new Set([
+  "llama_pack.chat.completed",
+  "llama_pack.chat.failed",
+  "llama_pack.chat.rejected",
+  "llama_pack.thread.error.created",
+  "llama_pack.thread.user_message.created",
+  "llama_pack.thread.assistant_message.created",
+  "llama_pack.thread.workflow_step.failed",
+  "llama_pack.thread.history_summary.created",
+]);
+
 function defaultParameters(templateId) {
   if (templateId === "thread_prompt_chain") {
     return {
@@ -259,7 +270,7 @@ function buildTriggers(data) {
   }
   if (triggerType === "event") {
     const eventType = String(data.get("event_type") || "").trim();
-    if (eventType !== "llama_pack.chat.completed" && eventType !== "llama_pack.chat.failed") {
+    if (!SUPPORTED_EVENT_TRIGGERS.has(eventType)) {
       throw new Error(`Unsupported workflow event type: ${eventType}`);
     }
     return [{ type: "event", schedule: null, event_type: eventType }];

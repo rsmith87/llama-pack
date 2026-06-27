@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient as FastAPITestClient
 
 from llama_pack.core.config import load_config
+from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.models import WorkflowStep
 from llama_pack.core.threads.service import ThreadService
 from llama_pack.core.threads.store import ThreadStore
@@ -103,6 +104,69 @@ def _service(tmp_path, chat_proxy=None, model_running=None):
         chat_proxy=chat_proxy or RecordingChatProxy(),
         model_running=model_running or (lambda node, model: True),
     )
+
+
+@pytest.mark.asyncio
+async def test_thread_service_publishes_thread_events_to_plugin_bus(tmp_path):
+    captured = []
+    event_bus = EventBus()
+    event_bus.subscribe("test", "llama_pack.thread.user_message.created", captured.append)
+    event_bus.subscribe("test", "llama_pack.thread.assistant_message.created", captured.append)
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=RecordingChatProxy(),
+        model_running=lambda node, model: True,
+        event_bus=event_bus,
+    )
+    thread = _thread(service)
+
+    await service.post_message_async(thread["id"], "user", "hello", None, "auto", None)
+
+    assert [event.type for event in captured] == [
+        "llama_pack.thread.user_message.created",
+        "llama_pack.thread.assistant_message.created",
+    ]
+    user_payload = captured[0].payload
+    assert user_payload["thread_id"] == thread["id"]
+    assert user_payload["event_type"] == "user_message"
+    assert user_payload["turn_id"]
+    assistant_payload = captured[1].payload
+    assert assistant_payload["model"] == "qwen"
+    assert assistant_payload["agent_node"] == "linux-2080ti"
+    assert assistant_payload["content"]["text"] == "hello"
+
+
+@pytest.mark.asyncio
+async def test_thread_workflow_step_failure_publishes_failed_event(tmp_path):
+    captured = []
+    event_bus = EventBus()
+    event_bus.subscribe("test", "llama_pack.thread.workflow_step.failed", captured.append)
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=RecordingChatProxy(error=RuntimeError("proxy down")),
+        model_running=lambda node, model: True,
+        event_bus=event_bus,
+    )
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="proxy down"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="triage", instructions="inspect")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    assert len(captured) == 1
+    payload = captured[0].payload
+    assert payload["thread_id"] == thread["id"]
+    assert payload["event_type"] == "workflow_step"
+    assert payload["content"]["status"] == "failed"
+    assert payload["content"]["label"] == "triage"
 
 
 def _thread(service):

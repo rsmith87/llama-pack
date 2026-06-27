@@ -392,6 +392,7 @@ def _configure_app_state(
             app.state.node_registry, app.state.model_catalog_service, node, model
         ),
         node_startup_allowed=lambda node, model: _thread_node_startup_allowed(app.state.node_registry, node, model),
+        event_bus=app.state.plugin_registry.events,
     )
     app.state.model_asset_inventory_service = ModelAssetInventoryService(
         app_config,

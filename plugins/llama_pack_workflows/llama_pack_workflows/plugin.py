@@ -8,6 +8,18 @@ from llama_pack_workflows.scheduler import WorkflowEventDispatcher, WorkflowSche
 from llama_pack_workflows.store import WorkflowStore
 
 
+SUPPORTED_EVENT_TRIGGERS = (
+    "llama_pack.chat.completed",
+    "llama_pack.chat.failed",
+    "llama_pack.chat.rejected",
+    "llama_pack.thread.error.created",
+    "llama_pack.thread.user_message.created",
+    "llama_pack.thread.assistant_message.created",
+    "llama_pack.thread.workflow_step.failed",
+    "llama_pack.thread.history_summary.created",
+)
+
+
 class WorkflowsPlugin:
     id = "llama_pack_workflows"
     name = "Llama Pack Workflows"
@@ -36,8 +48,8 @@ class WorkflowsPlugin:
         context.add_api_router(create_router(store, runner))
         context.add_health_check(health_check)
         context.add_background_task("scheduler", start=start, stop=stop)
-        context.subscribe("llama_pack.chat.completed", dispatcher.handle)
-        context.subscribe("llama_pack.chat.failed", dispatcher.handle)
+        for event_type in SUPPORTED_EVENT_TRIGGERS:
+            context.subscribe(event_type, dispatcher.handle)
         context.add_migration_target(
             "main",
             directory="llama_pack_workflows/migrations",

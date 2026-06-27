@@ -219,8 +219,48 @@ async def record_event(event):
 context.subscribe("llama_pack.plugin.loaded", record_event)
 ```
 
+Handlers can be synchronous or asynchronous. Use `context.subscribe(...)` during
+plugin registration only; subscriptions are removed when the plugin is disabled
+or unloaded.
+
+```python
+class Plugin:
+    id = "chat_audit_plugin"
+    name = "Chat Audit Plugin"
+    version = "1.0"
+
+    def register(self, context):
+        async def record_thread_error(event):
+            payload = event.payload
+            print(
+                "Thread error",
+                payload["thread_id"],
+                payload["error_code"],
+                event.correlation_id,
+            )
+
+        context.subscribe("llama_pack.thread.error.created", record_thread_error)
+
+
+plugin = Plugin()
+```
+
+The event envelope has these stable fields:
+
+- `id`: unique event-envelope id.
+- `type`: event name passed to subscribers.
+- `version`: event-envelope schema version.
+- `occurred_at`: UTC timestamp.
+- `source`: event source metadata.
+- `correlation_id`: request, turn, or source event id when available.
+- `actor`: user/session metadata when available.
+- `payload`: event-specific structured data.
+
 Subscriber failures and timeouts are isolated: they do not stop other
 subscribers, but they are recorded in plugin health/status metadata.
+Events are in-process, best-effort notifications. They are not durable across
+process restarts, and they are not replayed for plugins that were disabled or
+not yet loaded when the event occurred.
 
 Current built-in event names include:
 
@@ -230,6 +270,64 @@ Current built-in event names include:
 - `llama_pack.plugin.config.updated`
 - `llama_pack.plugin.migration.pending`
 - `llama_pack.plugin.migration.completed`
+
+Chat scheduler events:
+
+- `llama_pack.chat.admitted`: a chat request passed policy and capacity
+  admission. Payload fields include `model` and `session_id`.
+- `llama_pack.chat.rejected`: a chat request was rejected by policy, queue
+  limits, or admission timeout. Payload fields include `model`, `session_id`,
+  `reason`, and `status_code`.
+- `llama_pack.chat.completed`: a non-streaming or streaming chat request
+  completed. Payload fields include `model`, `session_id`, token counts when
+  available, `total_duration_ms`, `route`, and `streamed`.
+- `llama_pack.chat.failed`: a chat request failed after admission. Payload
+  fields include `model`, `session_id`, and `error`.
+
+Thread events:
+
+- `llama_pack.thread.user_message.created`
+- `llama_pack.thread.assistant_message.created`
+- `llama_pack.thread.routing_decision.created`
+- `llama_pack.thread.error.created`
+- `llama_pack.thread.workflow_step.started`
+- `llama_pack.thread.workflow_step.completed`
+- `llama_pack.thread.workflow_step.failed`
+- `llama_pack.thread.history_summary.created`
+- `llama_pack.thread.agent_request.created`
+- `llama_pack.thread.agent_response.created`
+- `llama_pack.thread.aggregation.created`
+
+Thread event payloads use a common shape:
+
+- `event_id`: durable thread event id.
+- `thread_id`: thread id.
+- `event_type`: stored thread event type, such as `user_message` or `error`.
+- `turn_id`: shared id for events in the same user turn, when available.
+- `role`: message role when applicable.
+- `public`: whether the event is visible in the public thread event list.
+- `route`: selected route metadata when applicable.
+- `agent_node`: node that handled the event when applicable.
+- `model`: model that handled the event when applicable.
+- `error_code` and `error_detail`: present for error events.
+- `content`: bounded event content with large/raw fields omitted.
+- `created_at`: durable thread event timestamp.
+
+For privacy and payload-size control, thread event `content` omits raw model
+responses and full message arrays. String fields are truncated to 1000
+characters, list fields to 20 items, and dictionary fields to 20 entries.
+
+The built-in workflows plugin can trigger workflows from these high-value
+events:
+
+- `llama_pack.chat.completed`
+- `llama_pack.chat.failed`
+- `llama_pack.chat.rejected`
+- `llama_pack.thread.error.created`
+- `llama_pack.thread.user_message.created`
+- `llama_pack.thread.assistant_message.created`
+- `llama_pack.thread.workflow_step.failed`
+- `llama_pack.thread.history_summary.created`
 
 ## Hooks
 

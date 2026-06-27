@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from llama_pack.core.config import load_config
@@ -109,6 +110,46 @@ def test_create_and_list_event_triggered_workflow_definition(tmp_path: Path):
         listed = list_response.json()["workflows"][0]
         assert listed["id"] == created["id"]
         assert listed["triggers"] == [{"type": "event", "schedule": None, "event_type": "llama_pack.chat.failed"}]
+
+
+def test_thread_error_event_triggers_workflow(tmp_path: Path):
+    app = create_app(config=workflows_config(tmp_path))
+    fake_thread_service = FakeThreadService()
+    app.state.thread_service = fake_thread_service
+
+    with authenticated_client(app) as client:
+        create_response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Thread error follow-up",
+                "description": "Runs after a thread error event",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Summarize the failed thread.",
+                    "steps": [{"label": "triage", "instructions": "Summarize the failure."}],
+                    "model": "qwen",
+                    "target": "auto",
+                },
+                "triggers": [{"type": "event", "schedule": None, "event_type": "llama_pack.thread.error.created"}],
+            },
+        )
+        assert create_response.status_code == 200
+
+        async def emit_thread_error_event() -> None:
+            await app.state.plugin_registry.events.emit(
+                "llama_pack.thread.error.created",
+                payload={"thread_id": "thread-1", "error_code": "CHAT_PROXY_ERROR"},
+                correlation_id="turn-1",
+            )
+
+        asyncio.run(emit_thread_error_event())
+
+        runs_response = client.get("/lm-api/v1/plugins/llama_pack_workflows/runs")
+        assert runs_response.status_code == 200
+        runs = runs_response.json()["runs"]
+        assert len(runs) == 1
+        assert runs[0]["trigger_detail"] == "llama_pack.thread.error.created"
 
 
 def test_update_workflow_definition(tmp_path: Path):
