@@ -1,110 +1,162 @@
 <section class="workflows-page" data-plugin-page="llama-pack-workflows">
   <header class="workflows-header">
-    <h1>Workflows</h1>
-    <button type="button" data-workflow-action="refresh">Refresh</button>
+    <div>
+      <h1>Workflows</h1>
+      <p>Build reusable automations, inspect their triggers, and follow recent execution state.</p>
+    </div>
+    <div class="workflows-header-actions">
+      <button type="button" data-workflow-action="new">New Workflow</button>
+      <button type="button" data-workflow-action="refresh">Refresh</button>
+    </div>
   </header>
-  <form class="workflow-form" data-workflow-form="create">
-    <h2 data-workflow-form-title>Create Workflow</h2>
-    <input name="workflow_id" type="hidden" />
-    <label>
-      Name
-      <input name="name" required maxlength="120" placeholder="Daily summary" />
-    </label>
-    <label>
-      Description
-      <input name="description" maxlength="500" placeholder="Reusable workflow for a recurring task" />
-    </label>
-    <label>
-      Template
-      <select name="template_id" data-workflow-template-select required></select>
-    </label>
-    <section class="workflow-parameter-panel" data-workflow-parameter-panel="thread_prompt_chain">
+
+  <nav class="workflow-tabs" aria-label="Workflow plugin sections" role="tablist">
+    <button type="button" class="active" role="tab" aria-selected="true" data-workflow-tab="workflows">Workflows</button>
+    <button type="button" role="tab" aria-selected="false" data-workflow-tab="timers">Timers</button>
+  </nav>
+
+  <div class="workflow-tab-panel active" role="tabpanel" data-workflow-panel="workflows" aria-label="Workflows">
+    <form class="workflow-form" data-workflow-form="create">
+      <h2 data-workflow-form-title>Create Workflow</h2>
+      <input name="workflow_id" type="hidden" />
       <label>
-        Content
-        <textarea name="content" data-workflow-content rows="4" required></textarea>
+        Name
+        <input name="name" required maxlength="120" placeholder="Daily summary" />
       </label>
-      <div class="workflow-steps-header">
-        <strong>Steps</strong>
-        <button type="button" data-workflow-action="add-step">Add Step</button>
-      </div>
-      <div class="workflow-step-list" data-workflow-steps></div>
-      <button type="button" data-workflow-action="toggle-advanced">Advanced</button>
-      <div class="workflow-advanced-fields" data-workflow-advanced hidden>
+      <label>
+        Description
+        <input name="description" maxlength="500" placeholder="Reusable workflow for a recurring task" />
+      </label>
+      <label>
+        Template
+        <select name="template_id" data-workflow-template-select required></select>
+      </label>
+      <section class="workflow-parameter-panel" data-workflow-parameter-panel="thread_prompt_chain">
         <label>
-          Model
-          <input name="model" value="auto" />
+          Content
+          <textarea name="content" data-workflow-content rows="4" required></textarea>
+        </label>
+        <div class="workflow-steps-header">
+          <strong>Steps</strong>
+          <button type="button" data-workflow-action="add-step">Add Step</button>
+        </div>
+        <div class="workflow-step-list" data-workflow-steps></div>
+        <button type="button" data-workflow-action="toggle-advanced">Advanced</button>
+        <div class="workflow-advanced-fields" data-workflow-advanced hidden>
+          <label>
+            Model
+            <input name="model" value="auto" />
+          </label>
+          <label>
+            Target
+            <input name="target" value="auto" />
+          </label>
+        </div>
+      </section>
+      <section class="workflow-parameter-panel" data-workflow-parameter-panel="scheduled_benchmark" hidden>
+        <label>
+          Benchmark ID
+          <input name="benchmark_id" />
         </label>
         <label>
-          Target
-          <input name="target" value="auto" />
+          Models
+          <input name="models" placeholder="qwen, mistral" />
         </label>
+      </section>
+      <fieldset class="workflow-trigger-section">
+        <legend>Trigger</legend>
+        <label>
+          Type
+          <select name="trigger_type" data-workflow-trigger-type required>
+            <option value="manual">Manual</option>
+            <option value="schedule_daily">Daily</option>
+            <option value="schedule_interval">Interval</option>
+            <option value="event">Event</option>
+          </select>
+        </label>
+        <label data-workflow-trigger-field="daily">
+          Run time
+          <input name="daily_time" type="time" value="09:00" />
+        </label>
+        <label data-workflow-trigger-field="interval">
+          Every
+          <input name="interval_minutes" type="number" min="1" step="1" value="60" />
+        </label>
+        <label data-workflow-trigger-field="event">
+          Event
+          <select name="event_type">
+            <option value="llama_pack.chat.completed">Chat completed</option>
+            <option value="llama_pack.chat.failed">Chat failed</option>
+            <option value="llama_pack.chat.rejected">Chat rejected</option>
+            <option value="llama_pack.thread.error.created">Thread error</option>
+            <option value="llama_pack.thread.user_message.created">Thread user message</option>
+            <option value="llama_pack.thread.assistant_message.created">Thread assistant message</option>
+            <option value="llama_pack.thread.workflow_step.failed">Workflow step failed</option>
+            <option value="llama_pack.thread.history_summary.created">History summary created</option>
+          </select>
+        </label>
+      </fieldset>
+      <label class="workflow-checkbox">
+        <input name="enabled" type="checkbox" checked />
+        Enabled
+      </label>
+      <div class="workflow-form-actions">
+        <button type="submit" data-workflow-save-label>Save</button>
+        <button type="button" data-workflow-action="cancel-edit" hidden>Cancel</button>
+        <span data-workflow-status></span>
       </div>
+    </form>
+
+    <section class="workflow-main">
+      <div class="workflow-summary-strip" data-workflow-summary></div>
+      <section class="workflow-card">
+        <div class="workflow-section-heading">
+          <div>
+            <h2>Definitions</h2>
+            <span>Saved workflow templates and their current trigger state.</span>
+          </div>
+        </div>
+        <div id="workflow-definitions" class="workflow-list"></div>
+      </section>
+      <section class="workflow-card">
+        <div class="workflow-section-heading">
+          <div>
+            <h2 data-workflow-diagram-title>Workflow Diagram</h2>
+            <span data-workflow-diagram-subtitle>Select a workflow to inspect its trigger, template, and steps.</span>
+          </div>
+        </div>
+        <div class="workflow-diagram" data-workflow-diagram></div>
+      </section>
+      <section class="workflow-card">
+        <div class="workflow-section-heading">
+          <div>
+            <h2>Recent Runs</h2>
+            <span>Latest execution results across manual, scheduled, and event workflows.</span>
+          </div>
+        </div>
+        <div id="workflow-runs" class="workflow-list workflow-run-list"></div>
+      </section>
+    </div>
+  </div>
+
+  <section class="workflow-tab-panel" role="tabpanel" data-workflow-panel="timers" aria-label="Timers">
+    <section class="workflow-card">
+      <div class="workflow-section-heading">
+        <div>
+          <h2>Timers</h2>
+          <span>Scheduled workflows separated from manual and event-triggered automation.</span>
+        </div>
+      </div>
+      <div id="workflow-timers" class="workflow-list"></div>
     </section>
-    <section class="workflow-parameter-panel" data-workflow-parameter-panel="scheduled_benchmark" hidden>
-      <label>
-        Benchmark ID
-        <input name="benchmark_id" />
-      </label>
-      <label>
-        Models
-        <input name="models" placeholder="qwen, mistral" />
-      </label>
+    <section class="workflow-card">
+      <div class="workflow-section-heading">
+        <div>
+          <h2>Timer Runs</h2>
+          <span>Recent executions started by scheduled triggers.</span>
+        </div>
+      </div>
+      <div id="workflow-timer-runs" class="workflow-list workflow-run-list"></div>
     </section>
-    <fieldset class="workflow-trigger-section">
-      <legend>Trigger</legend>
-      <label>
-        Type
-        <select name="trigger_type" data-workflow-trigger-type required>
-          <option value="manual">Manual</option>
-          <option value="schedule_daily">Daily</option>
-          <option value="schedule_interval">Interval</option>
-          <option value="event">Event</option>
-        </select>
-      </label>
-      <label data-workflow-trigger-field="daily">
-        Run time
-        <input name="daily_time" type="time" value="09:00" />
-      </label>
-      <label data-workflow-trigger-field="interval">
-        Every
-        <input name="interval_minutes" type="number" min="1" step="1" value="60" />
-      </label>
-      <label data-workflow-trigger-field="event">
-        Event
-        <select name="event_type">
-          <option value="llama_pack.chat.completed">Chat completed</option>
-          <option value="llama_pack.chat.failed">Chat failed</option>
-          <option value="llama_pack.chat.rejected">Chat rejected</option>
-          <option value="llama_pack.thread.error.created">Thread error</option>
-          <option value="llama_pack.thread.user_message.created">Thread user message</option>
-          <option value="llama_pack.thread.assistant_message.created">Thread assistant message</option>
-          <option value="llama_pack.thread.workflow_step.failed">Workflow step failed</option>
-          <option value="llama_pack.thread.history_summary.created">History summary created</option>
-        </select>
-      </label>
-    </fieldset>
-    <label class="workflow-checkbox">
-      <input name="enabled" type="checkbox" checked />
-      Enabled
-    </label>
-    <div class="workflow-form-actions">
-      <button type="submit" data-workflow-save-label>Save</button>
-      <button type="button" data-workflow-action="cancel-edit" hidden>Cancel</button>
-      <span data-workflow-status></span>
-    </div>
-  </form>
-  <section class="workflows-grid">
-    <div>
-      <h2>Templates</h2>
-      <div id="workflow-templates" class="workflow-list"></div>
-    </div>
-    <div>
-      <h2>Definitions</h2>
-      <div id="workflow-definitions" class="workflow-list"></div>
-    </div>
-    <div>
-      <h2>Recent Runs</h2>
-      <div id="workflow-runs" class="workflow-list"></div>
-    </div>
   </section>
 </section>

@@ -27,13 +27,21 @@ function defaultParameters(templateId) {
   return {};
 }
 
-function renderList(elementId, items, renderItem) {
-  const element = document.getElementById(elementId);
+function renderList(root, elementId, items, renderItem, emptyMessage) {
+  const element = root.querySelector(`#${elementId}`);
   if (!element) return;
   element.innerHTML = "";
+  if (items.length === 0) {
+    const row = document.createElement("div");
+    row.className = "workflow-empty";
+    row.textContent = emptyMessage;
+    element.appendChild(row);
+    return;
+  }
   for (const item of items) {
     const row = document.createElement("div");
     row.className = "workflow-row";
+    if (item.id) row.dataset.workflowRowId = item.id;
     row.innerHTML = renderItem(item);
     element.appendChild(row);
   }
@@ -43,6 +51,104 @@ function escapeHtml(value) {
   const element = document.createElement("span");
   element.textContent = String(value);
   return element.innerHTML;
+}
+
+function formatTemplateName(templateId, templates) {
+  const template = templates.find((item) => item.id === templateId);
+  return template ? template.name : templateId;
+}
+
+function workflowTrigger(workflow) {
+  return workflow.triggers && workflow.triggers.length > 0 ? workflow.triggers[0] : null;
+}
+
+function isScheduledWorkflow(workflow) {
+  return workflowTrigger(workflow)?.type === "schedule";
+}
+
+function describeTrigger(workflow) {
+  const trigger = workflowTrigger(workflow);
+  if (!trigger || trigger.type === "manual") return "Manual";
+  if (trigger.type === "schedule" && trigger.schedule?.kind === "daily") return `Daily at ${trigger.schedule.value}`;
+  if (trigger.type === "schedule" && trigger.schedule?.kind === "interval_minutes") return `Every ${trigger.schedule.value} min`;
+  if (trigger.type === "event" && trigger.event_type) return trigger.event_type.replaceAll(".", " / ");
+  return "Unknown trigger";
+}
+
+function describeWorkflowSteps(workflow) {
+  if (workflow.template_id === "thread_prompt_chain") {
+    const steps = Array.isArray(workflow.parameters?.steps) ? workflow.parameters.steps : [];
+    return steps.map((step) => String(step.label || "step")).filter((item) => item);
+  }
+  if (workflow.template_id === "scheduled_benchmark") {
+    const models = Array.isArray(workflow.parameters?.models) ? workflow.parameters.models : [];
+    return ["benchmark", models.length > 0 ? `${models.length} models` : "models"];
+  }
+  return ["run"];
+}
+
+function workflowLastRun(workflow, runs) {
+  return runs.find((run) => run.workflow_id === workflow.id) || null;
+}
+
+function renderSummary(root, workflows, runs) {
+  const summary = root.querySelector("[data-workflow-summary]");
+  if (!summary) return;
+  const enabledCount = workflows.filter((item) => item.enabled).length;
+  const timerCount = workflows.filter(isScheduledWorkflow).length;
+  const failedCount = runs.filter((item) => item.status === "failed").length;
+  summary.innerHTML = `
+    <div><span>Total</span><strong>${workflows.length}</strong></div>
+    <div><span>Enabled</span><strong>${enabledCount}</strong></div>
+    <div><span>Timers</span><strong>${timerCount}</strong></div>
+    <div><span>Failed runs</span><strong>${failedCount}</strong></div>
+  `;
+}
+
+function renderDiagram(root, workflow, templates) {
+  const diagram = root.querySelector("[data-workflow-diagram]");
+  const title = root.querySelector("[data-workflow-diagram-title]");
+  const subtitle = root.querySelector("[data-workflow-diagram-subtitle]");
+  if (!diagram || !title || !subtitle) return;
+  if (!workflow) {
+    title.textContent = "Workflow Diagram";
+    subtitle.textContent = "Select a workflow to inspect its trigger, template, and steps.";
+    diagram.innerHTML = `<div class="workflow-empty">No workflow selected.</div>`;
+    return;
+  }
+  title.textContent = workflow.name;
+  subtitle.textContent = workflow.description || "No description provided.";
+  const stepNodes = describeWorkflowSteps(workflow).map((step, index) => `
+    <div class="workflow-diagram-node">
+      <span>Step ${index + 1}</span>
+      <strong>${escapeHtml(step)}</strong>
+    </div>
+  `).join("");
+  diagram.innerHTML = `
+    <div class="workflow-diagram-node">
+      <span>Trigger</span>
+      <strong>${escapeHtml(describeTrigger(workflow))}</strong>
+    </div>
+    <div class="workflow-diagram-node">
+      <span>Template</span>
+      <strong>${escapeHtml(formatTemplateName(workflow.template_id, templates))}</strong>
+    </div>
+    ${stepNodes}
+    <div class="workflow-diagram-node">
+      <span>Output</span>
+      <strong>Run record</strong>
+    </div>
+  `;
+}
+
+function setActiveWorkflow(root, workflowId) {
+  root.selectedWorkflowId = workflowId;
+  const workflow = (root.workflowDefinitions || []).find((item) => item.id === workflowId) || null;
+  renderDiagram(root, workflow, root.workflowTemplates || []);
+  const rows = root.querySelectorAll("[data-workflow-row-id]");
+  for (const row of rows) {
+    row.classList.toggle("active", row.dataset.workflowRowId === workflowId);
+  }
 }
 
 function setStatus(root, message) {
@@ -210,6 +316,7 @@ function populateForm(root, workflow) {
   setEditing(root, true);
   syncTriggerFields(root);
   setStatus(root, "Editing workflow");
+  setActiveWorkflow(root, workflow.id);
 }
 
 async function refreshWorkflows(root, host) {
@@ -237,20 +344,68 @@ async function refreshWorkflows(root, host) {
   if (form && !form.elements.workflow_id.value && !form.elements.content.value && !form.elements.benchmark_id.value) {
     setParameterFields(root, selectedTemplate, defaultParameters(selectedTemplate));
   }
-  renderList("workflow-templates", templates.templates, (item) => `<strong>${item.name}</strong><span>${item.description}</span>`);
-  renderList("workflow-definitions", workflows.workflows, (item) => `
+  root.workflowDefinitions = workflows.workflows;
+  root.workflowTemplates = templates.templates;
+  root.workflowRuns = runs.runs;
+  renderSummary(root, workflows.workflows, runs.runs);
+  renderList(root, "workflow-definitions", workflows.workflows, (item) => {
+    const lastRun = workflowLastRun(item, runs.runs);
+    const statusClass = item.enabled ? "enabled" : "disabled";
+    return `
     <div class="workflow-row-main">
       <strong>${escapeHtml(item.name)}</strong>
-      <span>${escapeHtml(item.enabled ? "enabled" : "disabled")} · ${escapeHtml(item.template_id)}</span>
+      <span>${escapeHtml(formatTemplateName(item.template_id, templates.templates))}</span>
+      <span>${escapeHtml(describeTrigger(item))}</span>
+    </div>
+    <div class="workflow-row-meta">
+      <span class="workflow-chip ${statusClass}">${escapeHtml(item.enabled ? "Enabled" : "Disabled")}</span>
+      <span>${escapeHtml(lastRun ? lastRun.status : "No runs")}</span>
     </div>
     <div class="workflow-row-actions">
+      <button type="button" data-workflow-action="inspect" data-workflow-id="${escapeHtml(item.id)}">Inspect</button>
       <button type="button" data-workflow-action="edit" data-workflow-id="${escapeHtml(item.id)}">Edit</button>
       <button type="button" data-workflow-action="run" data-workflow-id="${escapeHtml(item.id)}">Run</button>
       <button type="button" data-workflow-action="${item.enabled ? "disable" : "enable"}" data-workflow-id="${escapeHtml(item.id)}">${item.enabled ? "Disable" : "Enable"}</button>
     </div>
-  `);
-  renderList("workflow-runs", runs.runs, (item) => `<strong>${item.status}</strong><span>${item.trigger_type}: ${item.trigger_detail}</span>`);
-  root.workflowDefinitions = workflows.workflows;
+  `;
+  }, "No workflows yet. Create one with the form on the left.");
+  const scheduledWorkflows = workflows.workflows.filter(isScheduledWorkflow);
+  renderList(root, "workflow-timers", scheduledWorkflows, (item) => {
+    const lastRun = workflowLastRun(item, runs.runs);
+    return `
+    <div class="workflow-row-main">
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${escapeHtml(describeTrigger(item))}</span>
+      <span>${escapeHtml(formatTemplateName(item.template_id, templates.templates))}</span>
+    </div>
+    <div class="workflow-row-meta">
+      <span class="workflow-chip ${item.enabled ? "enabled" : "disabled"}">${escapeHtml(item.enabled ? "Enabled" : "Disabled")}</span>
+      <span>${escapeHtml(lastRun ? `Last: ${lastRun.status}` : "No timer runs")}</span>
+    </div>
+    <div class="workflow-row-actions">
+      <button type="button" data-workflow-action="inspect" data-workflow-id="${escapeHtml(item.id)}">Inspect</button>
+      <button type="button" data-workflow-action="edit" data-workflow-id="${escapeHtml(item.id)}">Edit</button>
+      <button type="button" data-workflow-action="${item.enabled ? "disable" : "enable"}" data-workflow-id="${escapeHtml(item.id)}">${item.enabled ? "Disable" : "Enable"}</button>
+    </div>
+  `;
+  }, "No scheduled workflows yet. Create a workflow with a daily or interval trigger.");
+  renderList(root, "workflow-runs", runs.runs, (item) => `
+    <div class="workflow-row-main">
+      <strong>${escapeHtml(item.status)}</strong>
+      <span>${escapeHtml(item.trigger_type)}: ${escapeHtml(item.trigger_detail)}</span>
+    </div>
+    <span>${escapeHtml(item.created_at || "")}</span>
+  `, "No workflow runs yet.");
+  renderList(root, "workflow-timer-runs", runs.runs.filter((item) => item.trigger_type === "schedule"), (item) => `
+    <div class="workflow-row-main">
+      <strong>${escapeHtml(item.status)}</strong>
+      <span>${escapeHtml(item.trigger_detail)}</span>
+    </div>
+    <span>${escapeHtml(item.created_at || "")}</span>
+  `, "No scheduled runs yet.");
+  const selectedWorkflow = workflows.workflows.find((item) => item.id === root.selectedWorkflowId) || workflows.workflows[0] || null;
+  renderDiagram(root, selectedWorkflow, templates.templates);
+  if (selectedWorkflow) setActiveWorkflow(root, selectedWorkflow.id);
 }
 
 function buildTriggers(data) {
@@ -301,6 +456,10 @@ async function createWorkflow(root, host, form) {
 }
 
 async function handleWorkflowAction(root, host, action, workflowId) {
+  if (action === "inspect") {
+    setActiveWorkflow(root, workflowId);
+    return;
+  }
   if (action === "edit") {
     const workflow = (root.workflowDefinitions || []).find((item) => item.id === workflowId);
     if (!workflow) throw new Error(`Workflow not found: ${workflowId}`);
@@ -324,21 +483,39 @@ async function handleWorkflowAction(root, host, action, workflowId) {
 
 export function mountPage(root, host) {
   const refreshButton = root.querySelector("[data-workflow-action='refresh']");
+  const newButton = root.querySelector("[data-workflow-action='new']");
   const cancelButton = root.querySelector("[data-workflow-action='cancel-edit']");
   const form = root.querySelector("[data-workflow-form='create']");
-  const definitions = root.querySelector("#workflow-definitions");
+  const workflowLists = root.querySelectorAll("#workflow-definitions, #workflow-timers");
   const templateSelect = root.querySelector("[data-workflow-template-select]");
   const triggerType = root.querySelector("[data-workflow-trigger-type]");
+  const tabButtons = root.querySelectorAll("[data-workflow-tab]");
   const refresh = () => {
     refreshWorkflows(root, host).catch((error) => {
       setStatus(root, error.message);
       console.error(error);
     });
   };
+  const setActiveTab = (tabName) => {
+    for (const button of tabButtons) {
+      const active = button.dataset.workflowTab === tabName;
+      button.classList.toggle("active", active);
+      button.setAttribute("aria-selected", active ? "true" : "false");
+    }
+    for (const panel of root.querySelectorAll("[data-workflow-panel]")) {
+      panel.classList.toggle("active", panel.dataset.workflowPanel === tabName);
+    }
+  };
+  const tabClicked = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const tabName = target.dataset.workflowTab;
+    if (tabName) setActiveTab(tabName);
+  };
   const submit = (event) => {
     event.preventDefault();
     if (!form) return;
-    setStatus(root, "Creating...");
+    setStatus(root, form.elements.workflow_id.value ? "Saving..." : "Creating...");
     createWorkflow(root, host, form).catch((error) => {
       setStatus(root, error.message);
       console.error(error);
@@ -365,20 +542,29 @@ export function mountPage(root, host) {
     resetForm(root, form);
     setStatus(root, "");
   };
+  const newWorkflow = () => {
+    if (!form) return;
+    resetForm(root, form);
+    setActiveTab("workflows");
+    form.querySelector("[name='name']")?.focus();
+  };
   const workflowAction = (event) => {
     const target = event.target;
     if (!(target instanceof HTMLElement)) return;
     const action = target.dataset.workflowAction;
     const workflowId = target.dataset.workflowId;
     if (!action || !workflowId) return;
+    if (action === "inspect" || action === "edit") setActiveTab("workflows");
     handleWorkflowAction(root, host, action, workflowId).catch((error) => {
       setStatus(root, error.message);
       console.error(error);
     });
   };
   refreshButton?.addEventListener("click", refresh);
+  newButton?.addEventListener("click", newWorkflow);
   cancelButton?.addEventListener("click", cancelEdit);
-  definitions?.addEventListener("click", workflowAction);
+  for (const list of workflowLists) list.addEventListener("click", workflowAction);
+  for (const button of tabButtons) button.addEventListener("click", tabClicked);
   form?.addEventListener("click", formAction);
   form?.addEventListener("submit", submit);
   templateSelect?.addEventListener("change", templateChanged);
@@ -388,8 +574,10 @@ export function mountPage(root, host) {
 
   return () => {
     refreshButton?.removeEventListener("click", refresh);
+    newButton?.removeEventListener("click", newWorkflow);
     cancelButton?.removeEventListener("click", cancelEdit);
-    definitions?.removeEventListener("click", workflowAction);
+    for (const list of workflowLists) list.removeEventListener("click", workflowAction);
+    for (const button of tabButtons) button.removeEventListener("click", tabClicked);
     form?.removeEventListener("click", formAction);
     form?.removeEventListener("submit", submit);
     templateSelect?.removeEventListener("change", templateChanged);
