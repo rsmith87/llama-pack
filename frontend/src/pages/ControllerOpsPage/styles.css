@@ -4,3 +4,24 @@
   display: grid;
   gap: 10px;
 }
+
+.offline-setup-react {
+  display: grid;
+  gap: 12px;
+}
+
+.offline-target-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.offline-target-option {
+  align-items: center;
+  background: var(--button);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: inline-flex;
+  gap: 6px;
+  padding: 7px 10px;
+}

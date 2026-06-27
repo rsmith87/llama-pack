@@ -1,8 +1,9 @@
 import "./styles.css";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { cancelJob, exportArchive, getControllerStats, getJob, getJobArtifacts, getJobEvents, getRetentionPolicy, listJobs } from "../../api/controller";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, listNodes } from "../../api/nodes";
+import { checkOfflineReadiness, distributeOfflineModel, type OfflineDistributionResponse, type OfflineReadinessResponse } from "../../api/offline";
 import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
 import { mergeNodeInventory } from "../../features/nodes/nodesView";
 import { field } from "../../features/shared/helpers";
@@ -36,6 +37,14 @@ function statusTone(status: unknown) {
 
 function pretty(value: unknown) {
   return JSON.stringify(value || {}, null, 2);
+}
+
+function modelFileId(model: Record<string, unknown>): string {
+  return field(model, "file_id", field(model, "source_file_id"));
+}
+
+function modelName(model: Record<string, unknown>): string {
+  return field(model, "name", field(model, "registered_as"));
 }
 
 type ControllerOpsData = {
@@ -75,6 +84,33 @@ export function ControllerOpsPage() {
   const [statusFilter, setStatusFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
+  const [offlineSourceNode, setOfflineSourceNode] = useState("");
+  const [offlineModel, setOfflineModel] = useState("");
+  const [offlineSourceFileId, setOfflineSourceFileId] = useState("");
+  const [offlineTargets, setOfflineTargets] = useState<string[]>([]);
+  const [offlineReadiness, setOfflineReadiness] = useState<OfflineReadinessResponse | null>(null);
+  const [offlineDistribution, setOfflineDistribution] = useState<OfflineDistributionResponse | null>(null);
+
+  const reachableNodes = useMemo(() => nodes.filter((node) => field(node, "name") && Boolean(node.reachable)), [nodes]);
+  const selectedSource = useMemo(() => reachableNodes.find((node) => field(node, "name") === offlineSourceNode), [reachableNodes, offlineSourceNode]);
+  const selectedSourceModels = useMemo(
+    () => Array.isArray(selectedSource?.models) ? selectedSource.models as Record<string, unknown>[] : [],
+    [selectedSource],
+  );
+  const availableTargetNodes = useMemo(
+    () => reachableNodes.filter((node) => field(node, "name") !== offlineSourceNode),
+    [offlineSourceNode, reachableNodes],
+  );
+
+  useEffect(() => {
+    if (offlineSourceNode || reachableNodes.length === 0) return;
+    setOfflineSourceNode(field(reachableNodes[0], "name"));
+  }, [offlineSourceNode, reachableNodes]);
+
+  useEffect(() => {
+    const validTargets = new Set(availableTargetNodes.map((node) => field(node, "name")));
+    setOfflineTargets((current) => current.filter((node) => validTargets.has(node)));
+  }, [availableTargetNodes]);
 
   const filteredJobs = useMemo(() => jobs.filter((job) => {
     const status = field(job, "status", "").toLowerCase();
@@ -98,6 +134,63 @@ export function ControllerOpsPage() {
   async function runArchiveExport() {
     const result = await exportArchive();
     setArchiveResult(JSON.stringify(result, null, 2));
+  }
+
+  async function checkReadiness() {
+    const targetNodes = offlineTargets.filter((node) => node.trim());
+    if (!offlineSourceNode.trim()) {
+      setError("Select a source node before checking offline readiness.");
+      return;
+    }
+    if (!offlineModel.trim()) {
+      setError("Enter a model name before checking offline readiness.");
+      return;
+    }
+    if (targetNodes.length === 0) {
+      setError("Select at least one target node before checking offline readiness.");
+      return;
+    }
+    try {
+      setError("");
+      setOfflineReadiness(await checkOfflineReadiness({
+        source_node: offlineSourceNode,
+        model: offlineModel,
+        target_nodes: targetNodes,
+      }));
+      setOfflineDistribution(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Offline readiness check failed");
+    }
+  }
+
+  async function distributeModel() {
+    const targetNodes = offlineTargets.filter((node) => node.trim());
+    if (!offlineSourceNode.trim()) {
+      setError("Select a source node before distributing an offline model.");
+      return;
+    }
+    if (!offlineSourceFileId.trim()) {
+      setError("Enter a source file id before distributing an offline model.");
+      return;
+    }
+    if (targetNodes.length === 0) {
+      setError("Select at least one target node before distributing an offline model.");
+      return;
+    }
+    try {
+      setError("");
+      setOfflineDistribution(await distributeOfflineModel({
+        source_node: offlineSourceNode,
+        source_file_id: offlineSourceFileId,
+        target_nodes: targetNodes,
+      }));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Offline model distribution failed");
+    }
+  }
+
+  function toggleOfflineTarget(node: string, checked: boolean) {
+    setOfflineTargets((current) => checked ? [...new Set([...current, node])] : current.filter((item) => item !== node));
   }
 
   const nodeSummary = nodes.map((node) => ({
@@ -184,6 +277,90 @@ export function ControllerOpsPage() {
             { key: "source", header: "Source", render: (row) => row.source },
             { key: "heartbeat", header: "Heartbeat", render: (row) => row.heartbeat },
           ]} /> : <EmptyState message="No nodes." />}
+        </Panel>
+
+        <Panel title="Offline Setup" eyebrow="Readiness and distribution">
+          <div className="offline-setup-react">
+            <div className="filter-bar">
+              <FormField label="Source node">
+                <select value={offlineSourceNode} onChange={(event) => setOfflineSourceNode(event.target.value)} data-testid="offline-source-node">
+                  <option value="">Select source</option>
+                  {reachableNodes.map((node) => <option key={field(node, "name")} value={field(node, "name")}>{field(node, "name")}</option>)}
+                </select>
+              </FormField>
+              <FormField label="Model">
+                <input
+                  list="offline-source-models"
+                  value={offlineModel}
+                  onChange={(event) => setOfflineModel(event.target.value)}
+                  placeholder="registered model name"
+                />
+                <datalist id="offline-source-models">
+                  {selectedSourceModels.map((model, index) => <option key={`${modelName(model)}-${index}`} value={modelName(model)} />)}
+                </datalist>
+              </FormField>
+              <FormField label="Source file id">
+                <input
+                  list="offline-source-file-ids"
+                  value={offlineSourceFileId}
+                  onChange={(event) => setOfflineSourceFileId(event.target.value)}
+                  placeholder="file id"
+                />
+                <datalist id="offline-source-file-ids">
+                  {selectedSourceModels.map((model, index) => {
+                    const fileId = modelFileId(model);
+                    return fileId ? <option key={`${fileId}-${index}`} value={fileId} /> : null;
+                  })}
+                </datalist>
+              </FormField>
+            </div>
+            <div className="offline-target-list" aria-label="Target nodes">
+              {availableTargetNodes.length ? availableTargetNodes.map((node) => {
+                const name = field(node, "name");
+                return (
+                  <label key={name} className="offline-target-option">
+                    <input
+                      type="checkbox"
+                      checked={offlineTargets.includes(name)}
+                      onChange={(event) => toggleOfflineTarget(name, event.target.checked)}
+                    />
+                    <span>{name}</span>
+                  </label>
+                );
+              }) : <span className="muted">No reachable target nodes.</span>}
+            </div>
+            <div className="actions">
+              <Button type="button" onClick={() => void checkReadiness()}>Check Readiness</Button>
+              <Button type="button" onClick={() => void distributeModel()} disabled={!offlineReadiness}>Distribute Model</Button>
+            </div>
+            {offlineReadiness ? (
+              <DataTable
+                rows={offlineReadiness.nodes}
+                emptyMessage="No readiness results."
+                getRowKey={(row) => row.node}
+                columns={[
+                  { key: "node", header: "Node", render: (row) => row.node },
+                  { key: "ready", header: "Ready", render: (row) => <StatusBadge tone={row.ready ? "success" : "warning"}>{row.ready ? "ready" : "not ready"}</StatusBadge> },
+                  { key: "registered", header: "Registered", render: (row) => String(row.registered) },
+                  { key: "artifact", header: "Artifact", render: (row) => String(row.artifact_present) },
+                  { key: "error", header: "Error", render: (row) => row.error || "-" },
+                ]}
+              />
+            ) : null}
+            {offlineDistribution ? (
+              <DataTable
+                rows={offlineDistribution.nodes}
+                emptyMessage="No distribution jobs."
+                getRowKey={(row) => row.node}
+                columns={[
+                  { key: "node", header: "Node", render: (row) => row.node },
+                  { key: "status", header: "Status", render: (row) => <StatusBadge tone={statusTone(row.status)}>{row.status}</StatusBadge> },
+                  { key: "transfer", header: "Transfer", render: (row) => row.transfer_id || "-" },
+                  { key: "error", header: "Error", render: (row) => row.error || "-" },
+                ]}
+              />
+            ) : null}
+          </div>
         </Panel>
 
         <Panel title="Retention & Archive" eyebrow="Policy">

@@ -84,6 +84,33 @@ def test_create_and_list_workflow_definition(tmp_path: Path):
         assert list_response.json()["workflows"][0]["id"] == created["id"]
 
 
+def test_create_and_list_event_triggered_workflow_definition(tmp_path: Path):
+    with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
+        body = {
+            "name": "Chat failure follow-up",
+            "description": "Runs after a chat request fails",
+            "template_id": "thread_prompt_chain",
+            "enabled": True,
+            "parameters": {
+                "content": "Summarize the failed request.",
+                "steps": [{"label": "triage", "instructions": "Summarize the failure."}],
+                "model": "qwen",
+                "target": "auto",
+            },
+            "triggers": [{"type": "event", "schedule": None, "event_type": "llama_pack.chat.failed"}],
+        }
+
+        create_response = client.post("/lm-api/v1/plugins/llama_pack_workflows/workflows", json=body)
+        assert create_response.status_code == 200
+        created = create_response.json()
+
+        list_response = client.get("/lm-api/v1/plugins/llama_pack_workflows/workflows")
+        assert list_response.status_code == 200
+        listed = list_response.json()["workflows"][0]
+        assert listed["id"] == created["id"]
+        assert listed["triggers"] == [{"type": "event", "schedule": None, "event_type": "llama_pack.chat.failed"}]
+
+
 def test_update_workflow_definition(tmp_path: Path):
     with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
         create_response = client.post(
@@ -242,6 +269,10 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-trigger-type" in template.text
         assert 'value="schedule_daily"' in template.text
         assert 'value="schedule_interval"' in template.text
+        assert 'value="event"' in template.text
+        assert 'name="event_type"' in template.text
+        assert 'value="llama_pack.chat.completed"' in template.text
+        assert 'value="llama_pack.chat.failed"' in template.text
         assert "data-workflow-parameter-panel" in template.text
         assert "data-workflow-content" in template.text
         assert "data-workflow-steps" in template.text
@@ -258,6 +289,8 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert 'data-workflow-action="edit"' in controller.text
         assert "populateForm" in controller.text
         assert "buildTriggers" in controller.text
+        assert 'triggerType === "event"' in controller.text
+        assert "Unsupported workflow event type" in controller.text
         assert "host.apiGet" in controller.text
         assert "host.apiPost" in controller.text
         assert "fetch(" not in controller.text

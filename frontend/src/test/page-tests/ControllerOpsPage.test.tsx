@@ -19,8 +19,8 @@ function initialFetch() {
       { name: "linux", url: "http://linux" },
     ]))
     .mockResolvedValueOnce(okJson([
-      { name: "mac", reachable: true, models: [{ name: "qwen" }], last_heartbeat: "now", models_source: "agent" },
-      { name: "linux", reachable: false, models: [], last_heartbeat: "old", models_source: "cache" },
+      { name: "mac", reachable: true, models: [{ name: "qwen", file_id: "file-qwen" }], last_heartbeat: "now", models_source: "agent" },
+      { name: "linux", reachable: true, models: [], last_heartbeat: "old", models_source: "cache" },
     ]))
     .mockResolvedValueOnce(okJson([
       { id: "job-123456789", status: "running", type: "chat", target_selector: "node:mac", updated_at: "today" },
@@ -38,7 +38,7 @@ it("renders jobs, node capabilities, retention, and filters jobs", async () => {
 
   expect(await screen.findByText("job-1234")).toBeInTheDocument();
   expect(screen.getByText("node:mac")).toBeInTheDocument();
-  expect(screen.getByText("mac")).toBeInTheDocument();
+  expect(screen.getAllByText("mac").length).toBeGreaterThan(0);
   expect(screen.getByText("retention_days=7")).toBeInTheDocument();
   expect(screen.getByText(/"running": 1/)).toBeInTheDocument();
 
@@ -101,4 +101,48 @@ it("runs archive export", async () => {
 
   await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/controller/archive/export", expect.objectContaining({ method: "POST" })));
   expect(screen.getByText(/"jobs_exported": 3/)).toBeInTheDocument();
+});
+
+it("checks offline readiness and distributes a source model", async () => {
+  vi.stubGlobal(
+    "fetch",
+    initialFetch()
+      .mockResolvedValueOnce(okJson({
+        source_node: "mac",
+        model: "qwen",
+        nodes: [
+          { node: "linux", reachable: true, registered: false, artifact_present: false, ready: false, error: null },
+        ],
+      }))
+      .mockResolvedValueOnce(okJson({
+        source_node: "mac",
+        source_file_id: "file-qwen",
+        nodes: [
+          { node: "linux", status: "queued", transfer_id: "job-transfer", error: null },
+        ],
+      })),
+  );
+  const user = userEvent.setup();
+
+  render(<ControllerOpsPage />);
+
+  await user.selectOptions(await screen.findByTestId("offline-source-node"), "mac");
+  await user.type(await screen.findByLabelText("Model"), "qwen");
+  await user.type(screen.getByLabelText("Source file id"), "file-qwen");
+  await user.click(screen.getByLabelText("linux"));
+  await user.click(screen.getByRole("button", { name: "Check Readiness" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/offline/readiness", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ source_node: "mac", model: "qwen", target_nodes: ["linux"] }),
+  })));
+  expect(await screen.findByText("not ready")).toBeInTheDocument();
+
+  await user.click(screen.getByRole("button", { name: "Distribute Model" }));
+
+  await waitFor(() => expect(fetch).toHaveBeenCalledWith("/lm-api/v1/offline/distribute", expect.objectContaining({
+    method: "POST",
+    body: JSON.stringify({ source_node: "mac", source_file_id: "file-qwen", target_nodes: ["linux"] }),
+  })));
+  expect(await screen.findByText("job-transfer")).toBeInTheDocument();
 });

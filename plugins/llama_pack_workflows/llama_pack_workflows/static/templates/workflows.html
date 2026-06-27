@@ -58,6 +58,7 @@
           <option value="manual">Manual</option>
           <option value="schedule_daily">Daily</option>
           <option value="schedule_interval">Interval</option>
+          <option value="event">Event</option>
         </select>
       </label>
       <label data-workflow-trigger-field="daily">
@@ -67,6 +68,13 @@
       <label data-workflow-trigger-field="interval">
         Every
         <input name="interval_minutes" type="number" min="1" step="1" value="60" />
+      </label>
+      <label data-workflow-trigger-field="event">
+        Event
+        <select name="event_type">
+          <option value="llama_pack.chat.completed">Chat completed</option>
+          <option value="llama_pack.chat.failed">Chat failed</option>
+        </select>
       </label>
     </fieldset>
     <label class="workflow-checkbox">

@@ -150,9 +150,11 @@ function syncTriggerFields(root) {
   const triggerType = root.querySelector("[data-workflow-trigger-type]");
   const dailyField = root.querySelector("[data-workflow-trigger-field='daily']");
   const intervalField = root.querySelector("[data-workflow-trigger-field='interval']");
-  if (!triggerType || !dailyField || !intervalField) return;
+  const eventField = root.querySelector("[data-workflow-trigger-field='event']");
+  if (!triggerType || !dailyField || !intervalField || !eventField) return;
   dailyField.hidden = triggerType.value !== "schedule_daily";
   intervalField.hidden = triggerType.value !== "schedule_interval";
+  eventField.hidden = triggerType.value !== "event";
 }
 
 function hideAdvanced(root) {
@@ -174,6 +176,9 @@ function workflowTriggerOption(workflow) {
   if (trigger.type === "schedule" && trigger.schedule?.kind === "interval_minutes") {
     return { type: "schedule_interval", dailyTime: "09:00", intervalMinutes: trigger.schedule.value };
   }
+  if (trigger.type === "event" && trigger.event_type) {
+    return { type: "event", dailyTime: "09:00", intervalMinutes: "60", eventType: trigger.event_type };
+  }
   return { type: "manual", dailyTime: "09:00", intervalMinutes: "60" };
 }
 
@@ -189,6 +194,7 @@ function populateForm(root, workflow) {
   form.elements.trigger_type.value = trigger.type;
   form.elements.daily_time.value = trigger.dailyTime;
   form.elements.interval_minutes.value = trigger.intervalMinutes;
+  form.elements.event_type.value = trigger.eventType || "llama_pack.chat.completed";
   form.elements.enabled.checked = Boolean(workflow.enabled);
   setEditing(root, true);
   syncTriggerFields(root);
@@ -250,6 +256,13 @@ function buildTriggers(data) {
     const intervalMinutes = String(data.get("interval_minutes") || "").trim();
     if (!intervalMinutes || Number(intervalMinutes) < 1) throw new Error("Interval workflows require minutes greater than zero.");
     return [{ type: "schedule", schedule: { kind: "interval_minutes", value: intervalMinutes }, event_type: null }];
+  }
+  if (triggerType === "event") {
+    const eventType = String(data.get("event_type") || "").trim();
+    if (eventType !== "llama_pack.chat.completed" && eventType !== "llama_pack.chat.failed") {
+      throw new Error(`Unsupported workflow event type: ${eventType}`);
+    }
+    return [{ type: "event", schedule: null, event_type: eventType }];
   }
   throw new Error(`Unsupported trigger type: ${triggerType}`);
 }
