@@ -1,0 +1,92 @@
+.nodes-page-list {
+  display: grid;
+  gap: 14px;
+}
+
+.node {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 16px;
+  background: var(--card);
+}
+
+.node-header,
+.node-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.node-url {
+  color: var(--muted);
+  font-size: 13px;
+  margin-top: 3px;
+}
+
+.node-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.node-meta-grid > div {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  padding: 10px;
+  background: var(--card);
+}
+
+.model-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+.model-actions button {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 6px 10px;
+  background: var(--button);
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.node-edit-form {
+  display: grid;
+  gap: 14px;
+}
+
+.nodes-page-list .node.node-full .model-cards {
+  grid-template-columns: repeat(4, 250px);
+}
+
+.nodes-page-list {
+  /*grid-template-columns: repeat(2, 1fr);*/
+}
+
+.nodes-filter-bar {
+  margin-bottom: 20px;
+}
+
+.controller-mode .nodes-page-list .node.node-full {
+  grid-template-columns: repeat(1, 1fr);
+}
+
+.controller-mode .nodes-page-list .node.node-full .model-cards {
+  grid-template-columns: repeat(3, 32%);
+}
+
+@media (max-width: 1080px) {
+  .node-header,
+  .node-header-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .node-meta-grid {
+    grid-template-columns: 1fr;
+  }
+}

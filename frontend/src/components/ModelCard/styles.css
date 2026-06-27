@@ -1,4 +1,4 @@
-/* Uses existing global library-card selectors from app.css */
+/* Uses existing global library-card selectors from app.scss */
 
 .library-sections {
   display: grid;

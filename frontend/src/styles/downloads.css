@@ -1,0 +1,120 @@
+.download-form-status {
+  align-self: center;
+}
+
+.download-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.download-form {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(180px, 0.8fr) minmax(140px, 0.45fr) minmax(120px, 0.4fr);
+  gap: 8px;
+  align-items: end;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(2, 10, 15, 0.28);
+}
+
+.download-form .form-field {
+  min-width: 0;
+}
+
+.download-form-status {
+  grid-column: 1 / -1;
+  font-size: 12px;
+}
+
+.recommended-downloads {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 0;
+}
+
+.recommended-downloads-header {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.recommended-downloads-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.recommended-download-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+}
+
+.recommended-download-card {
+  display: grid;
+  gap: 8px;
+}
+
+.recommended-download-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.recommended-download-card small {
+  color: var(--muted);
+  word-break: break-word;
+  font-size: x-small;
+}
+
+.recommended-download-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.recommended-download-meta span {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 0 8px;
+  background: var(--button);
+  color: var(--ink);
+  font-size: 10px;
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.recommended-download-meta > span {
+  background-color: var(--success);
+  color: black;
+}
+
+.recommended-download-meta span:nth-child(2) {
+  background-color: var(--warning);
+  color: black;
+}
+
+.recommended-download-card button {
+  justify-self: start;
+  margin-left: 0;
+}
+
+.download-quant-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 12px;
+  margin-top: 0px;
+}
+
+.download-quant-cards article {
+  margin-top: 10px;
+}
+
+@media (max-width: 980px) {
+  .download-form {
+    grid-template-columns: 1fr;
+  }
+}
