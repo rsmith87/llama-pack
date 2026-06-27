@@ -13,15 +13,18 @@ from llama_pack.core.runtime.network_security import NetworkPolicy, OfflineNetwo
 
 _SSRF_BLOCKED_HOSTS = {"localhost", "127.0.0.1", "::1"}
 _PRIVATE_NETWORKS = [
+    ipaddress.ip_network("0.0.0.0/8"),
     ipaddress.ip_network("127.0.0.0/8"),
     ipaddress.ip_network("10.0.0.0/8"),
     ipaddress.ip_network("172.16.0.0/12"),
     ipaddress.ip_network("192.168.0.0/16"),
     ipaddress.ip_network("169.254.0.0/16"),
+    ipaddress.ip_network("::/128"),
     ipaddress.ip_network("::1/128"),
     ipaddress.ip_network("fc00::/7"),
     ipaddress.ip_network("fe80::/10"),
 ]
+_MAX_REDIRECTS = 5
 
 
 def _check_ssrf(hostname: str) -> str | None:
@@ -43,6 +46,26 @@ def _domain_allowed(hostname: str, allowed_domains: list[str]) -> bool:
         hostname == d.lower() or hostname.endswith("." + d.lower())
         for d in allowed_domains
     )
+
+
+def _validate_url(url: str, allowed_domains: list[str], network_policy: NetworkPolicy) -> str | None:
+    parsed = urlparse(url)
+    if parsed.scheme not in {"http", "https"}:
+        return f"web_fetch only supports http/https, got: {parsed.scheme!r}"
+
+    try:
+        network_policy.assert_url_allowed(url, "agent web_fetch tool")
+    except OfflineNetworkBlockedError as exc:
+        return str(exc)
+
+    hostname = parsed.hostname or ""
+    ssrf_err = _check_ssrf(hostname)
+    if ssrf_err:
+        return ssrf_err
+
+    if allowed_domains and not _domain_allowed(hostname, allowed_domains):
+        return f"domain not in allowed_domains: {hostname}"
+    return None
 
 
 def _extract_text(html: str) -> str:
@@ -115,32 +138,18 @@ class WebFetchToolAdapter:
         if not url:
             return {"ok": False, "error": "web_fetch requires a 'url' argument"}
 
-        parsed = urlparse(url)
-        if parsed.scheme not in {"http", "https"}:
-            return {"ok": False, "error": f"web_fetch only supports http/https, got: {parsed.scheme!r}"}
-
-        try:
-            self.network_policy.assert_url_allowed(url, "agent web_fetch tool")
-        except OfflineNetworkBlockedError as exc:
-            return {"ok": False, "error": str(exc)}
-
-        hostname = parsed.hostname or ""
-        ssrf_err = _check_ssrf(hostname)
-        if ssrf_err:
-            return {"ok": False, "error": ssrf_err}
-
-        if tool.allowed_domains and not _domain_allowed(hostname, tool.allowed_domains):
-            return {
-                "ok": False,
-                "error": f"domain not in allowed_domains: {hostname}",
-            }
+        validation_error = _validate_url(url, tool.allowed_domains, self.network_policy)
+        if validation_error:
+            return {"ok": False, "error": validation_error}
 
         timeout = tool.timeout_seconds or self.config.agent_tools.tool_timeout_seconds
         try:
-            async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-                response = await client.get(url, headers={"User-Agent": "LlamaManager/1.0"})
+            async with httpx.AsyncClient(timeout=timeout, follow_redirects=False) as client:
+                response = await self._get_validated_response(client, url, tool.allowed_domains)
         except httpx.RequestError as exc:
             return {"ok": False, "error": f"request failed: {exc}"}
+        except ValueError as exc:
+            return {"ok": False, "error": str(exc)}
 
         raw = response.content[: tool.max_response_bytes]
         content_type = response.headers.get("content-type", "")
@@ -156,3 +165,24 @@ class WebFetchToolAdapter:
             "content": truncate(text, MAX_RESULT_CHARS),
             "truncated": len(response.content) > tool.max_response_bytes,
         }
+
+    async def _get_validated_response(
+        self,
+        client: httpx.AsyncClient,
+        url: str,
+        allowed_domains: list[str],
+    ) -> httpx.Response:
+        current_url = url
+        for _redirect_count in range(_MAX_REDIRECTS + 1):
+            response = await client.get(current_url, headers={"User-Agent": "LlamaManager/1.0"})
+            if not response.is_redirect:
+                return response
+            location = response.headers.get("location")
+            if not location:
+                return response
+            next_url = str(response.url.join(location))
+            validation_error = _validate_url(next_url, allowed_domains, self.network_policy)
+            if validation_error:
+                raise ValueError(validation_error)
+            current_url = next_url
+        raise ValueError(f"too many redirects: exceeded {_MAX_REDIRECTS}")

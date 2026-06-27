@@ -3097,6 +3097,40 @@ async def test_tool_executor_web_fetch_allowed_domains_passes(tmp_path):
 
 
 @pytest.mark.asyncio
+@respx.mock
+async def test_tool_executor_web_fetch_blocks_redirect_to_localhost(tmp_path):
+    respx.get("https://example.com/redirect").mock(
+        return_value=httpx.Response(302, headers={"location": "http://localhost:9137/private"})
+    )
+    respx.get("http://localhost:9137/private").mock(
+        return_value=httpx.Response(200, content=b"internal secret", headers={"content-type": "text/plain"})
+    )
+    config = _make_web_fetch_config(tmp_path, allowed_domains=["example.com"])
+
+    result = await ToolExecutor(config).execute("browse", {"url": "https://example.com/redirect"}, request_id="req-1", model="qwen")
+
+    assert result["ok"] is False
+    assert "blocked" in result["error"]
+
+
+@pytest.mark.asyncio
+@respx.mock
+async def test_tool_executor_web_fetch_blocks_redirect_outside_allowed_domains(tmp_path):
+    respx.get("https://example.com/redirect").mock(
+        return_value=httpx.Response(302, headers={"location": "https://evil.com/page"})
+    )
+    respx.get("https://evil.com/page").mock(
+        return_value=httpx.Response(200, content=b"wrong domain", headers={"content-type": "text/plain"})
+    )
+    config = _make_web_fetch_config(tmp_path, allowed_domains=["example.com"])
+
+    result = await ToolExecutor(config).execute("browse", {"url": "https://example.com/redirect"}, request_id="req-1", model="qwen")
+
+    assert result["ok"] is False
+    assert "allowed_domains" in result["error"]
+
+
+@pytest.mark.asyncio
 async def test_tool_executor_web_fetch_allowed_domains_blocks_other(tmp_path):
     config = _make_web_fetch_config(tmp_path, allowed_domains=["stackoverflow.com"])
 

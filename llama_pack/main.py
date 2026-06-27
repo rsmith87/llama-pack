@@ -95,6 +95,9 @@ from llama_pack.core.app.auth_policy import (
 from llama_pack.core.plugins import load_plugins
 from llama_pack.core.plugins.registry import PluginRecord
 from llama_pack.core.ocr import create_ocr_service
+import logging
+
+logger = logging.getLogger(__name__)
 
 LM_API_PREFIX = "/lm-api/v1"
 

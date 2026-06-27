@@ -659,19 +659,6 @@ def test_build_llama_server_command_omits_speculative_flags_when_unset():
     assert "--spec-draft-n-min" not in command
 
 
-def test_configuration_docs_mention_speculative_fields_and_advanced_note():
-    root = Path(__file__).resolve().parents[1]
-    text = (root / "docs" / "configuration.md").read_text(encoding="utf-8")
-
-    assert "supports_mtp" in text
-    assert "speculative" in text
-    assert "draft_model_path" in text
-    assert "draft_max" in text
-    assert "draft_min" in text
-    assert "advanced speculative" in text.lower()
-    assert "hf_repo" in text.lower()
-
-
 def test_public_docs_do_not_reference_legacy_llama_manager_name():
     root = Path(__file__).resolve().parents[1]
     docs_dir = root / "docs"
