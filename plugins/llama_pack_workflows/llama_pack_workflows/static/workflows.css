@@ -27,11 +27,12 @@
 }
 
 .workflow-form {
+  background: var(--panel-bg, #fff);
   border: 1px solid var(--border-color, #d5d8df);
   border-radius: 8px;
   display: grid;
   gap: 10px;
-  padding: 12px;
+  padding: 14px;
 }
 
 .workflow-form label {
@@ -79,6 +80,7 @@
 .workflow-form-actions {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: 10px;
 }
 
@@ -93,11 +95,36 @@
 }
 
 .workflow-row {
+  background: var(--panel-bg, #fff);
   border: 1px solid var(--border-color, #d5d8df);
   border-radius: 8px;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+  padding: 10px;
+}
+
+.workflow-row-main {
   display: grid;
   gap: 4px;
-  padding: 10px;
+}
+
+.workflow-row-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  justify-content: flex-end;
+}
+
+.workflow-row-actions button,
+.workflow-form-actions button,
+.workflows-header button {
+  border: 1px solid var(--border-color, #d5d8df);
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+  padding: 6px 10px;
 }
 
 .workflow-row span {

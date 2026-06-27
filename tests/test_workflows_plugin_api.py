@@ -84,6 +84,53 @@ def test_create_and_list_workflow_definition(tmp_path: Path):
         assert list_response.json()["workflows"][0]["id"] == created["id"]
 
 
+def test_update_workflow_definition(tmp_path: Path):
+    with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
+        create_response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Daily summary",
+                "description": "Summarize recent thread activity",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Summarize the day",
+                    "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
+                    "model": "qwen",
+                    "target": "auto",
+                },
+                "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
+            },
+        )
+        workflow_id = create_response.json()["id"]
+
+        update_response = client.put(
+            f"/lm-api/v1/plugins/llama_pack_workflows/workflows/{workflow_id}",
+            json={
+                "name": "Benchmark every hour",
+                "description": "Updated workflow",
+                "template_id": "scheduled_benchmark",
+                "enabled": False,
+                "parameters": {"benchmark_id": "bench-1", "models": ["qwen"]},
+                "triggers": [
+                    {
+                        "type": "schedule",
+                        "schedule": {"kind": "interval_minutes", "value": "60"},
+                        "event_type": None,
+                    }
+                ],
+            },
+        )
+
+        assert update_response.status_code == 200
+        updated = update_response.json()
+        assert updated["id"] == workflow_id
+        assert updated["name"] == "Benchmark every hour"
+        assert updated["enabled"] is False
+        assert updated["triggers"][0]["schedule"]["kind"] == "interval_minutes"
+        assert updated["triggers"][0]["schedule"]["value"] == "60"
+
+
 def test_create_workflow_rejects_unknown_template(tmp_path: Path):
     with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
         response = client.post(
@@ -196,7 +243,10 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert 'value="schedule_daily"' in template.text
         assert 'value="schedule_interval"' in template.text
         assert "data-workflow-action" in controller.text
+        assert "data-workflow-action=\"cancel-edit\"" in template.text
         assert "export function mountPage" in controller.text
+        assert 'data-workflow-action="edit"' in controller.text
+        assert "populateForm" in controller.text
         assert "buildTriggers" in controller.text
         assert "host.apiGet" in controller.text
         assert "host.apiPost" in controller.text

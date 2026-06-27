@@ -32,6 +32,17 @@ def create_router(store: WorkflowStore, runner: WorkflowRunner) -> APIRouter:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         return created.model_dump(mode="json")
 
+    @router.put("/workflows/{workflow_id}")
+    async def update_workflow(workflow_id: str, body: WorkflowDefinitionCreate):
+        try:
+            get_template(body.template_id)
+            updated = store.update_definition(workflow_id, body)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        return updated.model_dump(mode="json")
+
     @router.post("/workflows/{workflow_id}/enable")
     async def enable_workflow(workflow_id: str):
         try:

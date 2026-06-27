@@ -4,7 +4,8 @@
     <button type="button" data-workflow-action="refresh">Refresh</button>
   </header>
   <form class="workflow-form" data-workflow-form="create">
-    <h2>Create Workflow</h2>
+    <h2 data-workflow-form-title>Create Workflow</h2>
+    <input name="workflow_id" type="hidden" />
     <label>
       Name
       <input name="name" required maxlength="120" placeholder="Daily summary" />
@@ -45,7 +46,8 @@
       Enabled
     </label>
     <div class="workflow-form-actions">
-      <button type="submit">Create</button>
+      <button type="submit" data-workflow-save-label>Save</button>
+      <button type="button" data-workflow-action="cancel-edit" hidden>Cancel</button>
       <span data-workflow-status></span>
     </div>
   </form>

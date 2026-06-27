@@ -28,9 +28,24 @@ function renderList(elementId, items, renderItem) {
   }
 }
 
+function escapeHtml(value) {
+  const element = document.createElement("span");
+  element.textContent = String(value);
+  return element.innerHTML;
+}
+
 function setStatus(root, message) {
   const status = root.querySelector("[data-workflow-status]");
   if (status) status.textContent = message;
+}
+
+function setEditing(root, editing) {
+  const title = root.querySelector("[data-workflow-form-title]");
+  const saveLabel = root.querySelector("[data-workflow-save-label]");
+  const cancelButton = root.querySelector("[data-workflow-action='cancel-edit']");
+  if (title) title.textContent = editing ? "Edit Workflow" : "Create Workflow";
+  if (saveLabel) saveLabel.textContent = editing ? "Save Changes" : "Save";
+  if (cancelButton) cancelButton.hidden = !editing;
 }
 
 function syncTemplateDefaults(root) {
@@ -40,6 +55,14 @@ function syncTemplateDefaults(root) {
   parameters.value = JSON.stringify(defaultParameters(select.value), null, 2);
 }
 
+function resetForm(root, form) {
+  form.reset();
+  form.elements.workflow_id.value = "";
+  setEditing(root, false);
+  syncTemplateDefaults(root);
+  syncTriggerFields(root);
+}
+
 function syncTriggerFields(root) {
   const triggerType = root.querySelector("[data-workflow-trigger-type]");
   const dailyField = root.querySelector("[data-workflow-trigger-field='daily']");
@@ -47,6 +70,36 @@ function syncTriggerFields(root) {
   if (!triggerType || !dailyField || !intervalField) return;
   dailyField.hidden = triggerType.value !== "schedule_daily";
   intervalField.hidden = triggerType.value !== "schedule_interval";
+}
+
+function workflowTriggerOption(workflow) {
+  const trigger = workflow.triggers && workflow.triggers.length > 0 ? workflow.triggers[0] : null;
+  if (!trigger || trigger.type === "manual") return { type: "manual", dailyTime: "09:00", intervalMinutes: "60" };
+  if (trigger.type === "schedule" && trigger.schedule?.kind === "daily") {
+    return { type: "schedule_daily", dailyTime: trigger.schedule.value, intervalMinutes: "60" };
+  }
+  if (trigger.type === "schedule" && trigger.schedule?.kind === "interval_minutes") {
+    return { type: "schedule_interval", dailyTime: "09:00", intervalMinutes: trigger.schedule.value };
+  }
+  return { type: "manual", dailyTime: "09:00", intervalMinutes: "60" };
+}
+
+function populateForm(root, workflow) {
+  const form = root.querySelector("[data-workflow-form='create']");
+  if (!form) return;
+  const trigger = workflowTriggerOption(workflow);
+  form.elements.workflow_id.value = workflow.id;
+  form.elements.name.value = workflow.name;
+  form.elements.description.value = workflow.description;
+  form.elements.template_id.value = workflow.template_id;
+  form.elements.parameters_json.value = JSON.stringify(workflow.parameters, null, 2);
+  form.elements.trigger_type.value = trigger.type;
+  form.elements.daily_time.value = trigger.dailyTime;
+  form.elements.interval_minutes.value = trigger.intervalMinutes;
+  form.elements.enabled.checked = Boolean(workflow.enabled);
+  setEditing(root, true);
+  syncTriggerFields(root);
+  setStatus(root, "Editing workflow");
 }
 
 async function refreshWorkflows(root, host) {
@@ -71,8 +124,19 @@ async function refreshWorkflows(root, host) {
   const parameters = root.querySelector("[data-workflow-parameters]");
   if (parameters && !parameters.value) syncTemplateDefaults(root);
   renderList("workflow-templates", templates.templates, (item) => `<strong>${item.name}</strong><span>${item.description}</span>`);
-  renderList("workflow-definitions", workflows.workflows, (item) => `<strong>${item.name}</strong><span>${item.enabled ? "enabled" : "disabled"}</span>`);
+  renderList("workflow-definitions", workflows.workflows, (item) => `
+    <div class="workflow-row-main">
+      <strong>${escapeHtml(item.name)}</strong>
+      <span>${escapeHtml(item.enabled ? "enabled" : "disabled")} · ${escapeHtml(item.template_id)}</span>
+    </div>
+    <div class="workflow-row-actions">
+      <button type="button" data-workflow-action="edit" data-workflow-id="${escapeHtml(item.id)}">Edit</button>
+      <button type="button" data-workflow-action="run" data-workflow-id="${escapeHtml(item.id)}">Run</button>
+      <button type="button" data-workflow-action="${item.enabled ? "disable" : "enable"}" data-workflow-id="${escapeHtml(item.id)}">${item.enabled ? "Disable" : "Enable"}</button>
+    </div>
+  `);
   renderList("workflow-runs", runs.runs, (item) => `<strong>${item.status}</strong><span>${item.trigger_type}: ${item.trigger_detail}</span>`);
+  root.workflowDefinitions = workflows.workflows;
 }
 
 function buildTriggers(data) {
@@ -96,6 +160,7 @@ function buildTriggers(data) {
 async function createWorkflow(root, host, form) {
   const data = new FormData(form);
   const parametersJson = String(data.get("parameters_json") || "{}");
+  const workflowId = String(data.get("workflow_id") || "");
   const body = {
     name: String(data.get("name") || ""),
     description: String(data.get("description") || ""),
@@ -104,17 +169,44 @@ async function createWorkflow(root, host, form) {
     parameters: JSON.parse(parametersJson),
     triggers: buildTriggers(data),
   };
-  await host.apiPost("/workflows", body);
-  form.reset();
-  syncTemplateDefaults(root);
-  syncTriggerFields(root);
-  setStatus(root, "Created");
+  if (workflowId) {
+    await host.apiPut(`/workflows/${encodeURIComponent(workflowId)}`, body);
+    setStatus(root, "Saved");
+  } else {
+    await host.apiPost("/workflows", body);
+    setStatus(root, "Created");
+  }
+  resetForm(root, form);
+  await refreshWorkflows(root, host);
+}
+
+async function handleWorkflowAction(root, host, action, workflowId) {
+  if (action === "edit") {
+    const workflow = (root.workflowDefinitions || []).find((item) => item.id === workflowId);
+    if (!workflow) throw new Error(`Workflow not found: ${workflowId}`);
+    populateForm(root, workflow);
+    return;
+  }
+  if (action === "run") {
+    await host.apiPost(`/workflows/${encodeURIComponent(workflowId)}/runs`);
+    setStatus(root, "Run started");
+  }
+  if (action === "enable") {
+    await host.apiPost(`/workflows/${encodeURIComponent(workflowId)}/enable`);
+    setStatus(root, "Enabled");
+  }
+  if (action === "disable") {
+    await host.apiPost(`/workflows/${encodeURIComponent(workflowId)}/disable`);
+    setStatus(root, "Disabled");
+  }
   await refreshWorkflows(root, host);
 }
 
 export function mountPage(root, host) {
   const refreshButton = root.querySelector("[data-workflow-action='refresh']");
+  const cancelButton = root.querySelector("[data-workflow-action='cancel-edit']");
   const form = root.querySelector("[data-workflow-form='create']");
+  const definitions = root.querySelector("#workflow-definitions");
   const templateSelect = root.querySelector("[data-workflow-template-select]");
   const triggerType = root.querySelector("[data-workflow-trigger-type]");
   const refresh = () => {
@@ -134,7 +226,25 @@ export function mountPage(root, host) {
   };
   const templateChanged = () => syncTemplateDefaults(root);
   const triggerChanged = () => syncTriggerFields(root);
+  const cancelEdit = () => {
+    if (!form) return;
+    resetForm(root, form);
+    setStatus(root, "");
+  };
+  const workflowAction = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.workflowAction;
+    const workflowId = target.dataset.workflowId;
+    if (!action || !workflowId) return;
+    handleWorkflowAction(root, host, action, workflowId).catch((error) => {
+      setStatus(root, error.message);
+      console.error(error);
+    });
+  };
   refreshButton?.addEventListener("click", refresh);
+  cancelButton?.addEventListener("click", cancelEdit);
+  definitions?.addEventListener("click", workflowAction);
   form?.addEventListener("submit", submit);
   templateSelect?.addEventListener("change", templateChanged);
   triggerType?.addEventListener("change", triggerChanged);
@@ -143,6 +253,8 @@ export function mountPage(root, host) {
 
   return () => {
     refreshButton?.removeEventListener("click", refresh);
+    cancelButton?.removeEventListener("click", cancelEdit);
+    definitions?.removeEventListener("click", workflowAction);
     form?.removeEventListener("submit", submit);
     templateSelect?.removeEventListener("change", templateChanged);
     triggerType?.removeEventListener("change", triggerChanged);

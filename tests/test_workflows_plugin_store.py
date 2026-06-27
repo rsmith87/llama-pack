@@ -34,6 +34,40 @@ def test_store_creates_and_lists_workflow_definitions(tmp_path: Path):
     assert rows[0].name == "Morning warmup"
 
 
+def test_store_updates_workflow_definition(tmp_path: Path):
+    store = WorkflowStore(tmp_path / "workflows.db")
+    store.migrate()
+    created = store.create_definition(_definition_body("Morning warmup"))
+
+    updated_body = WorkflowDefinitionCreate(
+        name="Evening summary",
+        description="Updated workflow",
+        template_id="scheduled_benchmark",
+        enabled=False,
+        parameters={"benchmark_id": "bench-1", "models": ["qwen"]},
+        triggers=[
+            WorkflowTrigger(
+                type="schedule",
+                schedule={"kind": "interval_minutes", "value": "30"},
+                event_type=None,
+            )
+        ],
+    )
+    updated = store.update_definition(created.id, updated_body)
+
+    assert updated.id == created.id
+    assert updated.name == "Evening summary"
+    assert updated.description == "Updated workflow"
+    assert updated.template_id == "scheduled_benchmark"
+    assert updated.enabled is False
+    assert updated.parameters == {"benchmark_id": "bench-1", "models": ["qwen"]}
+    assert updated.triggers[0].type == "schedule"
+    assert updated.triggers[0].schedule is not None
+    assert updated.triggers[0].schedule.kind == "interval_minutes"
+    assert updated.triggers[0].schedule.value == "30"
+    assert updated.updated_at >= created.updated_at
+
+
 def test_store_records_run_and_step_failure(tmp_path: Path):
     store = WorkflowStore(tmp_path / "workflows.db")
     store.migrate()

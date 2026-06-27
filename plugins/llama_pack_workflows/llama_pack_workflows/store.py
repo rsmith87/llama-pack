@@ -113,6 +113,36 @@ class WorkflowStore:
             raise KeyError(f"Workflow definition not found: {workflow_id}")
         return _definition_from_row(row)
 
+    def update_definition(self, workflow_id: str, body: WorkflowDefinitionCreate) -> WorkflowDefinition:
+        now = _utc_now()
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """
+                UPDATE workflow_definitions
+                SET name = ?,
+                    description = ?,
+                    template_id = ?,
+                    enabled = ?,
+                    parameters_json = ?,
+                    triggers_json = ?,
+                    updated_at = ?
+                WHERE id = ?
+                """,
+                (
+                    body.name,
+                    body.description,
+                    body.template_id,
+                    1 if body.enabled else 0,
+                    _json_dumps(body.parameters),
+                    _json_dumps([trigger.model_dump(mode="json") for trigger in body.triggers]),
+                    _datetime_to_text(now),
+                    workflow_id,
+                ),
+            )
+        if cursor.rowcount == 0:
+            raise KeyError(f"Workflow definition not found: {workflow_id}")
+        return self.get_definition(workflow_id)
+
     def set_definition_enabled(self, workflow_id: str, enabled: bool) -> WorkflowDefinition:
         now = _utc_now()
         with self._connect() as connection:
