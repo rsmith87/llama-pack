@@ -31,8 +31,15 @@ async function refreshWorkflows() {
   renderList("workflow-runs", runs.runs, (item) => `<strong>${item.status}</strong><span>${item.trigger_type}: ${item.trigger_detail}</span>`);
 }
 
-document.querySelector("[data-workflow-action='refresh']")?.addEventListener("click", () => {
-  refreshWorkflows().catch((error) => console.error(error));
-});
+export function mountPage(root) {
+  const refreshButton = root.querySelector("[data-workflow-action='refresh']");
+  const refresh = () => {
+    refreshWorkflows().catch((error) => console.error(error));
+  };
+  refreshButton?.addEventListener("click", refresh);
+  refresh();
 
-refreshWorkflows().catch((error) => console.error(error));
+  return () => {
+    refreshButton?.removeEventListener("click", refresh);
+  };
+}
