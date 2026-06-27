@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 from typing import Any
 
-from fastapi import Request
+from fastapi import HTTPException, Request
 
 from llama_pack.core.config import AppConfig
 
@@ -13,6 +13,7 @@ if TYPE_CHECKING:
     from llama_pack.core.chat.proxy import ChatProxy
     from llama_pack.core.chat.scheduler import ChatScheduler
     from llama_pack.core.chat.slot_allocator import ChatSlotAllocator
+    from llama_pack.core.document_collections.service import DocumentCollectionService
     from llama_pack.core.memory.store import ChromaMemoryStore
     from llama_pack.core.model_assets.catalog_service import ModelCatalogService
     from llama_pack.core.model_assets.conversions import ConversionManager
@@ -124,6 +125,19 @@ def get_project_graph_store(request: Request) -> ProjectGraphStoreOrm:
 
 def get_thread_service(request: Request) -> ThreadService:
     return request.app.state.thread_service
+
+
+def get_document_collection_service(request: Request) -> DocumentCollectionService:
+    service = getattr(request.app.state, "document_collection_service", None)
+    if service is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Document Collections are unavailable because controller memory embeddings are not configured. "
+                "Enable memory.embedding_model_path and run migrations."
+            ),
+        )
+    return service
 
 
 def get_audit_store(request: Request) -> Any:

@@ -18,6 +18,7 @@ from llama_pack.api.routes import (
     chat,
     client_discovery,
     conversions,
+    document_collections,
     downloads,
     external_keys,
     health,
@@ -47,6 +48,8 @@ from llama_pack.core.chat.proxy import ChatProxy
 from llama_pack.core.chat.scheduler import ChatScheduler
 from llama_pack.core.chat.slot_allocator import ChatSlotAllocator
 from llama_pack.core.memory.store import ChromaMemoryStore
+from llama_pack.core.document_collections.service import DocumentCollectionService
+from llama_pack.core.document_collections.vector_store import DocumentCollectionVectorStore
 from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
 from llama_pack.core.model_assets.conversions import ConversionManager
 from llama_pack.core.model_assets.catalog_service import ModelCatalogService
@@ -76,6 +79,7 @@ from llama_pack.core.persistence.model_asset_store_orm import ModelAssetStoreOrm
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
 from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
 from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
+from llama_pack.core.persistence.document_collection_store_orm import DocumentCollectionStoreOrm
 from llama_pack.core.code_graph.indexer import ProjectGraphIndexer
 from llama_pack.core.settings.runtime import RuntimeSettingsService
 from llama_pack.core.benchmarks.runner import BenchmarkRunner
@@ -424,6 +428,7 @@ def _configure_app_state(
     app.state.benchmark_store = BenchmarkStoreOrm(db_url=auth_urls.benchmarks)
     app.state.project_store = ProjectStoreOrm(db_url=auth_urls.projects)
     app.state.project_graph_store = ProjectGraphStoreOrm(db_url=auth_urls.projects)
+    app.state.document_collection_service = _build_document_collection_service(app_config, auth_urls.projects)
     app.state.chat_proxy.project_store = app.state.project_store
     app.state.chat_proxy.project_graph_store = app.state.project_graph_store
     if app_config.mode == "controller":
@@ -451,6 +456,21 @@ def _configure_app_state(
     app.state.test_chat_sessions = {}
     app.state.start_plugin_background_tasks = lambda record: _start_plugin_background_tasks(app, record)
     app.state.stop_plugin_background_tasks = lambda record: _stop_plugin_background_tasks(app, record)
+
+
+def _build_document_collection_service(app_config: AppConfig, projects_db_url: str) -> DocumentCollectionService | None:
+    if app_config.mode != "controller":
+        return None
+    try:
+        return DocumentCollectionService(
+            metadata_store=DocumentCollectionStoreOrm(db_url=projects_db_url),
+            vector_store=DocumentCollectionVectorStore(app_config.memory),
+            max_chunk_chars=1600,
+            chunk_overlap_chars=200,
+        )
+    except Exception as exc:
+        logger.warning("Document Collections disabled: %s", exc)
+        return None
 
 
 def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
@@ -491,6 +511,7 @@ def _register_routers(app: FastAPI, app_config: AppConfig) -> None:
     if app_config.mode == "controller":
         app.include_router(benchmarks.router, prefix=LM_API_PREFIX)
         app.include_router(projects.router, prefix=LM_API_PREFIX)
+        app.include_router(document_collections.router, prefix=LM_API_PREFIX)
         app.include_router(jobs.router, prefix=LM_API_PREFIX)
         app.include_router(node_work.router, prefix=LM_API_PREFIX)
         app.include_router(memory.router, prefix=LM_API_PREFIX)

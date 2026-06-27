@@ -50,6 +50,7 @@ class ChatRequestBody(BaseModel):
     request_type: str | None = None
     project_id: str | None = None
     thread_id: str | None = None
+    document_collection_ids: list[str] | None = Field(default=None, min_length=1, max_length=20)
 
     @model_validator(mode="after")
     def normalize_fields(self) -> "ChatRequestBody":

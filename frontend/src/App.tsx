@@ -11,6 +11,7 @@ import { ChatPage } from "./pages/ChatPage";
 import { SetupPage } from "./pages/SetupPage";
 import { NodesPage } from "./pages/NodesPage";
 import { ProjectsPage } from "./pages/ProjectsPage";
+import { DocumentCollectionsPage } from "./pages/DocumentCollectionsPage";
 import { ModelsPage } from "./pages/ModelsPage";
 import { GgufLibraryPage } from "./pages/GgufLibraryPage";
 import { HfToGgufPage } from "./pages/HfToGgufPage";
@@ -47,6 +48,7 @@ export default function App() {
                       <Route path="/ui/setup" element={<SetupPage />} />
                       <Route path="/ui/nodes" element={<NodesPage />} />
                       <Route path="/ui/projects" element={<ProjectsPage />} />
+                      <Route path="/ui/collections" element={<DocumentCollectionsPage />} />
                       <Route path="/ui/models" element={<ModelsPage />} />
                       <Route path="/ui/gguf-library" element={<GgufLibraryPage />} />
                       <Route path="/ui/hf-to-gguf" element={<HfToGgufPage />} />

@@ -1,4 +1,4 @@
-export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "projects" | "models" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "tool-loop-evals" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
+export type BuiltInPageKey = "dashboard" | "setup" | "chat" | "nodes" | "projects" | "collections" | "models" | "gguf-library" | "hf-to-gguf" | "hf-downloads" | "quantization" | "controller-ops" | "runtime-overview" | "tool-loop-evals" | "embeddings" | "plugins" | "audit" | "benchmarks" | "api-keys" | "settings" | "docs";
 export type PageKey = BuiltInPageKey | string;
 export type PageIcon =
   | "dashboard"
@@ -61,6 +61,7 @@ export const pages: PageDefinition[] = [
   { key: "dashboard", label: "Dashboard", path: "/", icon: "dashboard", section: "operations" },
   { key: "nodes", label: "Nodes", path: "/ui/nodes", icon: "nodes", section: "operations", hideInModes: ["agent"] },
   { key: "projects", label: "Projects", path: "/ui/projects", icon: "controller", section: "operations", hideInModes: ["agent"] },
+  { key: "collections", label: "Collections", path: "/ui/collections", icon: "library", section: "operations", hideInModes: ["agent"] },
   { key: "controller-ops", label: "Controller Ops", path: "/ui/controller-ops", icon: "controller", section: "operations", hideInModes: ["agent"] },
   { key: "models", label: "Models", path: "/ui/models", icon: "library", section: "models", secondaryNavigation: modelLifecycleNavigation },
   { key: "gguf-library", label: "Library", path: "/ui/gguf-library", icon: "library", section: "models", hideFromPrimary: true, secondaryNavigation: modelLifecycleNavigation },

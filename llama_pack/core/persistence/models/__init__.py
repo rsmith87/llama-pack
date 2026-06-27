@@ -7,6 +7,11 @@ from llama_pack.core.persistence.models.model_asset import (
     ModelProfileOrm,
 )
 from llama_pack.core.persistence.models.settings import SettingsEntryOrm
+from llama_pack.core.persistence.models.document_collections import (
+    DocumentCollectionChunkOrm,
+    DocumentCollectionDocumentOrm,
+    DocumentCollectionOrm,
+)
 from llama_pack.core.persistence.models.projects import (
     ProjectContextArtifactOrm,
     ProjectGraphFileOrm,
@@ -33,6 +38,9 @@ __all__ = [
     "AuditEventOrm",
     "ChatSessionOrm",
     "ControllerLeaseOrm",
+    "DocumentCollectionChunkOrm",
+    "DocumentCollectionDocumentOrm",
+    "DocumentCollectionOrm",
     "ModelDownloadOrm",
     "JobAttemptOrm",
     "JobEventOrm",

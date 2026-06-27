@@ -219,6 +219,22 @@ def test_projects_migrations_include_context_artifacts_revision():
     assert module.down_revision == "20260619_0002"
 
 
+def test_projects_migrations_include_document_collections_revision():
+    migration_path = Path("migrations/versions/projects/20260627_0004_document_collections.py")
+    assert migration_path.exists()
+
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("projects_document_collections", migration_path)
+    assert spec is not None
+    assert spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert module.revision == "20260627_0004"
+    assert module.down_revision == "20260619_0003"
+
+
 def test_projects_migration_stamps_existing_bootstrap_tables(tmp_path, monkeypatch):
     db_path = tmp_path / "projects.db"
     engine = create_engine(f"sqlite+pysqlite:///{db_path}", future=True)
@@ -240,7 +256,7 @@ def test_projects_migration_stamps_existing_bootstrap_tables(tmp_path, monkeypat
             version = connection.exec_driver_sql("select version_num from alembic_version").scalar_one()
     finally:
         engine.dispose()
-    assert version == "20260619_0003"
+    assert version == "20260627_0004"
 
 
 def test_models_migrations_include_catalog_expansion_revision():

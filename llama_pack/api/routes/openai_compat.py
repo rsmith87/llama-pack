@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from dataclasses import asdict
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -44,6 +45,7 @@ from llama_pack.core.chat.proxy import ChatProxy, ChatSummarizationError
 from llama_pack.core.chat.scheduler import ChatAdmissionError, ChatScheduler
 from llama_pack.core.agent_tools.runtime import AgentToolLoop, MalformedToolCallArgumentsError
 from llama_pack.core.config import AppConfig
+from llama_pack.core.document_collections.service import DocumentCollectionService
 from llama_pack.core.nodes.registry import NodeRegistry
 from llama_pack.core.persistence.project_graph_store_orm import ProjectGraphStoreOrm
 from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
@@ -82,6 +84,79 @@ class OpenAIChatCompletionsRequest(BaseModel):
     tool_choice: dict[str, Any] | str | None = None
     agent_tool_max_iterations: int | None = Field(default=None, ge=1, le=AGENT_TOOL_MAX_ITERATIONS_LIMIT)
     project_id: str | None = None
+    document_collection_ids: list[str] | None = Field(default=None, min_length=1, max_length=20)
+
+
+def apply_document_collection_context(
+    payload: dict[str, Any],
+    document_collection_ids: list[str] | None,
+    document_collection_service: DocumentCollectionService | None,
+) -> tuple[dict[str, Any], list[dict[str, object]]]:
+    if not document_collection_ids:
+        return payload, []
+    if document_collection_service is None:
+        raise HTTPException(
+            status_code=503,
+            detail=(
+                "Document Collections are unavailable because controller memory embeddings are not configured. "
+                "Enable memory.embedding_model_path and run migrations."
+            ),
+        )
+    query = _last_user_text(payload.get("messages"))
+    if not query:
+        return payload, []
+    results = document_collection_service.search(query, document_collection_ids, top_k=5)
+    if not results:
+        return payload, []
+    context_message = {
+        "role": "system",
+        "content": _render_document_collection_context([asdict(result) for result in results]),
+    }
+    messages = payload.get("messages")
+    if not isinstance(messages, list):
+        return payload, []
+    return {**payload, "messages": [context_message, *messages]}, [asdict(result) for result in results]
+
+
+def _last_user_text(messages: object) -> str:
+    if not isinstance(messages, list):
+        return ""
+    for message in reversed(messages):
+        if not isinstance(message, dict):
+            continue
+        if message.get("role") != "user":
+            continue
+        return _message_content_text(message.get("content")).strip()
+    return ""
+
+
+def _message_content_text(content: object) -> str:
+    if isinstance(content, str):
+        return content
+    if not isinstance(content, list):
+        return ""
+    parts: list[str] = []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            text = item.get("text")
+            if isinstance(text, str):
+                parts.append(text)
+    return "\n".join(parts)
+
+
+def _render_document_collection_context(citations: list[dict[str, object]]) -> str:
+    lines = [
+        "Relevant document collection context",
+        "Use these excerpts only when they are relevant. Cite the bracketed source labels in the answer.",
+    ]
+    for index, citation in enumerate(citations, start=1):
+        label = f"[D{index}]"
+        collection_name = str(citation["collection_name"])
+        filename = str(citation["filename"])
+        chunk_index = int(citation["chunk_index"])
+        text = str(citation["text"])
+        lines.append(f"{label} {collection_name} / {filename} chunk {chunk_index}: {text}")
+    return "\n".join(lines)
 
 
 class ClientChatDiagnosticsRequest(BaseModel):
@@ -382,7 +457,7 @@ async def openai_chat_completions(
     try:
         model_name = body.model
         payload: dict[str, Any] = ChatRequestBody.model_validate(
-            body.model_dump(exclude={"model", "stream", "thread_id", "request_type", "metadata", "agent_tool_max_iterations"})
+            body.model_dump(exclude={"model", "stream", "thread_id", "request_type", "metadata", "agent_tool_max_iterations", "document_collection_ids"})
         ).model_dump()
         if body.tool_runtime is not None:
             payload["tool_runtime"] = body.tool_runtime
@@ -392,6 +467,12 @@ async def openai_chat_completions(
             payload["agent_tool_max_iterations"] = body.agent_tool_max_iterations
         if body.project_id is not None:
             payload["project_id"] = body.project_id
+        document_citations: list[dict[str, object]] = []
+        payload, document_citations = apply_document_collection_context(
+            payload=payload,
+            document_collection_ids=body.document_collection_ids,
+            document_collection_service=getattr(request.app.state, "document_collection_service", None),
+        )
         profile_headers: dict[str, str] = {}
         if config.mode != "controller":
             model_name, profile_headers = resolve_profile_model(model_name, payload, profile_activation)
@@ -504,6 +585,12 @@ async def openai_chat_completions(
                 metadata=body.metadata,
                 target=body.target,
             )
+        if document_citations:
+            response_metadata = response.get("metadata")
+            if not isinstance(response_metadata, dict):
+                response_metadata = {}
+            response_metadata["document_citations"] = document_citations
+            response["metadata"] = response_metadata
         audit_external_chat_completion(
             request=request,
             endpoint="/v1/chat/completions",

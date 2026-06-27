@@ -17,6 +17,7 @@ describe("page route model", () => {
       "dashboard",
       "nodes",
       "projects",
+      "collections",
       "controller-ops",
       "models",
       "gguf-library",
@@ -57,6 +58,7 @@ describe("page route model", () => {
   it("hides controller-only pages in agent mode", () => {
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("nodes");
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("projects");
+    expect(pagesForMode("agent").map((page) => page.key)).not.toContain("collections");
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("controller-ops");
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("audit");
     expect(pagesForMode("agent").map((page) => page.key)).not.toContain("embeddings");
@@ -70,7 +72,7 @@ describe("page route model", () => {
       pages: section.pages.map((page) => page.key),
     }))).toEqual([
       { label: "Gateway", pages: ["chat", "api-keys", "audit"] },
-      { label: "Operations", pages: ["dashboard", "nodes", "projects", "controller-ops"] },
+      { label: "Operations", pages: ["dashboard", "nodes", "projects", "collections", "controller-ops"] },
       { label: "Models", pages: ["models"] },
       { label: "Runtime", pages: ["runtime-overview", "tool-loop-evals", "embeddings"] },
       { label: "Plugins", pages: ["plugins"] },
