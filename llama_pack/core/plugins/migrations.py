@@ -52,26 +52,32 @@ class PluginMigrationTarget:
             self.last_error_source = "refresh"
 
     def upgrade(self, *, plugin_root: Path | None = None) -> None:
-        if self.database_url is None:
+        if self.runner is None and self.database_url is None:
             raise ValueError(f"Plugin migration target {self.id} has no database URL")
-        migration_dir = self.migration_dir(plugin_root=plugin_root)
-        config = _alembic_config_for(migration_dir, self.database_url)
         try:
-            script = ScriptDirectory.from_config(config)
-            if self.database_path is not None:
-                self.database_path.parent.mkdir(parents=True, exist_ok=True)
-            engine = create_engine(self.database_url, future=True, pool_pre_ping=True)
-            try:
-                with engine.begin() as connection:
-                    def upgrade_revisions(revision: str, context: MigrationContext):
-                        return script._upgrade_revs("head", revision)
+            if self.runner is not None:
+                self.runner()
+                self.current_revision = self.head_revision
+            else:
+                if self.database_url is None:
+                    raise ValueError(f"Plugin migration target {self.id} has no database URL")
+                migration_dir = self.migration_dir(plugin_root=plugin_root)
+                config = _alembic_config_for(migration_dir, self.database_url)
+                script = ScriptDirectory.from_config(config)
+                if self.database_path is not None:
+                    self.database_path.parent.mkdir(parents=True, exist_ok=True)
+                engine = create_engine(self.database_url, future=True, pool_pre_ping=True)
+                try:
+                    with engine.begin() as connection:
+                        def upgrade_revisions(revision: str, context: MigrationContext):
+                            return script._upgrade_revs("head", revision)
 
-                    with EnvironmentContext(config, script, fn=upgrade_revisions, destination_rev="head") as environment:
-                        environment.configure(connection=connection)
-                        with environment.begin_transaction():
-                            environment.run_migrations()
-            finally:
-                engine.dispose()
+                        with EnvironmentContext(config, script, fn=upgrade_revisions, destination_rev="head") as environment:
+                            environment.configure(connection=connection)
+                            with environment.begin_transaction():
+                                environment.run_migrations()
+                finally:
+                    engine.dispose()
             self.last_error = None
             self.last_error_source = None
         except Exception as exc:
@@ -79,7 +85,8 @@ class PluginMigrationTarget:
             self.last_error_source = "upgrade"
             raise
         finally:
-            self.refresh_status(plugin_root=plugin_root)
+            if self.runner is None:
+                self.refresh_status(plugin_root=plugin_root)
 
     def migration_dir(self, *, plugin_root: Path | None = None) -> Path:
         migration_dir = Path(self.directory)

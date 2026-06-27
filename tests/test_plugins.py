@@ -1309,6 +1309,46 @@ def test_plugin_migration_registration_does_not_auto_run_migrations(tmp_path: Pa
     assert module.migrations_run is False
 
 
+def test_plugin_migration_upgrade_endpoint_runs_registered_runner(tmp_path: Path):
+    plugin_dir = write_plugin(
+        tmp_path,
+        "runner_migration_plugin",
+        body="""
+        migrations_run = False
+
+        def run_migrations():
+            global migrations_run
+            migrations_run = True
+
+        class Plugin:
+            def register(self, context):
+                context.add_migration_target(
+                    "manual",
+                    directory="migrations",
+                    current_revision=None,
+                    head_revision="001_initial",
+                    runner=run_migrations,
+                )
+
+        plugin = Plugin()
+        """,
+    )
+    app = create_app(config=plugin_config(tmp_path, plugin_dir))
+    client = authenticated_client(app)
+
+    response = client.post("/lm-api/v1/plugins/runner_migration_plugin/migrations/manual/upgrade")
+
+    assert response.status_code == 200
+    target = response.json()["target"]
+    assert target["current_revision"] == "001_initial"
+    assert target["head_revision"] == "001_initial"
+    assert target["status"] == "current"
+    assert target["pending"] is False
+    import runner_migration_plugin.plugin as module
+
+    assert module.migrations_run is True
+
+
 def test_plugin_route_outside_namespace_and_collision_are_rejected(tmp_path: Path):
     bad_dir = write_plugin(
         tmp_path,

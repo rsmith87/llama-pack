@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import sqlite3
+
 from llama_pack_workflows.api import create_router
 from llama_pack_workflows.runner import WorkflowRunner
 from llama_pack_workflows.scheduler import WorkflowEventDispatcher, WorkflowScheduler
@@ -14,7 +16,7 @@ class WorkflowsPlugin:
     def register(self, context) -> None:
         database = context.get_database("main")
         store = WorkflowStore(database.path)
-        store.migrate()
+        _run_migrations(store, "001_workflows")
         app_ref = {"app": None}
         runner = WorkflowRunner(store, app_provider=lambda: app_ref["app"])
         scheduler = WorkflowScheduler(store, runner, 60)
@@ -42,7 +44,17 @@ class WorkflowsPlugin:
             database=database,
             current_revision="001_workflows",
             head_revision="001_workflows",
+            runner=lambda: _run_migrations(store, "001_workflows"),
         )
 
 
 plugin = WorkflowsPlugin()
+
+
+def _run_migrations(store: WorkflowStore, revision: str) -> None:
+    store.migrate()
+    with sqlite3.connect(store.db_path) as connection:
+        connection.execute("CREATE TABLE IF NOT EXISTS alembic_version (version_num VARCHAR(32) NOT NULL)")
+        current = connection.execute("SELECT version_num FROM alembic_version LIMIT 1").fetchone()
+        if current is None:
+            connection.execute("INSERT INTO alembic_version (version_num) VALUES (?)", (revision,))
