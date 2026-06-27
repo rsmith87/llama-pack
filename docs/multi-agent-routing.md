@@ -4,7 +4,7 @@ This document covers the thread event schema, fanout routing policy, and aggrega
 
 ## Overview
 
-Thread mode routes each user message through the controller, which selects a target node and model, calls the agent, and records the full interaction as a series of typed events. The features described here extend that baseline to support routing a single user turn to **multiple agents in parallel**, recording each agent's output as internal events, and returning one aggregated public response.
+Thread mode routes each user message through the controller, which selects a target node and model, calls the agent, and records the full interaction as a series of typed events. The features described here extend that baseline to support routing a single user turn to **multiple agents**, recording each agent's output as internal events, and returning one aggregated public response.
 
 All three features are backward compatible. Existing single-node behavior is unchanged when fanout is not configured.
 
@@ -46,7 +46,7 @@ Non-admin callers receive only public events (`user_message`, `assistant_message
 
 When fanout is enabled, the routing policy selects a **primary node** using the normal deterministic priority order, then collects up to `routing_fanout_max - 1` additional eligible nodes from the same request-type candidate list. The full set of targets is returned as `fanout_targets` on the `RouteDecision`.
 
-The `service` layer then dispatches to each target concurrently (sequentially in the current implementation), records `agent_request` and `agent_response` events for each, aggregates the outputs, and publishes one `assistant_message`.
+The `service` layer then dispatches to each target sequentially in the current implementation, records `agent_request` and `agent_response` events for each, aggregates the outputs, and publishes one `assistant_message`.
 
 ### Configuration
 
@@ -174,8 +174,8 @@ nodes:
 
 The current implementation records the decision as metadata. It does **not**
 automatically trigger `POST /models/{name}/start`. The benchmark
-managed-lifecycle feature (`managed_load`) is an example of a caller that reads
-this signal to drive the full lifecycle.
+managed-lifecycle feature (`managed_load`) is a separate caller-driven
+lifecycle path that explicitly starts and restores models for benchmark runs.
 
 ---
 

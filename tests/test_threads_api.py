@@ -1361,6 +1361,27 @@ async def test_fanout_partial_failure_still_produces_assistant_message(tmp_path)
 
 
 @pytest.mark.asyncio
+async def test_fanout_all_failures_produces_no_successful_responses_message(tmp_path):
+    class FailingProxy:
+        async def chat_with_meta(self, model_name, payload):
+            raise RuntimeError(f"{model_name} unavailable")
+
+    service = _fanout_service(tmp_path, chat_proxy=FailingProxy())
+    thread = service.create_thread(title=None, default_model=None, metadata={"request_type": "coding"}, created_by=None)
+
+    response = await service.post_message_async(thread["id"], "user", "hello", None, "auto", None)
+
+    assert response["message"]["content"] == "[no successful agent responses]"
+    internal = service.list_events(thread["id"], include_internal=True)
+    aggregation = next(event for event in internal if event["event_type"] == "aggregation")
+    outputs = aggregation["content"]["outputs"]
+    assert len(outputs) == 2
+    assert all("error" in output for output in outputs)
+    public_events = service.list_events(thread["id"], include_internal=False)
+    assert public_events[-1]["content"]["text"] == "[no successful agent responses]"
+
+
+@pytest.mark.asyncio
 async def test_fanout_off_single_agent_path_unchanged(tmp_path):
     chat_proxy = RecordingChatProxy(responses=["single reply"])
     service = _service(tmp_path, chat_proxy=chat_proxy)
