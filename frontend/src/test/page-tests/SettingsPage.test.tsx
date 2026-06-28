@@ -1,7 +1,11 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { SettingsPage } from "../../pages/SettingsPage";
+import { AccessPane, RuntimeSettingsPane, StoragePane, ToolCatalogPane, ToolExecutionPane } from "../../pages/SettingsPage/panes";
+import { parseJsonObject, normalizedModelRoots } from "../../features/settings/settingsForms";
 import { AuthSessionProvider, AUTH_TOKEN_STORAGE_KEY } from "../../features/auth/authSession";
 import { AppModeProvider, type AppMode } from "../../features/appMode/appModeContext";
 
@@ -141,6 +145,22 @@ afterEach(() => {
   localStorage.clear();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("keeps SettingsPage focused by extracting settings panes and form helpers", () => {
+  const source = readFileSync(resolve(__dirname, "../../pages/SettingsPage/index.tsx"), "utf-8");
+
+  expect(RuntimeSettingsPane).toBeTypeOf("function");
+  expect(ToolExecutionPane).toBeTypeOf("function");
+  expect(ToolCatalogPane).toBeTypeOf("function");
+  expect(StoragePane).toBeTypeOf("function");
+  expect(AccessPane).toBeTypeOf("function");
+  expect(parseJsonObject("{\"workers\":2}", "Labels")).toEqual({ workers: 2 });
+  expect(normalizedModelRoots([" /models ", "/models", "", "/other"])).toEqual(["/models", "/other"]);
+  expect(source).not.toContain("function parseJsonObject");
+  expect(source).not.toContain("title=\"Runtime Settings\"");
+  expect(source).not.toContain("title=\"Tool Execution\"");
+  expect(source).not.toContain("title=\"Tool Catalog\"");
 });
 
 it("keeps setup config tools out of settings", async () => {

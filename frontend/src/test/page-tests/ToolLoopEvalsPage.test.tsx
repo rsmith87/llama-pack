@@ -1,6 +1,10 @@
 import { render, screen, within } from "@testing-library/react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, expect, it, vi } from "vitest";
 import { ToolLoopEvalsPage } from "../../pages/ToolLoopEvalsPage";
+import { ToolLoopCaseDetail, ToolLoopCaseList, RunComparisonPanel } from "../../pages/ToolLoopEvalsPage/components";
+import { scorePercent, presetGroupsWithAllOption } from "../../features/toolLoopEvals/viewModels";
 import userEvent from "@testing-library/user-event";
 import { AppModeProvider } from "../../features/appMode/appModeContext";
 
@@ -61,6 +65,18 @@ function presetCatalog(payload = {}) {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+});
+
+it("keeps ToolLoopEvalsPage focused by extracting view models and display components", () => {
+  const source = readFileSync(resolve(__dirname, "../../pages/ToolLoopEvalsPage/index.tsx"), "utf-8");
+
+  expect(ToolLoopCaseDetail).toBeTypeOf("function");
+  expect(ToolLoopCaseList).toBeTypeOf("function");
+  expect(RunComparisonPanel).toBeTypeOf("function");
+  expect(scorePercent(0.875)).toBe("88%");
+  expect(presetGroupsWithAllOption([{ id: "synthetic", label: "Synthetic", presets: [{ id: "case-1", label: "Case 1" }] }])[0].presets[0].id).toBe("all");
+  expect(source).not.toContain("function timelineEntries");
+  expect(source).not.toContain("function ToolLoopCaseDetail");
 });
 
 it("renders latest tool-loop eval summaries and selected case details", async () => {
