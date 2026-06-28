@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 
 import httpx
@@ -67,6 +68,13 @@ def test_default_live_tool_loop_scenarios_include_coding_agent_presets():
     assert scenarios["live-ci-failure-triage"].expected_artifacts == ["docs/ci-triage.md"]
     assert scenarios["live-ci-failure-triage"].max_repeated_tool_calls == 1
     assert "write_ci_triage_report" in scenarios["live-ci-failure-triage"].expected_tool_sequence
+
+
+def test_default_live_tool_loop_scenarios_delegate_to_fixture_module():
+    from llama_pack.core.agent_tools import live_eval_fixtures
+
+    assert default_live_tool_loop_scenarios() == live_eval_fixtures.default_live_tool_loop_scenarios()
+    assert "LiveToolLoopScenario(" not in inspect.getsource(default_live_tool_loop_scenarios)
 
 
 @pytest.mark.asyncio

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import inspect
+
 import pytest
 
 from llama_pack.core.agent_tools.evals import ToolLoopEvalCase, ToolLoopEvaluator, default_tool_loop_eval_cases
@@ -125,6 +127,13 @@ def test_default_tool_loop_eval_cases_include_harder_presets():
     assert cases["benchmark-runtime-trace"].max_repeated_tool_calls == 1
     assert "read_benchmark_unrelated_ui" in cases["benchmark-runtime-trace"].eval_tools
     assert "read_benchmark_unrelated_ui" not in cases["benchmark-runtime-trace"].expected_tool_sequence
+
+
+def test_default_tool_loop_eval_cases_delegate_to_fixture_module():
+    from llama_pack.core.agent_tools import eval_fixtures
+
+    assert default_tool_loop_eval_cases() == eval_fixtures.default_tool_loop_eval_cases()
+    assert "ToolLoopEvalCase(" not in inspect.getsource(default_tool_loop_eval_cases)
 
 
 @pytest.mark.asyncio

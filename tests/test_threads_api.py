@@ -106,6 +106,15 @@ def _service(tmp_path, chat_proxy=None, model_running=None):
     )
 
 
+def test_thread_service_exposes_focused_collaborators(tmp_path):
+    service = _service(tmp_path)
+
+    assert service.event_publisher.__class__.__name__ == "ThreadEventPublisher"
+    assert service.context_manager.__class__.__name__ == "ThreadContextManager"
+    assert service.turn_preparer.__class__.__name__ == "ThreadTurnPreparer"
+    assert service.workflow_runner.__class__.__name__ == "ThreadWorkflowRunner"
+
+
 @pytest.mark.asyncio
 async def test_thread_service_publishes_thread_events_to_plugin_bus(tmp_path):
     captured = []
