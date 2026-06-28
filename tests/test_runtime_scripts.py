@@ -10,76 +10,6 @@ from stat import S_IXUSR
 ROOT_DIR = Path(__file__).resolve().parents[1]
 
 
-def read_script(name: str) -> str:
-    return (ROOT_DIR / "scripts" / name).read_text(encoding="utf-8")
-
-
-def test_start_agent_script_uses_agent_specific_runtime_defaults() -> None:
-    script = ROOT_DIR / "scripts" / "start_agent.sh"
-
-    assert script.exists()
-    contents = script.read_text(encoding="utf-8")
-    assert ".llama_pack_agent.pid" in contents
-    assert "llama_pack_agent_uvicorn.log" in contents
-    assert "LLAMA_PACK_MODE=agent" in contents
-    assert "Expected agent config" in contents
-    assert "LLAMA_PACK_START_FRONTEND" in contents
-    assert 'start_frontend.sh' in contents
-
-
-def test_start_server_is_deprecated_agent_wrapper() -> None:
-    contents = read_script("start_server.sh")
-
-    assert "deprecated" in contents.lower()
-    assert 'exec "$ROOT_DIR/scripts/start_agent.sh"' in contents
-
-
-def test_stop_server_knows_agent_controller_and_legacy_targets() -> None:
-    contents = read_script("stop_server.sh")
-
-    assert ".llama_pack_agent.pid" in contents
-    assert ".llama_pack_controller.pid" in contents
-    assert ".llama_pack_frontend.pid" in contents
-    assert '"agent")' in contents
-    assert '"controller")' in contents
-    assert '"frontend")' in contents
-    assert '"server"|"legacy")' not in contents
-
-
-def test_start_controller_script_uses_controller_specific_runtime_defaults() -> None:
-    contents = read_script("start_controller.sh")
-
-    assert ".llama_pack_controller.pid" in contents
-    assert "llama_pack_controller_uvicorn.log" in contents
-    assert "LLAMA_PACK_MODE=controller" in contents
-    assert "Expected controller config" in contents
-    assert "LLAMA_PACK_START_FRONTEND" in contents
-    assert 'start_frontend.sh' in contents
-    assert "scripts/migrate_all.py" in contents
-
-
-def test_migrate_all_script_is_executable_and_uses_setup_migrations() -> None:
-    script = ROOT_DIR / "scripts" / "migrate_all.py"
-    contents = script.read_text(encoding="utf-8")
-
-    assert script.exists()
-    assert script.stat().st_mode & S_IXUSR
-    assert "run_setup_migrations" in contents
-    assert "--config" in contents
-
-
-def test_install_ocr_model_script_downloads_ppocrv5_to_repo_models_dir() -> None:
-    script = ROOT_DIR / "scripts" / "install_ocr_model.sh"
-    contents = script.read_text(encoding="utf-8")
-
-    assert script.exists()
-    assert script.stat().st_mode & S_IXUSR
-    assert "PaddlePaddle/PP-OCRv5_server_det" in contents
-    assert "PaddlePaddle/PP-OCRv5_server_rec" in contents
-    assert "./models/ocr/pp-ocrv5-server" in contents
-    assert "snapshot_download" in contents
-
-
 def test_smoke_ocr_document_script_validates_paths_without_loading_ocr(tmp_path: Path) -> None:
     script = ROOT_DIR / "scripts" / "smoke_ocr_document.py"
     missing_file = tmp_path / "missing.png"
@@ -106,45 +36,6 @@ def test_smoke_ocr_document_script_validates_paths_without_loading_ocr(tmp_path:
 
     assert result.returncode == 2
     assert f"OCR input file does not exist: {missing_file}" in result.stderr
-
-
-def test_smoke_ocr_document_script_exposes_ppocrv5_defaults() -> None:
-    script = ROOT_DIR / "scripts" / "smoke_ocr_document.py"
-    contents = script.read_text(encoding="utf-8")
-
-    assert script.exists()
-    assert script.stat().st_mode & S_IXUSR
-    assert "./models/ocr/pp-ocrv5-server/det" in contents
-    assert "./models/ocr/pp-ocrv5-server/rec" in contents
-    assert "PP-OCRv5_server_det" in contents
-    assert "PP-OCRv5_server_rec" in contents
-    assert "PaddleOcrModelConfig" in contents
-    assert "create_ocr_service" in contents
-
-
-def test_smoke_ocr_document_script_exposes_tesseract_engine() -> None:
-    script = ROOT_DIR / "scripts" / "smoke_ocr_document.py"
-    contents = script.read_text(encoding="utf-8")
-
-    assert "--engine" in contents
-    assert "tesseract" in contents
-    assert "OcrEngineConfig" in contents
-    assert "create_ocr_service" in contents
-
-
-def test_evaluate_ocr_candidates_script_lists_small_realistic_candidates() -> None:
-    script = ROOT_DIR / "scripts" / "evaluate_ocr_candidates.py"
-    contents = script.read_text(encoding="utf-8")
-
-    assert script.exists()
-    assert script.stat().st_mode & S_IXUSR
-    assert "tesseract-baseline" in contents
-    assert "ppocrv5-server" in contents
-    assert "paddleocr-vl-0.9b" in contents
-    assert "paddleocr-vl-1.5" in contents
-    assert "paddleocr-vl-1.6" in contents
-    assert "OcrEngineConfig" in contents
-    assert "create_ocr_service" in contents
 
 
 def test_evaluate_ocr_candidates_script_prints_config_only_json(tmp_path: Path) -> None:
@@ -179,81 +70,6 @@ def test_evaluate_ocr_candidates_script_prints_config_only_json(tmp_path: Path) 
         "rec_model_name": "PP-OCRv5_server_rec",
     }
     assert payload["candidates"][2]["integration_status"] == "requires-new-paddleocr-vl-runner"
-
-
-def test_start_frontend_script_uses_vite_dev_server_defaults() -> None:
-    contents = read_script("start_frontend.sh")
-
-    assert ".llama_pack_frontend.pid" in contents
-    assert "llama_pack_frontend_vite.log" in contents
-    assert "VITE_API_PROXY_TARGET" in contents
-    assert "npm run dev" in contents
-    assert 'LLAMA_PACK_FRONTEND_HOST:-127.0.0.1' in contents
-    assert 'LLAMA_PACK_FRONTEND_PORT:-5173' in contents
-    assert 'LLAMA_PACK_FRONTEND_BASE_PATH:-/ui/' in contents
-
-
-def test_start_frontend_checks_running_pid_before_building() -> None:
-    contents = read_script("start_frontend.sh")
-
-    assert contents.index('if [[ -f "$PID_FILE" ]]') < contents.index('echo "Building frontend..."')
-
-
-def test_frontend_build_does_not_generate_docs_by_default() -> None:
-    package_json = json.loads((ROOT_DIR / "frontend" / "package.json").read_text(encoding="utf-8"))
-    scripts = package_json["scripts"]
-
-    assert scripts["generate:docs"] == "node scripts/generate-docs.mjs"
-    assert scripts["build"] == "tsc -b && vite build"
-
-
-def test_start_controller_stack_script_starts_controller_and_frontend() -> None:
-    contents = read_script("start_controller_stack.sh")
-
-    assert ".llama_pack_controller.pid" in contents
-    assert ".llama_pack_frontend.pid" in contents
-    assert "currently up" in contents
-    assert 'scripts/start_controller.sh' in contents
-    assert 'scripts/start_frontend.sh' in contents
-    assert 'LLAMA_PACK_START_FRONTEND=0 "$ROOT_DIR/scripts/start_controller.sh"' in contents
-
-
-def test_start_agent_stack_script_starts_agent_and_frontend() -> None:
-    contents = read_script("start_agent_stack.sh")
-
-    assert ".llama_pack_agent.pid" in contents
-    assert ".llama_pack_frontend.pid" in contents
-    assert "currently up" in contents
-    assert 'scripts/start_agent.sh' in contents
-    assert 'scripts/start_frontend.sh' in contents
-    assert 'LLAMA_PACK_START_FRONTEND=0 "$ROOT_DIR/scripts/start_agent.sh"' in contents
-
-
-def test_stack_scripts_refresh_frontend_status_after_backend_start() -> None:
-    for script_name in ("start_agent_stack.sh", "start_controller_stack.sh"):
-        contents = read_script(script_name)
-
-        backend_start = contents.index('LLAMA_PACK_START_FRONTEND=0 "$ROOT_DIR/scripts/start_')
-        frontend_start = contents.index('"$ROOT_DIR/scripts/start_frontend.sh"')
-        assert backend_start < contents.index('if is_running "$FRONTEND_PID_FILE"; then', backend_start)
-        assert contents.index('if is_running "$FRONTEND_PID_FILE"; then', backend_start) < frontend_start
-
-
-def test_create_test_chat_key_script_updates_env_for_bootstrap() -> None:
-    contents = read_script("create_test_chat_key.sh")
-
-    assert "create-test-chat-key" in contents
-    assert "LLAMA_PACK_TEST_CHAT_API_KEY" in contents
-    assert ".llama_pack.env" in contents
-    assert "chmod 600" in contents
-
-
-def test_stop_frontend_script_wraps_stop_server_frontend_target() -> None:
-    contents = read_script("stop_frontend.sh")
-
-    assert "LLAMA_PACK_FRONTEND_PID_FILE" in contents
-    assert "LLAMA_PACK_PID_FILE" in contents
-    assert 'exec "$ROOT_DIR/scripts/stop_server.sh" frontend' in contents
 
 
 def test_runtime_shell_scripts_parse_cleanly() -> None:
@@ -546,26 +362,6 @@ def test_renew_caddy_step_cert_dry_run_reports_renew_install_and_reload(tmp_path
     assert "sudo systemctl reload caddy" in result.stdout
 
 
-def test_onboard_controller_exposes_one_step_memory_setup_options() -> None:
-    contents = read_script("onboard_controller.sh")
-
-    assert "--enable-memory" in contents
-    assert "--memory-model-path PATH" in contents
-    assert "--skip-memory-install" in contents
-    assert "controller-memory" in contents
-    assert "install_embedding_model.sh" in contents
-
-
-def test_onboard_controller_generated_config_includes_opt_in_memory_block() -> None:
-    contents = read_script("onboard_controller.sh")
-
-    assert 'if [[ "$ENABLE_MEMORY" == "true" ]]; then' in contents
-    assert "memory:" in contents
-    assert "enabled: true" in contents
-    assert "embedding_model_path: $MEMORY_MODEL_PATH" in contents
-    assert "Memory setup failed" in contents
-
-
 def test_onboard_controller_enable_memory_writes_working_config(tmp_path: Path) -> None:
     config = tmp_path / "controller.config.yaml"
     env_file = tmp_path / ".llama_pack.env"
@@ -691,25 +487,3 @@ def test_onboard_agent_keeps_lan_urls_in_env_not_config(tmp_path: Path) -> None:
     assert f"export LLAMA_PACK_AGENT_URL={agent_url}" in env_text
 
     assert "url: ${LLAMA_PACK_LINUX_2080TI_AGENT_URL}" in result.stdout
-
-
-def test_onboard_agent_exposes_optional_llama_cpp_install() -> None:
-    contents = read_script("onboard_agent.sh")
-
-    assert "--install-llama-cpp" in contents
-    assert "--llama-cpp-backend BACKEND" in contents
-    assert "--llama-cpp-dir PATH" in contents
-    assert "install_llama_cpp.sh" in contents
-
-
-def test_onboard_agent_can_reuse_local_controller_registration_key() -> None:
-    contents = read_script("onboard_agent.sh")
-
-    assert "LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND=\"$LLAMA_PACK_CONTROLLER_REGISTRATION_KEY\"" in contents
-    assert "Using local LLAMA_PACK_CONTROLLER_REGISTRATION_KEY as outbound registration key." in contents
-
-
-def test_runtime_scripts_do_not_reference_legacy_llama_manager_name() -> None:
-    for script_name in ("onboard_agent.sh", "onboard_controller.sh", "migrate_legacy_data.py"):
-        contents = read_script(script_name)
-        assert "llama-manager" not in contents

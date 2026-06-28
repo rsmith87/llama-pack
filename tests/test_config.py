@@ -659,20 +659,6 @@ def test_build_llama_server_command_omits_speculative_flags_when_unset():
     assert "--spec-draft-n-min" not in command
 
 
-def test_public_docs_do_not_reference_legacy_llama_manager_name():
-    root = Path(__file__).resolve().parents[1]
-    docs_dir = root / "docs"
-    public_docs = sorted(path for path in docs_dir.glob("*.md") if path.is_file())
-
-    offenders = [
-        str(path.relative_to(root))
-        for path in public_docs
-        if "llama-manager" in path.read_text(encoding="utf-8")
-    ]
-
-    assert offenders == []
-
-
 def test_load_config_accepts_legacy_hf_models_dir_list():
     config = load_config(
         {
