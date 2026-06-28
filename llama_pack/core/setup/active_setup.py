@@ -7,14 +7,41 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Literal
 
+import yaml
 from alembic import command
 from alembic.config import Config
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from llama_pack.core.persistence.alembic_config import DB_TARGETS, head_revision_for, version_locations
 
 
 SetupMode = Literal["controller", "agent", "standalone"]
+_ALLOWED_CONFIG_FILENAMES = {"agent.config.yaml", "config.yaml"}
+_ALLOWED_ENV_FILENAMES = {".llama_pack.env"}
+
+
+class _IndentedSafeDumper(yaml.SafeDumper):
+    def increase_indent(self, flow: bool = False, indentless: bool = False) -> object:
+        return super().increase_indent(flow, False)
+
+
+def _setup_root() -> Path:
+    return Path.cwd().resolve()
+
+
+def _normalize_setup_path(path_value: str, allowed_names: set[str], field_name: str) -> Path:
+    root = _setup_root()
+    requested = Path(path_value)
+    candidate = requested if requested.is_absolute() else root / requested
+    resolved = candidate.resolve(strict=False)
+    try:
+        relative_path = resolved.relative_to(root)
+    except ValueError as exc:
+        raise ValueError(f"{field_name} must stay under setup root {root}: {path_value}") from exc
+    if len(relative_path.parts) != 1 or relative_path.name not in allowed_names:
+        allowed = ", ".join(sorted(allowed_names))
+        raise ValueError(f"{field_name} must be one of: {allowed}")
+    return resolved
 
 
 class ControllerSetupInputs(BaseModel):
@@ -48,6 +75,12 @@ class ActiveSetupRequest(BaseModel):
     env_path: str = ".llama_pack.env"
     overwrite_existing: bool = False
     inputs: SetupInputs
+
+    @model_validator(mode="after")
+    def validate_setup_paths(self) -> "ActiveSetupRequest":
+        _setup_config_path(self)
+        _setup_env_path(self)
+        return self
 
 
 class MigrationStepResult(BaseModel):
@@ -86,7 +119,15 @@ class ActiveSetupResult(BaseModel):
 
 
 def _planned_paths(request: ActiveSetupRequest) -> list[Path]:
-    return [Path(request.config_path), Path(request.env_path)]
+    return [_setup_config_path(request), _setup_env_path(request)]
+
+
+def _setup_config_path(request: ActiveSetupRequest) -> Path:
+    return _normalize_setup_path(request.config_path, _ALLOWED_CONFIG_FILENAMES, "config_path")
+
+
+def _setup_env_path(request: ActiveSetupRequest) -> Path:
+    return _normalize_setup_path(request.env_path, _ALLOWED_ENV_FILENAMES, "env_path")
 
 
 def _existing_paths(request: ActiveSetupRequest) -> list[Path]:
@@ -97,54 +138,57 @@ def _quote_env(value: str) -> str:
     return shlex.quote(value)
 
 
+def _dump_setup_yaml(data: dict[str, object]) -> str:
+    return yaml.dump(data, Dumper=_IndentedSafeDumper, sort_keys=False)
+
+
 def _controller_config(inputs: ControllerSetupInputs) -> str:
-    return (
-        "mode: controller\n"
-        f"log_dir: {inputs.log_dir}\n"
-        "controller_registration_key: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}\n"
-        f"node_heartbeat_timeout_seconds: {inputs.node_heartbeat_timeout_seconds}\n"
-        f"controller_instance_id: {inputs.controller_instance_id}\n"
-        "nodes: {}\n"
+    return _dump_setup_yaml(
+        {
+            "mode": "controller",
+            "log_dir": inputs.log_dir,
+            "controller_registration_key": "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY}",
+            "node_heartbeat_timeout_seconds": inputs.node_heartbeat_timeout_seconds,
+            "controller_instance_id": inputs.controller_instance_id,
+            "nodes": {},
+        }
     )
 
 
 def _controller_env(request: ActiveSetupRequest, inputs: ControllerSetupInputs) -> str:
     return (
-        f"export LLAMA_PACK_CONFIG={_quote_env(str(Path(request.config_path)))}\n"
+        f"export LLAMA_PACK_CONFIG={_quote_env(str(_setup_config_path(request)))}\n"
         f"export LLAMA_PACK_CONTROLLER_REGISTRATION_KEY={_quote_env(inputs.controller_registration_key)}\n"
     )
 
 
 def _agent_config(inputs: AgentSetupInputs, *, include_controller_connection: bool) -> str:
-    lines = [
-        "mode: agent",
-    ]
+    data: dict[str, object] = {"mode": "agent"}
     if include_controller_connection:
-        lines.extend(
-            [
-                "controller_url: ${LLAMA_PACK_CONTROLLER_URL}",
-                f"node_name: {inputs.node_name}",
-                "agent_url: ${LLAMA_PACK_AGENT_URL}",
-                "agent_api_key: ${LLAMA_PACK_AGENT_API_KEY}",
-                "controller_registration_key_outbound: ${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
-            ]
+        data.update(
+            {
+                "controller_url": "${LLAMA_PACK_CONTROLLER_URL}",
+                "node_name": inputs.node_name,
+                "agent_url": "${LLAMA_PACK_AGENT_URL}",
+                "agent_api_key": "${LLAMA_PACK_AGENT_API_KEY}",
+                "controller_registration_key_outbound": "${LLAMA_PACK_CONTROLLER_REGISTRATION_KEY_OUTBOUND}",
+            }
         )
-    lines.extend(
-        [
-            f"llama_server_bin: {inputs.llama_server_bin}",
-            f"llama_cpp_dir: {inputs.llama_cpp_dir}",
-            f"python_bin: {inputs.python_bin}",
-            "hf_models_dirs:",
-            f"  - {inputs.hf_models_dir}",
-            f"log_dir: {inputs.log_dir}",
-        ]
+    data.update(
+        {
+            "llama_server_bin": inputs.llama_server_bin,
+            "llama_cpp_dir": inputs.llama_cpp_dir,
+            "python_bin": inputs.python_bin,
+            "hf_models_dirs": [inputs.hf_models_dir],
+            "log_dir": inputs.log_dir,
+        }
     )
-    return "\n".join(lines) + "\n"
+    return _dump_setup_yaml(data)
 
 
 def _agent_env(request: ActiveSetupRequest, inputs: AgentSetupInputs, *, include_controller_connection: bool) -> str:
     lines = [
-        f"export LLAMA_PACK_CONFIG={_quote_env(str(Path(request.config_path)))}",
+        f"export LLAMA_PACK_CONFIG={_quote_env(str(_setup_config_path(request)))}",
     ]
     if include_controller_connection:
         lines.extend(
@@ -164,18 +208,18 @@ def _render_files(request: ActiveSetupRequest) -> dict[Path, str]:
         if request.inputs.controller is None:
             raise ValueError("Controller setup inputs are required")
         return {
-            Path(request.config_path): _controller_config(request.inputs.controller),
-            Path(request.env_path): _controller_env(request, request.inputs.controller),
+            _setup_config_path(request): _controller_config(request.inputs.controller),
+            _setup_env_path(request): _controller_env(request, request.inputs.controller),
         }
     if request.inputs.agent is None:
         raise ValueError("Agent setup inputs are required")
     include_controller_connection = request.mode == "agent"
     return {
-        Path(request.config_path): _agent_config(
+        _setup_config_path(request): _agent_config(
             request.inputs.agent,
             include_controller_connection=include_controller_connection,
         ),
-        Path(request.env_path): _agent_env(
+        _setup_env_path(request): _agent_env(
             request,
             request.inputs.agent,
             include_controller_connection=include_controller_connection,
@@ -314,7 +358,7 @@ def apply_active_setup(request: ActiveSetupRequest) -> ActiveSetupResult:
     for path, content in rendered.items():
         _write_file(path, content, 0o600 if path.name.endswith(".env") else None)
 
-    migrations = run_setup_migrations(Path(request.config_path))
+    migrations = run_setup_migrations(_setup_config_path(request))
     actions = _base_actions(request, rendered=rendered, backups=backups, migrations=migrations)
     failed_migrations = [step for step in migrations if not step.ok]
     if failed_migrations:

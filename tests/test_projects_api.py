@@ -92,6 +92,66 @@ def test_project_graph_index_rejects_unregistered_root(tmp_path):
     assert response.json()["detail"] == "Project root is not registered for node mac-mini: /repo"
 
 
+def test_generic_project_graph_job_rejects_unregistered_root(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        response = client.post(
+            "/lm-api/v1/jobs",
+            json={
+                "type": "project.graph.index",
+                "target": "node:mac-mini",
+                "payload": {"project_id": project["id"], "node_name": "mac-mini", "root_path": "/repo"},
+            },
+        )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Project root is not registered for node mac-mini: /repo"
+
+
+def test_generic_project_graph_job_rejects_target_node_mismatch(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        client.put(
+            f"/lm-api/v1/projects/{project['id']}/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "allowed"},
+        )
+        response = client.post(
+            "/lm-api/v1/jobs",
+            json={
+                "type": "project.graph.index",
+                "target": "node:other-node",
+                "payload": {"project_id": project["id"], "node_name": "mac-mini", "root_path": "/repo"},
+            },
+        )
+
+    assert response.status_code == 422
+    assert response.json()["detail"] == "project.graph.index jobs must target node:mac-mini"
+
+
+def test_generic_project_graph_job_accepts_allowed_root(tmp_path):
+    app = _controller_app(tmp_path)
+    with TestClient(app) as client:
+        project = client.post("/lm-api/v1/projects", json={"name": "Spitball", "root_hint": None}).json()
+        client.put(
+            f"/lm-api/v1/projects/{project['id']}/node-roots",
+            json={"node_name": "mac-mini", "root_path": "/repo", "safe_root_status": "allowed"},
+        )
+        response = client.post(
+            "/lm-api/v1/jobs",
+            json={
+                "type": "project.graph.index",
+                "target": "node:mac-mini",
+                "payload": {"project_id": project["id"], "node_name": "mac-mini", "root_path": "/repo"},
+            },
+        )
+
+    assert response.status_code == 201
+    assert response.json()["type"] == "project.graph.index"
+    assert response.json()["target_selector"] == "node:mac-mini"
+
+
 def test_project_graph_status_and_overview_return_not_indexed(tmp_path):
     app = _controller_app(tmp_path)
     with TestClient(app) as client:

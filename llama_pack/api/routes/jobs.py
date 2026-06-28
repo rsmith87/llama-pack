@@ -9,10 +9,11 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 from pydantic import BaseModel, Field
 
-from llama_pack.api.dependencies import get_orchestrator
+from llama_pack.api.dependencies import get_orchestrator, get_project_store
 from llama_pack.core.orchestration.event_stream import stream_job_events
 from llama_pack.core.orchestration.job_contracts import validate_job_payload
 from llama_pack.core.orchestration.orchestrator import Orchestrator
+from llama_pack.core.persistence.project_store_orm import ProjectStoreOrm
 
 
 router = APIRouter()
@@ -32,11 +33,17 @@ class CancelJobResponse(BaseModel):
 
 
 @router.post("/jobs", status_code=201)
-def create_job(body: CreateJobRequest, orchestrator: Orchestrator = Depends(get_orchestrator)):
+def create_job(
+    body: CreateJobRequest,
+    orchestrator: Orchestrator = Depends(get_orchestrator),
+    project_store: ProjectStoreOrm = Depends(get_project_store),
+):
     try:
         payload = validate_job_payload(body.type, body.payload)
     except ValidationError as exc:
         raise HTTPException(status_code=422, detail=jsonable_encoder(exc.errors())) from exc
+    if body.type == "project.graph.index":
+        _require_allowed_project_graph_root(project_store, payload, body.target)
     return orchestrator.create_job(
         job_type=body.type,
         payload=payload,
@@ -119,3 +126,22 @@ def export_archive(
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")
     archive_path = str(Path("./logs/archive") / f"jobs-archive-{stamp}.jsonl")
     return orchestrator.archive_snapshot(archive_path=archive_path, retention_days=retention_days, limit=limit)
+
+
+def _require_allowed_project_graph_root(project_store: ProjectStoreOrm, payload: dict, target: str) -> None:
+    node_name = str(payload["node_name"])
+    expected_target = f"node:{node_name}"
+    if target != expected_target:
+        raise HTTPException(status_code=422, detail=f"project.graph.index jobs must target {expected_target}")
+
+    project_id = str(payload["project_id"])
+    root_path = str(payload["root_path"])
+    roots = project_store.list_node_roots(project_id)
+    if roots is None:
+        raise HTTPException(status_code=404, detail="Project not found")
+    for root in roots:
+        if root["node_name"] == node_name and root["root_path"] == root_path:
+            if root["safe_root_status"] != "allowed":
+                raise HTTPException(status_code=409, detail=f"Project root is not allowed for graph indexing: {root_path}")
+            return
+    raise HTTPException(status_code=409, detail=f"Project root is not registered for node {node_name}: {root_path}")

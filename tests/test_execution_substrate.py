@@ -572,6 +572,14 @@ async def test_agent_worker_reports_project_graph_progress_before_failure():
 
 def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):
     app = _create_controller_app(tmp_path, worker_nodes("agent-a"))
+    project = app.state.project_store.create_project(name="Spitball", root_hint="/repo")
+    app.state.project_store.upsert_node_root(
+        project_id=project["id"],
+        node_name="agent-a",
+        root_path="/repo",
+        safe_root_status="allowed",
+    )
+    project_id = str(project["id"])
     client = TestClient(app)
     job = client.post(
         "/lm-api/v1/jobs",
@@ -579,7 +587,7 @@ def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):
             "type": "project.graph.index",
             "target": "node:agent-a",
             "payload": {
-                "project_id": "project-1",
+                "project_id": project_id,
                 "node_name": "agent-a",
                 "root_path": "/repo",
                 "include_globs": ["**/*.py"],
@@ -600,7 +608,7 @@ def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):
         f"/lm-api/v1/nodes/agent-a/work/{claim[0]['attempt_id']}/complete",
         json={
             "result": {
-                "project_id": "project-1",
+                "project_id": project_id,
                 "snapshot_id": "snapshot-1",
                 "status": "ready",
                 "root_path": "/repo",
@@ -615,7 +623,7 @@ def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):
                 "graph_snapshot": {
                     "snapshot": {
                         "id": "snapshot-1",
-                        "project_id": "project-1",
+                        "project_id": project_id,
                         "node_name": "agent-a",
                         "root_path": "/repo",
                         "git_commit": None,
@@ -658,11 +666,11 @@ def test_controller_imports_project_graph_snapshot_on_work_completion(tmp_path):
 
     assert response.status_code == 200
     assert response.json()["id"] == job["id"]
-    status = app.state.project_graph_store.status("project-1")
+    status = app.state.project_graph_store.status(project_id)
     assert status["status"] == "ready"
     assert status["snapshot_id"] == "snapshot-1"
     assert status["file_count"] == 1
-    assert app.state.project_graph_store.find_symbols(project_id="project-1", query="run", kind=None)[0]["id"] == "sym-run"
+    assert app.state.project_graph_store.find_symbols(project_id=project_id, query="run", kind=None)[0]["id"] == "sym-run"
 
 
 @pytest.mark.asyncio

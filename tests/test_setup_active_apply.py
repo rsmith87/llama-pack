@@ -1,7 +1,9 @@
 from pathlib import Path
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient as RawTestClient
+from pydantic import ValidationError
 
 from llama_pack.core.config import load_config
 from llama_pack.core.setup.active_setup import (
@@ -122,6 +124,42 @@ def test_preflight_allows_existing_files_with_overwrite(tmp_path: Path) -> None:
     assert result.existing_files == [str(tmp_path / "config.yaml")]
 
 
+def test_setup_request_rejects_config_path_outside_setup_root(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="config_path"):
+        ActiveSetupRequest(
+            mode="controller",
+            config_path=str(tmp_path.parent / "attacker.yaml"),
+            env_path=str(tmp_path / ".llama_pack.env"),
+            overwrite_existing=False,
+            inputs=SetupInputs(
+                controller=ControllerSetupInputs(
+                    log_dir="./logs",
+                    controller_registration_key="registration-secret",
+                    node_heartbeat_timeout_seconds=90,
+                    controller_instance_id="local-controller",
+                )
+            ),
+        )
+
+
+def test_setup_request_rejects_nested_env_path(tmp_path: Path) -> None:
+    with pytest.raises(ValidationError, match="env_path"):
+        ActiveSetupRequest(
+            mode="controller",
+            config_path=str(tmp_path / "config.yaml"),
+            env_path=str(tmp_path / "nested" / ".llama_pack.env"),
+            overwrite_existing=False,
+            inputs=SetupInputs(
+                controller=ControllerSetupInputs(
+                    log_dir="./logs",
+                    controller_registration_key="registration-secret",
+                    node_heartbeat_timeout_seconds=90,
+                    controller_instance_id="local-controller",
+                )
+            ),
+        )
+
+
 def test_apply_writes_controller_config_and_env(tmp_path: Path) -> None:
     result = apply_active_setup(controller_request(tmp_path, overwrite=False))
 
@@ -151,6 +189,30 @@ def test_apply_writes_controller_config_and_env(tmp_path: Path) -> None:
     assert result.actions[2].detail == "2 migrations completed."
     assert result.actions[3].command == "scripts/start_controller.sh"
     assert "registration-secret" not in result.model_dump_json()
+
+
+def test_apply_escapes_controller_config_yaml_scalars(tmp_path: Path) -> None:
+    request = ActiveSetupRequest(
+        mode="controller",
+        config_path=str(tmp_path / "config.yaml"),
+        env_path=str(tmp_path / ".llama_pack.env"),
+        overwrite_existing=False,
+        inputs=SetupInputs(
+            controller=ControllerSetupInputs(
+                log_dir="./logs",
+                controller_registration_key="registration-secret",
+                node_heartbeat_timeout_seconds=90,
+                controller_instance_id="local-controller\nagent_api_key: injected",
+            )
+        ),
+    )
+
+    result = apply_active_setup(request)
+
+    assert result.ok is True
+    config_data = yaml.safe_load((tmp_path / "config.yaml").read_text(encoding="utf-8"))
+    assert config_data["controller_instance_id"] == "local-controller\nagent_api_key: injected"
+    assert "agent_api_key" not in config_data
 
 
 def test_apply_writes_agent_config_and_env(tmp_path: Path) -> None:
@@ -250,6 +312,18 @@ def test_setup_apply_route_blocks_existing_files_and_audits(tmp_path: Path) -> N
     assert response.json()["status"] == "blocked_existing_files"
     events = app.state.audit_store.list_events(limit=10)
     assert any(event["event_type"] == "setup_apply_blocked_existing_files" for event in events)
+
+
+def test_setup_apply_route_rejects_attacker_chosen_config_path(tmp_path: Path) -> None:
+    app = create_app(config=load_config({"mode": "controller", "log_dir": str(tmp_path)}))
+    payload = controller_request(tmp_path, overwrite=False).model_dump()
+    payload["config_path"] = str(tmp_path.parent / "attacker.yaml")
+
+    with authenticated_client(app) as client:
+        response = client.post("/lm-api/v1/setup/apply", json=payload)
+
+    assert response.status_code == 422
+    assert not (tmp_path.parent / "attacker.yaml").exists()
 
 
 def test_setup_apply_route_writes_files_and_audits_success(tmp_path: Path) -> None:
