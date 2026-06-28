@@ -1138,6 +1138,42 @@ def test_controller_can_register_node_and_track_heartbeat():
     assert beat.status_code == 200
 
 
+def test_controller_rejects_node_registration_when_join_key_unset():
+    app = create_app(config=load_config({"mode": "controller", "nodes": {}}))
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/nodes/register",
+        json={"name": "win", "url": "http://win-agent:9000"},
+    )
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Controller registration key is not configured"
+    assert client.get("/lm-api/v1/nodes").json() == []
+
+
+def test_controller_rejects_node_registration_with_wrong_join_key():
+    app = create_app(
+        config=load_config(
+            {"mode": "controller", "controller_registration_key": "join-key", "nodes": {}}
+        )
+    )
+    client = TestClient(app)
+
+    response = client.post(
+        "/lm-api/v1/nodes/register",
+        json={
+            "name": "win",
+            "url": "http://win-agent:9000",
+            "registration_key": "wrong-key",
+        },
+    )
+
+    assert response.status_code == 401
+    assert response.json()["detail"] == "Invalid registration key"
+    assert client.get("/lm-api/v1/nodes").json() == []
+
+
 def test_in_memory_controller_config_does_not_write_node_state_to_cwd(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     app = create_app(
@@ -1163,13 +1199,18 @@ def test_in_memory_controller_config_does_not_write_node_state_to_cwd(tmp_path, 
 def test_nodes_status_marks_stale_heartbeat_offline():
     app = create_app(
         config=load_config(
-            {"mode": "controller", "node_heartbeat_timeout_seconds": -1, "nodes": {}}
+            {
+                "mode": "controller",
+                "controller_registration_key": "join-key",
+                "node_heartbeat_timeout_seconds": -1,
+                "nodes": {},
+            }
         )
     )
     client = TestClient(app)
     client.post(
         "/lm-api/v1/nodes/register",
-        json={"name": "win", "url": "http://win-agent:9000"},
+        json={"name": "win", "url": "http://win-agent:9000", "registration_key": "join-key"},
     )
     status = client.get("/lm-api/v1/nodes/status")
     assert status.status_code == 200
@@ -1181,13 +1222,18 @@ def test_nodes_status_marks_stale_heartbeat_offline():
 def test_nodes_models_marks_stale_heartbeat_offline():
     app = create_app(
         config=load_config(
-            {"mode": "controller", "node_heartbeat_timeout_seconds": -1, "nodes": {}}
+            {
+                "mode": "controller",
+                "controller_registration_key": "join-key",
+                "node_heartbeat_timeout_seconds": -1,
+                "nodes": {},
+            }
         )
     )
     client = TestClient(app)
     client.post(
         "/lm-api/v1/nodes/register",
-        json={"name": "win", "url": "http://win-agent:9000"},
+        json={"name": "win", "url": "http://win-agent:9000", "registration_key": "join-key"},
     )
     response = client.get("/lm-api/v1/nodes/models")
     assert response.status_code == 200

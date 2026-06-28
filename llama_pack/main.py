@@ -569,7 +569,7 @@ def _register_middleware(app: FastAPI) -> None:
             request.state.ui_role = resolved_key.get("role", "operator")
             if is_viewer_forbidden(path, request.state.ui_role):
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})
-            if is_external_key_forbidden(path, request.state.ui_role):
+            if is_external_key_forbidden(path, method, request.state.ui_role):
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})
             if request.state.ui_role == "test_chat" and is_test_chat_key_forbidden(path, method):
                 return JSONResponse(status_code=403, content={"detail": "Forbidden"})

@@ -3,6 +3,7 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
 from fastapi.testclient import TestClient
 
 from llama_pack.core.config import load_config
@@ -13,7 +14,7 @@ from tests.persistence_db_setup import prepare_all_persistence_dbs
 PLUGIN_ROOT = Path(__file__).resolve().parents[1] / "plugins" / "llama-pack-business"
 
 
-def test_external_app_key_can_create_business_clients(tmp_path: Path) -> None:
+def test_external_app_key_cannot_create_business_clients(tmp_path: Path) -> None:
     sys.path.insert(0, str(PLUGIN_ROOT))
     log_dir = tmp_path / "logs"
     prepare_all_persistence_dbs(log_dir)
@@ -42,8 +43,78 @@ def test_external_app_key_can_create_business_clients(tmp_path: Path) -> None:
         json={"name": "Acme Manufacturing", "legal_name": "Acme Manufacturing LLC", "status": "active"},
     )
 
-    assert response.status_code == 201
-    assert response.json()["name"] == "Acme Manufacturing"
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("GET", "/lm-api/v1/plugins/llama_pack_business/clients"),
+        ("GET", "/lm-api/v1/plugins/llama_pack_business/knowledge-bases"),
+        ("GET", "/lm-api/v1/plugins/llama_pack_business/documents"),
+        ("GET", "/lm-api/v1/plugins/llama_pack_business/identity/users"),
+    ],
+)
+def test_external_app_key_cannot_read_business_data_routes(tmp_path: Path, method: str, path: str) -> None:
+    sys.path.insert(0, str(PLUGIN_ROOT))
+    log_dir = tmp_path / "logs"
+    prepare_all_persistence_dbs(log_dir)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(log_dir),
+                "enabled_plugins": ["llama_pack_business"],
+                "plugins": {
+                    "llama_pack_business": {
+                        "path": str(PLUGIN_ROOT),
+                        "enabled": True,
+                        "config": {"organization_name": "Acme", "license_key": "private-license"},
+                    }
+                },
+            }
+        )
+    )
+    created_key = app.state.auth_store.create_external_key("Campfire", "http://localhost")
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created_key["key"]})
+
+    response = client.request(method, path)
+
+    assert response.status_code == 403
+
+
+def test_external_app_key_can_call_business_plugin_login(tmp_path: Path) -> None:
+    sys.path.insert(0, str(PLUGIN_ROOT))
+    log_dir = tmp_path / "logs"
+    prepare_all_persistence_dbs(log_dir)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(log_dir),
+                "enabled_plugins": ["llama_pack_business"],
+                "plugins": {
+                    "llama_pack_business": {
+                        "path": str(PLUGIN_ROOT),
+                        "enabled": True,
+                        "config": {"organization_name": "Acme", "license_key": "private-license"},
+                    }
+                },
+            }
+        )
+    )
+    created_key = app.state.auth_store.create_external_key("Campfire", "http://localhost")
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": created_key["key"]})
+
+    response = client.post(
+        "/lm-api/v1/plugins/llama_pack_business/auth/login",
+        json={"email": "admin@example.com", "password": "secret"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["user"]["email"] == "admin@example.com"
 
 
 def test_external_app_key_cannot_access_non_business_plugin_routes(tmp_path: Path) -> None:

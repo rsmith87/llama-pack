@@ -22,7 +22,9 @@ def register_node(
     registry: NodeRegistry = Depends(get_node_registry),
 ):
     expected = registry.config.controller_registration_key
-    if expected and payload.registration_key != expected:
+    if not expected:
+        raise HTTPException(status_code=409, detail="Controller registration key is not configured")
+    if payload.registration_key != expected:
         raise HTTPException(status_code=401, detail="Invalid registration key")
     registry.register_node(
         payload.name,

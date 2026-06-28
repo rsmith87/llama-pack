@@ -60,7 +60,7 @@ def is_viewer_forbidden(path: str, role: str) -> bool:
     return True
 
 
-def is_external_key_forbidden(path: str, role: str) -> bool:
+def is_external_key_forbidden(path: str, method: str, role: str) -> bool:
     """External API keys (role='external') may only call consumer chat endpoints."""
     if role != "external":
         return False
@@ -68,7 +68,7 @@ def is_external_key_forbidden(path: str, role: str) -> bool:
         return False
     if path.startswith(f"{LM_API_PREFIX}/chat/") and path.endswith("/context-budget"):
         return False
-    if path.startswith(f"{LM_API_PREFIX}/plugins/llama_pack_business/"):
+    if method == "POST" and path == f"{LM_API_PREFIX}/plugins/llama_pack_business/auth/login":
         return False
     return True
 
