@@ -21,6 +21,28 @@ export type ChatContentBlock =
   | { type: "text"; text: string }
   | { type: "image_url"; image_url: { url: string } };
 
+export type DocumentCitation = {
+  collection_id: string;
+  collection_name: string;
+  document_id: string;
+  filename: string;
+  chunk_id: string;
+  chunk_index: number;
+  text: string;
+  score: number;
+};
+
+export type ThreadMessagePayload = {
+  role: "user";
+  content: string | ChatContentBlock[];
+  model: string | null;
+  model_family?: string;
+  context_profile?: string;
+  target: string;
+  metadata: Record<string, unknown>;
+  document_collection_ids?: string[];
+} & Record<string, unknown>;
+
 export type ChatSession = {
   id?: string;
   updated_at?: string;
@@ -70,6 +92,7 @@ export type ChatMessage = {
   firstTokenAtMs?: number;
   reasoningContent?: string;
   telemetry?: Telemetry;
+  documentCitations?: DocumentCitation[];
 };
 
 export type ChatDefaults = {

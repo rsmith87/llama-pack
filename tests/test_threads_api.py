@@ -1620,6 +1620,68 @@ def test_threads_stream_api_persists_assistant_and_forwards_generation_params(tm
     assert events[1]["content"]["reasoning_text"] == "thinking "
 
 
+def test_threads_stream_api_injects_document_collection_context(tmp_path):
+    from tests.test_document_collections import _FakeChatDocumentCollectionService
+
+    prepare_all_persistence_dbs(tmp_path)
+    captured_payloads = []
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+    service = _FakeChatDocumentCollectionService()
+
+    async def fake_stream(model_name, payload):
+        captured_payloads.append({"model_name": model_name, "payload": payload})
+
+        async def _stream():
+            yield b'data: {"choices":[{"delta":{"content":"The warranty lasts two years [D1]."}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        return _stream(), {"route": payload["target"]}
+
+    app.state.chat_proxy.stream_with_meta = fake_stream
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+    app.state.document_collection_service = service
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"metadata": {"request_type": "coding"}},
+    ).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages/stream",
+        json={
+            "role": "user",
+            "content": "How long is the dishwasher warranty?",
+            "model": "qwen",
+            "metadata": {"request_type": "coding"},
+            "document_collection_ids": ["home"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert service.queries == [("How long is the dishwasher warranty?", ["home"], 5)]
+    messages = captured_payloads[0]["payload"]["messages"]
+    assert messages[0]["role"] == "system"
+    assert "Relevant document collection context" in messages[0]["content"]
+    assert "dishwasher.md" in messages[0]["content"]
+    assert messages[-1]["content"] == "How long is the dishwasher warranty?"
+    events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
+    assert events[1]["content"]["document_citations"][0]["filename"] == "dishwasher.md"
+
+
 def test_threads_stream_api_forwards_agent_tool_runtime_fields(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     captured_payloads = []
@@ -1912,3 +1974,60 @@ def test_workflow_http_endpoint_returns_assistant_message(tmp_path):
 
     public_events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [e["event_type"] for e in public_events] == ["user_message", "assistant_message"]
+
+
+def test_workflow_http_endpoint_reports_failed_step(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+
+    call_index = 0
+
+    async def fake_chat(model_name, payload):
+        nonlocal call_index
+        call_index += 1
+        if call_index == 2:
+            raise RuntimeError("inference failed")
+        return {"choices": [{"message": {"content": f"step-{call_index}-output"}}]}, {}
+
+    app.state.chat_proxy.chat_with_meta = fake_chat
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"title": "wf", "metadata": {"request_type": "coding"}},
+    ).json()["id"]
+
+    resp = client.post(
+        f"/lm-api/v1/threads/{thread_id}/workflow",
+        json={
+            "content": "starting input",
+            "steps": [
+                {"label": "classify", "instructions": "classify this"},
+                {"label": "respond", "instructions": "respond to classification"},
+            ],
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == {
+        "code": "WORKFLOW_STEP_ERROR",
+        "message": "Workflow step 2 'respond' failed: inference failed",
+        "step_index": 1,
+        "step_label": "respond",
+        "error": "inference failed",
+    }

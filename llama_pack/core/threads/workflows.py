@@ -9,6 +9,24 @@ from llama_pack.core.threads.routing import RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 
 
+class WorkflowRunError(RuntimeError):
+    def __init__(self, error_code: str, step_index: int, step_label: str, cause: Exception) -> None:
+        self.error_code = error_code
+        self.step_index = step_index
+        self.step_label = step_label
+        self.error = str(cause)
+        super().__init__(f"Workflow step {step_index + 1} '{step_label}' failed: {cause}")
+
+    def detail(self) -> dict[str, str | int]:
+        return {
+            "code": self.error_code,
+            "message": str(self),
+            "step_index": self.step_index,
+            "step_label": self.step_label,
+            "error": self.error,
+        }
+
+
 class ThreadWorkflowRunner:
     def __init__(
         self,
@@ -113,7 +131,7 @@ class ThreadWorkflowRunner:
                     error_detail=None,
                 )
                 await self.event_publisher.append_error_async(thread_id, "WORKFLOW_STEP_ERROR", exc, turn_id)
-                raise
+                raise WorkflowRunError("WORKFLOW_STEP_ERROR", index, step.label, exc) from exc
 
             await self.event_publisher.append_event(
                 thread_id=thread_id,

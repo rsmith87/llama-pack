@@ -399,6 +399,8 @@ class ThreadService:
         model_family: str | None = None,
         context_profile: str | None = None,
         generation_payload: dict[str, object] | None = None,
+        document_context_messages: list[dict[str, Any]] | None = None,
+        document_citations: list[dict[str, object]] | None = None,
     ) -> dict[str, Any]:
         prepared = await self._prepare_message_route(
             thread_id=thread_id,
@@ -410,7 +412,10 @@ class ThreadService:
             target=target,
             metadata=metadata,
         )
-        messages = prepared["messages"]
+        messages = [
+            *(document_context_messages or []),
+            *prepared["messages"],
+        ]
         turn_id = prepared["turn_id"]
         route = prepared["route"]
         decision = prepared["decision"]
@@ -448,6 +453,7 @@ class ThreadService:
                 "text": assistant_content,
                 "raw_response": raw_response,
                 "response_meta": response_meta,
+                **({"document_citations": document_citations} if document_citations else {}),
             },
             public=True,
             turn_id=turn_id,
@@ -474,6 +480,8 @@ class ThreadService:
         model_family: str | None = None,
         context_profile: str | None = None,
         generation_payload: dict[str, object] | None = None,
+        document_context_messages: list[dict[str, Any]] | None = None,
+        document_citations: list[dict[str, object]] | None = None,
     ) -> tuple[AsyncIterator[bytes], dict[str, Any]]:
         """Route a user message and return an SSE stream plus the route dict.
 
@@ -497,7 +505,10 @@ class ThreadService:
             target=target,
             metadata=metadata,
         )
-        messages = prepared["messages"]
+        messages = [
+            *(document_context_messages or []),
+            *prepared["messages"],
+        ]
         turn_id = prepared["turn_id"]
         route = prepared["route"]
         decision = prepared["decision"]
@@ -524,6 +535,9 @@ class ThreadService:
             if prepared["context_management"] is not None:
                 context_event = json.dumps({"type": "context_management", **prepared["context_management"]})
                 yield f"data: {context_event}\n\n".encode()
+            if document_citations:
+                citation_event = json.dumps({"type": "document_citations", "citations": document_citations})
+                yield f"data: {citation_event}\n\n".encode()
 
             assistant_content = ""
             reasoning_content = ""
@@ -564,6 +578,7 @@ class ThreadService:
                     "text": assistant_content,
                     "reasoning_text": reasoning_content,
                     "response_meta": {},
+                    **({"document_citations": document_citations} if document_citations else {}),
                 },
                 public=True,
                 turn_id=turn_id,
@@ -851,4 +866,3 @@ class ThreadService:
             target=target,
             metadata=metadata,
         )
-
