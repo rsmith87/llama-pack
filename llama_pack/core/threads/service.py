@@ -6,19 +6,20 @@ from collections.abc import AsyncIterator
 from typing import Any
 from uuid import uuid4
 
-from llama_pack.core.chat.context_budget import estimate_prompt_tokens
-from llama_pack.core.chat.context_management import (
-    assistant_summary_content,
-    context_management_metadata,
-    should_summarize_messages,
-    summary_prompt_messages,
-    summary_system_message,
-)
-from llama_pack.core.chat.internal_payload import SKIP_CONTEXT_MANAGEMENT_KEY, TRUSTED_CONTROLLER_TARGET_KEY
+from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config.models import AppConfig
 from llama_pack.core.plugins.events import EventBus
+from llama_pack.core.threads.context import ThreadContextError, ThreadContextManager, event_message
+from llama_pack.core.threads.events import ThreadEventPublisher
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
+from llama_pack.core.threads.turns import (
+    ThreadTurnPreparer,
+    json_content,
+    message_display_text,
+    requested_model_name,
+)
+from llama_pack.core.threads.workflows import ThreadWorkflowRunner
 
 
 class ThreadChatError(RuntimeError):
@@ -53,6 +54,10 @@ class ThreadService:
         self._turn_locks: dict[str, asyncio.Lock] = {}
         self._turn_locks_guard = asyncio.Lock()
         self.event_bus = event_bus
+        self.event_publisher = ThreadEventPublisher(store, event_bus)
+        self.context_manager = ThreadContextManager(config, store, chat_proxy, self.event_publisher)
+        self.turn_preparer = ThreadTurnPreparer(store, self.routing_policy, self.context_manager, self.event_publisher)
+        self.workflow_runner = ThreadWorkflowRunner(store, self.routing_policy, chat_proxy, self.event_publisher)
 
     async def acquire_turn_lock(self, thread_id: str) -> asyncio.Lock:
         async with self._turn_locks_guard:
@@ -258,7 +263,7 @@ class ThreadService:
         error_code: str | None = None,
         error_detail: str | None = None,
     ) -> dict[str, Any]:
-        event = self.store.append_event(
+        return await self.event_publisher.append_event(
             thread_id=thread_id,
             event_type=event_type,
             role=role,
@@ -271,17 +276,9 @@ class ThreadService:
             error_code=error_code,
             error_detail=error_detail,
         )
-        await self._publish_thread_event(event)
-        return event
 
     async def _publish_thread_event(self, event: dict[str, Any]) -> None:
-        if self.event_bus is None:
-            return
-        await self.event_bus.emit(
-            _plugin_thread_event_type(str(event["event_type"]), event.get("content")),
-            payload=_plugin_thread_event_payload(event),
-            correlation_id=str(event.get("turn_id") or event["id"]),
-        )
+        await self.event_publisher.publish(event)
 
     async def compact_thread_async(
         self,
@@ -376,91 +373,20 @@ class ThreadService:
         target: str,
         metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        """Shared first half of a thread message turn: validate, load thread, build
-        history, append user event, choose route, append routing event.
-
-        Returns a dict with keys: thread, request_metadata, messages, turn_id, route, decision.
-        Raises ValueError (ROUTING_ERROR) and re-appends the public error event on failure.
-        """
-        if role != "user":
-            raise ValueError("ThreadService only accepts user messages")
-
-        thread = self.store.get_thread(thread_id)
-        request_metadata = {**thread.get("metadata", {}), **(metadata or {})}
-        request_type = request_metadata.get("request_type") or "general"
-        previous_route = self._previous_route(thread_id, model_family=model_family, context_profile=context_profile)
-        requested_model = self._requested_model(model, model_family, context_profile)
-        display_text = self._message_display_text(content)
-        messages = [
-            *self._public_messages(thread_id),
-            {"role": "user", "content": content},
-        ]
-        turn_id = str(uuid4())
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="user_message",
-            role="user",
-            content={"text": display_text, "request_content": self._json_content(content), "metadata": request_metadata},
-            public=True,
-            turn_id=turn_id,
-        )
         try:
-            self._require_thread_node_target(thread_id, target)
-        except ValueError as exc:
-            await self._append_error_async(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
-            raise
-
-        try:
-            decision = await self.routing_policy.choose(
-                request_type=request_type,
-                requested_model=requested_model or thread.get("default_model"),
-                explicit_target=target,
-                previous_route=previous_route,
+            prepared = await self.turn_preparer.prepare_message_route(
+                thread_id=thread_id,
+                role=role,
+                content=content,
+                model=model,
+                model_family=model_family,
+                context_profile=context_profile,
+                target=target,
+                metadata=metadata,
             )
-        except ValueError as exc:
-            await self._append_error_async(thread_id, "ROUTING_ERROR", exc, turn_id=turn_id)
-            raise
-
-        route = {
-            "node": decision.node,
-            "model": decision.model,
-            "family": model_family,
-            "profile": context_profile,
-            "strategy": decision.strategy,
-            "reason": decision.reason,
-        }
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="routing_decision",
-            role=None,
-            content={**route, "candidates": list(decision.candidates)},
-            public=False,
-            turn_id=turn_id,
-            route=route,
-            agent_node=decision.node,
-            model=decision.model,
-        )
-        managed_messages = await self._managed_thread_messages(
-            thread_id=thread_id,
-            turn_id=turn_id,
-            messages=messages,
-            model=decision.model,
-            route=route,
-        )
-
-        return {
-            "thread": thread,
-            "request_metadata": request_metadata,
-            "messages": managed_messages["messages"],
-            "turn_id": turn_id,
-            "route": route,
-            "decision": decision,
-            "model_family": model_family,
-            "context_profile": context_profile,
-            "context_management": managed_messages["metadata"],
-        }
+        except ThreadContextError as exc:
+            raise ThreadChatError(exc.thread_id, exc.error_code, str(exc)) from exc
+        return prepared.as_legacy_dict()
 
     async def post_message_async(
         self,
@@ -742,9 +668,7 @@ class ThreadService:
         }
 
     def _requested_model(self, model: str | None, model_family: str | None, context_profile: str | None) -> str | None:
-        if model_family and context_profile:
-            return f"{model_family}:{context_profile}"
-        return model
+        return requested_model_name(model, model_family, context_profile)
 
     def _profile_payload(self, prepared: dict[str, Any]) -> dict[str, str]:
         payload: dict[str, str] = {}
@@ -757,25 +681,10 @@ class ThreadService:
         return payload
 
     def _message_display_text(self, content: Any) -> str:
-        if isinstance(content, str):
-            return content
-        if isinstance(content, list):
-            text_parts: list[str] = []
-            for block in content:
-                block_payload = self._json_content(block)
-                if isinstance(block_payload, dict) and block_payload.get("type") == "text":
-                    text = block_payload.get("text")
-                    if isinstance(text, str):
-                        text_parts.append(text)
-            return "\n".join(text_parts)
-        return str(content)
+        return message_display_text(content)
 
     def _json_content(self, content: Any) -> Any:
-        if hasattr(content, "model_dump"):
-            return content.model_dump()
-        if isinstance(content, list):
-            return [self._json_content(item) for item in content]
-        return content
+        return json_content(content)
 
     def _previous_route(
         self,
@@ -783,68 +692,29 @@ class ThreadService:
         model_family: str | None = None,
         context_profile: str | None = None,
     ) -> dict[str, Any] | None:
-        for event in reversed(self.store.list_events(thread_id, include_internal=True)):
-            if event["event_type"] != "assistant_message":
-                continue
-            if event.get("agent_node") and event.get("model"):
-                route = event.get("route") or {}
-                if model_family or context_profile:
-                    if route.get("family") != model_family or route.get("profile") != context_profile:
-                        continue
-                return {"node": event["agent_node"], "model": event["model"]}
-        return None
-
-    def _assigned_node(self, thread_id: str) -> str | None:
-        for event in reversed(self.store.list_events(thread_id, include_internal=True)):
-            if event["event_type"] == "assistant_message" and event.get("agent_node"):
-                return str(event["agent_node"])
-        return None
-
-    def _require_thread_node_target(self, thread_id: str, target: str) -> None:
-        target_value = target.strip()
-        if not target_value.startswith("node:"):
-            return
-        requested_node = target_value.removeprefix("node:").strip()
-        if not requested_node:
-            return
-        assigned_node = self._assigned_node(thread_id)
-        if assigned_node is None or assigned_node == requested_node:
-            return
-        raise ValueError(
-            f"This thread is already routed to node '{assigned_node}'. "
-            f"Start a new thread to use node '{requested_node}'."
+        return self.turn_preparer.previous_route(
+            thread_id,
+            model_family=model_family,
+            context_profile=context_profile,
         )
 
+    def _assigned_node(self, thread_id: str) -> str | None:
+        return self.turn_preparer.assigned_node(thread_id)
+
+    def _require_thread_node_target(self, thread_id: str, target: str) -> None:
+        self.turn_preparer.require_thread_node_target(thread_id, target)
+
     def _public_messages(self, thread_id: str) -> list[dict[str, str]]:
-        messages = []
-        for event in self._public_message_events(thread_id):
-            messages.append(self._event_message(event))
-        return messages
+        return self.context_manager.public_messages(thread_id)
 
     def _public_message_events(self, thread_id: str) -> list[dict[str, Any]]:
-        events: list[dict[str, Any]] = []
-        for event in self.store.list_events(thread_id, include_internal=False):
-            if event["event_type"] not in {"user_message", "assistant_message"}:
-                continue
-            text = event["content"].get("text")
-            role = event.get("role")
-            if isinstance(text, str) and role in {"user", "assistant"}:
-                events.append(event)
-        return events
+        return self.context_manager.public_message_events(thread_id)
 
     def _event_message(self, event: dict[str, Any]) -> dict[str, str]:
-        return {"role": str(event["role"]), "content": str(event["content"]["text"])}
+        return event_message(event)
 
     def _latest_history_summary(self, thread_id: str) -> dict[str, Any] | None:
-        for event in reversed(self.store.list_events(thread_id, include_internal=True)):
-            if event["event_type"] != "history_summary":
-                continue
-            content = event.get("content") or {}
-            summary = content.get("summary")
-            covered_event_ids = content.get("covered_event_ids")
-            if isinstance(summary, str) and isinstance(covered_event_ids, list):
-                return {"summary": summary, "covered_event_ids": [str(item) for item in covered_event_ids]}
-        return None
+        return self.context_manager.latest_history_summary(thread_id)
 
     def _preview_thread_messages(
         self,
@@ -852,23 +722,7 @@ class ThreadService:
         incoming_messages: list[dict[str, Any]],
         model: str,
     ) -> list[dict[str, Any]]:
-        public_events = self._public_message_events(thread_id)
-        latest_summary = self._latest_history_summary(thread_id)
-        covered_event_ids = list(latest_summary.get("covered_event_ids", [])) if latest_summary else []
-        covered_event_id_set = set(covered_event_ids)
-        unsummarized_events = [event for event in public_events if event["id"] not in covered_event_id_set]
-        messages = [self._event_message(event) for event in unsummarized_events]
-        previous_summary = str(latest_summary.get("summary", "")) if latest_summary else None
-        if previous_summary:
-            messages = [summary_system_message(previous_summary), *messages]
-        messages = [*messages, *incoming_messages]
-        if not should_summarize_messages(self.config, model, messages):
-            return messages
-        recent_message_count = self.config.context_summarization_recent_messages
-        return [
-            summary_system_message(previous_summary or "A summary will be generated before the next model response."),
-            *messages[-recent_message_count:],
-        ]
+        return self.context_manager.preview_thread_messages(thread_id, incoming_messages, model)
 
     async def _managed_thread_messages(
         self,
@@ -878,33 +732,16 @@ class ThreadService:
         model: str,
         route: dict[str, Any],
     ) -> dict[str, Any]:
-        if not self.config.context_summarization_enabled:
-            return {"messages": list(messages), "metadata": None}
-
-        public_events = self._public_message_events(thread_id)
-        if not public_events:
-            return {"messages": list(messages), "metadata": None}
-
-        latest_summary = self._latest_history_summary(thread_id)
-        covered_event_ids = list(latest_summary.get("covered_event_ids", [])) if latest_summary else []
-        covered_event_id_set = set(covered_event_ids)
-        unsummarized_events = [event for event in public_events if event["id"] not in covered_event_id_set]
-        previous_summary = str(latest_summary.get("summary", "")) if latest_summary else None
-        current_messages = [self._event_message(event) for event in unsummarized_events]
-        if previous_summary:
-            current_messages = [summary_system_message(previous_summary), *current_messages]
-
-        if not should_summarize_messages(self.config, model, current_messages):
-            return {"messages": current_messages, "metadata": None}
-
-        return await self._compact_thread_history(
-            thread_id=thread_id,
-            turn_id=turn_id,
-            model=model,
-            route=route,
-            recent_message_count=self.config.context_summarization_recent_messages,
-            source="auto",
-        )
+        try:
+            return await self.context_manager.managed_thread_messages(
+                thread_id=thread_id,
+                turn_id=turn_id,
+                messages=messages,
+                model=model,
+                route=route,
+            )
+        except ThreadContextError as exc:
+            raise ThreadChatError(exc.thread_id, exc.error_code, str(exc)) from exc
 
     async def _compact_thread_history(
         self,
@@ -915,86 +752,17 @@ class ThreadService:
         recent_message_count: int,
         source: str,
     ) -> dict[str, Any]:
-        public_events = self._public_message_events(thread_id)
-        latest_summary = self._latest_history_summary(thread_id)
-        covered_event_ids = list(latest_summary.get("covered_event_ids", [])) if latest_summary else []
-        covered_event_id_set = set(covered_event_ids)
-        unsummarized_events = [event for event in public_events if event["id"] not in covered_event_id_set]
-        previous_summary = str(latest_summary.get("summary", "")) if latest_summary else None
-        current_messages = [self._event_message(event) for event in unsummarized_events]
-        if previous_summary:
-            current_messages = [summary_system_message(previous_summary), *current_messages]
-        if len(unsummarized_events) <= recent_message_count:
-            return {
-                "messages": current_messages,
-                "metadata": {
-                    "summarized": False,
-                    "reason": "not_enough_unsummarized_events",
-                    "unsummarized_event_count": len(unsummarized_events),
-                },
-            }
-
-        events_to_summarize = unsummarized_events[:-recent_message_count]
-        recent_events = unsummarized_events[-recent_message_count:]
-        messages_to_summarize = [self._event_message(event) for event in events_to_summarize]
-        prompt_tokens_before = estimate_prompt_tokens({"messages": current_messages})
-        summary_payload = {
-            "messages": summary_prompt_messages(previous_summary, messages_to_summarize),
-            "temperature": 0.0,
-            "max_tokens": self.config.context_summarization_max_tokens,
-            "target": f"node:{route['node']}",
-            TRUSTED_CONTROLLER_TARGET_KEY: True,
-            SKIP_CONTEXT_MANAGEMENT_KEY: True,
-        }
         try:
-            response, response_meta = await self.chat_proxy.chat_with_meta(model, summary_payload)
-            summary = assistant_summary_content(response)
-        except Exception as exc:
-            await self._append_error_async(thread_id, "CONTEXT_SUMMARY_ERROR", exc, turn_id=turn_id)
-            raise ThreadChatError(
-                thread_id,
-                "CONTEXT_SUMMARY_ERROR",
-                f"Failed to summarize thread {thread_id} for model {model}: {exc}",
-            ) from exc
-
-        all_covered_event_ids = [*covered_event_ids, *[event["id"] for event in events_to_summarize]]
-        compacted_messages = [summary_system_message(summary), *[self._event_message(event) for event in recent_events]]
-        prompt_tokens_after = estimate_prompt_tokens({"messages": compacted_messages})
-        summary_event = await self._append_event_async(
-            thread_id=thread_id,
-            event_type="history_summary",
-            role=None,
-            content={
-                "summary": summary,
-                "covered_event_ids": all_covered_event_ids,
-                "source_event_ids": [event["id"] for event in events_to_summarize],
-                "prompt_tokens_before": prompt_tokens_before,
-                "prompt_tokens_after": prompt_tokens_after,
-                "summary_tokens_estimated": estimate_prompt_tokens({"messages": [summary_system_message(summary)]}),
-                "summary_model": model,
-                "model": model,
-                "route": route,
-                "response_meta": response_meta,
-                "source": source,
-            },
-            public=False,
-            turn_id=turn_id,
-            route=route,
-            agent_node=route["node"],
-            model=model,
-        )
-        return {
-            "messages": compacted_messages,
-            "metadata": {
-                **context_management_metadata(
-                    summary_event_id=summary_event["id"],
-                    prompt_tokens_before=prompt_tokens_before,
-                    prompt_tokens_after=prompt_tokens_after,
-                ),
-                "summary": summary,
-                "covered_event_count": len(events_to_summarize),
-            },
-        }
+            return await self.context_manager.compact_thread_history(
+                thread_id=thread_id,
+                turn_id=turn_id,
+                model=model,
+                route=route,
+                recent_message_count=recent_message_count,
+                source=source,
+            )
+        except ThreadContextError as exc:
+            raise ThreadChatError(exc.thread_id, exc.error_code, str(exc)) from exc
 
     def _history_prompt_token_budget(self, model: str) -> int:
         try:
@@ -1045,28 +813,10 @@ class ThreadService:
         )
 
     def _append_error(self, thread_id: str, error_code: str, exc: Exception, turn_id: str | None = None) -> None:
-        self.store.append_event(
-            thread_id=thread_id,
-            event_type="error",
-            role=None,
-            content={"text": str(exc)},
-            public=True,
-            turn_id=turn_id,
-            error_code=error_code,
-            error_detail=str(exc),
-        )
+        self.event_publisher.append_error(thread_id, error_code, exc, turn_id)
 
     async def _append_error_async(self, thread_id: str, error_code: str, exc: Exception, turn_id: str | None = None) -> None:
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="error",
-            role=None,
-            content={"text": str(exc)},
-            public=True,
-            turn_id=turn_id,
-            error_code=error_code,
-            error_detail=str(exc),
-        )
+        await self.event_publisher.append_error_async(thread_id, error_code, exc, turn_id)
 
     def _latest_user_text(self, messages: list[dict[str, Any]]) -> str:
         for message in reversed(messages):
@@ -1093,183 +843,12 @@ class ThreadService:
         target: str,
         metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
-        thread = self.store.get_thread(thread_id)
-        request_metadata = {**thread.get("metadata", {}), **(metadata or {})}
-        turn_id = str(uuid4())
-
-        await self._append_event_async(
+        return await self.workflow_runner.run_workflow(
             thread_id=thread_id,
-            event_type="user_message",
-            role="user",
-            content={"text": content, "metadata": request_metadata},
-            public=True,
-            turn_id=turn_id,
+            content=content,
+            steps=steps,
+            model=model,
+            target=target,
+            metadata=metadata,
         )
 
-        current_input = content
-        step_results: list[dict[str, Any]] = []
-
-        for i, step in enumerate(steps):
-            step_model = step.model or model or thread.get("default_model")
-            step_target = step.target if step.target != "auto" else target
-
-            try:
-                decision = await self.routing_policy.choose(
-                    request_type=request_metadata.get("request_type") or "general",
-                    requested_model=step_model,
-                    explicit_target=step_target,
-                    previous_route=None,
-            )
-            except ValueError as exc:
-                await self._append_error_async(thread_id, "WORKFLOW_ROUTING_ERROR", exc, turn_id=turn_id)
-                raise
-
-            await self._append_event_async(
-                thread_id=thread_id,
-                event_type="workflow_step",
-                role=None,
-                content={
-                    "label": step.label,
-                    "step_index": i,
-                    "status": "running",
-                    "model": decision.model,
-                    "node": decision.node,
-                },
-                public=False,
-                turn_id=turn_id,
-                agent_node=decision.node,
-                model=decision.model,
-            )
-
-            messages = [
-                {"role": "system", "content": step.instructions},
-                {"role": "user", "content": current_input},
-            ]
-
-            try:
-                raw_response, _response_meta = await self.chat_proxy.chat_with_meta(
-                    decision.model,
-                    {"messages": messages, "target": f"node:{decision.node}", TRUSTED_CONTROLLER_TARGET_KEY: True},
-                )
-                step_output = raw_response["choices"][0]["message"]["content"]
-            except Exception as exc:
-                await self._append_event_async(
-                    thread_id=thread_id,
-                    event_type="workflow_step",
-                    role=None,
-                    content={"label": step.label, "step_index": i, "status": "failed", "error": str(exc)},
-                    public=False,
-                    turn_id=turn_id,
-                )
-                await self._append_error_async(thread_id, "WORKFLOW_STEP_ERROR", exc, turn_id=turn_id)
-                raise
-
-            await self._append_event_async(
-                thread_id=thread_id,
-                event_type="workflow_step",
-                role=None,
-                content={
-                    "label": step.label,
-                    "step_index": i,
-                    "status": "complete",
-                    "output": step_output,
-                    "model": decision.model,
-                    "node": decision.node,
-                },
-                public=False,
-                turn_id=turn_id,
-                agent_node=decision.node,
-                model=decision.model,
-            )
-
-            step_results.append({"label": step.label, "model": decision.model, "node": decision.node, "output": step_output})
-            current_input = step_output
-
-        last = step_results[-1]
-        route = {"node": last["node"], "model": last["model"], "strategy": "workflow", "reason": "workflow_final_step"}
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="assistant_message",
-            role="assistant",
-            content={"text": last["output"], "workflow_steps": step_results},
-            public=True,
-            turn_id=turn_id,
-            route=route,
-            agent_node=last["node"],
-            model=last["model"],
-        )
-
-        return {
-            "thread_id": thread_id,
-            "message": {"role": "assistant", "content": last["output"]},
-            "route": route,
-            "workflow_steps": step_results,
-        }
-
-
-def _history_summary_content(messages: list[dict[str, Any]], max_chars: int, item_max_chars: int) -> str:
-    lines: list[str] = ["Earlier thread history summary:"]
-    for message in messages:
-        role = str(message.get("role") or "message")
-        content = _history_summary_text(message.get("content", ""), item_max_chars)
-        if not content:
-            continue
-        lines.append(f"- {role}: {content}")
-    summary = "\n".join(lines)
-    return summary[:max_chars]
-
-
-def _history_summary_text(content: Any, max_chars: int) -> str:
-    if isinstance(content, str):
-        text = content
-    else:
-        text = str(content)
-    collapsed = " ".join(text.split())
-    return collapsed[:max_chars]
-
-
-def _plugin_thread_event_type(event_type: str, content: dict[str, Any] | None) -> str:
-    if event_type == "workflow_step":
-        status = (content or {}).get("status")
-        if status == "running":
-            return "llama_pack.thread.workflow_step.started"
-        if status == "complete":
-            return "llama_pack.thread.workflow_step.completed"
-        if status == "failed":
-            return "llama_pack.thread.workflow_step.failed"
-    return f"llama_pack.thread.{event_type}.created"
-
-
-def _plugin_thread_event_payload(event: dict[str, Any]) -> dict[str, Any]:
-    return {
-        "event_id": event["id"],
-        "thread_id": event["thread_id"],
-        "event_type": event["event_type"],
-        "turn_id": event.get("turn_id"),
-        "role": event.get("role"),
-        "public": bool(event.get("public")),
-        "route": event.get("route"),
-        "agent_node": event.get("agent_node"),
-        "model": event.get("model"),
-        "error_code": event.get("error_code"),
-        "error_detail": event.get("error_detail"),
-        "content": _bounded_plugin_content(event.get("content") or {}),
-        "created_at": event["created_at"],
-    }
-
-
-def _bounded_plugin_content(content: dict[str, Any]) -> dict[str, Any]:
-    bounded: dict[str, Any] = {}
-    for key, value in content.items():
-        if key in {"raw_response", "messages"}:
-            continue
-        if isinstance(value, str):
-            bounded[key] = value[:1000]
-        elif isinstance(value, list):
-            bounded[key] = value[:20]
-        elif isinstance(value, dict):
-            bounded[key] = {str(item_key): item_value for item_key, item_value in list(value.items())[:20]}
-        else:
-            bounded[key] = value
-    return bounded
