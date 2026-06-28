@@ -1,9 +1,11 @@
 import json
+import inspect
 
 import httpx
 from fastapi.testclient import TestClient
 
 from llama_pack.core.config import NodeConfig, load_config
+from llama_pack.core.agent_tools import eval_runtime
 from llama_pack.api.routes.runtime import _merge_tool_loop_suites
 from llama_pack.main import create_app
 from tests.persistence_db_setup import prepare_all_persistence_dbs
@@ -26,6 +28,14 @@ def test_merge_tool_loop_suites_preserves_partial_status():
     assert suite["passed_count"] == 1
     assert suite["partial_count"] == 1
     assert suite["failed_count"] == 0
+
+
+def test_runtime_route_delegates_tool_loop_eval_execution_to_core_module():
+    import llama_pack.api.routes.runtime as runtime_route
+
+    assert _merge_tool_loop_suites is eval_runtime.merge_tool_loop_suites
+    assert not hasattr(runtime_route, "_execute_tool_loop_suites")
+    assert "ToolLoopEvaluator(" not in inspect.getsource(runtime_route)
 
 
 def test_runtime_overview_reports_agent_runtime_state(tmp_path):
