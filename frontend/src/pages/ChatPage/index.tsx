@@ -1,49 +1,36 @@
 import "./styles.css";
 import { useEffect, useRef, useState, type ChangeEvent, type FormEvent, type KeyboardEvent } from "react";
-import ReactMarkdown from "react-markdown";
-import remarkGfm from "remark-gfm";
 import { clearKvSlot, deleteChatSession, getChatCapabilities, getChatSession, getContextBudget, inspectModel, listChatSessions, listKvSlots, saveChatSession } from "../../api/chat";
 import { searchMemory, writeMemory } from "../../api/memory";
-import { getModelProfiles, listModels } from "../../api/models";
-import { getNodeModels } from "../../api/nodes";
 import { createThread, getThreadEvents, streamThreadMessage } from "../../api/threads";
-import { EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
+import { ErrorBanner, Panel, Button } from "../../components/ui";
+import { ChatComposer, ChatSessionsPanel, ChatTranscriptPanel } from "./components";
+import { ChatControlsPanel } from "./controls";
+import { useChatModelSelection } from "./useChatModelSelection";
 import { buildChatSessionSavePayload, chooseChatSessionToResume, nextSelectedChatSessionId } from "../../features/chat/chatSessions";
 import type { ChatSession } from "../../types/chat";
-import type { MemorySearchResult } from "../../types/memory";
 import { applyTelemetryFromChunk, finalizeTelemetry } from "../../features/chat/chatTelemetry";
 import type { TelemetryChunk } from "../../types/streaming";
 import { buildThreadMetadata, threadEventsToChatMessages } from "../../features/chat/chatThreads";
 import type { ThreadEvent } from "../../types/threads";
-import type { LocalModel, ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
 import type { ChatMessage, ChatDefaults, AdvancedDefaults, ChatContentBlock, ContextBudget } from "../../types/chat";
 import { CHAT_CONSTANTS } from "../../constants"
 import { modelName } from "../../features/models";
 import { 
-  asModels,
-  asNodes,
-  nodeModelsToChatModels,
   modelTarget,
-  modelOptionLabel,
-  modelIsLoaded,
   modelSupportsVision,
   readFileAsDataUrl,
-  telemetryChips,
   asChatSessions,
-  asProfileCatalog,
-  firstProfileForFamily,
-  familyForModel,
   readChatHandoff,
-  sessionLabel,
   sessionMessages,
   parseStopTokens,
   explainChatError,
   structuredPayload,
   readChatStream,
   routeDecisionToMeta,
-  routeExplanationItems,
   parseSlashCommand,
 } from "../../features/chat";
+import { contextBudgetSummary, memoryResultLine } from "../../features/chat/chatView";
 
 const PRESETS: Record<string, ChatDefaults> = {
   balanced: { temperature: 0.7, max_tokens: 1024, top_p: 1 },
@@ -65,41 +52,8 @@ const ADVANCED_DEFAULTS: AdvancedDefaults = {
   grammarText: "",
 };
 
-function formatCompactTokenCount(value: number): string {
-  if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
-  return String(value);
-}
-
-function contextBudgetSummary(budget: ContextBudget): string {
-  const used = budget.prompt_tokens_estimated + budget.reserved_completion_tokens;
-  return `Context: ${formatCompactTokenCount(used)} / ${formatCompactTokenCount(budget.context_window_tokens)} used · ${formatCompactTokenCount(budget.remaining_context_tokens)} left`;
-}
-
-function contextBudgetPercent(budget: ContextBudget): number {
-  return Math.min(100, Math.max(0, Math.round(budget.usage_ratio * 100)));
-}
-
-function memoryResultLine(result: MemorySearchResult): string {
-  const score = result.score == null ? "-" : result.score.toFixed(4);
-  return `${score} ${result.tier || "-"} ${result.topic || "-"} ${result.text || "-"}`;
-}
-
-function MarkdownMessage({ content }: { content: string }) {
-  return (
-    <div className="chat-markdown">
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-    </div>
-  );
-}
-
 export function ChatPage() {
   const [handoff] = useState(readChatHandoff);
-  const [models, setModels] = useState<LocalModel[]>([]);
-  const [profileCatalog, setProfileCatalog] = useState<ModelProfileCatalog>({ families: [] });
-  const [selectedFamily, setSelectedFamily] = useState("");
-  const [selectedProfile, setSelectedProfile] = useState("");
-  const [selectedModel, setSelectedModel] = useState(handoff.model);
-  const [target, setTarget] = useState(handoff.target || "auto");
   const [activeConversationId, setActiveConversationId] = useState("");
   const [conversationApp, setConversationApp] = useState(handoff.source || "ui");
   const [conversationPurpose, setConversationPurpose] = useState("chat");
@@ -133,43 +87,29 @@ export function ChatPage() {
   const [sessionName, setSessionName] = useState("");
   const abortRef = useRef<AbortController | null>(null);
   const transcriptRef = useRef<HTMLDivElement>(null);
-
-  async function refreshModels() {
-    setError("");
-    try {
-      let items = asModels(await listModels());
-      if (!items.length) {
-        items = nodeModelsToChatModels(asNodes(await getNodeModels()));
-      }
-      const loadedItems = items.filter((model) => modelName(model) && modelIsLoaded(model));
-      setModels(items);
-      setSelectedModel((current) => loadedItems.some((model) => modelName(model) === current) ? current : modelName(loadedItems[0] || {}));
-      setTarget((current) => current === "auto" && modelTarget(loadedItems[0] || {}) ? modelTarget(loadedItems[0] || {}) : current);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load chat models");
-    }
-  }
-
-  async function refreshProfileCatalog() {
-    try {
-      const catalog = asProfileCatalog(await getModelProfiles());
-      setProfileCatalog(catalog);
-      const preferredFamily = familyForModel(catalog, selectedModel) || catalog.families[0]?.family || "";
-      setSelectedFamily((current) => current || preferredFamily);
-      setSelectedProfile((current) => current || firstProfileForFamily(catalog, preferredFamily));
-    } catch {
-      setProfileCatalog({ families: [] });
-    }
-  }
-
-  function selectModel(model: string) {
-    setSelectedModel(model);
-    const family = familyForModel(profileCatalog, model);
-    if (family) {
-      setSelectedFamily(family);
-      setSelectedProfile(firstProfileForFamily(profileCatalog, family));
-    }
-  }
+  const {
+    profileCatalog,
+    selectedFamily,
+    selectedProfile,
+    selectedModel,
+    target,
+    runningModels,
+    noModelLoaded,
+    selectedRunningModel,
+    profileFamilies,
+    selectedProfileFamily,
+    targetOptions,
+    refreshModels,
+    refreshProfileCatalog,
+    selectModel,
+    setSelectedFamily,
+    setSelectedProfile,
+    setTarget,
+  } = useChatModelSelection({
+    initialModel: handoff.model,
+    initialTarget: handoff.target,
+    onError: setError,
+  });
 
   useEffect(() => {
     void refreshChatBootstrap();
@@ -334,7 +274,7 @@ export function ChatPage() {
       thread_metadata?: { app?: string | null; purpose?: string | null; priority?: string; request_type?: string };
       include_internal?: boolean;
     };
-    if (model) setSelectedModel(model);
+    if (model) selectModel(model);
     setTarget(targetSelector || "auto");
     setDefaults((current) => ({
       ...current,
@@ -819,14 +759,8 @@ export function ChatPage() {
     localStorage.setItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY, localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || "");
   }
 
-  const runningModels = models.filter((model) => modelName(model) && modelIsLoaded(model));
-  const noModelLoaded = runningModels.length === 0;
-  const selectedRunningModel = runningModels.find((model) => modelName(model) === selectedModel);
   const selectedModelSupportsVision = modelSupportsVision(selectedRunningModel);
   const showImageUpload = selectedModelSupportsVision;
-  const profileFamilies = profileCatalog.families.filter((family) => family.family && family.profiles.length);
-  const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
-  const targetOptions = ["auto", "local", target, ...runningModels.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
   const parsedCommand = parseSlashCommand(prompt);
   const canSendCommand = Boolean(chatBootstrapLoaded && parsedCommand && prompt.trim() && !pending);
   const canSendChat = Boolean(chatBootstrapLoaded && !controllerChatUrl && !noModelLoaded && selectedModel && prompt.trim() && !pending);
@@ -875,199 +809,100 @@ export function ChatPage() {
       <ErrorBanner message={error} />
       <div className="chat-layout">
         <div className="chat-main-column">
-          <Panel title="Conversation History" eyebrow="Save and resume" className="chat-sessions-panel">
-            <div className="chat-session-panel chat-session-panel-top">
-              <FormField label="Session name"><input value={sessionName} onChange={(event) => setSessionName(event.target.value)} placeholder="Session name" /></FormField>
-              <FormField label="Saved sessions">
-                <select value={selectedSessionId} onChange={(event) => setSelectedSessionId(event.target.value)}>
-                  <option value="">Select a session</option>
-                  {sessions.map((session) => <option key={session.id} value={session.id}>{sessionLabel(session)}</option>)}
-                </select>
-              </FormField>
-              <div className="modal-actions">
-                <Button type="button" onClick={() => void refreshSessions()}>Refresh Sessions</Button>
-                <Button type="button" onClick={() => void loadSelectedSession()} disabled={!selectedSessionId.trim()}>Load Session</Button>
-                <Button type="button" onClick={() => void saveCurrentSession(false)} disabled={!messages.length}>Save Session</Button>
-                <Button type="button" onClick={() => void saveCurrentSession(true)} disabled={!messages.length}>Save As New</Button>
-                <Button type="button" onClick={() => void deleteSelectedSession()} disabled={!selectedSessionId.trim()}>Delete Session</Button>
-                <Button type="button" onClick={() => void resumeRecentSession()}>Resume Recent</Button>
-              </div>
-            </div>
-          </Panel>
+          <ChatSessionsPanel
+            sessionName={sessionName}
+            selectedSessionId={selectedSessionId}
+            sessions={sessions}
+            messages={messages}
+            onSessionNameChange={setSessionName}
+            onSelectedSessionIdChange={setSelectedSessionId}
+            onRefreshSessions={() => void refreshSessions()}
+            onLoadSession={() => void loadSelectedSession()}
+            onSaveSession={() => void saveCurrentSession(false)}
+            onSaveAsNewSession={() => void saveCurrentSession(true)}
+            onDeleteSession={() => void deleteSelectedSession()}
+            onResumeRecentSession={() => void resumeRecentSession()}
+          />
 
           <Panel title="Transcript" eyebrow="Streaming response" className="chat-workbench-panel">
-            <div ref={transcriptRef} className="chat-transcript" aria-live="polite">
-              {controllerChatUrl ? (
-                <div className="test-chat-controller-launcher">
-                  <h2>Controller mode required</h2>
-                  <p>Routed chat conversations, sessions, and thread events are controller-owned.</p>
-                  <a className="btn btn-ghost" href={controllerChatUrl}>Open controller chat</a>
-                </div>
-              ) : messages.length ? messages.map((message, index) => {
-                const routeItems = routeExplanationItems(message);
-                return (
-                  <article className={`chat-bubble chat-bubble-${message.role}`} key={`${message.role}-${index}`}>
-                    <span className="chat-role">{message.role}</span>
-                    {telemetryChips(message).length ? (
-                      <div className="chat-chips">
-                        {telemetryChips(message).map((chip) => <span className="chat-chip" key={chip}>{chip}</span>)}
-                      </div>
-                    ) : null}
-                    {message.reasoningContent ? (
-                      <details className="chat-reasoning" open={message.pending ? true : undefined}>
-                        <summary>{message.pending ? "Reasoning (streaming...)" : "Reasoning"}</summary>
-                        <pre>{message.reasoningContent}</pre>
-                      </details>
-                    ) : null}
-                    {message.content ? (
-                      message.role === "user" ? <p>{message.content}</p> : <MarkdownMessage content={message.content} />
-                    ) : message.pending ? (
-                      <div className="chat-activity" data-testid="assistant-activity-indicator" role="status">
-                        <span className="chat-activity-dots" aria-hidden="true"><span /> <span /> <span /></span>
-                        <span>Agent is responding</span>
-                      </div>
-                    ) : (
-                      <p>(empty response)</p>
-                    )}
-                    {message.imageName ? <small>image: {message.imageName}</small> : null}
-                    {routeItems.length ? (
-                      <details className="chat-route-detail">
-                        <summary>Route</summary>
-                        <ul>
-                          {routeItems.map((item) => <li key={item}>{item}</li>)}
-                        </ul>
-                      </details>
-                    ) : null}
-                    {message.stopped ? <small>stopped</small> : null}
-                  </article>
-                );
-              }) : <EmptyState message="Start a running model, choose it here, and send a test prompt." />}
-            </div>
-            <form className="chat-composer" onSubmit={onSubmit}>
-              <FormField label="Prompt">
-                <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} onKeyDown={onPromptKeyDown} rows={4} disabled={pending} placeholder="/remember saves text to controller memory" />
-              </FormField>
-              {showImageUpload ? (
-                <div className="chat-image-upload">
-                  <FormField label="Image">
-                    <input type="file" accept="image/*" onChange={onImageChange} disabled={pending} />
-                  </FormField>
-                  {selectedImage ? (
-                    <div className="chat-image-preview">
-                      <img src={selectedImage.dataUrl} alt="" />
-                      <span>{selectedImage.name}</span>
-                      <Button type="button" onClick={() => setSelectedImage(null)} disabled={pending}>Remove</Button>
-                    </div>
-                  ) : null}
-                </div>
-              ) : null}
-              <div className="modal-actions">
-                <label className="checkbox-label"><input type="checkbox" checked={enterToSend} onChange={(event) => setEnterToSend(event.target.checked)} />Enter to send</label>
-                <Button type="submit" disabled={!canSend}>Send</Button>
-                <Button type="button" onClick={stop} disabled={!pending}>Stop</Button>
-                <Button type="button" onClick={() => void submitPrompt(lastPrompt)} disabled={pending || !lastPrompt}>Regenerate</Button>
-                <Button type="button" onClick={clear} disabled={pending}>Clear</Button>
-              </div>
-            </form>
+            <ChatTranscriptPanel transcriptRef={transcriptRef} controllerChatUrl={controllerChatUrl} messages={messages} />
+            <ChatComposer
+              prompt={prompt}
+              pending={pending}
+              enterToSend={enterToSend}
+              canSend={canSend}
+              lastPrompt={lastPrompt}
+              showImageUpload={showImageUpload}
+              selectedImage={selectedImage}
+              onSubmit={onSubmit}
+              onPromptChange={setPrompt}
+              onPromptKeyDown={onPromptKeyDown}
+              onImageChange={onImageChange}
+              onRemoveImage={() => setSelectedImage(null)}
+              onEnterToSendChange={setEnterToSend}
+              onStop={stop}
+              onRegenerate={() => void submitPrompt(lastPrompt)}
+              onClear={clear}
+            />
           </Panel>
         </div>
 
-        <Panel title="Controls" eyebrow="Route and defaults" className={`side-panel${noModelLoaded ? " chat-controls-unavailable" : ""}`}>
-          {noModelLoaded ? <p className="chat-controls-warning" role="status">Load a model before using chat controls.</p> : null}
-          <fieldset className="stacked-controls chat-controls-fieldset" disabled={noModelLoaded} aria-disabled={noModelLoaded}>
-            <FormField label="Model"><select value={selectedModel} onChange={(event) => {
-              const nextModel = runningModels.find((model) => modelName(model) === event.target.value);
-              selectModel(event.target.value);
-              if (nextModel && modelTarget(nextModel)) setTarget(modelTarget(nextModel));
-            }}>{runningModels.length ? runningModels.map((model) => <option key={`${modelName(model)}-${modelTarget(model) || "local"}`} value={modelName(model)}>{modelOptionLabel(model)}</option>) : <option value="">No loaded models</option>}</select></FormField>
-            {profileFamilies.length ? (
-              <>
-                <FormField label="Model Family"><select value={selectedFamily} onChange={(event) => {
-                  const family = event.target.value;
-                  setSelectedFamily(family);
-                  setSelectedProfile(firstProfileForFamily(profileCatalog, family));
-                }}>{profileFamilies.map((family) => <option key={family.family} value={family.family}>{family.family}</option>)}</select></FormField>
-                <FormField label="Context Profile"><select value={selectedProfile} onChange={(event) => setSelectedProfile(event.target.value)}>
-                  {(selectedProfileFamily?.profiles || []).map((profile) => <option key={profile.profile} value={profile.profile}>{profile.label || profile.profile}</option>)}
-                </select></FormField>
-              </>
-            ) : null}
-            <FormField label="Target"><select value={target} onChange={(event) => setTarget(event.target.value)}>{targetOptions.map((option) => <option key={option} value={option}>{option === "auto" ? "Auto" : option === "local" ? "Local" : option}</option>)}</select></FormField>
-            <FormField label="Preset"><select value={preset} onChange={(event) => applyPreset(event.target.value)}><option value="balanced">Balanced</option><option value="precise">Precise</option><option value="creative">Creative</option></select></FormField>
-            <FormField label="Temperature"><input type="number" step="0.05" value={defaults.temperature} onChange={(event) => setDefaults((current) => ({ ...current, temperature: Number(event.target.value || 0) }))} /></FormField>
-            <FormField label="Max tokens"><input type="number" value={defaults.max_tokens} onChange={(event) => setDefaults((current) => ({ ...current, max_tokens: Number(event.target.value || 0) }))} /></FormField>
-            <FormField label="Top P"><input type="number" step="0.05" value={defaults.top_p} onChange={(event) => setDefaults((current) => ({ ...current, top_p: Number(event.target.value || 0) }))} /></FormField>
-            <Button type="button" onClick={toggleAdvanced}>Advanced</Button>
-            {advancedOpen ? (
-              <div className="advanced-chat-panel">
-                <FormField label="Top K"><input type="number" value={advanced.top_k} onChange={(event) => updateAdvanced("top_k", Number(event.target.value || 0))} /></FormField>
-                <FormField label="Min P"><input type="number" step="0.01" value={advanced.min_p} onChange={(event) => updateAdvanced("min_p", Number(event.target.value || 0))} /></FormField>
-                <FormField label="Repeat penalty"><input type="number" step="0.01" value={advanced.repeat_penalty} onChange={(event) => updateAdvanced("repeat_penalty", Number(event.target.value || 0))} /></FormField>
-                <FormField label="Seed"><input type="number" value={advanced.seed} onChange={(event) => updateAdvanced("seed", Number(event.target.value || 0))} /></FormField>
-                <FormField label="Stop tokens"><input value={advanced.stop} onChange={(event) => updateAdvanced("stop", event.target.value)} placeholder="</s>, User:" /></FormField>
-                <label className="checkbox-label"><input type="checkbox" checked={advanced.reasoning} onChange={(event) => updateAdvanced("reasoning", event.target.checked)} />Reasoning</label>
-                <label className="checkbox-label"><input type="checkbox" checked={advanced.cache_prompt} onChange={(event) => updateAdvanced("cache_prompt", event.target.checked)} />Cache prompt</label>
-                <FormField label="KV slot"><input type="number" value={advanced.slot_id} onChange={(event) => updateAdvanced("slot_id", event.target.value)} placeholder="auto" /></FormField>
-                <FormField label="Structured mode"><select value={advanced.structuredMode} onChange={(event) => updateAdvanced("structuredMode", event.target.value as AdvancedDefaults["structuredMode"])}><option value="none">None</option><option value="json_schema">JSON Schema</option><option value="grammar">Grammar</option></select></FormField>
-                <FormField label="JSON schema"><textarea value={advanced.jsonSchemaText} disabled={advanced.structuredMode !== "json_schema"} onChange={(event) => updateAdvanced("jsonSchemaText", event.target.value)} rows={4} /></FormField>
-                <FormField label="Grammar"><textarea value={advanced.grammarText} disabled={advanced.structuredMode !== "grammar"} onChange={(event) => updateAdvanced("grammarText", event.target.value)} rows={4} /></FormField>
-                <div className="modal-actions">
-                  <Button type="button" onClick={() => void refreshCapabilities()}>Refresh Capabilities</Button>
-                  <Button type="button" onClick={() => void copyCapabilitiesJson()} disabled={!capabilities}>Copy Capabilities JSON</Button>
-                  <Button type="button" onClick={() => void inspectPrompt()}>Inspect prompt/template</Button>
-                  <Button type="button" onClick={() => void refreshKvSlots()}>Refresh KV slots</Button>
-                </div>
-                <div className="modal-actions">
-                  <FormField label="KV slot action id"><input type="number" value={kvSlotActionId} onChange={(event) => setKvSlotActionId(event.target.value)} placeholder="slot id" /></FormField>
-                  <Button type="button" onClick={() => void clearSelectedKvSlot()} disabled={!kvSlotActionId.trim()}>Clear slot</Button>
-                </div>
-                <p className="muted">Structured output: {advanced.structuredMode === "none" ? "disabled" : advanced.structuredMode}</p>
-                <pre className="detail-json compact-json">{capabilityDetail}</pre>
-                <pre className="detail-json compact-json">{inspectDetail}</pre>
-                <pre className="detail-json compact-json">{kvDetail}</pre>
-              </div>
-            ) : null}
-            <StatusBadge tone={pending ? "warning" : "success"}>{status}</StatusBadge>
-            {contextBudget ? (
-              <div className={`context-budget context-budget-${contextBudget.status}`} data-testid="context-budget-summary">
-                <div className="context-budget-header">
-                  <strong>{contextBudgetSummary(contextBudget)}</strong>
-                  <span>{contextBudgetPercent(contextBudget)}%</span>
-                </div>
-                <div
-                  className="context-budget-meter"
-                  role="progressbar"
-                  aria-label="Context used"
-                  aria-valuemin={0}
-                  aria-valuemax={100}
-                  aria-valuenow={contextBudgetPercent(contextBudget)}
-                >
-                  <span style={{ width: `${contextBudgetPercent(contextBudget)}%` }} />
-                </div>
-                <div className="context-budget-breakdown">
-                  <span>Prompt {formatCompactTokenCount(contextBudget.prompt_tokens_estimated)}</span>
-                  <span>Reserved output {formatCompactTokenCount(contextBudget.reserved_completion_tokens)}</span>
-                </div>
-                <small>{contextBudget.precision === "approximate" ? "Approximate estimate" : "Tokenizer estimate"}</small>
-              </div>
-            ) : contextBudgetError ? (
-              <p className="muted" data-testid="context-budget-summary">{contextBudgetError}</p>
-            ) : null}
-            <div className="thread-controls">
-              <FormField label="Conversation ID"><input value={activeConversationId} onChange={(event) => setActiveConversationId(event.target.value)} placeholder="conversation id" /></FormField>
-              <FormField label="Conversation App"><input value={conversationApp} onChange={(event) => setConversationApp(event.target.value)} /></FormField>
-              <FormField label="Conversation Purpose"><input value={conversationPurpose} onChange={(event) => setConversationPurpose(event.target.value)} /></FormField>
-              <FormField label="Conversation Priority"><select value={conversationPriority} onChange={(event) => setConversationPriority(event.target.value)}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></FormField>
-              <FormField label="Conversation Request Type"><select value={conversationRequestType} onChange={(event) => setConversationRequestType(event.target.value)}><option value="general">General</option><option value="coding">Coding</option><option value="analysis">Analysis</option></select></FormField>
-              <label className="checkbox-label"><input type="checkbox" checked={includeInternal} onChange={(event) => setIncludeInternal(event.target.checked)} />Include internal events</label>
-              <div className="modal-actions">
-                <Button type="button" onClick={() => void createConversationFromUi()} disabled={pending || !chatBootstrapLoaded || Boolean(controllerChatUrl)}>New Conversation</Button>
-                <Button type="button" onClick={() => void refreshConversationEvents()} disabled={pending || !activeConversationId}>Refresh Conversation</Button>
-              </div>
-              <pre className="detail-json">{threadRouteDetail}</pre>
-            </div>
-          </fieldset>
-        </Panel>
+        <ChatControlsPanel
+          noModelLoaded={noModelLoaded}
+          selectedModel={selectedModel}
+          runningModels={runningModels}
+          profileFamilies={profileFamilies}
+          selectedFamily={selectedFamily}
+          selectedProfile={selectedProfile}
+          selectedProfileFamily={selectedProfileFamily}
+          profileCatalog={profileCatalog}
+          target={target}
+          targetOptions={targetOptions}
+          preset={preset}
+          defaults={defaults}
+          advanced={advanced}
+          advancedOpen={advancedOpen}
+          pending={pending}
+          status={status}
+          capabilities={capabilities}
+          capabilityDetail={capabilityDetail}
+          inspectDetail={inspectDetail}
+          kvDetail={kvDetail}
+          kvSlotActionId={kvSlotActionId}
+          contextBudget={contextBudget}
+          contextBudgetError={contextBudgetError}
+          activeConversationId={activeConversationId}
+          conversationApp={conversationApp}
+          conversationPurpose={conversationPurpose}
+          conversationPriority={conversationPriority}
+          conversationRequestType={conversationRequestType}
+          includeInternal={includeInternal}
+          threadRouteDetail={threadRouteDetail}
+          chatBootstrapLoaded={chatBootstrapLoaded}
+          controllerChatUrl={controllerChatUrl}
+          onSelectModel={selectModel}
+          onTargetChange={setTarget}
+          onSelectedFamilyChange={setSelectedFamily}
+          onSelectedProfileChange={setSelectedProfile}
+          onPresetChange={applyPreset}
+          onDefaultsChange={(patch) => setDefaults((current) => ({ ...current, ...patch }))}
+          onAdvancedChange={updateAdvanced}
+          onToggleAdvanced={toggleAdvanced}
+          onRefreshCapabilities={() => void refreshCapabilities()}
+          onCopyCapabilitiesJson={() => void copyCapabilitiesJson()}
+          onInspectPrompt={() => void inspectPrompt()}
+          onRefreshKvSlots={() => void refreshKvSlots()}
+          onKvSlotActionIdChange={setKvSlotActionId}
+          onClearSelectedKvSlot={() => void clearSelectedKvSlot()}
+          onActiveConversationIdChange={setActiveConversationId}
+          onConversationAppChange={setConversationApp}
+          onConversationPurposeChange={setConversationPurpose}
+          onConversationPriorityChange={setConversationPriority}
+          onConversationRequestTypeChange={setConversationRequestType}
+          onIncludeInternalChange={setIncludeInternal}
+          onCreateConversation={() => void createConversationFromUi()}
+          onRefreshConversation={() => void refreshConversationEvents()}
+        />
       </div>
     </div>
   );

@@ -1,7 +1,13 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { ChatPage } from "../../pages/ChatPage";
+import { ChatComposer, ChatSessionsPanel, ChatTranscriptPanel } from "../../pages/ChatPage/components";
+import { ChatControlsPanel } from "../../pages/ChatPage/controls";
+import { useChatModelSelection } from "../../pages/ChatPage/useChatModelSelection";
+import { contextBudgetPercent, contextBudgetSummary } from "../../features/chat/chatView";
 
 afterEach(() => {
   window.history.pushState({}, "", "/ui/chat");
@@ -57,6 +63,45 @@ function stubChatPageFetch(handler: (url: string, init?: RequestInit) => unknown
   vi.stubGlobal("fetch", fetchMock);
   return fetchMock;
 }
+
+it("keeps ChatPage as orchestration by extracting view components and helpers", () => {
+  const source = readFileSync(resolve(__dirname, "../../pages/ChatPage/index.tsx"), "utf-8");
+
+  expect(ChatSessionsPanel).toBeTypeOf("function");
+  expect(ChatTranscriptPanel).toBeTypeOf("function");
+  expect(ChatComposer).toBeTypeOf("function");
+  expect(ChatControlsPanel).toBeTypeOf("function");
+  expect(useChatModelSelection).toBeTypeOf("function");
+  expect(contextBudgetSummary({
+    model: "mistral",
+    context_window_tokens: 1000,
+    prompt_tokens_estimated: 125,
+    reserved_completion_tokens: 125,
+    available_input_tokens: 750,
+    remaining_context_tokens: 750,
+    usage_ratio: 0.25,
+    status: "comfortable",
+    estimation_method: "test",
+    precision: "approximate",
+    warnings: [],
+  })).toBe("Context: 250 / 1.0k used · 750 left");
+  expect(contextBudgetPercent({
+    model: "mistral",
+    context_window_tokens: 1000,
+    prompt_tokens_estimated: 125,
+    reserved_completion_tokens: 125,
+    available_input_tokens: 750,
+    remaining_context_tokens: 750,
+    usage_ratio: 0.25,
+    status: "comfortable",
+    estimation_method: "test",
+    precision: "approximate",
+    warnings: [],
+  })).toBe(25);
+  expect(source).not.toContain("ReactMarkdown");
+  expect(source).not.toContain("title=\"Controls\"");
+  expect(source).toContain("useChatModelSelection");
+});
 
 it("loads models and preserves chat localStorage keys", async () => {
   localStorage.setItem("lm_chat_preset", "creative");
