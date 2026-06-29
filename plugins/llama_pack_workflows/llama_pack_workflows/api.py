@@ -69,4 +69,11 @@ def create_router(store: WorkflowStore, runner: WorkflowRunner) -> APIRouter:
     async def list_runs(workflow_id: str | None = None):
         return {"runs": [run.model_dump(mode="json") for run in store.list_runs(workflow_id)]}
 
+    @router.get("/runs/{run_id}")
+    async def get_run(run_id: str):
+        try:
+            return store.get_run_detail(run_id).model_dump(mode="json")
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+
     return router

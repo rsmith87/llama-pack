@@ -159,6 +159,56 @@ function renderDiagram(root, workflow, templates) {
   `;
 }
 
+function formatOptionalValue(value) {
+  return value ? escapeHtml(value) : "None";
+}
+
+function renderRunDetail(root, detail) {
+  const panel = root.querySelector("[data-workflow-run-detail]");
+  const body = root.querySelector("[data-workflow-run-detail-body]");
+  if (!panel || !body) return;
+  const run = detail.run;
+  const steps = Array.isArray(detail.steps) ? detail.steps : [];
+  const failedStep = steps.find((step) => step.status === "failed") || null;
+  const stepRows = steps.map((step) => `
+    <div class="workflow-run-step ${escapeHtml(step.status)}">
+      <div>
+        <strong>${escapeHtml(step.label)}</strong>
+        <span>${escapeHtml(step.status)}</span>
+      </div>
+      <dl>
+        <div><dt>Created</dt><dd>${formatOptionalValue(step.created_at)}</dd></div>
+        <div><dt>Thread ID</dt><dd>${formatOptionalValue(step.linked_thread_id)}</dd></div>
+        <div><dt>Job ID</dt><dd>${formatOptionalValue(step.linked_job_id)}</dd></div>
+      </dl>
+      ${step.error_detail ? `<pre>${escapeHtml(step.error_detail)}</pre>` : ""}
+    </div>
+  `).join("");
+  panel.hidden = false;
+  body.innerHTML = `
+    <div class="workflow-run-detail-grid">
+      <div><span>Status</span><strong>${escapeHtml(run.status)}</strong></div>
+      <div><span>Created</span><strong>${formatOptionalValue(run.created_at)}</strong></div>
+      <div><span>Started</span><strong>${formatOptionalValue(run.started_at)}</strong></div>
+      <div><span>Finished</span><strong>${formatOptionalValue(run.finished_at)}</strong></div>
+      <div><span>Correlation ID</span><strong>${formatOptionalValue(run.correlation_id)}</strong></div>
+    </div>
+    ${run.error_detail ? `<section class="workflow-run-error"><strong>Error detail</strong><pre>${escapeHtml(run.error_detail)}</pre></section>` : ""}
+    ${failedStep ? `<section class="workflow-run-failed-step"><strong>Failed step</strong><span>${escapeHtml(failedStep.label)}</span></section>` : ""}
+    <section class="workflow-run-steps">
+      <strong>Steps</strong>
+      ${stepRows || `<div class="workflow-empty">No persisted steps for this run.</div>`}
+    </section>
+  `;
+}
+
+async function inspectRun(root, host, runId) {
+  setStatus(root, "Loading run details...");
+  const detail = await host.apiGet(`/runs/${encodeURIComponent(runId)}`);
+  renderRunDetail(root, detail);
+  setStatus(root, "Run details loaded");
+}
+
 function setActiveWorkflow(root, workflowId) {
   root.selectedWorkflowId = workflowId;
   const workflow = (root.workflowDefinitions || []).find((item) => item.id === workflowId) || null;
@@ -413,6 +463,9 @@ async function refreshWorkflows(root, host) {
       <span>${escapeHtml(item.trigger_type)}: ${escapeHtml(item.trigger_detail)}</span>
     </div>
     <span>${escapeHtml(item.created_at || "")}</span>
+    <div class="workflow-row-actions">
+      <button type="button" data-workflow-action="inspect-run" data-workflow-run-id="${escapeHtml(item.id)}">Inspect</button>
+    </div>
   `, "No workflow runs yet.");
   renderList(root, "workflow-timer-runs", runs.runs.filter((item) => item.trigger_type === "schedule"), (item) => `
     <div class="workflow-row-main">
@@ -420,6 +473,9 @@ async function refreshWorkflows(root, host) {
       <span>${escapeHtml(item.trigger_detail)}</span>
     </div>
     <span>${escapeHtml(item.created_at || "")}</span>
+    <div class="workflow-row-actions">
+      <button type="button" data-workflow-action="inspect-run" data-workflow-run-id="${escapeHtml(item.id)}">Inspect</button>
+    </div>
   `, "No scheduled runs yet.");
   const selectedWorkflow = workflows.workflows.find((item) => item.id === root.selectedWorkflowId) || workflows.workflows[0] || null;
   renderDiagram(root, selectedWorkflow, templates.templates);
@@ -499,12 +555,18 @@ async function handleWorkflowAction(root, host, action, workflowId) {
   await refreshWorkflows(root, host);
 }
 
+async function handleRunAction(root, host, action, runId) {
+  if (action !== "inspect-run") return;
+  await inspectRun(root, host, runId);
+}
+
 export function mountPage(root, host) {
   const refreshButton = root.querySelector("[data-workflow-action='refresh']");
   const newButton = root.querySelector("[data-workflow-action='new']");
   const cancelButton = root.querySelector("[data-workflow-action='cancel-edit']");
   const form = root.querySelector("[data-workflow-form='create']");
   const workflowLists = root.querySelectorAll("#workflow-definitions, #workflow-timers");
+  const runLists = root.querySelectorAll("#workflow-runs, #workflow-timer-runs");
   const templateSelect = root.querySelector("[data-workflow-template-select]");
   const triggerType = root.querySelector("[data-workflow-trigger-type]");
   const tabButtons = root.querySelectorAll("[data-workflow-tab]");
@@ -578,10 +640,22 @@ export function mountPage(root, host) {
       console.error(error);
     });
   };
+  const runAction = (event) => {
+    const target = event.target;
+    if (!(target instanceof HTMLElement)) return;
+    const action = target.dataset.workflowAction;
+    const runId = target.dataset.workflowRunId;
+    if (!action || !runId) return;
+    handleRunAction(root, host, action, runId).catch((error) => {
+      setStatus(root, error.message);
+      console.error(error);
+    });
+  };
   refreshButton?.addEventListener("click", refresh);
   newButton?.addEventListener("click", newWorkflow);
   cancelButton?.addEventListener("click", cancelEdit);
   for (const list of workflowLists) list.addEventListener("click", workflowAction);
+  for (const list of runLists) list.addEventListener("click", runAction);
   for (const button of tabButtons) button.addEventListener("click", tabClicked);
   form?.addEventListener("click", formAction);
   form?.addEventListener("submit", submit);
@@ -595,6 +669,7 @@ export function mountPage(root, host) {
     newButton?.removeEventListener("click", newWorkflow);
     cancelButton?.removeEventListener("click", cancelEdit);
     for (const list of workflowLists) list.removeEventListener("click", workflowAction);
+    for (const list of runLists) list.removeEventListener("click", runAction);
     for (const button of tabButtons) button.removeEventListener("click", tabClicked);
     form?.removeEventListener("click", formAction);
     form?.removeEventListener("submit", submit);

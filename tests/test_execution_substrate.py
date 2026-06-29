@@ -343,6 +343,41 @@ async def test_agent_worker_default_request_includes_error_response_body(monkeyp
 
 
 @pytest.mark.asyncio
+async def test_agent_worker_default_request_diagnoses_empty_gateway_error(monkeypatch):
+    request = httpx.Request("POST", "https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim")
+    response = httpx.Response(
+        502,
+        request=request,
+        headers={"server": "Caddy", "content-length": "0"},
+    )
+
+    class FakeClient:
+        def __init__(self, timeout):
+            self.timeout = timeout
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return None
+
+        async def request(self, method, url, json, headers):
+            return response
+
+    monkeypatch.setattr("llama_pack.core.nodes.worker.httpx.AsyncClient", FakeClient)
+
+    with pytest.raises(httpx.HTTPStatusError) as exc_info:
+        await AgentWorker._default_request("POST", str(request.url), {"max_jobs": 1}, {"X-Llama-Pack-Key": "node-secret"})
+
+    message = str(exc_info.value)
+    assert "Gateway/proxy returned 502 with an empty response body" in message
+    assert "method=POST" in message
+    assert "url=https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim" in message
+    assert "server=Caddy" in message
+    assert "Check the controller service and reverse-proxy logs on pi-controller.local" in message
+
+
+@pytest.mark.asyncio
 async def test_agent_worker_fails_unsupported_job_type_non_retryable():
     calls = []
 

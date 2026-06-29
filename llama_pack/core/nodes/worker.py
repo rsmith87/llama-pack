@@ -742,4 +742,35 @@ def _raise_for_status_with_body(response: httpx.Response) -> None:
         message = str(exc)
         if body:
             message = f"{message}\nResponse body: {body}"
+        else:
+            diagnostic = _empty_error_response_diagnostic(response)
+            if diagnostic:
+                message = f"{message}\n{diagnostic}"
         raise httpx.HTTPStatusError(message, request=exc.request, response=exc.response) from exc
+
+
+def _empty_error_response_diagnostic(response: httpx.Response) -> str:
+    if response.status_code != 502:
+        return ""
+    request = response.request
+    host = request.url.host or "unknown-host"
+    return "\n".join(
+        [
+            "Gateway/proxy returned 502 with an empty response body.",
+            f"Request: method={request.method} url={request.url}",
+            f"Response headers: {_diagnostic_response_headers(response)}",
+            f"Next step: Check the controller service and reverse-proxy logs on {host}; the proxy could not get a valid response from the upstream Llama Pack controller.",
+        ]
+    )
+
+
+def _diagnostic_response_headers(response: httpx.Response) -> str:
+    header_names = ("server", "date", "content-length", "content-type")
+    parts = []
+    for name in header_names:
+        value = response.headers.get(name)
+        if value is not None:
+            parts.append(f"{name}={value}")
+    if not parts:
+        return "none"
+    return ", ".join(parts)

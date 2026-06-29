@@ -74,3 +74,21 @@ class WorkflowRun(BaseModel):
     started_at: datetime | None
     finished_at: datetime | None
     created_at: datetime
+
+
+class WorkflowRunStep(BaseModel):
+    id: str
+    run_id: str
+    label: str
+    status: str
+    input_summary: str | None
+    output_summary: str | None
+    linked_job_id: str | None
+    linked_thread_id: str | None
+    error_detail: str | None
+    created_at: datetime
+
+
+class WorkflowRunDetail(BaseModel):
+    run: WorkflowRun
+    steps: list[WorkflowRunStep]

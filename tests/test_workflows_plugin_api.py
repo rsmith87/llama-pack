@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import sys
 from pathlib import Path
 
 from llama_pack.core.config import load_config
@@ -10,12 +11,17 @@ from tests.helpers import authenticated_client
 from tests.persistence_db_setup import prepare_all_persistence_dbs
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
+PLUGIN_ROOT = REPO_ROOT / "plugins" / "llama_pack_workflows"
+if str(PLUGIN_ROOT) not in sys.path:
+    sys.path.insert(0, str(PLUGIN_ROOT))
+
+from llama_pack_workflows.store import WorkflowStore
 
 
 def workflows_config(tmp_path: Path):
     log_dir = tmp_path / "logs"
     prepare_all_persistence_dbs(log_dir)
-    plugin_dir = REPO_ROOT / "plugins" / "llama_pack_workflows"
+    plugin_dir = PLUGIN_ROOT
     return load_config(
         {
             "mode": "controller",
@@ -150,6 +156,68 @@ def test_thread_error_event_triggers_workflow(tmp_path: Path):
         runs = runs_response.json()["runs"]
         assert len(runs) == 1
         assert runs[0]["trigger_detail"] == "llama_pack.thread.error.created"
+
+
+def test_workflow_run_detail_includes_failed_step_debug_fields(tmp_path: Path):
+    app = create_app(config=workflows_config(tmp_path))
+
+    with authenticated_client(app) as client:
+        create_response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Failure inspector",
+                "description": "Exposes failed run details",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Debug this failure.",
+                    "steps": [{"label": "triage", "instructions": "Find the failure."}],
+                    "model": "qwen",
+                    "target": "auto",
+                },
+                "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
+            },
+        )
+        workflow_id = create_response.json()["id"]
+        store = WorkflowStore(tmp_path / "logs" / "plugins" / "llama_pack_workflows" / "state" / "llama_pack_workflows.db")
+        run = store.create_run(workflow_id, "manual", "api", "job-9")
+        store.mark_run_running(run.id)
+        store.add_step(
+            run.id,
+            "triage",
+            "failed",
+            "user prompt",
+            None,
+            "job-9",
+            "thread-7",
+            "model qwen unavailable",
+        )
+        store.mark_run_failed(run.id, "model qwen unavailable")
+
+        response = client.get(f"/lm-api/v1/plugins/llama_pack_workflows/runs/{run.id}")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert payload["run"]["id"] == run.id
+        assert payload["run"]["status"] == "failed"
+        assert payload["run"]["error_detail"] == "model qwen unavailable"
+        assert payload["run"]["correlation_id"] == "job-9"
+        assert payload["run"]["started_at"] is not None
+        assert payload["run"]["finished_at"] is not None
+        assert payload["steps"] == [
+            {
+                "id": payload["steps"][0]["id"],
+                "run_id": run.id,
+                "label": "triage",
+                "status": "failed",
+                "input_summary": "user prompt",
+                "output_summary": None,
+                "linked_job_id": "job-9",
+                "linked_thread_id": "thread-7",
+                "error_detail": "model qwen unavailable",
+                "created_at": payload["steps"][0]["created_at"],
+            }
+        ]
 
 
 def test_update_workflow_definition(tmp_path: Path):
@@ -324,9 +392,17 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "parameters_json" not in template.text
         assert "data-workflow-action" in controller.text
         assert "data-workflow-action=\"cancel-edit\"" in template.text
+        assert "data-workflow-run-detail" in template.text
+        assert "data-workflow-run-detail-body" in template.text
         assert "export function mountPage" in controller.text
         assert "buildParameters" in controller.text
         assert "addStepField" in controller.text
+        assert "renderRunDetail" in controller.text
+        assert "inspect-run" in controller.text
+        assert "data-workflow-run-id" in controller.text
+        assert "linked_thread_id" in controller.text
+        assert "linked_job_id" in controller.text
+        assert 'host.apiGet(`/runs/${encodeURIComponent(runId)}`)' in controller.text
         assert 'data-workflow-action="edit"' in controller.text
         assert "populateForm" in controller.text
         assert "buildTriggers" in controller.text

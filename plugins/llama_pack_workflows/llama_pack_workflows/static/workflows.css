@@ -429,7 +429,84 @@
 }
 
 .workflow-run-list .workflow-row {
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+}
+
+.workflow-run-detail,
+.workflow-run-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.workflow-run-detail-grid {
+  display: grid;
+  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.workflow-run-detail-grid > div,
+.workflow-run-step,
+.workflow-run-error,
+.workflow-run-failed-step {
+  background: color-mix(in srgb, var(--button) 72%, var(--card));
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  display: grid;
+  gap: 6px;
+  padding: 10px;
+}
+
+.workflow-run-detail-grid span,
+.workflow-run-step span,
+.workflow-run-error strong,
+.workflow-run-failed-step strong,
+.workflow-run-steps > strong {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.workflow-run-detail-grid strong,
+.workflow-run-failed-step span {
+  overflow-wrap: anywhere;
+}
+
+.workflow-run-step.failed,
+.workflow-run-error,
+.workflow-run-failed-step {
+  border-color: color-mix(in srgb, #dc2626 36%, var(--line));
+}
+
+.workflow-run-step dl {
+  display: grid;
+  gap: 6px;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  margin: 0;
+}
+
+.workflow-run-step dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-run-step dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.workflow-run-detail pre,
+.workflow-run-step pre {
+  background: color-mix(in srgb, var(--page) 60%, var(--card));
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  margin: 0;
+  max-height: 220px;
+  overflow: auto;
+  padding: 8px;
+  white-space: pre-wrap;
 }
 
 .workflow-empty {

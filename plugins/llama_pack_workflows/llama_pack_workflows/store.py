@@ -6,7 +6,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from llama_pack_workflows.models import TriggerType, WorkflowDefinition, WorkflowDefinitionCreate, WorkflowRun
+from llama_pack_workflows.models import (
+    TriggerType,
+    WorkflowDefinition,
+    WorkflowDefinitionCreate,
+    WorkflowRun,
+    WorkflowRunDetail,
+    WorkflowRunStep,
+)
 
 
 class WorkflowStore:
@@ -300,7 +307,10 @@ class WorkflowStore:
             )
 
     def list_run_steps(self, run_id: str) -> list[dict[str, str | None]]:
-        self.get_run(run_id)
+        return [step.model_dump(mode="json") for step in self.get_run_detail(run_id).steps]
+
+    def get_run_detail(self, run_id: str) -> WorkflowRunDetail:
+        run = self.get_run(run_id)
         with self._connect() as connection:
             rows = connection.execute(
                 """
@@ -312,21 +322,8 @@ class WorkflowStore:
                 """,
                 (run_id,),
             ).fetchall()
-        return [
-            {
-                "id": row["id"],
-                "run_id": row["run_id"],
-                "label": row["label"],
-                "status": row["status"],
-                "input_summary": row["input_summary"],
-                "output_summary": row["output_summary"],
-                "linked_job_id": row["linked_job_id"],
-                "linked_thread_id": row["linked_thread_id"],
-                "error_detail": row["error_detail"],
-                "created_at": row["created_at"],
-            }
-            for row in rows
-        ]
+        steps = [_run_step_from_row(row) for row in rows]
+        return WorkflowRunDetail(run=run, steps=steps)
 
     def _update_run(
         self,
@@ -390,6 +387,23 @@ def _run_from_row(row: sqlite3.Row) -> WorkflowRun:
             "correlation_id": row["correlation_id"],
             "started_at": row["started_at"],
             "finished_at": row["finished_at"],
+            "created_at": row["created_at"],
+        }
+    )
+
+
+def _run_step_from_row(row: sqlite3.Row) -> WorkflowRunStep:
+    return WorkflowRunStep.model_validate(
+        {
+            "id": row["id"],
+            "run_id": row["run_id"],
+            "label": row["label"],
+            "status": row["status"],
+            "input_summary": row["input_summary"],
+            "output_summary": row["output_summary"],
+            "linked_job_id": row["linked_job_id"],
+            "linked_thread_id": row["linked_thread_id"],
+            "error_detail": row["error_detail"],
             "created_at": row["created_at"],
         }
     )
