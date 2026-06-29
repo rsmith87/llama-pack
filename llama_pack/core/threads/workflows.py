@@ -53,6 +53,8 @@ class ThreadWorkflowRunner:
         target: str,
         metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
+        if not steps:
+            raise ValueError("workflow requires at least one step")
         thread = self.store.get_thread(thread_id)
         request_metadata = {**thread.get("metadata", {}), **(metadata or {})}
         turn_id = str(uuid4())

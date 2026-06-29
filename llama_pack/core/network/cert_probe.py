@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import socket
 import ssl
+import tempfile
 from datetime import datetime, timezone
 from urllib.parse import urlparse
 
@@ -31,7 +32,7 @@ def _blocking_probe(host: str, port: int, timeout: float) -> int | None:
     try:
         with socket.create_connection((host, port), timeout=timeout) as raw:
             with ctx.wrap_socket(raw, server_hostname=host) as tls:
-                cert = tls.getpeercert()
+                cert = _decode_der_cert(tls.getpeercert(binary_form=True))
     except OSError:
         return None
     if not cert:
@@ -44,3 +45,13 @@ def _blocking_probe(host: str, port: int, timeout: float) -> int | None:
         return int((expiry - datetime.now(timezone.utc)).total_seconds())
     except ValueError:
         return None
+
+
+def _decode_der_cert(cert_bytes: bytes | None) -> dict[str, object] | None:
+    if cert_bytes is None:
+        return None
+    pem = ssl.DER_cert_to_PEM_cert(cert_bytes)
+    with tempfile.NamedTemporaryFile("w", encoding="ascii", suffix=".pem") as cert_file:
+        cert_file.write(pem)
+        cert_file.flush()
+        return ssl._ssl._test_decode_cert(cert_file.name)

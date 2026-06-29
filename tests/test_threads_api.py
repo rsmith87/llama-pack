@@ -113,6 +113,7 @@ def test_thread_service_exposes_focused_collaborators(tmp_path):
     assert service.event_publisher.__class__.__name__ == "ThreadEventPublisher"
     assert service.context_manager.__class__.__name__ == "ThreadContextManager"
     assert service.turn_preparer.__class__.__name__ == "ThreadTurnPreparer"
+    assert service.fanout_runner.__class__.__name__ == "ThreadFanoutRunner"
     assert service.workflow_runner.__class__.__name__ == "ThreadWorkflowRunner"
 
 
@@ -1233,26 +1234,24 @@ async def test_post_message_async_uses_distinct_turn_id_per_turn(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_agent_request_and_agent_response_helpers_record_internal_events_with_turn_id(tmp_path):
-    service = _service(tmp_path, chat_proxy=RecordingChatProxy())
-    thread = _thread(service)
-    turn_id = "turn-manual-test"
-    route = {"node": "linux-2080ti", "model": "qwen", "strategy": "deterministic", "reason": "request_type"}
+async def test_fanout_internal_events_share_turn_id(tmp_path):
+    service = _fanout_service(tmp_path, chat_proxy=RecordingChatProxy(responses=["mac reply", "linux reply"]))
+    thread = service.create_thread(title=None, default_model=None, metadata={"request_type": "coding"}, created_by=None)
 
-    service._append_agent_request(
-        thread["id"], turn_id, node="linux-2080ti", model="qwen",
-        messages=[{"role": "user", "content": "q"}],
-    )
-    service._append_agent_response(
-        thread["id"], turn_id, node="linux-2080ti", model="qwen",
-        content="agent answer", route=route,
-    )
+    await service.post_message_async(thread["id"], "user", "hello", None, "auto", None)
 
     internal = service.list_events(thread["id"], include_internal=True)
-    assert [e["event_type"] for e in internal] == ["agent_request", "agent_response"]
-    assert all(e["turn_id"] == turn_id for e in internal)
-    assert all(not e["public"] for e in internal)
-    assert internal[1]["content"]["text"] == "agent answer"
+    user_event = next(event for event in internal if event["event_type"] == "user_message")
+    fanout_events = [
+        event
+        for event in internal
+        if event["event_type"] in {"agent_request", "agent_response", "aggregation"}
+    ]
+    response_events = [event for event in fanout_events if event["event_type"] == "agent_response"]
+    assert len(fanout_events) == 5
+    assert all(event["turn_id"] == user_event["turn_id"] for event in fanout_events)
+    assert all(not event["public"] for event in fanout_events)
+    assert {event["content"]["text"] for event in response_events} == {"mac reply", "linux reply"}
 
 
 @pytest.mark.asyncio
@@ -1889,6 +1888,24 @@ async def test_workflow_routing_failure_appends_error_event(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_workflow_rejects_empty_steps_before_writing_events(tmp_path):
+    service = _service(tmp_path, chat_proxy=RecordingChatProxy())
+    thread = _thread(service)
+
+    with pytest.raises(ValueError, match="workflow requires at least one step"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[],
+            model=None,
+            target="auto",
+            metadata=None,
+        )
+
+    assert service.list_events(thread["id"], include_internal=True) == []
+
+
+@pytest.mark.asyncio
 async def test_workflow_step_uses_per_step_model_override(tmp_path):
     """A step with an explicit model uses that model instead of the workflow default."""
     received: list[str] = []
@@ -2174,3 +2191,72 @@ async def test_workflow_restores_prior_models_when_startup_times_out(tmp_path):
     assert ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/stop") in calls
     assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/start") in calls
     assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
+
+
+@pytest.mark.asyncio
+async def test_workflow_deferred_startup_records_failed_step_and_error(tmp_path):
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=RecordingChatProxy(responses=["unused"]),
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: False,
+    )
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: model_start_deferred"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    events = service.list_events(thread["id"], include_internal=True)
+    failed_step = next(
+        event
+        for event in events
+        if event["event_type"] == "workflow_step" and event["content"]["status"] == "failed"
+    )
+    error_event = next(event for event in events if event["event_type"] == "error")
+    assert "model_start_deferred: node=linux-2080ti model=qwen" in failed_step["content"]["error"]
+    assert error_event["error_code"] == "WORKFLOW_STEP_ERROR"
+    assert error_event["turn_id"] == failed_step["turn_id"]
+
+
+@pytest.mark.asyncio
+async def test_workflow_missing_model_lifecycle_records_failed_step_and_error(tmp_path):
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=RecordingChatProxy(responses=["unused"]),
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    service.workflow_runner.model_lifecycle = None
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: model_lifecycle_unavailable"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    events = service.list_events(thread["id"], include_internal=True)
+    failed_step = next(
+        event
+        for event in events
+        if event["event_type"] == "workflow_step" and event["content"]["status"] == "failed"
+    )
+    error_event = next(event for event in events if event["event_type"] == "error")
+    assert "model_lifecycle_unavailable: node=linux-2080ti model=qwen" in failed_step["content"]["error"]
+    assert error_event["error_code"] == "WORKFLOW_STEP_ERROR"
+    assert error_event["turn_id"] == failed_step["turn_id"]

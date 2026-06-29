@@ -12,6 +12,7 @@ from llama_pack.core.model_lifecycle import ManagedModelLifecycle
 from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.context import ThreadContextError, ThreadContextManager, event_message
 from llama_pack.core.threads.events import ThreadEventPublisher
+from llama_pack.core.threads.fanout import ThreadFanoutRunner
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 from llama_pack.core.threads.turns import (
@@ -58,6 +59,7 @@ class ThreadService:
         self.event_publisher = ThreadEventPublisher(store, event_bus)
         self.context_manager = ThreadContextManager(config, store, chat_proxy, self.event_publisher)
         self.turn_preparer = ThreadTurnPreparer(store, self.routing_policy, self.context_manager, self.event_publisher)
+        self.fanout_runner = ThreadFanoutRunner(chat_proxy, self.event_publisher)
         self.workflow_runner = ThreadWorkflowRunner(
             store,
             self.routing_policy,
@@ -428,7 +430,7 @@ class ThreadService:
         decision = prepared["decision"]
 
         if decision.fanout_targets:
-            return await self._post_message_fanout(
+            return await self.fanout_runner.post_message_fanout(
                 thread_id=thread_id,
                 turn_id=turn_id,
                 messages=messages,
@@ -598,97 +600,6 @@ class ThreadService:
                 yield b"data: [DONE]\n\n"
 
         return _generate(), route
-
-    async def _post_message_fanout(
-        self,
-        thread_id: str,
-        turn_id: str,
-        messages: list[dict[str, Any]],
-        primary: Any,
-        route: dict[str, Any],
-    ) -> dict[str, Any]:
-        all_targets = [primary, *primary.fanout_targets]
-        agent_outputs: list[dict[str, Any]] = []
-
-        for target in all_targets:
-            target_route = {
-                "node": target.node,
-                "model": target.model,
-                "strategy": target.strategy,
-                "reason": target.reason,
-            }
-            await self._append_event_async(
-                thread_id=thread_id,
-                event_type="agent_request",
-                role=None,
-                content={"node": target.node, "model": target.model, "messages": messages},
-                public=False,
-                turn_id=turn_id,
-                agent_node=target.node,
-                model=target.model,
-            )
-            try:
-                raw_response, response_meta = await self.chat_proxy.chat_with_meta(
-                    target.model,
-                    {"messages": messages, "target": f"node:{target.node}", TRUSTED_CONTROLLER_TARGET_KEY: True},
-                )
-                content = raw_response["choices"][0]["message"]["content"]
-                await self._append_event_async(
-                    thread_id=thread_id,
-                    event_type="agent_response",
-                    role=None,
-                    content={"text": content},
-                    public=False,
-                    turn_id=turn_id,
-                    route=target_route,
-                    agent_node=target.node,
-                    model=target.model,
-                )
-                agent_outputs.append({"node": target.node, "model": target.model, "content": content})
-            except Exception as exc:
-                await self._append_event_async(
-                    thread_id=thread_id,
-                    event_type="agent_response",
-                    role=None,
-                    content={"text": f"[error: {exc}]"},
-                    public=False,
-                    turn_id=turn_id,
-                    route=target_route,
-                    agent_node=target.node,
-                    model=target.model,
-                )
-                agent_outputs.append({"node": target.node, "model": target.model, "error": str(exc)})
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="aggregation",
-            role=None,
-            content={"outputs": agent_outputs},
-            public=False,
-            turn_id=turn_id,
-        )
-
-        successful = [o["content"] for o in agent_outputs if "content" in o]
-        aggregated = "\n\n---\n\n".join(successful) if successful else "[no successful agent responses]"
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="assistant_message",
-            role="assistant",
-            content={"text": aggregated},
-            public=True,
-            turn_id=turn_id,
-            route=route,
-            agent_node=primary.node,
-            model=primary.model,
-        )
-
-        return {
-            "thread_id": thread_id,
-            "message": {"role": "assistant", "content": aggregated},
-            "route": route,
-        }
-
     def _requested_model(self, model: str | None, model_family: str | None, context_profile: str | None) -> str | None:
         return requested_model_name(model, model_family, context_profile)
 
@@ -793,46 +704,6 @@ class ThreadService:
             return self.config.thread_history_min_prompt_tokens
         ratio_budget = int(context_window * self.config.thread_history_context_ratio)
         return min(self.config.thread_history_min_prompt_tokens, ratio_budget)
-
-    def _append_agent_request(
-        self,
-        thread_id: str,
-        turn_id: str,
-        node: str,
-        model: str,
-        messages: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        return self.store.append_event(
-            thread_id=thread_id,
-            event_type="agent_request",
-            role=None,
-            content={"node": node, "model": model, "messages": messages},
-            public=False,
-            turn_id=turn_id,
-            agent_node=node,
-            model=model,
-        )
-
-    def _append_agent_response(
-        self,
-        thread_id: str,
-        turn_id: str,
-        node: str,
-        model: str,
-        content: str,
-        route: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self.store.append_event(
-            thread_id=thread_id,
-            event_type="agent_response",
-            role=None,
-            content={"text": content},
-            public=False,
-            turn_id=turn_id,
-            route=route,
-            agent_node=node,
-            model=model,
-        )
 
     def _append_error(self, thread_id: str, error_code: str, exc: Exception, turn_id: str | None = None) -> None:
         self.event_publisher.append_error(thread_id, error_code, exc, turn_id)

@@ -144,7 +144,6 @@ class AgentToolLoop:
                 name = str(function.get("name") or "")
                 tool_call_id = str(tool_call.get("id") or name)
                 arguments = _parse_arguments(function.get("arguments"), tool_name=name, tool_call_id=tool_call_id)
-                source_tool_evidence_available = True
                 result = await self.executor.execute(
                     name,
                     arguments,
@@ -153,6 +152,7 @@ class AgentToolLoop:
                     tool_call_id=tool_call_id,
                 )
                 if bool(result.get("ok")):
+                    source_tool_evidence_available = True
                     test_source_tool_evidence_available = test_source_tool_evidence_available or _result_has_test_source_evidence(result)
                 messages.append(
                     {

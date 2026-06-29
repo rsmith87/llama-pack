@@ -273,7 +273,7 @@ export function DashboardPage() {
               const models = node.models || [];
               const nodeStatus = node.reachable === false ? "offline" : node.status || "reachable";
               const nodeTone = node.reachable === false ? "danger" : statusTone(node.status || "reachable");
-              const cert = certBadge(node.cert_expires_in_seconds);
+              const cert = certBadge(node.cert_expires_in_seconds, node.url);
               const visibility = nodeVisibilityDetails(node);
               return (
                 <NodeCard
