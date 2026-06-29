@@ -8,6 +8,7 @@ from uuid import uuid4
 
 from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config.models import AppConfig
+from llama_pack.core.model_lifecycle import ManagedModelLifecycle
 from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.context import ThreadContextError, ThreadContextManager, event_message
 from llama_pack.core.threads.events import ThreadEventPublisher
@@ -57,7 +58,13 @@ class ThreadService:
         self.event_publisher = ThreadEventPublisher(store, event_bus)
         self.context_manager = ThreadContextManager(config, store, chat_proxy, self.event_publisher)
         self.turn_preparer = ThreadTurnPreparer(store, self.routing_policy, self.context_manager, self.event_publisher)
-        self.workflow_runner = ThreadWorkflowRunner(store, self.routing_policy, chat_proxy, self.event_publisher)
+        self.workflow_runner = ThreadWorkflowRunner(
+            store,
+            self.routing_policy,
+            chat_proxy,
+            self.event_publisher,
+            _managed_model_lifecycle(chat_proxy),
+        )
 
     async def acquire_turn_lock(self, thread_id: str) -> asyncio.Lock:
         async with self._turn_locks_guard:
@@ -866,3 +873,13 @@ class ThreadService:
             target=target,
             metadata=metadata,
         )
+
+
+def _managed_model_lifecycle(chat_proxy: Any) -> ManagedModelLifecycle | None:
+    node_registry = getattr(chat_proxy, "node_registry", None)
+    if node_registry is None:
+        wrapped_proxy = getattr(chat_proxy, "proxy", None)
+        node_registry = getattr(wrapped_proxy, "node_registry", None)
+    if node_registry is None:
+        return None
+    return ManagedModelLifecycle(node_registry, 120.0)

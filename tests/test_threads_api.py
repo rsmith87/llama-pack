@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient as FastAPITestClient
 
 from llama_pack.core.config import load_config
+from llama_pack.core.model_lifecycle import ManagedModelLifecycle
 from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.models import WorkflowStep
 from llama_pack.core.threads.service import ThreadService
@@ -2031,3 +2032,145 @@ def test_workflow_http_endpoint_reports_failed_step(tmp_path):
         "step_label": "respond",
         "error": "inference failed",
     }
+
+
+@pytest.mark.asyncio
+async def test_workflow_starts_stopped_model_and_restores_prior_models(tmp_path):
+    running = {"other-model"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [
+                    {"name": "other-model", "running": "other-model" in running},
+                    {"name": "qwen", "running": "qwen" in running},
+                ]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start"):
+                running.add(path.split("/")[-2])
+            return {"ok": True}
+
+    chat_proxy = RecordingChatProxy(responses=["managed output"])
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    result = await service.run_workflow_async(
+        thread_id=thread["id"],
+        content="start",
+        steps=[WorkflowStep(label="respond", instructions="respond")],
+        model="qwen",
+        target="auto",
+        metadata=None,
+    )
+
+    assert result["message"]["content"] == "managed output"
+    assert running == {"other-model"}
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/stop") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/start") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/stop") in calls
+    assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
+
+
+@pytest.mark.asyncio
+async def test_workflow_restores_prior_models_after_step_failure(tmp_path):
+    running = {"other-model"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [
+                    {"name": "other-model", "running": "other-model" in running},
+                    {"name": "qwen", "running": "qwen" in running},
+                ]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start"):
+                running.add(path.split("/")[-2])
+            return {"ok": True}
+
+    chat_proxy = RecordingChatProxy(error=RuntimeError("inference failed"))
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: inference failed"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    assert running == {"other-model"}
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/stop") in calls
+    assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
+
+
+@pytest.mark.asyncio
+async def test_workflow_restores_prior_models_when_startup_times_out(tmp_path):
+    running = {"other-model"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [
+                    {"name": "other-model", "running": "other-model" in running},
+                    {"name": "qwen", "running": False},
+                ]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start") and "other-model" in path:
+                running.add("other-model")
+            return {"ok": True}
+
+    chat_proxy = RecordingChatProxy(responses=["managed output"])
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    service.workflow_runner.model_lifecycle = ManagedModelLifecycle(chat_proxy.node_registry, 0.0)
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: model_start_timeout"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    assert running == {"other-model"}
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/stop") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/start") in calls
+    assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
