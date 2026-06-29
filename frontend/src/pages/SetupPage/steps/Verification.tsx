@@ -65,9 +65,8 @@ export function Verification({ nav }: { nav: WizardNav }) {
     // ── Check 4 (controller): at least one node with fresh heartbeat ────────
     if (mode === "controller") {
       try {
-        const resp = await listNodes();
-        const nodes = resp.nodes ?? [];
-        const fresh = nodes.filter((n) => (n as { heartbeat_fresh?: boolean }).heartbeat_fresh);
+        const nodes = await listNodes();
+        const fresh = nodes.filter((node) => node.heartbeat_fresh);
         results.push({
           label: "At least one node online",
           state: fresh.length > 0 ? "pass" : "fail",

@@ -30,7 +30,14 @@ function stubJson(payload: unknown = {}) {
 
 describe("domain API modules", () => {
   it("wraps read endpoints with typed GET calls", async () => {
-    stubJson({});
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url: string) => {
+        if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => [] });
+        if (url === "/lm-api/v1/downloads/history?limit=200") return Promise.resolve({ ok: true, json: async () => [] });
+        return Promise.resolve({ ok: true, json: async () => ({}) });
+      }),
+    );
 
     await getHealth();
     await listModels();

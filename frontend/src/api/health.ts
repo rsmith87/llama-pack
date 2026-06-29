@@ -1,24 +1,74 @@
 import { apiGet } from "./client";
 import type { DashboardData, HealthResponse, LocalModel, NodeInventoryItem } from "../types/index";
 
-function modelList(payload: unknown): LocalModel[] {
-  if (Array.isArray(payload)) return payload as LocalModel[];
-  const models = (payload as { models?: LocalModel[] } | null)?.models;
-  return Array.isArray(models) ? models : [];
+export type ControllerStatusResponse = {
+  reachable: boolean;
+  error?: string;
+  status_code?: number;
+};
+
+function isRecord(payload: unknown): payload is Record<string, unknown> {
+  return typeof payload === "object" && payload !== null && !Array.isArray(payload);
 }
 
-function nodeList(payload: unknown): NodeInventoryItem[] {
-  if (Array.isArray(payload)) return payload as NodeInventoryItem[];
-  const nodes = (payload as { nodes?: NodeInventoryItem[] } | null)?.nodes;
-  return Array.isArray(nodes) ? nodes : [];
+function requireRecord(payload: unknown, endpoint: string): Record<string, unknown> {
+  if (!isRecord(payload)) {
+    throw new TypeError(`${endpoint} response must be an object.`);
+  }
+  return payload;
 }
 
-export function getHealth() {
-  return apiGet<HealthResponse>("/health");
+function requireArrayResponse(endpoint: string, payload: unknown, fieldName: string): unknown[] {
+  if (Array.isArray(payload)) {
+    return payload;
+  }
+  if (isRecord(payload) && Array.isArray(payload[fieldName])) {
+    return payload[fieldName];
+  }
+  throw new TypeError(`${endpoint} response must be an array or include a ${fieldName} array.`);
 }
 
-export function getControllerStatus() {
-  return apiGet<{ reachable: boolean; error?: string; status_code?: number }>("/health/controller");
+function requireObjectArray(endpoint: string, payload: unknown, fieldName: string): Record<string, unknown>[] {
+  const values = requireArrayResponse(endpoint, payload, fieldName);
+  const invalidIndex = values.findIndex((value) => !isRecord(value));
+  if (invalidIndex !== -1) {
+    throw new TypeError(`${endpoint} ${fieldName}[${invalidIndex}] must be an object.`);
+  }
+  return values.map((value) => value as Record<string, unknown>);
+}
+
+function parseHealthResponse(payload: unknown): HealthResponse {
+  return requireRecord(payload, "/health") as HealthResponse;
+}
+
+function parseModelList(payload: unknown): LocalModel[] {
+  return requireObjectArray("/models", payload, "models") as LocalModel[];
+}
+
+function parseNodeList(payload: unknown): NodeInventoryItem[] {
+  return requireObjectArray("/nodes/models", payload, "nodes") as NodeInventoryItem[];
+}
+
+function parseControllerStatus(payload: unknown): ControllerStatusResponse {
+  const record = requireRecord(payload, "/health/controller");
+  if (typeof record.reachable !== "boolean") {
+    throw new TypeError("/health/controller response must include a reachable boolean.");
+  }
+  if (record.error !== undefined && typeof record.error !== "string") {
+    throw new TypeError("/health/controller error must be a string when present.");
+  }
+  if (record.status_code !== undefined && typeof record.status_code !== "number") {
+    throw new TypeError("/health/controller status_code must be a number when present.");
+  }
+  return record as ControllerStatusResponse;
+}
+
+export function getHealth(): Promise<HealthResponse> {
+  return apiGet<unknown>("/health").then(parseHealthResponse);
+}
+
+export function getControllerStatus(): Promise<ControllerStatusResponse> {
+  return apiGet<unknown>("/health/controller").then(parseControllerStatus);
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {
@@ -29,8 +79,8 @@ export async function loadDashboardData(): Promise<DashboardData> {
   ]);
 
   return {
-    health,
-    localModels: modelList(localModelsPayload),
-    nodes: nodeList(nodesPayload),
+    health: parseHealthResponse(health),
+    localModels: parseModelList(localModelsPayload),
+    nodes: parseNodeList(nodesPayload),
   };
 }

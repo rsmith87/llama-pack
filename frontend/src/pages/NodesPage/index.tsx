@@ -20,12 +20,6 @@ type NodeEditState = {
   verify_tls: boolean;
 };
 
-function asNodeArray(payload: unknown): NodeRecord[] {
-  if (Array.isArray(payload)) return payload as NodeRecord[];
-  const nodes = (payload as { nodes?: NodeRecord[] } | null)?.nodes;
-  return Array.isArray(nodes) ? nodes : [];
-}
-
 function isSendableGgufModel(node: NodeRecord, model: Record<string, unknown>) {
   const path = String(model.model_path || model.path || model.filename || "").toLowerCase();
   return Boolean(node.reachable && modelFileId(model) && path.endsWith(".gguf"));
@@ -45,7 +39,7 @@ export function NodesPage() {
   const navigateToPage = useNavigateToPage();
   const { data: nodes, loading, error, refresh, setError } = useAsyncResource<NodeRecord[]>(
     () => Promise.all([listNodes(), getNodeModels()])
-      .then(([configuredPayload, modelsPayload]) => mergeNodeInventory(asNodeArray(configuredPayload), asNodeArray(modelsPayload))),
+      .then(([configuredNodes, modelNodes]) => mergeNodeInventory(configuredNodes, modelNodes)),
     [],
   );
   const [query, setQuery] = useState("");

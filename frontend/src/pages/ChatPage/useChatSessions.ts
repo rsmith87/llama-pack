@@ -1,7 +1,7 @@
 import { useState, type Dispatch, type SetStateAction } from "react";
 import { deleteChatSession, getChatSession, listChatSessions, saveChatSession } from "../../api/chat";
 import { CHAT_CONSTANTS } from "../../constants";
-import { asChatSessions, sessionMessages } from "../../features/chat";
+import { sessionMessages } from "../../features/chat";
 import {
   buildChatSessionSavePayload,
   chooseChatSessionToResume,
@@ -68,7 +68,7 @@ export function useChatSessions({
   async function refreshSessions() {
     setError("");
     try {
-      const items = asChatSessions(await listChatSessions());
+      const items = await listChatSessions();
       setSessions(items);
       setSelectedSessionId((current) => current || localStorage.getItem(CHAT_CONSTANTS.ACTIVE_CHAT_SESSION_STORAGE_KEY) || items[0]?.id || "");
       setStatus("Sessions refreshed");

@@ -79,8 +79,8 @@ function graphStatusMessage(status: ProjectGraphStatus | null): string {
 }
 
 async function loadProjectsData(): Promise<ProjectsData> {
-  const [projectsPayload, nodesPayload] = await Promise.all([listProjects(false), listNodes()]);
-  return { projects: projectsPayload.projects, nodes: nodesPayload.nodes || [] };
+  const [projectsPayload, nodes] = await Promise.all([listProjects(false), listNodes()]);
+  return { projects: projectsPayload.projects, nodes };
 }
 
 function nodeRootMappings(nodes: NodeInventoryItem[], roots: ProjectNodeRootRecord[]): ProjectNodeRootMapping[] {

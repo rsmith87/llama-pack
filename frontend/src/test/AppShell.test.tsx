@@ -715,6 +715,8 @@ it("refreshes the active page after login so protected data reloads with the ses
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
       if (url === "/lm-api/v1/models" && token === "token-1") return Promise.resolve({ ok: true, json: async () => ({ models: [{ name: "authorized-model" }] }) });
       if (url === "/lm-api/v1/models") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
+      if (url === "/lm-api/v1/nodes/models" && token === "token-1") return Promise.resolve({ ok: true, json: async () => [] });
+      if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
       if (url === "/lm-api/v1/nodes" && token === "token-1") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
       if (url === "/lm-api/v1/auth/login") return Promise.resolve({ ok: true, json: async () => ({ token: "token-1", username: "admin", role: "admin", expires_at: "later" }) });

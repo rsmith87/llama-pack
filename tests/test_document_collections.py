@@ -314,6 +314,36 @@ def test_document_collection_vector_store_adds_and_filters_chunks(
     assert results[0].score > 0
 
 
+def test_document_collection_vector_store_filters_low_similarity_results(
+    tmp_path: Path,
+    fake_document_vector_modules: None,
+) -> None:
+    from llama_pack.core.document_collections.vector_store import DocumentCollectionVectorStore
+
+    store = DocumentCollectionVectorStore(_memory_config(tmp_path))
+    results = store._search_results(
+        {
+            "documents": [["dishwasher warranty lasts two years"]],
+            "metadatas": [
+                [
+                    {
+                        "chunk_id": "chunk-home",
+                        "document_id": "doc-home",
+                        "collection_id": "home",
+                        "filename": "dishwasher.txt",
+                        "chunk_index": 0,
+                    }
+                ]
+            ],
+            "distances": [[0.74]],
+        },
+        collection_ids=["home"],
+        top_k=5,
+    )
+
+    assert results == []
+
+
 def test_document_collection_vector_store_deletes_document_chunks(
     tmp_path: Path,
     fake_document_vector_modules: None,

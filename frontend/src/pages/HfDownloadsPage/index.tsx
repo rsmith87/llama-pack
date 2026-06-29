@@ -13,29 +13,7 @@ import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferSta
 import { RecommendationModelCard } from "../../components/RecommendationModelCard";
 import { field } from "../../features/shared/helpers";
 import { modelName, modelFileId } from "../../features/models";
-
-function asDownloads(payload: unknown): DownloadRecord[] {
-  if (Array.isArray(payload)) return payload as DownloadRecord[];
-  const downloads = (payload as { downloads?: DownloadRecord[] } | null)?.downloads;
-  return Array.isArray(downloads) ? downloads : [];
-}
-
-function asQuants(payload: unknown): QuantRecord[] {
-  if (Array.isArray(payload)) return payload as QuantRecord[];
-  const quants = (payload as { quants?: QuantRecord[]; files?: QuantRecord[] } | null)?.quants || (payload as { files?: QuantRecord[] } | null)?.files;
-  return Array.isArray(quants) ? quants : [];
-}
-
-function asGgufs(payload: unknown): GgufFile[] {
-  if (Array.isArray(payload)) return payload as GgufFile[];
-  const files = (payload as { files?: GgufFile[]; ggufs?: GgufFile[] } | null)?.files || (payload as { ggufs?: GgufFile[] } | null)?.ggufs;
-  return Array.isArray(files) ? files : [];
-}
-
-function asNodes(payload: unknown): NodeRecord[] {
-  const nodes = Array.isArray(payload) ? payload : (payload as { nodes?: NodeRecord[] } | null)?.nodes;
-  return Array.isArray(nodes) ? nodes : [];
-}
+import { asFiles } from "../../features/ggufLibrary";
 
 function quantPath(quant: QuantRecord) {
   return String(quant.path || quant.filename || "model.gguf");
@@ -240,11 +218,11 @@ async function loadHfDownloadsData(): Promise<HfDownloadsData> {
     getNodeModels().catch(() => []),
   ]);
   return {
-    downloads: asDownloads(downloadPayload),
+    downloads: downloadPayload,
     recommendationPayload: recommendationResult.payload,
     recommendationError: recommendationResult.error,
-    localGgufs: asGgufs(ggufsPayload),
-    nodes: asNodes(nodePayload),
+    localGgufs: asFiles(ggufsPayload),
+    nodes: nodePayload,
   };
 }
 
@@ -284,7 +262,7 @@ export function HfDownloadsPage() {
     setQuantStatus("Querying Hugging Face...");
     setQuants([]);
     try {
-      const items = asQuants(await discoverQuants(repoId.trim(), revision.trim()));
+      const items = await discoverQuants(repoId.trim(), revision.trim());
       setQuants(items);
       setQuantStatus(items.length ? `${items.length} remote GGUF quant${items.length === 1 ? "" : "s"} found.` : "No remote GGUF quants found.");
     } catch (err) {

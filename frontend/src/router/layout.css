@@ -24,7 +24,41 @@
   height: 100vh;
   top: 0;
   overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 78%, var(--sidebar-ink) 22%) var(--scrollbar-track);
   box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.04);
+}
+
+.app-sidebar::-webkit-scrollbar,
+.app-main::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+
+.app-sidebar::-webkit-scrollbar-track,
+.app-main::-webkit-scrollbar-track {
+  background: var(--scrollbar-track);
+  border-radius: 999px;
+}
+
+.app-sidebar::-webkit-scrollbar-thumb,
+.app-main::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+  background-clip: padding-box;
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent-dark) 28%, transparent);
+}
+
+.app-sidebar::-webkit-scrollbar-thumb:hover,
+.app-main::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
+  background-clip: padding-box;
+}
+
+.app-sidebar::-webkit-scrollbar-corner,
+.app-main::-webkit-scrollbar-corner {
+  background: transparent;
 }
 
 .mobile-menu-button,
@@ -343,6 +377,8 @@
   min-width: 0;
   height: 100vh;
   overflow: auto;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--accent) 72%, var(--ink) 28%) var(--scrollbar-track);
 }
 
 .app-header {

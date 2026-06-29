@@ -274,7 +274,6 @@ export function DashboardPage() {
               const nodeStatus = node.reachable === false ? "offline" : node.status || "reachable";
               const nodeTone = node.reachable === false ? "danger" : statusTone(node.status || "reachable");
               const cert = certBadge(node.cert_expires_in_seconds, node.url);
-              const visibility = nodeVisibilityDetails(node);
               return (
                 <NodeCard
                   key={`${name}-${index}`}
@@ -284,13 +283,6 @@ export function DashboardPage() {
                   certLabel={cert.label}
                   certTone={cert.tone}
                   modelCount={models.length}
-                  details={[
-                    visibility.reachability,
-                    visibility.heartbeat,
-                    visibility.cert,
-                    visibility.placement,
-                    visibility.actionTarget,
-                  ]}
                   onOpenNode={() => navigateToPage("nodes")}
                   emptyMessage="No models reported for this node."
                  >

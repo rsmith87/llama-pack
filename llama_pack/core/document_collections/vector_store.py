@@ -6,6 +6,9 @@ from typing import Protocol, cast
 from llama_pack.core.config.models import MemoryConfig
 
 
+DOCUMENT_COLLECTION_MIN_SIMILARITY_SCORE = 0.35
+
+
 @dataclass(frozen=True)
 class DocumentChunkInput:
     chunk_id: str
@@ -149,6 +152,9 @@ class DocumentCollectionVectorStore:
             collection_id = str(metadata.get("collection_id", ""))
             if collection_id not in collection_ids:
                 continue
+            score = 1.0 - float(distance)
+            if score < DOCUMENT_COLLECTION_MIN_SIMILARITY_SCORE:
+                continue
             results.append(
                 DocumentChunkSearchResult(
                     chunk_id=str(metadata.get("chunk_id", "")),
@@ -157,7 +163,7 @@ class DocumentCollectionVectorStore:
                     filename=str(metadata.get("filename", "")),
                     chunk_index=int(metadata.get("chunk_index", 0)),
                     text=str(document),
-                    score=round(1.0 - float(distance), 4),
+                    score=round(score, 4),
                 )
             )
             if len(results) >= top_k:
