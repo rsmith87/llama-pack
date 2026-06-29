@@ -7,6 +7,7 @@ export type NodeModel = {
 export type NodeInventoryItem = {
   node_id?: string;
   name?: string;
+  url?: string;
   status?: string;
   reachable?: boolean;
   models?: NodeModel[];
