@@ -292,6 +292,47 @@ def test_install_caddy_fullchain_dry_run_builds_chain_and_reports_install_comman
     assert str(cert_dir / "pi-controller-fullchain.crt") in result.stdout
 
 
+def test_install_caddy_fullchain_installs_to_user_writable_cert_dir_without_sudo(tmp_path: Path) -> None:
+    leaf = tmp_path / "mac-mini.crt"
+    key = tmp_path / "mac-mini.key"
+    intermediate = tmp_path / "intermediate_ca.crt"
+    cert_dir = tmp_path / "caddy-certs"
+    cert_dir.mkdir()
+    leaf.write_text("leaf\n", encoding="utf-8")
+    key.write_text("key\n", encoding="utf-8")
+    intermediate.write_text("intermediate\n", encoding="utf-8")
+
+    result = subprocess.run(
+        [
+            "bash",
+            str(ROOT_DIR / "scripts" / "install_caddy_fullchain.sh"),
+            "--name",
+            "mac-mini",
+            "--leaf",
+            str(leaf),
+            "--key",
+            str(key),
+            "--intermediate",
+            str(intermediate),
+            "--cert-dir",
+            str(cert_dir),
+            "--owner",
+            str(os.getuid()),
+            "--group",
+            str(os.getgid()),
+        ],
+        cwd=ROOT_DIR,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert "Installed Caddy certs under:" in result.stdout
+    assert (cert_dir / "mac-mini.crt").read_text(encoding="utf-8") == "leaf\n"
+    assert (cert_dir / "mac-mini-fullchain.crt").read_text(encoding="utf-8") == "leaf\nintermediate\n"
+    assert (cert_dir / "mac-mini.key").read_text(encoding="utf-8") == "key\n"
+
+
 def test_install_caddy_fullchain_reports_missing_inputs(tmp_path: Path) -> None:
     result = subprocess.run(
         [

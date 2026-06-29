@@ -38,15 +38,35 @@ quote() {
   printf "%q" "$1"
 }
 
-run_or_print() {
+print_sudo_command() {
+  printf 'sudo'
+  for arg in "$@"; do
+    printf ' %s' "$(quote "$arg")"
+  done
+  printf '\n'
+}
+
+ensure_cert_dir() {
   if [[ "$DRY_RUN" == "true" ]]; then
-    printf 'sudo'
-    for arg in "$@"; do
-      printf ' %s' "$(quote "$arg")"
-    done
-    printf '\n'
+    print_sudo_command install -d -o "$OWNER" -g "$GROUP" -m 750 "$CERT_DIR"
+  elif [[ -d "$CERT_DIR" && -w "$CERT_DIR" ]]; then
+    chmod 750 "$CERT_DIR"
   else
-    sudo "$@"
+    sudo install -d -o "$OWNER" -g "$GROUP" -m 750 "$CERT_DIR"
+  fi
+}
+
+install_cert_file() {
+  local mode="$1"
+  local source="$2"
+  local destination="$3"
+
+  if [[ "$DRY_RUN" == "true" ]]; then
+    print_sudo_command install -o "$OWNER" -g "$GROUP" -m "$mode" "$source" "$destination"
+  elif [[ -w "$CERT_DIR" ]]; then
+    install -o "$OWNER" -g "$GROUP" -m "$mode" "$source" "$destination"
+  else
+    sudo install -o "$OWNER" -g "$GROUP" -m "$mode" "$source" "$destination"
   fi
 }
 
@@ -134,10 +154,10 @@ chmod 644 "$FULLCHAIN"
 
 echo "Built fullchain: $FULLCHAIN"
 
-run_or_print install -d -o "$OWNER" -g "$GROUP" -m 750 "$CERT_DIR"
-run_or_print install -o "$OWNER" -g "$GROUP" -m 644 "$LEAF" "$CERT_DIR/$NAME.crt"
-run_or_print install -o "$OWNER" -g "$GROUP" -m 644 "$FULLCHAIN" "$CERT_DIR/$NAME-fullchain.crt"
-run_or_print install -o "$OWNER" -g "$GROUP" -m 640 "$KEY" "$CERT_DIR/$NAME.key"
+ensure_cert_dir
+install_cert_file 644 "$LEAF" "$CERT_DIR/$NAME.crt"
+install_cert_file 644 "$FULLCHAIN" "$CERT_DIR/$NAME-fullchain.crt"
+install_cert_file 640 "$KEY" "$CERT_DIR/$NAME.key"
 
 if [[ "$DRY_RUN" == "true" ]]; then
   echo "Dry run complete. Re-run without --dry-run to install with sudo."
