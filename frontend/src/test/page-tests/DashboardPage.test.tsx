@@ -367,6 +367,8 @@ it("renders certificate alerts and per-node cert badges", async () => {
             { name: "expired-node", reachable: true, models: [], cert_expires_in_seconds: -10 },
             { name: "expiring-node", reachable: true, models: [], cert_expires_in_seconds: 86400 },
             { name: "healthy-node", reachable: true, models: [], cert_expires_in_seconds: 60 * 60 * 24 * 90 },
+            { name: "http-node", url: "http://localhost:9000", reachable: true, models: [], cert_expires_in_seconds: null },
+            { name: "https-node", url: "https://localhost:9443", reachable: true, models: [], cert_expires_in_seconds: null },
           ],
         }),
       }),
@@ -381,4 +383,6 @@ it("renders certificate alerts and per-node cert badges", async () => {
   expect(screen.getByText("cert expired")).toBeInTheDocument();
   expect(screen.getByText("cert 1d left")).toBeInTheDocument();
   expect(screen.getByText("cert valid")).toBeInTheDocument();
+  expect(screen.getByText("no TLS")).toBeInTheDocument();
+  expect(screen.getByText("cert unknown")).toBeInTheDocument();
 });

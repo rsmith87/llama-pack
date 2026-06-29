@@ -2,6 +2,7 @@ import pytest
 from fastapi.testclient import TestClient as FastAPITestClient
 
 from llama_pack.core.config import load_config
+from llama_pack.core.model_lifecycle import ManagedModelLifecycle
 from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.models import WorkflowStep
 from llama_pack.core.threads.service import ThreadService
@@ -112,6 +113,7 @@ def test_thread_service_exposes_focused_collaborators(tmp_path):
     assert service.event_publisher.__class__.__name__ == "ThreadEventPublisher"
     assert service.context_manager.__class__.__name__ == "ThreadContextManager"
     assert service.turn_preparer.__class__.__name__ == "ThreadTurnPreparer"
+    assert service.fanout_runner.__class__.__name__ == "ThreadFanoutRunner"
     assert service.workflow_runner.__class__.__name__ == "ThreadWorkflowRunner"
 
 
@@ -1232,26 +1234,24 @@ async def test_post_message_async_uses_distinct_turn_id_per_turn(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_agent_request_and_agent_response_helpers_record_internal_events_with_turn_id(tmp_path):
-    service = _service(tmp_path, chat_proxy=RecordingChatProxy())
-    thread = _thread(service)
-    turn_id = "turn-manual-test"
-    route = {"node": "linux-2080ti", "model": "qwen", "strategy": "deterministic", "reason": "request_type"}
+async def test_fanout_internal_events_share_turn_id(tmp_path):
+    service = _fanout_service(tmp_path, chat_proxy=RecordingChatProxy(responses=["mac reply", "linux reply"]))
+    thread = service.create_thread(title=None, default_model=None, metadata={"request_type": "coding"}, created_by=None)
 
-    service._append_agent_request(
-        thread["id"], turn_id, node="linux-2080ti", model="qwen",
-        messages=[{"role": "user", "content": "q"}],
-    )
-    service._append_agent_response(
-        thread["id"], turn_id, node="linux-2080ti", model="qwen",
-        content="agent answer", route=route,
-    )
+    await service.post_message_async(thread["id"], "user", "hello", None, "auto", None)
 
     internal = service.list_events(thread["id"], include_internal=True)
-    assert [e["event_type"] for e in internal] == ["agent_request", "agent_response"]
-    assert all(e["turn_id"] == turn_id for e in internal)
-    assert all(not e["public"] for e in internal)
-    assert internal[1]["content"]["text"] == "agent answer"
+    user_event = next(event for event in internal if event["event_type"] == "user_message")
+    fanout_events = [
+        event
+        for event in internal
+        if event["event_type"] in {"agent_request", "agent_response", "aggregation"}
+    ]
+    response_events = [event for event in fanout_events if event["event_type"] == "agent_response"]
+    assert len(fanout_events) == 5
+    assert all(event["turn_id"] == user_event["turn_id"] for event in fanout_events)
+    assert all(not event["public"] for event in fanout_events)
+    assert {event["content"]["text"] for event in response_events} == {"mac reply", "linux reply"}
 
 
 @pytest.mark.asyncio
@@ -1620,6 +1620,68 @@ def test_threads_stream_api_persists_assistant_and_forwards_generation_params(tm
     assert events[1]["content"]["reasoning_text"] == "thinking "
 
 
+def test_threads_stream_api_injects_document_collection_context(tmp_path):
+    from tests.test_document_collections import _FakeChatDocumentCollectionService
+
+    prepare_all_persistence_dbs(tmp_path)
+    captured_payloads = []
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+    service = _FakeChatDocumentCollectionService()
+
+    async def fake_stream(model_name, payload):
+        captured_payloads.append({"model_name": model_name, "payload": payload})
+
+        async def _stream():
+            yield b'data: {"choices":[{"delta":{"content":"The warranty lasts two years [D1]."}}]}\n\n'
+            yield b"data: [DONE]\n\n"
+
+        return _stream(), {"route": payload["target"]}
+
+    app.state.chat_proxy.stream_with_meta = fake_stream
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+    app.state.document_collection_service = service
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"metadata": {"request_type": "coding"}},
+    ).json()["id"]
+
+    response = client.post(
+        f"/lm-api/v1/threads/{thread_id}/messages/stream",
+        json={
+            "role": "user",
+            "content": "How long is the dishwasher warranty?",
+            "model": "qwen",
+            "metadata": {"request_type": "coding"},
+            "document_collection_ids": ["home"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert service.queries == [("How long is the dishwasher warranty?", ["home"], 5)]
+    messages = captured_payloads[0]["payload"]["messages"]
+    assert messages[0]["role"] == "system"
+    assert "Relevant document collection context" in messages[0]["content"]
+    assert "dishwasher.md" in messages[0]["content"]
+    assert messages[-1]["content"] == "How long is the dishwasher warranty?"
+    events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
+    assert events[1]["content"]["document_citations"][0]["filename"] == "dishwasher.md"
+
+
 def test_threads_stream_api_forwards_agent_tool_runtime_fields(tmp_path):
     prepare_all_persistence_dbs(tmp_path)
     captured_payloads = []
@@ -1826,6 +1888,24 @@ async def test_workflow_routing_failure_appends_error_event(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_workflow_rejects_empty_steps_before_writing_events(tmp_path):
+    service = _service(tmp_path, chat_proxy=RecordingChatProxy())
+    thread = _thread(service)
+
+    with pytest.raises(ValueError, match="workflow requires at least one step"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[],
+            model=None,
+            target="auto",
+            metadata=None,
+        )
+
+    assert service.list_events(thread["id"], include_internal=True) == []
+
+
+@pytest.mark.asyncio
 async def test_workflow_step_uses_per_step_model_override(tmp_path):
     """A step with an explicit model uses that model instead of the workflow default."""
     received: list[str] = []
@@ -1912,3 +1992,271 @@ def test_workflow_http_endpoint_returns_assistant_message(tmp_path):
 
     public_events = client.get(f"/lm-api/v1/threads/{thread_id}/events").json()
     assert [e["event_type"] for e in public_events] == ["user_message", "assistant_message"]
+
+
+def test_workflow_http_endpoint_reports_failed_step(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "controller",
+                "log_dir": str(tmp_path),
+                "nodes": {
+                    "linux-2080ti": {
+                        "url": "http://linux",
+                        "default_model": "qwen",
+                        "request_types": {"coding": {"model": "qwen", "priority": 10}},
+                    }
+                },
+            }
+        )
+    )
+
+    call_index = 0
+
+    async def fake_chat(model_name, payload):
+        nonlocal call_index
+        call_index += 1
+        if call_index == 2:
+            raise RuntimeError("inference failed")
+        return {"choices": [{"message": {"content": f"step-{call_index}-output"}}]}, {}
+
+    app.state.chat_proxy.chat_with_meta = fake_chat
+    app.state.thread_service.routing_policy.model_running = lambda node, model: True
+
+    client = TestClient(app)
+    thread_id = client.post(
+        "/lm-api/v1/threads",
+        json={"title": "wf", "metadata": {"request_type": "coding"}},
+    ).json()["id"]
+
+    resp = client.post(
+        f"/lm-api/v1/threads/{thread_id}/workflow",
+        json={
+            "content": "starting input",
+            "steps": [
+                {"label": "classify", "instructions": "classify this"},
+                {"label": "respond", "instructions": "respond to classification"},
+            ],
+        },
+    )
+
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == {
+        "code": "WORKFLOW_STEP_ERROR",
+        "message": "Workflow step 2 'respond' failed: inference failed",
+        "step_index": 1,
+        "step_label": "respond",
+        "error": "inference failed",
+    }
+
+
+@pytest.mark.asyncio
+async def test_workflow_starts_stopped_model_and_restores_prior_models(tmp_path):
+    running = {"other-model"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [
+                    {"name": "other-model", "running": "other-model" in running},
+                    {"name": "qwen", "running": "qwen" in running},
+                ]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start"):
+                running.add(path.split("/")[-2])
+            return {"ok": True}
+
+    chat_proxy = RecordingChatProxy(responses=["managed output"])
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    result = await service.run_workflow_async(
+        thread_id=thread["id"],
+        content="start",
+        steps=[WorkflowStep(label="respond", instructions="respond")],
+        model="qwen",
+        target="auto",
+        metadata=None,
+    )
+
+    assert result["message"]["content"] == "managed output"
+    assert running == {"other-model"}
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/stop") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/start") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/stop") in calls
+    assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
+
+
+@pytest.mark.asyncio
+async def test_workflow_restores_prior_models_after_step_failure(tmp_path):
+    running = {"other-model"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [
+                    {"name": "other-model", "running": "other-model" in running},
+                    {"name": "qwen", "running": "qwen" in running},
+                ]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start"):
+                running.add(path.split("/")[-2])
+            return {"ok": True}
+
+    chat_proxy = RecordingChatProxy(error=RuntimeError("inference failed"))
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: inference failed"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    assert running == {"other-model"}
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/stop") in calls
+    assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
+
+
+@pytest.mark.asyncio
+async def test_workflow_restores_prior_models_when_startup_times_out(tmp_path):
+    running = {"other-model"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [
+                    {"name": "other-model", "running": "other-model" in running},
+                    {"name": "qwen", "running": False},
+                ]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start") and "other-model" in path:
+                running.add("other-model")
+            return {"ok": True}
+
+    chat_proxy = RecordingChatProxy(responses=["managed output"])
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    service.workflow_runner.model_lifecycle = ManagedModelLifecycle(chat_proxy.node_registry, 0.0)
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: model_start_timeout"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    assert running == {"other-model"}
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/stop") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/start") in calls
+    assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
+
+
+@pytest.mark.asyncio
+async def test_workflow_deferred_startup_records_failed_step_and_error(tmp_path):
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=RecordingChatProxy(responses=["unused"]),
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: False,
+    )
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: model_start_deferred"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    events = service.list_events(thread["id"], include_internal=True)
+    failed_step = next(
+        event
+        for event in events
+        if event["event_type"] == "workflow_step" and event["content"]["status"] == "failed"
+    )
+    error_event = next(event for event in events if event["event_type"] == "error")
+    assert "model_start_deferred: node=linux-2080ti model=qwen" in failed_step["content"]["error"]
+    assert error_event["error_code"] == "WORKFLOW_STEP_ERROR"
+    assert error_event["turn_id"] == failed_step["turn_id"]
+
+
+@pytest.mark.asyncio
+async def test_workflow_missing_model_lifecycle_records_failed_step_and_error(tmp_path):
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=RecordingChatProxy(responses=["unused"]),
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+        node_startup_allowed=lambda node, model: True,
+    )
+    service.workflow_runner.model_lifecycle = None
+    thread = _thread(service)
+
+    with pytest.raises(RuntimeError, match="Workflow step 1 'respond' failed: model_lifecycle_unavailable"):
+        await service.run_workflow_async(
+            thread_id=thread["id"],
+            content="start",
+            steps=[WorkflowStep(label="respond", instructions="respond")],
+            model="qwen",
+            target="auto",
+            metadata=None,
+        )
+
+    events = service.list_events(thread["id"], include_internal=True)
+    failed_step = next(
+        event
+        for event in events
+        if event["event_type"] == "workflow_step" and event["content"]["status"] == "failed"
+    )
+    error_event = next(event for event in events if event["event_type"] == "error")
+    assert "model_lifecycle_unavailable: node=linux-2080ti model=qwen" in failed_step["content"]["error"]
+    assert error_event["error_code"] == "WORKFLOW_STEP_ERROR"
+    assert error_event["turn_id"] == failed_step["turn_id"]

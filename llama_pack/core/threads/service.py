@@ -8,9 +8,11 @@ from uuid import uuid4
 
 from llama_pack.core.chat.internal_payload import TRUSTED_CONTROLLER_TARGET_KEY
 from llama_pack.core.config.models import AppConfig
+from llama_pack.core.model_lifecycle import ManagedModelLifecycle
 from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.context import ThreadContextError, ThreadContextManager, event_message
 from llama_pack.core.threads.events import ThreadEventPublisher
+from llama_pack.core.threads.fanout import ThreadFanoutRunner
 from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 from llama_pack.core.threads.turns import (
@@ -57,7 +59,14 @@ class ThreadService:
         self.event_publisher = ThreadEventPublisher(store, event_bus)
         self.context_manager = ThreadContextManager(config, store, chat_proxy, self.event_publisher)
         self.turn_preparer = ThreadTurnPreparer(store, self.routing_policy, self.context_manager, self.event_publisher)
-        self.workflow_runner = ThreadWorkflowRunner(store, self.routing_policy, chat_proxy, self.event_publisher)
+        self.fanout_runner = ThreadFanoutRunner(chat_proxy, self.event_publisher)
+        self.workflow_runner = ThreadWorkflowRunner(
+            store,
+            self.routing_policy,
+            chat_proxy,
+            self.event_publisher,
+            _managed_model_lifecycle(chat_proxy),
+        )
 
     async def acquire_turn_lock(self, thread_id: str) -> asyncio.Lock:
         async with self._turn_locks_guard:
@@ -399,6 +408,8 @@ class ThreadService:
         model_family: str | None = None,
         context_profile: str | None = None,
         generation_payload: dict[str, object] | None = None,
+        document_context_messages: list[dict[str, Any]] | None = None,
+        document_citations: list[dict[str, object]] | None = None,
     ) -> dict[str, Any]:
         prepared = await self._prepare_message_route(
             thread_id=thread_id,
@@ -410,13 +421,16 @@ class ThreadService:
             target=target,
             metadata=metadata,
         )
-        messages = prepared["messages"]
+        messages = [
+            *(document_context_messages or []),
+            *prepared["messages"],
+        ]
         turn_id = prepared["turn_id"]
         route = prepared["route"]
         decision = prepared["decision"]
 
         if decision.fanout_targets:
-            return await self._post_message_fanout(
+            return await self.fanout_runner.post_message_fanout(
                 thread_id=thread_id,
                 turn_id=turn_id,
                 messages=messages,
@@ -448,6 +462,7 @@ class ThreadService:
                 "text": assistant_content,
                 "raw_response": raw_response,
                 "response_meta": response_meta,
+                **({"document_citations": document_citations} if document_citations else {}),
             },
             public=True,
             turn_id=turn_id,
@@ -474,6 +489,8 @@ class ThreadService:
         model_family: str | None = None,
         context_profile: str | None = None,
         generation_payload: dict[str, object] | None = None,
+        document_context_messages: list[dict[str, Any]] | None = None,
+        document_citations: list[dict[str, object]] | None = None,
     ) -> tuple[AsyncIterator[bytes], dict[str, Any]]:
         """Route a user message and return an SSE stream plus the route dict.
 
@@ -497,7 +514,10 @@ class ThreadService:
             target=target,
             metadata=metadata,
         )
-        messages = prepared["messages"]
+        messages = [
+            *(document_context_messages or []),
+            *prepared["messages"],
+        ]
         turn_id = prepared["turn_id"]
         route = prepared["route"]
         decision = prepared["decision"]
@@ -524,6 +544,9 @@ class ThreadService:
             if prepared["context_management"] is not None:
                 context_event = json.dumps({"type": "context_management", **prepared["context_management"]})
                 yield f"data: {context_event}\n\n".encode()
+            if document_citations:
+                citation_event = json.dumps({"type": "document_citations", "citations": document_citations})
+                yield f"data: {citation_event}\n\n".encode()
 
             assistant_content = ""
             reasoning_content = ""
@@ -564,6 +587,7 @@ class ThreadService:
                     "text": assistant_content,
                     "reasoning_text": reasoning_content,
                     "response_meta": {},
+                    **({"document_citations": document_citations} if document_citations else {}),
                 },
                 public=True,
                 turn_id=turn_id,
@@ -576,97 +600,6 @@ class ThreadService:
                 yield b"data: [DONE]\n\n"
 
         return _generate(), route
-
-    async def _post_message_fanout(
-        self,
-        thread_id: str,
-        turn_id: str,
-        messages: list[dict[str, Any]],
-        primary: Any,
-        route: dict[str, Any],
-    ) -> dict[str, Any]:
-        all_targets = [primary, *primary.fanout_targets]
-        agent_outputs: list[dict[str, Any]] = []
-
-        for target in all_targets:
-            target_route = {
-                "node": target.node,
-                "model": target.model,
-                "strategy": target.strategy,
-                "reason": target.reason,
-            }
-            await self._append_event_async(
-                thread_id=thread_id,
-                event_type="agent_request",
-                role=None,
-                content={"node": target.node, "model": target.model, "messages": messages},
-                public=False,
-                turn_id=turn_id,
-                agent_node=target.node,
-                model=target.model,
-            )
-            try:
-                raw_response, response_meta = await self.chat_proxy.chat_with_meta(
-                    target.model,
-                    {"messages": messages, "target": f"node:{target.node}", TRUSTED_CONTROLLER_TARGET_KEY: True},
-                )
-                content = raw_response["choices"][0]["message"]["content"]
-                await self._append_event_async(
-                    thread_id=thread_id,
-                    event_type="agent_response",
-                    role=None,
-                    content={"text": content},
-                    public=False,
-                    turn_id=turn_id,
-                    route=target_route,
-                    agent_node=target.node,
-                    model=target.model,
-                )
-                agent_outputs.append({"node": target.node, "model": target.model, "content": content})
-            except Exception as exc:
-                await self._append_event_async(
-                    thread_id=thread_id,
-                    event_type="agent_response",
-                    role=None,
-                    content={"text": f"[error: {exc}]"},
-                    public=False,
-                    turn_id=turn_id,
-                    route=target_route,
-                    agent_node=target.node,
-                    model=target.model,
-                )
-                agent_outputs.append({"node": target.node, "model": target.model, "error": str(exc)})
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="aggregation",
-            role=None,
-            content={"outputs": agent_outputs},
-            public=False,
-            turn_id=turn_id,
-        )
-
-        successful = [o["content"] for o in agent_outputs if "content" in o]
-        aggregated = "\n\n---\n\n".join(successful) if successful else "[no successful agent responses]"
-
-        await self._append_event_async(
-            thread_id=thread_id,
-            event_type="assistant_message",
-            role="assistant",
-            content={"text": aggregated},
-            public=True,
-            turn_id=turn_id,
-            route=route,
-            agent_node=primary.node,
-            model=primary.model,
-        )
-
-        return {
-            "thread_id": thread_id,
-            "message": {"role": "assistant", "content": aggregated},
-            "route": route,
-        }
-
     def _requested_model(self, model: str | None, model_family: str | None, context_profile: str | None) -> str | None:
         return requested_model_name(model, model_family, context_profile)
 
@@ -772,46 +705,6 @@ class ThreadService:
         ratio_budget = int(context_window * self.config.thread_history_context_ratio)
         return min(self.config.thread_history_min_prompt_tokens, ratio_budget)
 
-    def _append_agent_request(
-        self,
-        thread_id: str,
-        turn_id: str,
-        node: str,
-        model: str,
-        messages: list[dict[str, Any]],
-    ) -> dict[str, Any]:
-        return self.store.append_event(
-            thread_id=thread_id,
-            event_type="agent_request",
-            role=None,
-            content={"node": node, "model": model, "messages": messages},
-            public=False,
-            turn_id=turn_id,
-            agent_node=node,
-            model=model,
-        )
-
-    def _append_agent_response(
-        self,
-        thread_id: str,
-        turn_id: str,
-        node: str,
-        model: str,
-        content: str,
-        route: dict[str, Any],
-    ) -> dict[str, Any]:
-        return self.store.append_event(
-            thread_id=thread_id,
-            event_type="agent_response",
-            role=None,
-            content={"text": content},
-            public=False,
-            turn_id=turn_id,
-            route=route,
-            agent_node=node,
-            model=model,
-        )
-
     def _append_error(self, thread_id: str, error_code: str, exc: Exception, turn_id: str | None = None) -> None:
         self.event_publisher.append_error(thread_id, error_code, exc, turn_id)
 
@@ -852,3 +745,12 @@ class ThreadService:
             metadata=metadata,
         )
 
+
+def _managed_model_lifecycle(chat_proxy: Any) -> ManagedModelLifecycle | None:
+    node_registry = getattr(chat_proxy, "node_registry", None)
+    if node_registry is None:
+        wrapped_proxy = getattr(chat_proxy, "proxy", None)
+        node_registry = getattr(wrapped_proxy, "node_registry", None)
+    if node_registry is None:
+        return None
+    return ManagedModelLifecycle(node_registry, 120.0)

@@ -7,6 +7,8 @@ import { ChatPage } from "../../pages/ChatPage";
 import { ChatComposer, ChatSessionsPanel, ChatTranscriptPanel } from "../../pages/ChatPage/components";
 import { ChatControlsPanel } from "../../pages/ChatPage/controls";
 import { useChatModelSelection } from "../../pages/ChatPage/useChatModelSelection";
+import { useChatSessions } from "../../pages/ChatPage/useChatSessions";
+import { useChatSubmission } from "../../pages/ChatPage/useChatSubmission";
 import { contextBudgetPercent, contextBudgetSummary } from "../../features/chat/chatView";
 
 afterEach(() => {
@@ -72,6 +74,8 @@ it("keeps ChatPage as orchestration by extracting view components and helpers", 
   expect(ChatComposer).toBeTypeOf("function");
   expect(ChatControlsPanel).toBeTypeOf("function");
   expect(useChatModelSelection).toBeTypeOf("function");
+  expect(useChatSessions).toBeTypeOf("function");
+  expect(useChatSubmission).toBeTypeOf("function");
   expect(contextBudgetSummary({
     model: "mistral",
     context_window_tokens: 1000,
@@ -100,7 +104,11 @@ it("keeps ChatPage as orchestration by extracting view components and helpers", 
   })).toBe(25);
   expect(source).not.toContain("ReactMarkdown");
   expect(source).not.toContain("title=\"Controls\"");
+  expect(source).not.toContain("saveChatSession");
+  expect(source).not.toContain("streamThreadMessage");
   expect(source).toContain("useChatModelSelection");
+  expect(source).toContain("useChatSessions");
+  expect(source).toContain("useChatSubmission");
 });
 
 it("loads models and preserves chat localStorage keys", async () => {
@@ -285,6 +293,74 @@ it("renders model family and context profile selectors from catalog and sends th
     method: "POST",
     body: expect.stringContaining('"context_profile":"long"'),
   }));
+});
+
+it("sends selected document collections through native thread chat and renders citations", async () => {
+  let streamRequestBody: Record<string, unknown> | null = null;
+  const fetchMock = stubChatPageFetch((url, init) => {
+    if (url === "/lm-api/v1/document-collections?include_archived=false") {
+      return okJson({
+        collections: [
+          {
+            id: "home",
+            name: "Home Repairs",
+            description: "Manuals",
+            archived: false,
+            created_at: "2026-01-01T00:00:00Z",
+            updated_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      });
+    }
+    if (url === "/lm-api/v1/threads/thread-1/messages/stream") {
+      streamRequestBody = JSON.parse(String(init?.body || "{}")) as Record<string, unknown>;
+      return streamResponse([
+        'data: {"choices":[{"delta":{"content":"The warranty lasts two years [D1]."}}]}\n\n',
+        'data: {"type":"document_citations","citations":[{"collection_id":"home","collection_name":"Home Repairs","document_id":"doc-1","filename":"dishwasher.md","chunk_id":"chunk-1","chunk_index":0,"text":"The dishwasher warranty lasts two years.","score":0.91}]}\n\n',
+        "data: [DONE]\n\n",
+      ]);
+    }
+    if (url === "/lm-api/v1/threads/thread-1/events") {
+      return okJson({ events: [
+        { event_type: "user_message", content: { text: "How long is the warranty?" } },
+        {
+          event_type: "assistant_message",
+          content: {
+            text: "The warranty lasts two years [D1].",
+            document_citations: [
+              {
+                collection_id: "home",
+                collection_name: "Home Repairs",
+                document_id: "doc-1",
+                filename: "dishwasher.md",
+                chunk_id: "chunk-1",
+                chunk_index: 0,
+                text: "The dishwasher warranty lasts two years.",
+                score: 0.91,
+              },
+            ],
+          },
+          route: { node: "local", model: "mistral", reason: "test" },
+          agent_node: "local",
+          model: "mistral",
+        },
+      ] });
+    }
+    return okJson({});
+  });
+  const user = userEvent.setup();
+
+  render(<ChatPage />);
+
+  await screen.findByRole("option", { name: "mistral" });
+  await user.click(await screen.findByLabelText("Home Repairs"));
+  await user.type(screen.getByLabelText("Prompt"), "How long is the warranty?");
+  await user.click(screen.getByRole("button", { name: "Send" }));
+
+  await waitFor(() => expect(fetchMock).toHaveBeenCalledWith("/lm-api/v1/threads/thread-1/messages/stream", expect.anything()));
+  expect(streamRequestBody?.["document_collection_ids"]).toEqual(["home"]);
+  expect(await screen.findByText("dishwasher.md")).toBeInTheDocument();
+  expect(screen.getByText(/The dishwasher warranty lasts two years./)).toBeInTheDocument();
 });
 
 it("preselects model and route target from chat handoff query parameters", async () => {

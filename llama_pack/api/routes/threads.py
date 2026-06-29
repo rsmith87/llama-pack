@@ -5,9 +5,11 @@ from fastapi.responses import StreamingResponse
 
 from llama_pack.api.chat_error_contract import is_no_eligible_route_message, no_eligible_route_detail, thread_chat_error_detail
 from llama_pack.api.dependencies import get_thread_service
+from llama_pack.api.routes.openai_chat_completion import apply_document_collection_context
 from llama_pack.core.chat.proxy import ProjectRoutingError
 from llama_pack.core.threads.models import CompactThreadRequest, CreateThreadRequest, ThreadMessageRequest, WorkflowRunRequest
 from llama_pack.core.threads.service import ThreadChatError, ThreadService
+from llama_pack.core.threads.workflows import WorkflowRunError
 
 
 router = APIRouter(prefix="/threads")
@@ -81,11 +83,13 @@ async def compact_thread(
 async def post_message(
     thread_id: str,
     body: ThreadMessageRequest,
+    request: Request,
     service: ThreadService = Depends(get_thread_service),
 ):
     lock = await service.acquire_turn_lock(thread_id)
     try:
         generation_payload = body.generation_payload()
+        document_context_messages, document_citations = _document_context_for_thread_message(body, request)
         return await service.post_message_async(
             thread_id=thread_id,
             role=body.role,
@@ -96,6 +100,8 @@ async def post_message(
             target=body.target,
             metadata=body.metadata.model_dump() if body.metadata is not None else None,
             generation_payload=generation_payload,
+            document_context_messages=document_context_messages,
+            document_citations=document_citations,
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
@@ -115,11 +121,13 @@ async def post_message(
 async def post_message_stream(
     thread_id: str,
     body: ThreadMessageRequest,
+    request: Request,
     service: ThreadService = Depends(get_thread_service),
 ):
     lock = await service.acquire_turn_lock(thread_id)
     try:
         generation_payload = body.generation_payload()
+        document_context_messages, document_citations = _document_context_for_thread_message(body, request)
         stream, _route = await service.stream_message_async(
             thread_id=thread_id,
             role=body.role,
@@ -130,6 +138,8 @@ async def post_message_stream(
             target=body.target,
             metadata=body.metadata.model_dump() if body.metadata is not None else None,
             generation_payload=generation_payload,
+            document_context_messages=document_context_messages,
+            document_citations=document_citations,
         )
     except KeyError as exc:
         lock.release()
@@ -153,6 +163,22 @@ async def _release_lock_after_stream(stream, lock):
         lock.release()
 
 
+def _document_context_for_thread_message(
+    body: ThreadMessageRequest,
+    request: Request,
+) -> tuple[list[dict[str, object]], list[dict[str, object]]]:
+    payload, citations = apply_document_collection_context(
+        payload={"messages": [{"role": body.role, "content": body.content}]},
+        document_collection_ids=body.document_collection_ids,
+        document_collection_service=getattr(request.app.state, "document_collection_service", None),
+    )
+    messages = payload.get("messages")
+    if not citations or not isinstance(messages, list):
+        return [], []
+    context_messages = [message for message in messages if isinstance(message, dict) and message.get("role") == "system"]
+    return context_messages, citations
+
+
 @router.post("/{thread_id}/workflow")
 async def run_workflow(
     thread_id: str,
@@ -170,5 +196,7 @@ async def run_workflow(
         )
     except KeyError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except WorkflowRunError as exc:
+        raise HTTPException(status_code=409, detail=exc.detail()) from exc
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc

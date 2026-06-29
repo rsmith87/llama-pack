@@ -3,6 +3,7 @@ import remarkGfm from "remark-gfm";
 import type { ChangeEvent, FormEvent, KeyboardEvent, RefObject } from "react";
 import { EmptyState, FormField, Panel, Button } from "../../components/ui";
 import type { ChatMessage, ChatSession } from "../../types/chat";
+import type { DocumentCollectionRecord } from "../../api/documentCollections";
 import {
   routeExplanationItems,
   sessionLabel,
@@ -119,6 +120,20 @@ export function ChatTranscriptPanel({
                 </ul>
               </details>
             ) : null}
+            {message.documentCitations?.length ? (
+              <details className="chat-source-detail" open>
+                <summary>Sources</summary>
+                <ul>
+                  {message.documentCitations.map((citation) => (
+                    <li key={citation.chunk_id}>
+                      <strong>{citation.filename}</strong>
+                      <span>{citation.collection_name} chunk {citation.chunk_index}</span>
+                      <p>{citation.text}</p>
+                    </li>
+                  ))}
+                </ul>
+              </details>
+            ) : null}
             {message.stopped ? <small>stopped</small> : null}
           </article>
         );
@@ -135,11 +150,14 @@ export function ChatComposer({
   lastPrompt,
   showImageUpload,
   selectedImage,
+  documentCollections,
+  selectedDocumentCollectionIds,
   onSubmit,
   onPromptChange,
   onPromptKeyDown,
   onImageChange,
   onRemoveImage,
+  onDocumentCollectionToggle,
   onEnterToSendChange,
   onStop,
   onRegenerate,
@@ -152,16 +170,21 @@ export function ChatComposer({
   lastPrompt: string;
   showImageUpload: boolean;
   selectedImage: { name: string; dataUrl: string } | null;
+  documentCollections: DocumentCollectionRecord[];
+  selectedDocumentCollectionIds: string[];
   onSubmit: (event: FormEvent) => void;
   onPromptChange: (value: string) => void;
   onPromptKeyDown: (event: KeyboardEvent<HTMLTextAreaElement>) => void;
   onImageChange: (event: ChangeEvent<HTMLInputElement>) => void;
   onRemoveImage: () => void;
+  onDocumentCollectionToggle: (collectionId: string, selected: boolean) => void;
   onEnterToSendChange: (value: boolean) => void;
   onStop: () => void;
   onRegenerate: () => void;
   onClear: () => void;
 }) {
+  const selectableCollections = Array.isArray(documentCollections) ? documentCollections : [];
+  const selectedCollectionIds = Array.isArray(selectedDocumentCollectionIds) ? selectedDocumentCollectionIds : [];
   return (
     <form className="chat-composer" onSubmit={onSubmit}>
       <FormField label="Prompt">
@@ -180,6 +203,22 @@ export function ChatComposer({
             </div>
           ) : null}
         </div>
+      ) : null}
+      {selectableCollections.length ? (
+        <fieldset className="chat-collection-picker">
+          <legend>Collections</legend>
+          {selectableCollections.map((collection) => (
+            <label className="checkbox-label" key={collection.id}>
+              <input
+                type="checkbox"
+                checked={selectedCollectionIds.includes(collection.id)}
+                disabled={pending}
+                onChange={(event) => onDocumentCollectionToggle(collection.id, event.target.checked)}
+              />
+              {collection.name}
+            </label>
+          ))}
+        </fieldset>
       ) : null}
       <div className="modal-actions">
         <label className="checkbox-label"><input type="checkbox" checked={enterToSend} onChange={(event) => onEnterToSendChange(event.target.checked)} />Enter to send</label>

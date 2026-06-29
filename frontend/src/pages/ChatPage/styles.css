@@ -216,7 +216,8 @@
   font-size: 12px;
 }
 
-.chat-route-detail {
+.chat-route-detail,
+.chat-source-detail {
   margin-top: 10px;
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -224,14 +225,16 @@
   background: color-mix(in srgb, var(--card) 94%, var(--accent) 6%);
 }
 
-.chat-route-detail summary {
+.chat-route-detail summary,
+.chat-source-detail summary {
   cursor: pointer;
   color: var(--muted);
   font-size: 12px;
   user-select: none;
 }
 
-.chat-route-detail ul {
+.chat-route-detail ul,
+.chat-source-detail ul {
   display: grid;
   gap: 5px;
   margin: 8px 0 0;
@@ -239,12 +242,26 @@
   list-style: none;
 }
 
-.chat-route-detail li {
+.chat-route-detail li,
+.chat-source-detail li {
   min-width: 0;
   color: var(--ink);
   font-size: 12px;
   line-height: 1.35;
   overflow-wrap: anywhere;
+}
+
+.chat-source-detail li {
+  display: grid;
+  gap: 3px;
+}
+
+.chat-source-detail span {
+  color: var(--muted);
+}
+
+.chat-source-detail p {
+  margin: 0;
 }
 
 .chat-composer {
@@ -297,6 +314,23 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--muted);
+}
+
+.chat-collection-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  margin: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  background: var(--card);
+}
+
+.chat-collection-picker legend {
+  padding: 0 4px;
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .chat-chips {

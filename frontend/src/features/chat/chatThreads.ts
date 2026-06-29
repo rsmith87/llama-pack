@@ -18,6 +18,7 @@ export function threadEventToChatMessage(event: ThreadEvent): ChatMessage {
       content: text,
       threadEventType: event.event_type,
       routeMeta: eventToRouteMeta(event),
+      documentCitations: Array.isArray(content.document_citations) ? content.document_citations : undefined,
     };
     if (typeof content.reasoning_text === "string") {
       return { ...message, reasoningContent: content.reasoning_text };

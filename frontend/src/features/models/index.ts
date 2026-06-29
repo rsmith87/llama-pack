@@ -111,11 +111,17 @@ export function nodeName(node: { name?: string; node_id?: string }): string {
   return String(node.name || node.node_id || "");
 }
 
-export function certBadge(seconds: number | null | undefined): { tone: CertTone; label: string } {
+export function certBadge(seconds: number | null | undefined, url: string | undefined): { tone: CertTone; label: string } {
+  if (!isHttpsUrl(url)) return { tone: "muted", label: "no TLS" };
   if (typeof seconds !== "number") return { tone: "muted", label: "cert unknown" };
   if (seconds <= 0) return { tone: "danger", label: "cert expired" };
   if (seconds <= TIMERS.CERT_EXPIRING_SOON_SECONDS) return { tone: "warning", label: `cert ${Math.max(1, Math.ceil(seconds / TIMERS.DAY_SECONDS))}d left` };
   return { tone: "success", label: "cert valid" };
+}
+
+function isHttpsUrl(url: string | undefined): boolean {
+  if (!url) return true;
+  return url.trim().toLowerCase().startsWith("https://");
 }
 
 export function asNodeRecords(nodes: DashboardData["nodes"]): NodeRecord[] {

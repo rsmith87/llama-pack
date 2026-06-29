@@ -41,7 +41,7 @@ export function nodeVisibilityDetails(node: NodeRecord): NodeVisibilityDetails {
   return {
     reachability: node.reachable ? "Controller can reach this agent." : "Controller cannot reach this agent.",
     heartbeat: heartbeatText(node.heartbeat_fresh, node.heartbeat_age_seconds),
-    cert: certText(node.cert_expires_in_seconds),
+    cert: certText(node.cert_expires_in_seconds, node.url),
     placement: placementText(modelCount, modelsSource),
     actionTarget: node.reachable
       ? `Actions run on ${name} through the controller.`
@@ -56,10 +56,16 @@ function heartbeatText(fresh: boolean | undefined, ageSeconds: number | null | u
   return `${prefix}, ${durationText(ageSeconds)} old.`;
 }
 
-function certText(expiresInSeconds: number | null | undefined): string {
+function certText(expiresInSeconds: number | null | undefined, url: string | undefined): string {
+  if (!isHttpsUrl(url)) return "TLS is not configured for this node.";
   if (typeof expiresInSeconds !== "number" || Number.isNaN(expiresInSeconds)) return "TLS certificate status unknown.";
   if (expiresInSeconds <= 0) return "TLS certificate expired.";
   return `TLS certificate valid for ${durationText(expiresInSeconds)}.`;
+}
+
+function isHttpsUrl(url: string | undefined): boolean {
+  if (!url) return true;
+  return url.trim().toLowerCase().startsWith("https://");
 }
 
 function placementText(modelCount: number, modelsSource: string): string {

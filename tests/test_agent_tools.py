@@ -1696,6 +1696,98 @@ async def test_tool_loop_revises_unverified_project_graph_answer(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_tool_loop_does_not_count_failed_tool_call_as_source_evidence(tmp_path):
+    db_path = tmp_path / "projects.db"
+    prepare_projects_db(db_path)
+    graph_store = ProjectGraphStoreOrm(sqlite_url_for_path(db_path))
+    project_id = "project-1"
+    snapshot = graph_store.create_snapshot(project_id=project_id, node_name="local", root_path=str(tmp_path), git_commit=None)
+    graph_store.replace_snapshot_graph(
+        snapshot_id=str(snapshot["id"]),
+        files=[
+            {
+                "id": "file-runner",
+                "path": "llama_pack/core/benchmarks/runner.py",
+                "language": "python",
+                "size_bytes": 10,
+                "content_hash": "hash",
+                "mtime_ns": 1,
+                "parse_status": "parsed",
+                "parse_error": None,
+            }
+        ],
+        symbols=[],
+        imports=[],
+        relations=[],
+    )
+    graph_store.activate_snapshot(str(snapshot["id"]))
+    config = load_config(
+        {
+            "mode": "agent",
+            "log_dir": str(tmp_path),
+            "agent_tools": {
+                "enabled": True,
+                "safe_roots": [str(tmp_path)],
+                "tools": {
+                    "read_missing_status": {
+                        "type": "file_read",
+                        "description": "Read a status file.",
+                        "path": str(tmp_path / "missing-status.txt"),
+                    }
+                },
+            },
+        }
+    )
+
+    class Proxy:
+        def __init__(self):
+            self.messages = []
+
+        async def chat_with_meta(self, model_name, payload):
+            self.messages.append(payload["messages"])
+            if len(self.messages) == 1:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "",
+                                "tool_calls": [
+                                    {
+                                        "id": "call-1",
+                                        "type": "function",
+                                        "function": {"name": "read_missing_status", "arguments": "{}"},
+                                    }
+                                ],
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            if len(self.messages) == 2:
+                return {
+                    "choices": [
+                        {
+                            "message": {
+                                "role": "assistant",
+                                "content": "Verified from source: `llama_pack/core/benchmarks/runner.py`.",
+                            }
+                        }
+                    ]
+                }, {"route": "local"}
+            return {"choices": [{"message": {"role": "assistant", "content": "The source claim is not verified."}}]}, {"route": "local"}
+
+    proxy = Proxy()
+    response, _meta = await AgentToolLoop(
+        config,
+        proxy,
+        project_graph_context=ProjectGraphToolContext(project_id=project_id, store=graph_store),
+    ).run("qwen", {"messages": [{"role": "user", "content": "verify runner"}]})
+
+    assert response["choices"][0]["message"]["content"] == "The source claim is not verified."
+    assert "No project/source tool evidence was captured" in proxy.messages[2][-1]["content"]
+
+
+@pytest.mark.asyncio
 async def test_tool_loop_revises_trace_answer_without_structured_edge_evidence(tmp_path):
     db_path = tmp_path / "projects.db"
     prepare_projects_db(db_path)
