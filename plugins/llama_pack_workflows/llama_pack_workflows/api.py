@@ -19,6 +19,10 @@ def create_router(store: WorkflowStore, runner: WorkflowRunner) -> APIRouter:
     async def list_templates():
         return {"templates": [template.model_dump(mode="json") for template in builtin_templates()]}
 
+    @router.get("/route-options")
+    async def route_options():
+        return await runner.route_options()
+
     @router.get("/workflows")
     async def list_workflows():
         return {"workflows": [item.model_dump(mode="json") for item in store.list_definitions()]}

@@ -18,6 +18,23 @@ if str(PLUGIN_ROOT) not in sys.path:
 from llama_pack_workflows.store import WorkflowStore
 
 
+class FakeRouteRegistry:
+    def list_nodes(self) -> list[dict[str, object]]:
+        return [
+            {"name": "gpu-box", "heartbeat_fresh": True},
+            {"name": "offline-box", "heartbeat_fresh": False},
+        ]
+
+    async def request_node(self, node_name: str, method: str, path: str) -> object:
+        if method != "GET":
+            raise AssertionError(f"Unexpected node request: {method} {path}")
+        if node_name == "gpu-box" and path == "/lm-api/v1/models":
+            return [{"name": "qwen", "running": True}, {"name": "mistral", "running": False}]
+        if node_name == "gpu-box" and path == "/lm-api/v1/library/ggufs":
+            return [{"filename": "deepseek-r1.gguf", "registered_as": "deepseek"}]
+        raise AssertionError(f"Unexpected node request: {node_name}")
+
+
 def workflows_config(tmp_path: Path):
     log_dir = tmp_path / "logs"
     prepare_all_persistence_dbs(log_dir)
@@ -285,6 +302,29 @@ def test_create_workflow_rejects_unknown_template(tmp_path: Path):
         assert response.json()["detail"] == "Unknown workflow template: missing"
 
 
+def test_workflows_plugin_route_options_list_models_and_node_targets(tmp_path: Path):
+    app = create_app(config=workflows_config(tmp_path))
+    app.state.node_registry = FakeRouteRegistry()
+
+    with authenticated_client(app) as client:
+        response = client.get("/lm-api/v1/plugins/llama_pack_workflows/route-options")
+
+        assert response.status_code == 200
+        assert response.json() == {
+            "models": [
+                {"value": "auto", "label": "Auto"},
+                {"value": "qwen", "label": "qwen"},
+                {"value": "mistral", "label": "mistral"},
+                {"value": "deepseek", "label": "deepseek"},
+                {"value": "deepseek-r1", "label": "deepseek-r1"},
+            ],
+            "targets": [
+                {"value": "auto", "label": "Auto"},
+                {"value": "node:gpu-box", "label": "gpu-box"},
+            ],
+        }
+
+
 class FakeThreadService:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
@@ -388,7 +428,9 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-action=\"add-step\"" in template.text
         assert "data-workflow-action=\"toggle-advanced\"" in template.text
         assert "name=\"model\"" in template.text
+        assert "data-workflow-model-select" in template.text
         assert "name=\"target\"" in template.text
+        assert "data-workflow-target-select" in template.text
         assert "parameters_json" not in template.text
         assert "data-workflow-action" in controller.text
         assert "data-workflow-action=\"cancel-edit\"" in template.text
@@ -398,6 +440,8 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "buildParameters" in controller.text
         assert "addStepField" in controller.text
         assert "renderRunDetail" in controller.text
+        assert "syncRouteSelects" in controller.text
+        assert 'host.apiGet("/route-options")' in controller.text
         assert "inspect-run" in controller.text
         assert "data-workflow-run-id" in controller.text
         assert "linked_thread_id" in controller.text

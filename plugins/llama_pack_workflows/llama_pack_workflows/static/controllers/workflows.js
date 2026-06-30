@@ -224,6 +224,65 @@ function setStatus(root, message) {
   if (status) status.textContent = message;
 }
 
+function defaultRouteOptions() {
+  return {
+    models: [{ value: "auto", label: "Auto" }],
+    targets: [{ value: "auto", label: "Auto" }],
+  };
+}
+
+function normalizeRouteOptions(payload) {
+  const defaults = defaultRouteOptions();
+  const models = Array.isArray(payload?.models) ? payload.models : [];
+  const targets = Array.isArray(payload?.targets) ? payload.targets : [];
+  return {
+    models: normalizeRouteOptionList(models, defaults.models),
+    targets: normalizeRouteOptionList(targets, defaults.targets),
+  };
+}
+
+function normalizeRouteOptionList(items, defaults) {
+  const options = new Map();
+  for (const item of defaults) {
+    options.set(item.value, item.label);
+  }
+  for (const item of items) {
+    if (!item || typeof item !== "object") continue;
+    const value = String(item.value || "").trim();
+    const label = String(item.label || value).trim();
+    if (value) options.set(value, label || value);
+  }
+  return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+}
+
+function ensureRouteOption(options, value, label) {
+  const normalizedValue = String(value || "").trim() || "auto";
+  if (options.some((item) => item.value === normalizedValue)) return options;
+  return [...options, { value: normalizedValue, label: `${label}: ${normalizedValue}` }];
+}
+
+function populateSelect(select, options, selectedValue) {
+  if (!select) return;
+  select.innerHTML = "";
+  for (const option of options) {
+    const element = document.createElement("option");
+    element.value = option.value;
+    element.textContent = option.label;
+    select.appendChild(element);
+  }
+  select.value = selectedValue;
+}
+
+function syncRouteSelects(root, modelValue, targetValue) {
+  const routeOptions = root.workflowRouteOptions || defaultRouteOptions();
+  const modelSelect = root.querySelector("[data-workflow-model-select]");
+  const targetSelect = root.querySelector("[data-workflow-target-select]");
+  const modelOptions = ensureRouteOption(routeOptions.models, modelValue, "Saved model");
+  const targetOptions = ensureRouteOption(routeOptions.targets, targetValue, "Saved target");
+  populateSelect(modelSelect, modelOptions, String(modelValue || "auto"));
+  populateSelect(targetSelect, targetOptions, String(targetValue || "auto"));
+}
+
 function setEditing(root, editing) {
   const title = root.querySelector("[data-workflow-form-title]");
   const saveLabel = root.querySelector("[data-workflow-save-label]");
@@ -276,8 +335,7 @@ function setParameterFields(root, templateId, parameters) {
   setParameterPanel(root, templateId);
   if (templateId === "thread_prompt_chain") {
     form.elements.content.value = String(parameters.content || "");
-    form.elements.model.value = String(parameters.model || "auto");
-    form.elements.target.value = String(parameters.target || "auto");
+    syncRouteSelects(root, String(parameters.model || "auto"), String(parameters.target || "auto"));
     clearSteps(root);
     const steps = Array.isArray(parameters.steps) && parameters.steps.length > 0
       ? parameters.steps
@@ -388,11 +446,16 @@ function populateForm(root, workflow) {
 }
 
 async function refreshWorkflows(root, host) {
-  const [templates, workflows, runs] = await Promise.all([
+  const [templates, workflows, runs, routeOptions] = await Promise.all([
     host.apiGet("/templates"),
     host.apiGet("/workflows"),
     host.apiGet("/runs"),
+    host.apiGet("/route-options").catch((error) => {
+      setStatus(root, `Route options unavailable: ${error.message}`);
+      return defaultRouteOptions();
+    }),
   ]);
+  root.workflowRouteOptions = normalizeRouteOptions(routeOptions);
   const select = root.querySelector("[data-workflow-template-select]");
   if (select) {
     const selected = select.value;
@@ -409,6 +472,9 @@ async function refreshWorkflows(root, host) {
   const selectedTemplate = select?.value || "thread_prompt_chain";
   setParameterPanel(root, selectedTemplate);
   const form = root.querySelector("[data-workflow-form='create']");
+  if (form) {
+    syncRouteSelects(root, form.elements.model?.value || "auto", form.elements.target?.value || "auto");
+  }
   if (form && !form.elements.workflow_id.value && !form.elements.content.value && !form.elements.benchmark_id.value) {
     setParameterFields(root, selectedTemplate, defaultParameters(selectedTemplate));
   }
