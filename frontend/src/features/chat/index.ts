@@ -4,7 +4,7 @@ import { ModelProfileCatalog, ModelProfileFamily } from "../../types";
 import { ChatMessage, ChatDefaults, AdvancedDefaults, ChatContentBlock } from "../../types";
 import { ChatSession } from "../../types";
 import { Telemetry, TelemetryChunk } from "../../types";
-import { modelName } from "../models";
+import { isRunnableModelOption, modelName } from "../models";
 import { parseStreamEvent } from "./chatStreaming";
 
 export { chatSlashCommands, parseSlashCommand } from "./slashCommands";
@@ -30,6 +30,10 @@ export function nodeModelsToChatModels(nodes: NodeRecord[]): LocalModel[] {
       node: nodeName,
     }));
   }).filter((model) => modelName(model));
+}
+
+export function runningChatModelOptions(models: LocalModel[]): LocalModel[] {
+  return models.filter((model) => modelName(model) && modelIsLoaded(model) && isRunnableModelOption(model));
 }
 
 export function modelTarget(model: LocalModel) {

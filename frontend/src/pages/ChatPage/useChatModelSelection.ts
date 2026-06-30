@@ -10,6 +10,7 @@ import {
   modelIsLoaded,
   modelTarget,
   nodeModelsToChatModels,
+  runningChatModelOptions,
 } from "../../features/chat";
 import { modelName } from "../../features/models";
 import type { LocalModel, ModelProfileCatalog } from "../../types/models";
@@ -30,7 +31,7 @@ export function useChatModelSelection({
   const [selectedModel, setSelectedModel] = useState(initialModel);
   const [target, setTarget] = useState(initialTarget || "auto");
 
-  const runningModels = useMemo(() => models.filter((model) => modelName(model) && modelIsLoaded(model)), [models]);
+  const runningModels = useMemo(() => runningChatModelOptions(models), [models]);
   const noModelLoaded = runningModels.length === 0;
   const selectedRunningModel = runningModels.find((model) => modelName(model) === selectedModel);
   const profileFamilies = profileCatalog.families.filter((family) => family.family && family.profiles.length);

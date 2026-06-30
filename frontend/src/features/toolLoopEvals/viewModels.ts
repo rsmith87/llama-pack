@@ -1,4 +1,5 @@
 import type { LocalModel, ToolLoopEvalCaseResult, ToolLoopEvalPresetGroup, ToolLoopEvalRunDetail, ToolLoopEvalSuite, TraceEvent } from "../../types";
+import { isRunnableModelOption } from "../models";
 
 export function scorePercent(score?: number): string {
   return `${Math.round((score ?? 0) * 100)}%`;
@@ -155,4 +156,13 @@ export function flattenNodeModels(payload: unknown): LocalModel[] {
     if (!nodeName || node.reachable === false || !models.length) return [];
     return models.map((model) => ({ ...(model as LocalModel), node: nodeName }));
   }).filter((model) => nodeModelName(model));
+}
+
+export function runningNodeModelOptions(models: LocalModel[]): LocalModel[] {
+  return models.filter((model) => nodeModelName(model) && isModelRunning(model) && isRunnableModelOption(model));
+}
+
+function isModelRunning(model: LocalModel): boolean {
+  const status = String(model.status || "").toLowerCase();
+  return !status || status === "running" || status === "loaded";
 }

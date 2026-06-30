@@ -23,6 +23,7 @@ import {
   presetGroupsWithAllOption,
   presetSummary,
   runTargetLabel,
+  runningNodeModelOptions,
   scorePercent,
   statusTone,
 } from "../../features/toolLoopEvals/viewModels";
@@ -103,7 +104,9 @@ export function ToolLoopEvalsPage() {
     [isControllerMode, nodeModels],
   );
   const modelOptions = useMemo(
-    () => isLocalMode ? nodeModels : nodeModels.filter((model) => !runNode || model.node === runNode || model.node_name === runNode),
+    () => runningNodeModelOptions(
+      isLocalMode ? nodeModels : nodeModels.filter((model) => !runNode || model.node === runNode || model.node_name === runNode),
+    ),
     [isLocalMode, nodeModels, runNode],
   );
 

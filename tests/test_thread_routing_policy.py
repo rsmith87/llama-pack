@@ -1,6 +1,6 @@
 import pytest
 
-from llama_pack.core.config import load_config
+from llama_pack.core.config import NodeConfig, load_config
 from llama_pack.core.threads.routing import ClassifierHint, RouteDecision, RoutingPolicy
 
 
@@ -160,6 +160,28 @@ async def test_routing_policy_honors_explicit_node_target():
 
     assert decision.node == "mac-mini"
     assert decision.model == "gemma"
+    assert decision.strategy == "explicit"
+
+
+@pytest.mark.asyncio
+async def test_routing_policy_honors_explicit_dynamic_node_target():
+    config = load_config({"mode": "controller", "nodes": {}})
+    nodes = {"linux-2080ti": NodeConfig(url="http://linux")}
+    policy = RoutingPolicy(
+        config,
+        model_running=lambda node, model: node == "linux-2080ti" and model == "qwen",
+        node_configs=lambda: nodes,
+    )
+
+    decision = await policy.choose(
+        request_type="general",
+        requested_model="qwen",
+        explicit_target="node:linux-2080ti",
+        previous_route=None,
+    )
+
+    assert decision.node == "linux-2080ti"
+    assert decision.model == "qwen"
     assert decision.strategy == "explicit"
 
 

@@ -38,10 +38,13 @@ class NodeRegistry:
         self._load_state()
 
     def list_nodes(self) -> list[dict[str, str]]:
-        nodes = {**self.config.nodes, **self._node_overrides, **self._dynamic_nodes}
+        nodes = self.all_node_configs()
         return [self._node_payload(name, node)
             for name, node in sorted(nodes.items())
         ]
+
+    def all_node_configs(self) -> dict[str, NodeConfig]:
+        return {**self.config.nodes, **self._node_overrides, **self._dynamic_nodes}
 
     def _node_payload(self, name: str, node: NodeConfig) -> dict[str, Any]:
         heartbeat = self._heartbeats.get(name)

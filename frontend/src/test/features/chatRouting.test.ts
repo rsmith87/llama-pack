@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { routeDecisionToMeta, routeExplanationItems } from "../../features/chat";
+import { nodeModelsToChatModels, routeDecisionToMeta, routeExplanationItems, runningChatModelOptions } from "../../features/chat";
 
 describe("chat route explanation helpers", () => {
   it("keeps the selected route, reason, candidates, and startup decision from a thread route decision", () => {
@@ -54,5 +54,28 @@ describe("chat route explanation helpers", () => {
 
   it("uses direct route headers when detailed route metadata is unavailable", () => {
     expect(routeExplanationItems({ route: "node:mac-mini" })).toEqual(["Resolved route node:mac-mini"]);
+  });
+
+  it("separates chat node model inventory from runnable dropdown options", () => {
+    const models = nodeModelsToChatModels([
+      {
+        name: "linux-2080ti",
+        reachable: true,
+        models: [
+          { name: "gpt-oss-20b-mxfp4:default", status: "running" },
+          { name: "gemma", status: "stopped" },
+          { name: "mmproj-F16.gguf", status: "running", path: "/models/qwen/mmproj-F16.gguf" },
+          { name: "projector.gguf", status: "running", path: "/models/qwen/mmproj/projector.gguf" },
+        ],
+      },
+    ]);
+
+    expect(models.map((model) => model.name)).toEqual([
+      "gpt-oss-20b-mxfp4:default",
+      "gemma",
+      "mmproj-F16.gguf",
+      "projector.gguf",
+    ]);
+    expect(runningChatModelOptions(models).map((model) => model.name)).toEqual(["gpt-oss-20b-mxfp4:default"]);
   });
 });

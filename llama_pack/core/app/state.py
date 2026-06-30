@@ -227,6 +227,7 @@ def configure_runtime_domain_state(app: FastAPI, app_config: AppConfig, auth_url
             app.state.node_registry, app.state.model_catalog_service, node, model
         ),
         node_startup_allowed=lambda node, model: thread_node_startup_allowed(app.state.node_registry, node, model),
+        node_configs=app.state.node_registry.all_node_configs if app_config.mode == "controller" else None,
         event_bus=app.state.plugin_registry.events,
     )
     app.state.document_collection_service = build_document_collection_service(app_config, auth_urls.projects)

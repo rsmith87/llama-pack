@@ -974,7 +974,12 @@ it("updates the model field when the selected node changes", async () => {
           {
             name: "linux-2080ti",
             reachable: true,
-            models: { models: [{ name: "gpt-oss-20b-mxfp4:default", status: "running" }] },
+            models: {
+              models: [
+                { name: "gpt-oss-20b-mxfp4:default", status: "running" },
+                { name: "mmproj-F16.gguf", status: "running", path: "/models/qwen/mmproj-F16.gguf" },
+              ],
+            },
           },
         ],
       }));
@@ -993,7 +998,7 @@ it("updates the model field when the selected node changes", async () => {
     return Promise.resolve(okJson({}));
   }));
 
-  render(
+  const { container } = render(
     <AppModeProvider appMode="controller">
       <ToolLoopEvalsPage />
     </AppModeProvider>,
@@ -1003,4 +1008,6 @@ it("updates the model field when the selected node changes", async () => {
   await user.selectOptions(screen.getByLabelText("Node"), "linux-2080ti");
 
   expect(screen.getByDisplayValue("gpt-oss-20b-mxfp4:default")).toBeInTheDocument();
+  expect(container.querySelector('option[value="gpt-oss-20b-mxfp4:default"]')).not.toBeNull();
+  expect(container.querySelector('option[value="mmproj-F16.gguf"]')).toBeNull();
 });

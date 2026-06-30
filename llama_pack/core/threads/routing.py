@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import importlib
 import inspect
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import dataclass, field
 from dataclasses import replace as dc_replace
 from typing import Any
 
-from llama_pack.core.config.models import AppConfig
+from llama_pack.core.config.models import AppConfig, NodeConfig
 
 
 ModelRunning = Callable[[str, str], bool | Awaitable[bool]]
@@ -16,6 +16,7 @@ ModelAvailable = Callable[[str, str], bool | Awaitable[bool]]
 ModelArtifactPresence = Callable[[str, str], "str | None | Awaitable[str | None]"]
 # Returns True if the node may start a new model instance right now.
 NodeStartupAllowed = Callable[[str, str], bool | Awaitable[bool]]
+NodeConfigs = Callable[[], Mapping[str, NodeConfig]]
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,7 @@ class RoutingPolicy:
         model_available: ModelAvailable | None = None,
         model_artifact_presence: ModelArtifactPresence | None = None,
         node_startup_allowed: NodeStartupAllowed | None = None,
+        node_configs: NodeConfigs | None = None,
         plugin: RoutingPlugin | None = None,
     ) -> None:
         self.config = config
@@ -71,6 +73,7 @@ class RoutingPolicy:
         self.model_available = model_available or (lambda node, model: False)
         self.model_artifact_presence = model_artifact_presence
         self.node_startup_allowed = node_startup_allowed
+        self.node_configs = node_configs or (lambda: self.config.nodes)
         if plugin is not None:
             self._plugin: RoutingPlugin | None = plugin
         elif config.routing_plugin_path:
@@ -198,7 +201,7 @@ class RoutingPolicy:
         return dc_replace(decision, reason=reason, classifier_hint=hint)
 
     async def _choose_explicit_node(self, node_name: str, requested_model: str | None) -> RouteDecision:
-        node = self.config.nodes.get(node_name)
+        node = self._node_configs().get(node_name)
         if node is None:
             raise ValueError(f"Unknown node target: {node_name}")
         model = requested_model or node.default_model
@@ -223,7 +226,7 @@ class RoutingPolicy:
         if not isinstance(node, str) or not isinstance(model, str):
             return None
         candidates = ({"node": node, "model": model, "source": "previous_route"},)
-        if node in self.config.nodes and await self._candidate_model_running(candidates[0]):
+        if node in self._node_configs() and await self._candidate_model_running(candidates[0]):
             return RouteDecision(
                 node=node,
                 model=model,
@@ -250,8 +253,9 @@ class RoutingPolicy:
 
     async def _choose_fallback(self, requested_model: str | None) -> RouteDecision | None:
         candidates: list[dict[str, Any]] = []
-        for node_name in sorted(self.config.nodes):
-            node = self.config.nodes[node_name]
+        nodes = self._node_configs()
+        for node_name in sorted(nodes):
+            node = nodes[node_name]
             model = requested_model or node.default_model
             if model is None:
                 continue
@@ -298,7 +302,7 @@ class RoutingPolicy:
 
     def _request_type_candidates(self, request_type: str) -> list[dict[str, Any]]:
         candidates = []
-        for node_name, node in self.config.nodes.items():
+        for node_name, node in self._node_configs().items():
             route = node.request_types.get(request_type)
             if route is None:
                 continue
@@ -311,6 +315,9 @@ class RoutingPolicy:
                 }
             )
         return sorted(candidates, key=lambda candidate: (candidate["priority"], candidate["node"]))
+
+    def _node_configs(self) -> Mapping[str, NodeConfig]:
+        return self.node_configs()
 
     async def _model_running(self, node: str, model: str) -> bool:
         result = self.model_running(node, model)

@@ -13,7 +13,7 @@ from llama_pack.core.plugins.events import EventBus
 from llama_pack.core.threads.context import ThreadContextError, ThreadContextManager, event_message
 from llama_pack.core.threads.events import ThreadEventPublisher
 from llama_pack.core.threads.fanout import ThreadFanoutRunner
-from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeStartupAllowed, RoutingPolicy
+from llama_pack.core.threads.routing import ModelArtifactPresence, ModelAvailable, ModelRunning, NodeConfigs, NodeStartupAllowed, RoutingPolicy
 from llama_pack.core.threads.store import ThreadStore
 from llama_pack.core.threads.turns import (
     ThreadTurnPreparer,
@@ -41,6 +41,7 @@ class ThreadService:
         model_available: ModelAvailable | None = None,
         model_artifact_presence: ModelArtifactPresence | None = None,
         node_startup_allowed: NodeStartupAllowed | None = None,
+        node_configs: NodeConfigs | None = None,
         event_bus: EventBus | None = None,
     ) -> None:
         self.config = config
@@ -52,6 +53,7 @@ class ThreadService:
             model_available=model_available,
             model_artifact_presence=model_artifact_presence,
             node_startup_allowed=node_startup_allowed,
+            node_configs=node_configs,
         )
         self._turn_locks: dict[str, asyncio.Lock] = {}
         self._turn_locks_guard = asyncio.Lock()

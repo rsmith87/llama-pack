@@ -13,6 +13,17 @@ export function modelName(model: { name?: string; id?: string; model?: string; p
   return model.name || model.id || model.model || model.path || "unnamed model";
 }
 
+export function isRunnableModelOption(model: LocalModel): boolean {
+  const name = modelName(model).toLowerCase();
+  const path = String(model.model_path || model.path || model.model || "").toLowerCase();
+  return !isModelSidecarReference(name) && !isModelSidecarReference(path);
+}
+
+function isModelSidecarReference(value: string): boolean {
+  const fileName = value.split(/[\\/]/).pop() || value;
+  return fileName.startsWith("mmproj") || fileName.startsWith("projector") || value.includes("/mmproj/");
+}
+
 export function statusTone(status: string): CertTone {
   const normalized = status.toLowerCase();
   if (["running", "ready", "available", "loaded", "reachable"].includes(normalized)) return "success";
