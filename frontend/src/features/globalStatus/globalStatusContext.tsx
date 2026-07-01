@@ -15,7 +15,7 @@ type GlobalStatusContextValue = {
   configuredModels: number;
   refreshKey: number;
   globalRefreshing: boolean;
-  refreshGlobal: (refreshPage?: boolean) => Promise<void>;
+  refreshGlobal: (refreshPage: boolean) => Promise<void>;
 };
 
 const GlobalStatusContext = createContext<GlobalStatusContextValue>({
@@ -27,7 +27,7 @@ const GlobalStatusContext = createContext<GlobalStatusContextValue>({
   configuredModels: 0,
   refreshKey: 0,
   globalRefreshing: false,
-  refreshGlobal: async () => {},
+  refreshGlobal: async (_refreshPage: boolean) => {},
 });
 
 export function GlobalStatusProvider({ children }: { children: ReactNode }) {
@@ -41,7 +41,7 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [globalRefreshing, setGlobalRefreshing] = useState(false);
 
-  const refreshGlobal = useCallback(async (refreshPage = true) => {
+  const refreshGlobal = useCallback(async (refreshPage: boolean) => {
     setGlobalRefreshing(true);
     try {
       const health = await getHealth();
@@ -51,7 +51,7 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
       setControllerUrl(typeof health.controller_url === "string" ? health.controller_url : null);
       setConfiguredModels(configuredModelCount);
       setStatus("Backend online");
-      if (mode === "controller") {
+      if (refreshPage && mode === "controller") {
         try {
           const nodesPayload = await listNodes();
           const nodeList: Array<{ name?: unknown; url?: unknown; heartbeat_fresh?: unknown }> = Array.isArray(nodesPayload)
@@ -68,7 +68,7 @@ export function GlobalStatusProvider({ children }: { children: ReactNode }) {
       } else {
         setAgentNodes([]);
       }
-      if (mode === "agent") {
+      if (refreshPage && mode === "agent") {
         try {
           const cs = await getControllerStatus();
           setControllerReachable(cs.reachable);

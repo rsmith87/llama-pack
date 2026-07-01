@@ -96,7 +96,7 @@ export function AppLayout() {
             <div className="global-status">
               <span className={`status-dot ${status === "Backend online" ? "online" : status === "Backend offline" ? "offline" : ""}`} aria-hidden="true" />
               <span>{status}</span>
-              <Button type="button" onClick={() => void refreshGlobal()} disabled={globalRefreshing} aria-label={globalRefreshing ? "Refreshing" : "Global Refresh"}>
+              <Button type="button" onClick={() => void refreshGlobal(true)} disabled={globalRefreshing} aria-label={globalRefreshing ? "Refreshing" : "Global Refresh"}>
                 {globalRefreshing ? "Refreshing" : <IoRefreshSharp />}
               </Button>
             </div>
