@@ -127,6 +127,7 @@ class WorkflowRunRequest(BaseModel):
     steps: list[WorkflowStep] = Field(min_length=1)
     model: str | None = None
     target: str = "auto"
+    manage_model_lifecycle: bool = False
     metadata: ThreadMetadata | None = None
 
 

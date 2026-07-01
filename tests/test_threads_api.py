@@ -169,6 +169,7 @@ async def test_thread_workflow_step_failure_publishes_failed_event(tmp_path):
             steps=[WorkflowStep(label="triage", instructions="inspect")],
             model="qwen",
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -1769,6 +1770,7 @@ async def test_workflow_chains_step_outputs_as_user_inputs(tmp_path):
         ],
         model=None,
         target="auto",
+        manage_model_lifecycle=False,
         metadata=None,
     )
 
@@ -1803,6 +1805,7 @@ async def test_workflow_step_events_are_internal_assistant_is_public(tmp_path):
         ],
         model=None,
         target="auto",
+        manage_model_lifecycle=False,
         metadata=None,
     )
 
@@ -1845,6 +1848,7 @@ async def test_workflow_step_failure_appends_failed_event_and_error_event(tmp_pa
             ],
             model=None,
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -1878,6 +1882,7 @@ async def test_workflow_routing_failure_appends_error_event(tmp_path):
             steps=[WorkflowStep(label="classify", instructions="classify this")],
             model=None,
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -1899,6 +1904,7 @@ async def test_workflow_rejects_empty_steps_before_writing_events(tmp_path):
             steps=[],
             model=None,
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -1927,6 +1933,7 @@ async def test_workflow_step_uses_per_step_model_override(tmp_path):
         ],
         model=None,
         target="auto",
+        manage_model_lifecycle=False,
         metadata=None,
     )
 
@@ -2088,6 +2095,7 @@ async def test_workflow_starts_stopped_model_and_restores_prior_models(tmp_path)
         steps=[WorkflowStep(label="respond", instructions="respond")],
         model="qwen",
         target="auto",
+        manage_model_lifecycle=False,
         metadata=None,
     )
 
@@ -2133,7 +2141,8 @@ async def test_workflow_forces_managed_lifecycle_when_requested(tmp_path):
         steps=[WorkflowStep(label="respond", instructions="respond")],
         model="qwen",
         target="node:linux-2080ti",
-        metadata={"manage_model_lifecycle": True},
+        manage_model_lifecycle=True,
+        metadata=None,
     )
 
     assert result["message"]["content"] == "managed output"
@@ -2215,6 +2224,7 @@ async def test_workflow_restores_prior_models_after_step_failure(tmp_path):
             steps=[WorkflowStep(label="respond", instructions="respond")],
             model="qwen",
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -2262,6 +2272,7 @@ async def test_workflow_restores_prior_models_when_startup_times_out(tmp_path):
             steps=[WorkflowStep(label="respond", instructions="respond")],
             model="qwen",
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -2290,6 +2301,7 @@ async def test_workflow_deferred_startup_records_failed_step_and_error(tmp_path)
             steps=[WorkflowStep(label="respond", instructions="respond")],
             model="qwen",
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 
@@ -2325,6 +2337,7 @@ async def test_workflow_missing_model_lifecycle_records_failed_step_and_error(tm
             steps=[WorkflowStep(label="respond", instructions="respond")],
             model="qwen",
             target="auto",
+            manage_model_lifecycle=False,
             metadata=None,
         )
 

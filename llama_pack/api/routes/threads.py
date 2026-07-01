@@ -192,6 +192,7 @@ async def run_workflow(
             steps=body.steps,
             model=body.model,
             target=body.target,
+            manage_model_lifecycle=body.manage_model_lifecycle,
             metadata=body.metadata.model_dump() if body.metadata is not None else None,
         )
     except KeyError as exc:

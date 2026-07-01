@@ -140,10 +140,10 @@ class WorkflowRunner:
             steps=steps,
             model=model,
             target=target,
+            manage_model_lifecycle=parameters.get("manage_model_lifecycle") is True,
             metadata={
                 "workflow_id": definition.id,
                 "workflow_run_id": run_id,
-                "manage_model_lifecycle": parameters.get("manage_model_lifecycle") is True,
             },
         )
         message = result.get("message")

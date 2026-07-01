@@ -500,6 +500,7 @@ class FakeThreadService:
         steps: list[WorkflowStep],
         model: str | None,
         target: str,
+        manage_model_lifecycle: bool,
         metadata: dict[str, object] | None,
     ) -> dict[str, object]:
         self.calls.append(
@@ -509,6 +510,7 @@ class FakeThreadService:
                 "steps": steps,
                 "model": model,
                 "target": target,
+                "manage_model_lifecycle": manage_model_lifecycle,
                 "metadata": metadata,
             }
         )
@@ -557,10 +559,10 @@ def test_manual_run_executes_thread_prompt_chain(tmp_path: Path):
     assert fake_thread_service.calls[0]["content"] == "Summarize the day"
     assert fake_thread_service.calls[0]["model"] == "qwen"
     assert fake_thread_service.calls[0]["target"] == "node:gpu-box"
+    assert fake_thread_service.calls[0]["manage_model_lifecycle"] is True
     assert fake_thread_service.calls[0]["metadata"] == {
         "workflow_id": workflow_id,
         "workflow_run_id": run["id"],
-        "manage_model_lifecycle": True,
     }
 
 

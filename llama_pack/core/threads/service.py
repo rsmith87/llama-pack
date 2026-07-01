@@ -736,6 +736,7 @@ class ThreadService:
         steps: list[Any],
         model: str | None,
         target: str,
+        manage_model_lifecycle: bool,
         metadata: dict[str, Any] | None,
     ) -> dict[str, Any]:
         return await self.workflow_runner.run_workflow(
@@ -744,6 +745,7 @@ class ThreadService:
             steps=steps,
             model=model,
             target=target,
+            manage_model_lifecycle=manage_model_lifecycle,
             metadata=metadata,
         )
 
