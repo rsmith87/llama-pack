@@ -93,13 +93,20 @@ async def node_status(registry: NodeRegistry = Depends(get_node_registry)):
     )
 
 
+@router.get("/nodes/summary")
+async def node_summary(registry: NodeRegistry = Depends(get_node_registry)):
+    return registry.node_summaries()
+
+
 @router.get("/nodes/models")
 async def node_models(request: Request, registry: NodeRegistry = Depends(get_node_registry)):
     store = getattr(request.app.state, "model_asset_store", None)
     nodes = registry.list_nodes()
-    return await asyncio.gather(
+    snapshots = await asyncio.gather(
         *(_fetch_node_snapshot(registry, node, include_models=True, store=store) for node in nodes)
     )
+    registry.cache_model_snapshots(list(snapshots))
+    return snapshots
 
 
 async def _fetch_node_gguf_snapshot(registry: NodeRegistry, node: dict) -> dict:

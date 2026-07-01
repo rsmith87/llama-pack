@@ -1,6 +1,6 @@
 import { apiGet } from "./client";
 import type { DashboardData, HealthResponse, LocalModel, NodeInventoryItem } from "../types/index";
-import { getNodeModels } from "./nodes";
+import { getNodeModels, listNodeSummaries } from "./nodes";
 
 export type ControllerStatusResponse = {
   reachable: boolean;
@@ -79,15 +79,17 @@ export function getControllerStatus(): Promise<ControllerStatusResponse> {
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {
-  const [health, localModelsPayload, nodes] = await Promise.all([
+  const [health, localModelsPayload, nodes, nodeSummaries] = await Promise.all([
     getHealth(),
     apiGet<unknown>("/models"),
     getNodeModels(),
+    listNodeSummaries().catch(() => []),
   ]);
 
   return {
     health: parseHealthResponse(health),
     localModels: parseModelList(localModelsPayload),
     nodes: nodes as NodeInventoryItem[],
+    nodeSummaries,
   };
 }

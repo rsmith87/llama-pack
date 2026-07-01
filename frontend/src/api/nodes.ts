@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPut, apiStream } from "./client";
-import type { NodeRecord } from "../types/index";
+import type { NodeRecord, NodeSummary } from "../types/index";
 
 export type NodeActionResponse = Record<string, unknown>;
 
@@ -68,6 +68,10 @@ function parseTransferRecord(payload: unknown): TransferRecord {
 
 export function listNodes(): Promise<NodeRecord[]> {
   return apiGet<unknown>("/nodes").then((payload) => parseNodeArray("/nodes", payload));
+}
+
+export function listNodeSummaries(): Promise<NodeSummary[]> {
+  return apiGet<unknown>("/nodes/summary").then((payload) => parseNodeArray("/nodes/summary", payload) as NodeSummary[]);
 }
 
 export function getNodeModels(): Promise<NodeRecord[]> {

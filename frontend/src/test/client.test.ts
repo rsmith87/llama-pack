@@ -3,7 +3,7 @@ import { apiDelete, apiGet, apiPost, apiRequest, apiStream, setAuthTokenProvider
 import { clearKvSlot, getChatCapabilities, getChatSession, listChatSessions, listKvSlots, saveChatSession } from "../api/chat";
 import { cancelDownload, deleteDownload, discoverQuants, listDownloadHistory, listDownloadRecommendations, startDownload } from "../api/downloads";
 import { getControllerStatus, getHealth, loadDashboardData } from "../api/health";
-import { getCachedNodeModels, getNodeGgufs, getNodeModels, invalidateNodeModelsCache, listNodes } from "../api/nodes";
+import { getCachedNodeModels, getNodeGgufs, getNodeModels, invalidateNodeModelsCache, listNodeSummaries, listNodes } from "../api/nodes";
 
 afterEach(() => {
   setAuthTokenProvider(() => "");
@@ -134,13 +134,15 @@ describe("loadDashboardData", () => {
       vi.fn()
         .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller" }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "llama" }] }) })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ node_id: "mac" }] }) }),
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ node_id: "mac" }] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => ([{ name: "mac", reachable: true }]) }),
     );
 
     await expect(loadDashboardData()).resolves.toEqual({
       health: { mode: "controller" },
       localModels: [{ name: "llama" }],
       nodes: [{ node_id: "mac" }],
+      nodeSummaries: [{ name: "mac", reachable: true }],
     });
   });
 
@@ -150,7 +152,8 @@ describe("loadDashboardData", () => {
       vi.fn()
         .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller" }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ models: "invalid" }) })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) }),
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [] }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => [] }),
     );
 
     await expect(loadDashboardData()).rejects.toThrow("/models response must be an array or include a models array.");
@@ -162,7 +165,8 @@ describe("loadDashboardData", () => {
       vi.fn()
         .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller" }) })
         .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [] }) })
-        .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: null }) }),
+        .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: null }) })
+        .mockResolvedValueOnce({ ok: true, json: async () => [] }),
     );
 
     await expect(loadDashboardData()).rejects.toThrow("/nodes/models response must be an array or include a nodes array.");
@@ -217,6 +221,19 @@ describe("node API responses", () => {
     );
 
     await expect(listNodes()).resolves.toEqual([{ name: "mac-agent", url: "http://mac:9000" }]);
+  });
+
+  it("loads node summary arrays", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => [{ name: "mac-agent", reachable: true, models_total: 2 }],
+      }),
+    );
+
+    await expect(listNodeSummaries()).resolves.toEqual([{ name: "mac-agent", reachable: true, models_total: 2 }]);
+    expect(fetch).toHaveBeenCalledWith("/lm-api/v1/nodes/summary", expect.anything());
   });
 
   it("rejects configured node payloads without node arrays", async () => {
