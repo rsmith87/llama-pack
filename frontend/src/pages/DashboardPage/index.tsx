@@ -4,7 +4,7 @@ import { loadDashboardData } from "../../api/health";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer } from "../../api/library";
 import { startModel, stopModel, setFavorite } from "../../api/models";
-import { startNodeModel, stopNodeModel } from "../../api/nodes";
+import { getCachedNodeModels, startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
 import { ModelCard } from "../../components/ModelCard";
@@ -32,11 +32,13 @@ import {
   metricPercent
 } from "../../features/models";
 
-const emptyData: DashboardData = {
-  health: null,
-  localModels: [],
-  nodes: [],
-};
+function initialDashboardData(): DashboardData {
+  return {
+    health: null,
+    localModels: [],
+    nodes: getCachedNodeModels() || [],
+  };
+}
 
 function loadDashboard() {
   return loadDashboardData();
@@ -65,7 +67,7 @@ function runningFirstModels(models: LocalModel[]): LocalModel[] {
 export function DashboardPage() {
   const { openLogs } = useLogModal();
   const navigateToPage = useNavigateToPage();
-  const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, emptyData);
+  const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, initialDashboardData());
   const [actingModel, setActingModel] = useState("");
   const [transfer, setTransfer] = useState<TransferState | null>(null);
 

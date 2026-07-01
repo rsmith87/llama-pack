@@ -2,8 +2,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { apiDelete, apiGet, apiPost, apiRequest, apiStream, setAuthTokenProvider } from "../api/client";
 import { clearKvSlot, getChatCapabilities, getChatSession, listChatSessions, listKvSlots, saveChatSession } from "../api/chat";
 import { cancelDownload, deleteDownload, discoverQuants, listDownloadHistory, listDownloadRecommendations, startDownload } from "../api/downloads";
-import { getControllerStatus, loadDashboardData } from "../api/health";
-import { getNodeGgufs, getNodeModels, listNodes } from "../api/nodes";
+import { getControllerStatus, getHealth, loadDashboardData } from "../api/health";
+import { getCachedNodeModels, getNodeGgufs, getNodeModels, invalidateNodeModelsCache, listNodes } from "../api/nodes";
 
 afterEach(() => {
   setAuthTokenProvider(() => "");
@@ -169,6 +169,25 @@ describe("loadDashboardData", () => {
   });
 });
 
+describe("getHealth", () => {
+  it("shares one in-flight health request across concurrent callers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ mode: "controller" }),
+      }),
+    );
+
+    await expect(Promise.all([getHealth(), getHealth()])).resolves.toEqual([
+      { mode: "controller" },
+      { mode: "controller" },
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith("/lm-api/v1/health", expect.anything());
+  });
+});
+
 describe("getControllerStatus", () => {
   it("rejects controller status payloads without a reachable boolean", async () => {
     vi.stubGlobal(
@@ -184,6 +203,10 @@ describe("getControllerStatus", () => {
 });
 
 describe("node API responses", () => {
+  afterEach(() => {
+    invalidateNodeModelsCache();
+  });
+
   it("loads configured node arrays", async () => {
     vi.stubGlobal(
       "fetch",
@@ -218,6 +241,38 @@ describe("node API responses", () => {
     );
 
     await expect(getNodeModels()).rejects.toThrow("/nodes/models nodes[1] must be an object.");
+  });
+
+  it("shares one in-flight node model request across concurrent callers", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ nodes: [{ name: "mac-agent", models: [{ name: "llama" }] }] }),
+      }),
+    );
+
+    await expect(Promise.all([getNodeModels(), getNodeModels()])).resolves.toEqual([
+      [{ name: "mac-agent", models: [{ name: "llama" }] }],
+      [{ name: "mac-agent", models: [{ name: "llama" }] }],
+    ]);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(fetch).toHaveBeenCalledWith("/lm-api/v1/nodes/models", expect.anything());
+  });
+
+  it("keeps the last successful node model inventory available for immediate reuse", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ nodes: [{ name: "mac-agent", models: [{ name: "llama" }] }] }),
+      }),
+    );
+
+    expect(getCachedNodeModels()).toBeNull();
+    await getNodeModels();
+
+    expect(getCachedNodeModels()).toEqual([{ name: "mac-agent", models: [{ name: "llama" }] }]);
   });
 
   it("rejects node GGUF payloads without node arrays", async () => {
