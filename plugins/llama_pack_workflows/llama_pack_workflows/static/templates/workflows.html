@@ -45,15 +45,21 @@
         <div class="workflow-advanced-fields" data-workflow-advanced hidden>
           <label>
             Model
+            <span class="workflow-field-hint">Choose a specific model when this workflow should manage a node model.</span>
             <select name="model" data-workflow-model-select>
               <option value="auto">Auto</option>
             </select>
           </label>
           <label>
             Target
+            <span class="workflow-field-hint">Use node:name to let the workflow start that node's model and restore prior models after the run.</span>
             <select name="target" data-workflow-target-select>
               <option value="auto">Auto</option>
             </select>
+          </label>
+          <label class="workflow-checkbox">
+            <input name="manage_model_lifecycle" type="checkbox" />
+            Start selected node model for this workflow run
           </label>
         </div>
       </section>

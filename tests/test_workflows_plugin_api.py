@@ -369,6 +369,58 @@ def test_create_workflow_rejects_unknown_template(tmp_path: Path):
         assert response.json()["detail"] == "Unknown workflow template: missing"
 
 
+def test_create_workflow_rejects_managed_lifecycle_without_node_target(tmp_path: Path):
+    with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
+        response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Managed summary",
+                "description": "Starts a node model for the workflow",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Summarize the day",
+                    "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
+                    "model": "qwen",
+                    "target": "auto",
+                    "manage_model_lifecycle": True,
+                },
+                "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Workflow parameter 'target' must be node:<name> when manage_model_lifecycle=true"
+        )
+
+
+def test_create_workflow_rejects_managed_lifecycle_without_specific_model(tmp_path: Path):
+    with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
+        response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Managed summary",
+                "description": "Starts a node model for the workflow",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Summarize the day",
+                    "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
+                    "model": "auto",
+                    "target": "node:gpu-box",
+                    "manage_model_lifecycle": True,
+                },
+                "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Workflow parameter 'model' must be a specific model when manage_model_lifecycle=true"
+        )
+
+
 def test_workflows_plugin_route_options_list_models_and_node_targets(tmp_path: Path):
     app = create_app(config=workflows_config(tmp_path))
     app.state.node_registry = FakeRouteRegistry()
@@ -485,7 +537,8 @@ def test_manual_run_executes_thread_prompt_chain(tmp_path: Path):
                     "content": "Summarize the day",
                     "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
                     "model": "qwen",
-                    "target": "auto",
+                    "target": "node:gpu-box",
+                    "manage_model_lifecycle": True,
                 },
                 "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
             },
@@ -503,6 +556,7 @@ def test_manual_run_executes_thread_prompt_chain(tmp_path: Path):
 
     assert fake_thread_service.calls[0]["content"] == "Summarize the day"
     assert fake_thread_service.calls[0]["model"] == "qwen"
+    assert fake_thread_service.calls[0]["target"] == "node:gpu-box"
 
 
 def test_workflows_plugin_static_assets_load(tmp_path: Path):
@@ -534,6 +588,8 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-model-select" in template.text
         assert "name=\"target\"" in template.text
         assert "data-workflow-target-select" in template.text
+        assert "name=\"manage_model_lifecycle\"" in template.text
+        assert "Start selected node model for this workflow run" in template.text
         assert "parameters_json" not in template.text
         assert "data-workflow-action" in controller.text
         assert "data-workflow-action=\"cancel-edit\"" in template.text
@@ -541,6 +597,7 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-run-detail-body" in template.text
         assert "export function mountPage" in controller.text
         assert "buildParameters" in controller.text
+        assert "manage_model_lifecycle" in controller.text
         assert "addStepField" in controller.text
         assert "renderRunDetail" in controller.text
         assert "syncRouteSelects" in controller.text

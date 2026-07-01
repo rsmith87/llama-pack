@@ -16,6 +16,7 @@ function defaultParameters(templateId) {
       steps: [{ label: "summarize", instructions: "Summarize in five bullets." }],
       model: "auto",
       target: "auto",
+      manage_model_lifecycle: false,
     };
   }
   if (templateId === "scheduled_benchmark") {
@@ -349,6 +350,7 @@ function setParameterFields(root, templateId, parameters) {
   if (templateId === "thread_prompt_chain") {
     form.elements.content.value = String(parameters.content || "");
     syncRouteSelects(root, String(parameters.model || "auto"), String(parameters.target || "auto"));
+    form.elements.manage_model_lifecycle.checked = parameters.manage_model_lifecycle === true;
     clearSteps(root);
     const steps = Array.isArray(parameters.steps) && parameters.steps.length > 0
       ? parameters.steps
@@ -373,11 +375,21 @@ function buildParameters(root, data) {
       const instructions = String(row.querySelector("[name='step_instructions']")?.value || "").trim();
       if (label || instructions) steps.push({ label, instructions });
     }
+    const model = String(data.get("model") || "auto");
+    const target = String(data.get("target") || "auto");
+    const manageModelLifecycle = data.get("manage_model_lifecycle") === "on";
+    if (manageModelLifecycle && model === "auto") {
+      throw new Error("Workflow parameter 'model' must be a specific model when manage_model_lifecycle=true");
+    }
+    if (manageModelLifecycle && !target.startsWith("node:")) {
+      throw new Error("Workflow parameter 'target' must be node:<name> when manage_model_lifecycle=true");
+    }
     return {
       content: String(data.get("content") || ""),
       steps,
-      model: String(data.get("model") || "auto"),
-      target: String(data.get("target") || "auto"),
+      model,
+      target,
+      manage_model_lifecycle: manageModelLifecycle,
     };
   }
   if (templateId === "scheduled_benchmark") {

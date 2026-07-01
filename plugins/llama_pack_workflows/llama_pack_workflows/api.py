@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException
 from llama_pack_workflows.models import WorkflowDefinitionCreate
 from llama_pack_workflows.runner import WorkflowRunner
 from llama_pack_workflows.store import WorkflowStore
-from llama_pack_workflows.templates import builtin_templates, get_template
+from llama_pack_workflows.templates import builtin_templates, validate_template_parameters
 
 
 def create_router(store: WorkflowStore, runner: WorkflowRunner) -> APIRouter:
@@ -30,7 +30,7 @@ def create_router(store: WorkflowStore, runner: WorkflowRunner) -> APIRouter:
     @router.post("/workflows")
     async def create_workflow(body: WorkflowDefinitionCreate):
         try:
-            get_template(body.template_id)
+            validate_template_parameters(body.template_id, body.parameters)
             created = store.create_definition(body)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
@@ -39,7 +39,7 @@ def create_router(store: WorkflowStore, runner: WorkflowRunner) -> APIRouter:
     @router.put("/workflows/{workflow_id}")
     async def update_workflow(workflow_id: str, body: WorkflowDefinitionCreate):
         try:
-            get_template(body.template_id)
+            validate_template_parameters(body.template_id, body.parameters)
             updated = store.update_definition(workflow_id, body)
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc

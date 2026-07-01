@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from llama_pack.core.threads.models import WorkflowStep
 from llama_pack_workflows.models import TriggerType, WorkflowDefinition, WorkflowRun
 from llama_pack_workflows.store import WorkflowStore
+from llama_pack_workflows.templates import validate_template_parameters
 
 
 class ModelRouteRegistry(Protocol):
@@ -118,6 +119,7 @@ class WorkflowRunner:
 
     async def _run_thread_prompt_chain(self, run_id: str, definition: WorkflowDefinition) -> None:
         parameters = definition.parameters
+        validate_template_parameters(definition.template_id, parameters)
         content = _required_string(parameters, "content")
         steps = _required_steps(parameters)
         model = _required_string(parameters, "model")
