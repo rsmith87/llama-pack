@@ -34,6 +34,9 @@ class FakeRouteRegistry:
             return [{"filename": "deepseek-r1.gguf", "registered_as": "deepseek"}]
         raise AssertionError(f"Unexpected node request: {node_name}")
 
+    async def aclose(self) -> None:
+        return None
+
 
 class FakeEligibilityRouteRegistry:
     def list_nodes(self) -> list[dict[str, object]]:
@@ -54,6 +57,49 @@ class FakeEligibilityRouteRegistry:
         if node_name == "linux-2080ti" and path == "/lm-api/v1/library/ggufs":
             raise AssertionError("Unavailable nodes must not be queried for GGUFs")
         raise AssertionError(f"Unexpected node request: {node_name} {path}")
+
+    async def aclose(self) -> None:
+        return None
+
+
+class FakeCachedRouteRegistry:
+    def node_summaries(self) -> list[dict[str, object]]:
+        return [
+            {
+                "name": "gpu-box",
+                "reachable": True,
+                "heartbeat_fresh": True,
+                "models_total": 2,
+                "models_running": 1,
+                "primary_model": "qwen",
+            },
+            {
+                "name": "offline-box",
+                "reachable": False,
+                "heartbeat_fresh": False,
+                "models_total": None,
+                "models_running": None,
+                "primary_model": None,
+            },
+        ]
+
+    def cached_model_snapshots(self) -> list[dict[str, object]]:
+        return [
+            {
+                "name": "gpu-box",
+                "reachable": True,
+                "models": [{"name": "qwen", "running": True}, {"name": "mistral", "running": False}],
+            }
+        ]
+
+    def list_nodes(self) -> list[dict[str, object]]:
+        raise AssertionError("Cached route options must not list nodes through the live registry path")
+
+    async def request_node(self, node_name: str, method: str, path: str) -> object:
+        raise AssertionError("Cached route options must not query agents live")
+
+    async def aclose(self) -> None:
+        return None
 
 
 def workflows_config(tmp_path: Path):
@@ -365,6 +411,23 @@ def test_workflows_plugin_route_options_explain_model_and_node_eligibility(tmp_p
         assert targets["node:linux-2080ti"]["reason"] == "Node linux-2080ti is unavailable because its heartbeat is stale or missing."
 
 
+def test_workflows_plugin_route_options_use_cached_node_inventory(tmp_path: Path):
+    app = create_app(config=workflows_config(tmp_path))
+    app.state.node_registry = FakeCachedRouteRegistry()
+
+    with authenticated_client(app) as client:
+        response = client.get("/lm-api/v1/plugins/llama_pack_workflows/route-options")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert [item["value"] for item in payload["models"]] == ["auto", "qwen", "mistral"]
+        assert [item["value"] for item in payload["targets"]] == ["auto", "node:gpu-box", "node:offline-box"]
+        assert payload["models"][1]["reason"] == "Running on gpu-box."
+        assert payload["models"][2]["reason"] == "Stopped on gpu-box; workflow routing can start it if capacity allows."
+        assert payload["targets"][1]["selectable"] is True
+        assert payload["targets"][2]["selectable"] is False
+
+
 class FakeThreadService:
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
@@ -481,7 +544,10 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "addStepField" in controller.text
         assert "renderRunDetail" in controller.text
         assert "syncRouteSelects" in controller.text
+        assert "loadRouteOptions" in controller.text
         assert 'host.apiGet("/route-options")' in controller.text
+        assert 'host.apiGet("/route-options").catch' not in controller.text
+        assert "const [templates, workflows, runs] = await Promise.all" in controller.text
         assert "option.title = option.reason" in controller.text
         assert "element.disabled = option.selectable === false" in controller.text
         assert "formatRouteOptionLabel" in controller.text

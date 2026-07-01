@@ -55,6 +55,9 @@ class NodeRegistry:
             if isinstance(snapshot.get("name"), str)
         }
 
+    def cached_model_snapshots(self) -> list[dict[str, Any]]:
+        return list(self._last_model_snapshots.values())
+
     def node_summaries(self) -> list[dict[str, Any]]:
         return [self._node_summary(node) for node in self.list_nodes()]
 

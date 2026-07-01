@@ -459,16 +459,11 @@ function populateForm(root, workflow) {
 }
 
 async function refreshWorkflows(root, host) {
-  const [templates, workflows, runs, routeOptions] = await Promise.all([
+  const [templates, workflows, runs] = await Promise.all([
     host.apiGet("/templates"),
     host.apiGet("/workflows"),
     host.apiGet("/runs"),
-    host.apiGet("/route-options").catch((error) => {
-      setStatus(root, `Route options unavailable: ${error.message}`);
-      return defaultRouteOptions();
-    }),
   ]);
-  root.workflowRouteOptions = normalizeRouteOptions(routeOptions);
   const select = root.querySelector("[data-workflow-template-select]");
   if (select) {
     const selected = select.value;
@@ -559,6 +554,15 @@ async function refreshWorkflows(root, host) {
   const selectedWorkflow = workflows.workflows.find((item) => item.id === root.selectedWorkflowId) || workflows.workflows[0] || null;
   renderDiagram(root, selectedWorkflow, templates.templates);
   if (selectedWorkflow) setActiveWorkflow(root, selectedWorkflow.id);
+}
+
+async function loadRouteOptions(root, host) {
+  const routeOptions = await host.apiGet("/route-options");
+  root.workflowRouteOptions = normalizeRouteOptions(routeOptions);
+  const form = root.querySelector("[data-workflow-form='create']");
+  if (form) {
+    syncRouteSelects(root, form.elements.model?.value || "auto", form.elements.target?.value || "auto");
+  }
 }
 
 function buildTriggers(data) {
@@ -652,6 +656,10 @@ export function mountPage(root, host) {
   const refresh = () => {
     refreshWorkflows(root, host).catch((error) => {
       setStatus(root, error.message);
+      console.error(error);
+    });
+    loadRouteOptions(root, host).catch((error) => {
+      setStatus(root, `Route options unavailable: ${error.message}`);
       console.error(error);
     });
   };
