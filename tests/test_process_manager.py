@@ -169,6 +169,26 @@ def test_process_manager_start_stop_status_and_log_tail(tmp_path):
     assert stopped.pid is None
 
 
+def test_process_manager_ready_uses_current_start_log_marker(tmp_path):
+    config, store, catalog = _catalog_config(tmp_path)
+    _register_model(store, model_name="qwen", path="/models/qwen.gguf", port=8081)
+    manager = ProcessManager(config, catalog_service=catalog, popen=lambda *args, **kwargs: FakeProcess())
+    log_path = config.log_dir / "qwen.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_path.write_text("old update_slots: all slots are idle\n", encoding="utf-8")
+
+    with patch.object(manager, "_find_pid_on_port", return_value=None):
+        started = manager.start("qwen")
+
+    assert started.running is True
+    assert started.ready is False
+
+    with log_path.open("a", encoding="utf-8") as handle:
+        handle.write("1.07.812.291 I srv  update_slots: all slots are idle\n")
+
+    assert manager.status("qwen").ready is True
+
+
 def test_process_manager_starts_profile_with_effective_config(tmp_path):
     spawned = []
     config, store, catalog = _catalog_config(tmp_path)

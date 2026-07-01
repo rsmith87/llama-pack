@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import os
 import signal
-import socket
 import subprocess
 import time
 from contextlib import contextmanager
@@ -18,6 +17,7 @@ from llama_pack.providers.llama_cpp import build_llama_server_command
 
 
 PopenFactory = Callable[..., subprocess.Popen]
+MODEL_READY_LOG_MARKER = "update_slots: all slots are idle"
 
 
 class _ManagedProcess(Protocol):
@@ -133,6 +133,7 @@ class ProcessManager:
         self._processes: dict[str, _ManagedProcess] = {}
         self._adopted_processes: set[str] = set()
         self._log_handles: dict[str, IO[bytes]] = {}
+        self._ready_log_offsets: dict[str, int] = {}
         self._active_requests: dict[str, int] = {}
         self.config.log_dir.mkdir(parents=True, exist_ok=True)
 
@@ -153,7 +154,7 @@ class ProcessManager:
             self._close_log(name)
             process = None
         process_state = self._process_state(name, running, stale_pid)
-        ready = running and _port_accepting_connections("127.0.0.1", model.port, 0.2)
+        ready = running and self._ready_log_marker_seen(name)
         return ModelStatus(
             name=name,
             running=running,
@@ -200,6 +201,7 @@ class ProcessManager:
 
         log_path = self._log_path(name)
         log_path.parent.mkdir(parents=True, exist_ok=True)
+        self._ready_log_offsets[name] = log_path.stat().st_size if log_path.exists() else 0
         log_handle = log_path.open("ab")
         command = build_llama_server_command(self.config.llama_server_bin, model)
         process = self._popen(command, stdout=log_handle, stderr=log_handle, cwd=None)
@@ -220,6 +222,7 @@ class ProcessManager:
                 process.wait(timeout=5)
         self._processes.pop(name, None)
         self._adopted_processes.discard(name)
+        self._ready_log_offsets.pop(name, None)
         self._close_log(name)
         return self.status(name)
 
@@ -278,6 +281,7 @@ class ProcessManager:
         process = _AdoptedProcess(existing_pid)
         self._processes[name] = process
         self._adopted_processes.add(name)
+        self._ready_log_offsets[name] = 0
         return process
 
     def _process_state(self, name: str, running: bool, stale_pid: int | None) -> str:
@@ -296,6 +300,18 @@ class ProcessManager:
         if ":" not in name:
             return name
         return f"__profile__{quote(name, safe='')}"
+
+    def _ready_log_marker_seen(self, name: str) -> bool:
+        log_path = self._log_path(name)
+        if not log_path.exists():
+            return False
+        offset = self._ready_log_offsets.get(name, 0)
+        try:
+            with log_path.open("rb") as handle:
+                handle.seek(offset)
+                return MODEL_READY_LOG_MARKER in handle.read().decode("utf-8", errors="replace")
+        except OSError:
+            return False
 
     def _profile_metadata(self, name: str) -> _ProfileMetadata:
         if ":" not in name:
@@ -390,11 +406,3 @@ def _pid_is_zombie(pid: int) -> bool:
     if result.returncode != 0:
         return False
     return result.stdout.strip().startswith("Z")
-
-
-def _port_accepting_connections(host: str, port: int, timeout_seconds: float) -> bool:
-    try:
-        with socket.create_connection((host, port), timeout=timeout_seconds):
-            return True
-    except OSError:
-        return False
