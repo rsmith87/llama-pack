@@ -164,6 +164,38 @@ async def test_routing_policy_honors_explicit_node_target():
 
 
 @pytest.mark.asyncio
+async def test_explicit_node_target_selects_available_stopped_model_for_startup():
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {
+                "mac-mini": {"url": "http://mac", "default_model": "gemma"},
+            },
+        }
+    )
+    policy = RoutingPolicy(
+        config,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: node == "mac-mini" and model == "gemma",
+        node_startup_allowed=lambda node, model: True,
+    )
+
+    decision = await policy.choose(
+        request_type="general",
+        requested_model="gemma",
+        explicit_target="node:mac-mini",
+        previous_route=None,
+    )
+
+    assert decision.node == "mac-mini"
+    assert decision.model == "gemma"
+    assert decision.strategy == "explicit"
+    assert decision.reason == "explicit_target_model_available"
+    assert decision.startup_needed is True
+    assert decision.startup_decision == "start_now"
+
+
+@pytest.mark.asyncio
 async def test_routing_policy_honors_explicit_dynamic_node_target():
     config = load_config({"mode": "controller", "nodes": {}})
     nodes = {"linux-2080ti": NodeConfig(url="http://linux")}

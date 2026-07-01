@@ -2,7 +2,7 @@ import "./styles.css";
 import { useMemo, useState } from "react";
 import { createGgufTransfer } from "../../api/library";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
-import { getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel, stopNodeModel, updateNode } from "../../api/nodes";
+import { getCachedNodeModels, getNodeModels, getTransfer, listNodes, restartNodeModel, startNodeModel, stopNodeModel, updateNode } from "../../api/nodes";
 import { EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
 import { useLogModal } from "../../features/logs/logModalContext";
@@ -40,7 +40,7 @@ export function NodesPage() {
   const { data: nodes, loading, error, refresh, setError } = useAsyncResource<NodeRecord[]>(
     () => Promise.all([listNodes(), getNodeModels()])
       .then(([configuredNodes, modelNodes]) => mergeNodeInventory(configuredNodes, modelNodes)),
-    [],
+    getCachedNodeModels() || [],
   );
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("");

@@ -10,12 +10,29 @@ export type NodeInventoryItem = {
   url?: string;
   status?: string;
   reachable?: boolean;
+  heartbeat_fresh?: boolean;
+  heartbeat_age_seconds?: number | null;
+  last_heartbeat?: string | null;
+  registration?: string;
   models?: NodeModel[];
   cert_expires_in_seconds?: number | null;
 };
 
 export type NodesResponse = {
   nodes?: NodeInventoryItem[];
+};
+
+export type NodeSummary = {
+  name: string;
+  url?: string;
+  reachable: boolean;
+  heartbeat_fresh: boolean;
+  heartbeat_age_seconds?: number | null;
+  last_heartbeat?: string | null;
+  registration?: string;
+  models_total?: number | null;
+  models_running?: number | null;
+  primary_model?: string | null;
 };
 
 /** A node record as seen by the controller's node inventory/config views. */
@@ -32,7 +49,7 @@ export type NodeRecord = {
   verify_tls?: boolean;
   heartbeat_fresh?: boolean;
   heartbeat_age_seconds?: number | null;
-  last_heartbeat?: string;
+  last_heartbeat?: string | null;
   error?: string;
   cert_expires_in_seconds?: number | null;
 };

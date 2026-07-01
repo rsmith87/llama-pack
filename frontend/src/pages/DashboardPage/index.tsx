@@ -4,7 +4,7 @@ import { loadDashboardData } from "../../api/health";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer } from "../../api/library";
 import { startModel, stopModel, setFavorite } from "../../api/models";
-import { startNodeModel, stopNodeModel } from "../../api/nodes";
+import { getCachedNodeModels, startNodeModel, stopNodeModel } from "../../api/nodes";
 import { Button, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { NodeCard } from "../../components/NodeCard";
 import { ModelCard } from "../../components/ModelCard";
@@ -20,6 +20,7 @@ import { modelName, statusTone } from "../../features/models";
 import { isActiveModel } from "../../features/models/modelStatus";
 import { librarySelectionSearch } from "../../features/ggufLibrary";
 import { TIMERS } from "../../constants";
+import type { NodeSummary } from "../../types/nodes";
 import { 
   percent,
   modelActionTargetLabel,
@@ -32,11 +33,14 @@ import {
   metricPercent
 } from "../../features/models";
 
-const emptyData: DashboardData = {
-  health: null,
-  localModels: [],
-  nodes: [],
-};
+function initialDashboardData(): DashboardData {
+  return {
+    health: null,
+    localModels: [],
+    nodes: getCachedNodeModels() || [],
+    nodeSummaries: [],
+  };
+}
 
 function loadDashboard() {
   return loadDashboardData();
@@ -65,7 +69,7 @@ function runningFirstModels(models: LocalModel[]): LocalModel[] {
 export function DashboardPage() {
   const { openLogs } = useLogModal();
   const navigateToPage = useNavigateToPage();
-  const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, emptyData);
+  const { data, loading, error, refresh, setError } = useAsyncResource<DashboardData>(loadDashboard, initialDashboardData());
   const [actingModel, setActingModel] = useState("");
   const [transfer, setTransfer] = useState<TransferState | null>(null);
 
@@ -141,7 +145,7 @@ export function DashboardPage() {
   const isController = mode === "controller";
   const carouselModels = useMemo(() => runningFirstModels(data.localModels), [data.localModels]);
   const nodeRecords = asNodeRecords(data.nodes);
-  const controllerNodes = (() => {
+  const fullControllerNodes = (() => {
     const byName = new Map<string, DashboardData["nodes"][number]>();
     for (const node of data.nodes) byName.set(nodeName(node) || "unnamed node", node);
     for (const model of data.localModels) {
@@ -156,10 +160,34 @@ export function DashboardPage() {
     }
     return [...byName.values()];
   })();
-  const expiredCertNodes = controllerNodes
+  const controllerNodeSummaries = (() => {
+    if (data.nodeSummaries.length > 0) {
+      return data.nodeSummaries;
+    }
+    return fullControllerNodes.map((node): NodeSummary => {
+      const models = node.models || [];
+      const runningModels = models.filter((model) => isActiveModel(model as Parameters<typeof isActiveModel>[0]));
+      const primary = runningModels[0] || models[0] || null;
+      return {
+        name: nodeName(node) || "unnamed node",
+        url: node.url,
+        reachable: node.reachable !== false,
+        heartbeat_fresh: node.heartbeat_fresh !== false,
+        heartbeat_age_seconds: node.heartbeat_age_seconds,
+        last_heartbeat: node.last_heartbeat,
+        registration: node.registration,
+        models_total: models.length,
+        models_running: runningModels.length,
+        primary_model: primary ? modelName(primary) : null,
+      };
+    });
+  })();
+  const fullNodeByName = new Map(fullControllerNodes.map((node) => [nodeName(node) || "unnamed node", node]));
+  const modelsByNode = new Map(fullControllerNodes.map((node) => [nodeName(node) || "unnamed node", node.models || []]));
+  const expiredCertNodes = fullControllerNodes
     .filter((node) => typeof node.cert_expires_in_seconds === "number" && node.cert_expires_in_seconds <= 0)
     .map((node) => nodeName(node) || "unnamed node");
-  const expiringCertNodes = controllerNodes
+  const expiringCertNodes = fullControllerNodes
     .filter((node) => {
       const expiry = node.cert_expires_in_seconds;
       return typeof expiry === "number" && expiry > 0 && expiry <= TIMERS.CERT_EXPIRING_SOON_SECONDS;
@@ -267,13 +295,15 @@ export function DashboardPage() {
           actions={<Button type="button" onClick={() => navigateToPage("nodes")}>Manage Nodes</Button>}
         >
           <div className="controller-node-grid">
-            {controllerNodes.length === 0 ? <EmptyState message="No controller nodes reported." /> : null}
-            {controllerNodes.map((node, index) => {
-              const name = nodeName(node) || "unnamed node";
-              const models = node.models || [];
-              const nodeStatus = node.reachable === false ? "offline" : node.status || "reachable";
-              const nodeTone = node.reachable === false ? "danger" : statusTone(node.status || "reachable");
-              const cert = certBadge(node.cert_expires_in_seconds, node.url);
+            {controllerNodeSummaries.length === 0 ? <EmptyState message="No controller nodes reported." /> : null}
+            {controllerNodeSummaries.map((node, index) => {
+              const name = node.name || "unnamed node";
+              const fullNode = fullNodeByName.get(name);
+              const models = modelsByNode.get(name) || [];
+              const modelCount = node.models_total ?? models.length;
+              const nodeStatus = node.reachable === false ? "offline" : node.heartbeat_fresh ? "reachable" : "stale";
+              const nodeTone = node.reachable === false ? "danger" : statusTone(nodeStatus);
+              const cert = certBadge(fullNode?.cert_expires_in_seconds, fullNode?.url || node.url);
               return (
                 <NodeCard
                   key={`${name}-${index}`}
@@ -282,7 +312,11 @@ export function DashboardPage() {
                   badgeTone={nodeTone}
                   certLabel={cert.label}
                   certTone={cert.tone}
-                  modelCount={models.length}
+                  modelCount={modelCount}
+                  details={[
+                    `${node.models_running ?? 0}/${modelCount} running`,
+                    node.primary_model ? `Primary: ${node.primary_model}` : "No primary model",
+                  ]}
                   onOpenNode={() => navigateToPage("nodes")}
                   emptyMessage="No models reported for this node."
                  >

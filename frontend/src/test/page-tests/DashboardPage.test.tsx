@@ -267,14 +267,17 @@ it("starts and stops local models from the Dashboard card", async () => {
       .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller", configured_models: 1 }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "stopped", node: "mac-mini" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ([{ name: "mac-mini", reachable: true, heartbeat_fresh: true, models_total: 1, models_running: 0, primary_model: "mistral" }]) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller", configured_models: 1 }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "running", node: "mac-mini" }] }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ([{ name: "mac-mini", reachable: true, heartbeat_fresh: true, models_total: 1, models_running: 1, primary_model: "mistral" }]) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ ok: true }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ mode: "controller", configured_models: 1 }) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ models: [{ name: "mistral", status: "stopped", node: "mac-mini" }] }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) }),
+      .mockResolvedValueOnce({ ok: true, json: async () => ({ nodes: [{ name: "mac-mini", reachable: true, models: [{ name: "mistral" }] }] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ([{ name: "mac-mini", reachable: true, heartbeat_fresh: true, models_total: 1, models_running: 0, primary_model: "mistral" }]) }),
   );
   const user = userEvent.setup();
 
@@ -298,6 +301,11 @@ it("sends dashboard local models to another reachable node", async () => {
         { name: "linux", reachable: true, models: [] },
         { name: "offline", reachable: false, models: [] },
       ] }) })
+      .mockResolvedValueOnce({ ok: true, json: async () => ([
+        { name: "mac-mini", reachable: true, heartbeat_fresh: true, models_total: 1, models_running: 0, primary_model: "mistral" },
+        { name: "linux", reachable: true, heartbeat_fresh: true, models_total: 0, models_running: 0, primary_model: null },
+        { name: "offline", reachable: false, heartbeat_fresh: false, models_total: 0, models_running: 0, primary_model: null },
+      ]) })
       .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "transfer-1", status: "queued", destination_node: "linux" }) }),
   );
   const user = userEvent.setup();
@@ -371,7 +379,14 @@ it("renders certificate alerts and per-node cert badges", async () => {
             { name: "https-node", url: "https://localhost:9443", reachable: true, models: [], cert_expires_in_seconds: null },
           ],
         }),
-      }),
+      })
+      .mockResolvedValueOnce({ ok: true, json: async () => ([
+        { name: "expired-node", reachable: true, heartbeat_fresh: true, models_total: 0, models_running: 0, primary_model: null },
+        { name: "expiring-node", reachable: true, heartbeat_fresh: true, models_total: 0, models_running: 0, primary_model: null },
+        { name: "healthy-node", reachable: true, heartbeat_fresh: true, models_total: 0, models_running: 0, primary_model: null },
+        { name: "http-node", reachable: true, heartbeat_fresh: true, models_total: 0, models_running: 0, primary_model: null },
+        { name: "https-node", reachable: true, heartbeat_fresh: true, models_total: 0, models_running: 0, primary_model: null },
+      ]) }),
   );
 
   renderDashboardPage();

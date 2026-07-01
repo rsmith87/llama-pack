@@ -34,6 +34,9 @@ class FakeRouteRegistry:
             return [{"filename": "deepseek-r1.gguf", "registered_as": "deepseek"}]
         raise AssertionError(f"Unexpected node request: {node_name}")
 
+    async def aclose(self) -> None:
+        return None
+
 
 class FakeEligibilityRouteRegistry:
     def list_nodes(self) -> list[dict[str, object]]:
@@ -54,6 +57,49 @@ class FakeEligibilityRouteRegistry:
         if node_name == "linux-2080ti" and path == "/lm-api/v1/library/ggufs":
             raise AssertionError("Unavailable nodes must not be queried for GGUFs")
         raise AssertionError(f"Unexpected node request: {node_name} {path}")
+
+    async def aclose(self) -> None:
+        return None
+
+
+class FakeCachedRouteRegistry:
+    def node_summaries(self) -> list[dict[str, object]]:
+        return [
+            {
+                "name": "gpu-box",
+                "reachable": True,
+                "heartbeat_fresh": True,
+                "models_total": 2,
+                "models_running": 1,
+                "primary_model": "qwen",
+            },
+            {
+                "name": "offline-box",
+                "reachable": False,
+                "heartbeat_fresh": False,
+                "models_total": None,
+                "models_running": None,
+                "primary_model": None,
+            },
+        ]
+
+    def cached_model_snapshots(self) -> list[dict[str, object]]:
+        return [
+            {
+                "name": "gpu-box",
+                "reachable": True,
+                "models": [{"name": "qwen", "running": True}, {"name": "mistral", "running": False}],
+            }
+        ]
+
+    def list_nodes(self) -> list[dict[str, object]]:
+        raise AssertionError("Cached route options must not list nodes through the live registry path")
+
+    async def request_node(self, node_name: str, method: str, path: str) -> object:
+        raise AssertionError("Cached route options must not query agents live")
+
+    async def aclose(self) -> None:
+        return None
 
 
 def workflows_config(tmp_path: Path):
@@ -323,6 +369,58 @@ def test_create_workflow_rejects_unknown_template(tmp_path: Path):
         assert response.json()["detail"] == "Unknown workflow template: missing"
 
 
+def test_create_workflow_rejects_managed_lifecycle_without_node_target(tmp_path: Path):
+    with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
+        response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Managed summary",
+                "description": "Starts a node model for the workflow",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Summarize the day",
+                    "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
+                    "model": "qwen",
+                    "target": "auto",
+                    "manage_model_lifecycle": True,
+                },
+                "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Workflow parameter 'target' must be node:<name> when manage_model_lifecycle=true"
+        )
+
+
+def test_create_workflow_rejects_managed_lifecycle_without_specific_model(tmp_path: Path):
+    with authenticated_client(create_app(config=workflows_config(tmp_path))) as client:
+        response = client.post(
+            "/lm-api/v1/plugins/llama_pack_workflows/workflows",
+            json={
+                "name": "Managed summary",
+                "description": "Starts a node model for the workflow",
+                "template_id": "thread_prompt_chain",
+                "enabled": True,
+                "parameters": {
+                    "content": "Summarize the day",
+                    "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
+                    "model": "auto",
+                    "target": "node:gpu-box",
+                    "manage_model_lifecycle": True,
+                },
+                "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
+            },
+        )
+
+        assert response.status_code == 400
+        assert response.json()["detail"] == (
+            "Workflow parameter 'model' must be a specific model when manage_model_lifecycle=true"
+        )
+
+
 def test_workflows_plugin_route_options_list_models_and_node_targets(tmp_path: Path):
     app = create_app(config=workflows_config(tmp_path))
     app.state.node_registry = FakeRouteRegistry()
@@ -363,6 +461,23 @@ def test_workflows_plugin_route_options_explain_model_and_node_eligibility(tmp_p
         assert targets["node:mac-mini"]["reason"] == "Node mac-mini is reachable."
         assert targets["node:linux-2080ti"]["selectable"] is False
         assert targets["node:linux-2080ti"]["reason"] == "Node linux-2080ti is unavailable because its heartbeat is stale or missing."
+
+
+def test_workflows_plugin_route_options_use_cached_node_inventory(tmp_path: Path):
+    app = create_app(config=workflows_config(tmp_path))
+    app.state.node_registry = FakeCachedRouteRegistry()
+
+    with authenticated_client(app) as client:
+        response = client.get("/lm-api/v1/plugins/llama_pack_workflows/route-options")
+
+        assert response.status_code == 200
+        payload = response.json()
+        assert [item["value"] for item in payload["models"]] == ["auto", "qwen", "mistral"]
+        assert [item["value"] for item in payload["targets"]] == ["auto", "node:gpu-box", "node:offline-box"]
+        assert payload["models"][1]["reason"] == "Running on gpu-box."
+        assert payload["models"][2]["reason"] == "Stopped on gpu-box; workflow routing can start it if capacity allows."
+        assert payload["targets"][1]["selectable"] is True
+        assert payload["targets"][2]["selectable"] is False
 
 
 class FakeThreadService:
@@ -422,7 +537,8 @@ def test_manual_run_executes_thread_prompt_chain(tmp_path: Path):
                     "content": "Summarize the day",
                     "steps": [{"label": "summarize", "instructions": "Summarize in five bullets."}],
                     "model": "qwen",
-                    "target": "auto",
+                    "target": "node:gpu-box",
+                    "manage_model_lifecycle": True,
                 },
                 "triggers": [{"type": "manual", "schedule": None, "event_type": None}],
             },
@@ -440,6 +556,7 @@ def test_manual_run_executes_thread_prompt_chain(tmp_path: Path):
 
     assert fake_thread_service.calls[0]["content"] == "Summarize the day"
     assert fake_thread_service.calls[0]["model"] == "qwen"
+    assert fake_thread_service.calls[0]["target"] == "node:gpu-box"
 
 
 def test_workflows_plugin_static_assets_load(tmp_path: Path):
@@ -471,6 +588,8 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-model-select" in template.text
         assert "name=\"target\"" in template.text
         assert "data-workflow-target-select" in template.text
+        assert "name=\"manage_model_lifecycle\"" in template.text
+        assert "Start selected node model for this workflow run" in template.text
         assert "parameters_json" not in template.text
         assert "data-workflow-action" in controller.text
         assert "data-workflow-action=\"cancel-edit\"" in template.text
@@ -478,10 +597,14 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "data-workflow-run-detail-body" in template.text
         assert "export function mountPage" in controller.text
         assert "buildParameters" in controller.text
+        assert "manage_model_lifecycle" in controller.text
         assert "addStepField" in controller.text
         assert "renderRunDetail" in controller.text
         assert "syncRouteSelects" in controller.text
+        assert "loadRouteOptions" in controller.text
         assert 'host.apiGet("/route-options")' in controller.text
+        assert 'host.apiGet("/route-options").catch' not in controller.text
+        assert "const [templates, workflows, runs] = await Promise.all" in controller.text
         assert "option.title = option.reason" in controller.text
         assert "element.disabled = option.selectable === false" in controller.text
         assert "formatRouteOptionLabel" in controller.text

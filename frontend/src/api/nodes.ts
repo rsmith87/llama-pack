@@ -1,5 +1,5 @@
 import { apiGet, apiPost, apiPut, apiStream } from "./client";
-import type { NodeRecord } from "../types/index";
+import type { NodeRecord, NodeSummary } from "../types/index";
 
 export type NodeActionResponse = Record<string, unknown>;
 
@@ -20,6 +20,9 @@ export type UpdateNodePayload = {
   api_key?: string;
   verify_tls: boolean;
 };
+
+let nodeModelsRequest: Promise<NodeRecord[]> | null = null;
+let nodeModelsCache: NodeRecord[] | null = null;
 
 function isRecord(payload: unknown): payload is Record<string, unknown> {
   return typeof payload === "object" && payload !== null && !Array.isArray(payload);
@@ -67,8 +70,33 @@ export function listNodes(): Promise<NodeRecord[]> {
   return apiGet<unknown>("/nodes").then((payload) => parseNodeArray("/nodes", payload));
 }
 
+export function listNodeSummaries(): Promise<NodeSummary[]> {
+  return apiGet<unknown>("/nodes/summary").then((payload) => parseNodeArray("/nodes/summary", payload) as NodeSummary[]);
+}
+
 export function getNodeModels(): Promise<NodeRecord[]> {
-  return apiGet<unknown>("/nodes/models").then((payload) => parseNodeArray("/nodes/models", payload));
+  if (nodeModelsRequest) {
+    return nodeModelsRequest;
+  }
+  nodeModelsRequest = apiGet<unknown>("/nodes/models")
+    .then((payload) => parseNodeArray("/nodes/models", payload))
+    .then((nodes) => {
+      nodeModelsCache = nodes;
+      return nodes;
+    })
+    .finally(() => {
+      nodeModelsRequest = null;
+    });
+  return nodeModelsRequest;
+}
+
+export function getCachedNodeModels(): NodeRecord[] | null {
+  return nodeModelsCache ? nodeModelsCache.map((node) => ({ ...node })) : null;
+}
+
+export function invalidateNodeModelsCache(): void {
+  nodeModelsCache = null;
+  nodeModelsRequest = null;
 }
 
 export function getNodeGgufs(): Promise<NodeRecord[]> {
@@ -77,17 +105,26 @@ export function getNodeGgufs(): Promise<NodeRecord[]> {
 
 export function startNodeModel(node: string, name: string): Promise<NodeActionResponse> {
   const path = `/nodes/${encodeURIComponent(node)}/models/${encodeURIComponent(name)}/start`;
-  return apiPost<unknown>(path).then((payload) => parseNodeAction(path, payload));
+  return apiPost<unknown>(path).then((payload) => {
+    invalidateNodeModelsCache();
+    return parseNodeAction(path, payload);
+  });
 }
 
 export function stopNodeModel(node: string, name: string): Promise<NodeActionResponse> {
   const path = `/nodes/${encodeURIComponent(node)}/models/${encodeURIComponent(name)}/stop`;
-  return apiPost<unknown>(path).then((payload) => parseNodeAction(path, payload));
+  return apiPost<unknown>(path).then((payload) => {
+    invalidateNodeModelsCache();
+    return parseNodeAction(path, payload);
+  });
 }
 
 export function restartNodeModel(node: string, name: string): Promise<NodeActionResponse> {
   const path = `/nodes/${encodeURIComponent(node)}/models/${encodeURIComponent(name)}/restart`;
-  return apiPost<unknown>(path).then((payload) => parseNodeAction(path, payload));
+  return apiPost<unknown>(path).then((payload) => {
+    invalidateNodeModelsCache();
+    return parseNodeAction(path, payload);
+  });
 }
 
 export function streamNodeModelLogs(node: string, name: string): Promise<ReadableStreamDefaultReader<Uint8Array>> {
@@ -100,5 +137,8 @@ export function getTransfer(transferId: string): Promise<TransferRecord> {
 
 export function updateNode(node: string, payload: UpdateNodePayload): Promise<NodeRecord> {
   const path = `/nodes/${encodeURIComponent(node)}`;
-  return apiPut<unknown>(path, payload).then((response) => requireRecordResponse(path, response) as NodeRecord);
+  return apiPut<unknown>(path, payload).then((response) => {
+    invalidateNodeModelsCache();
+    return requireRecordResponse(path, response) as NodeRecord;
+  });
 }

@@ -35,6 +35,8 @@ class NodeRegistry:
         self._dynamic_nodes: dict[str, NodeConfig] = {}
         self._node_overrides: dict[str, NodeConfig] = {}
         self._heartbeats: dict[str, str] = {}
+        self._clients: dict[tuple[float | None, bool], httpx.AsyncClient] = {}
+        self._last_model_snapshots: dict[str, dict[str, Any]] = {}
         self._load_state()
 
     def list_nodes(self) -> list[dict[str, str]]:
@@ -45,6 +47,19 @@ class NodeRegistry:
 
     def all_node_configs(self) -> dict[str, NodeConfig]:
         return {**self.config.nodes, **self._node_overrides, **self._dynamic_nodes}
+
+    def cache_model_snapshots(self, snapshots: list[dict[str, Any]]) -> None:
+        self._last_model_snapshots = {
+            str(snapshot.get("name")): snapshot
+            for snapshot in snapshots
+            if isinstance(snapshot.get("name"), str)
+        }
+
+    def cached_model_snapshots(self) -> list[dict[str, Any]]:
+        return list(self._last_model_snapshots.values())
+
+    def node_summaries(self) -> list[dict[str, Any]]:
+        return [self._node_summary(node) for node in self.list_nodes()]
 
     def _node_payload(self, name: str, node: NodeConfig) -> dict[str, Any]:
         heartbeat = self._heartbeats.get(name)
@@ -57,6 +72,34 @@ class NodeRegistry:
             "last_heartbeat": heartbeat,
             "heartbeat_age_seconds": self.heartbeat_age_seconds(name),
             "heartbeat_fresh": self.is_heartbeat_fresh(name),
+        }
+
+    def _node_summary(self, node: dict[str, Any]) -> dict[str, Any]:
+        node_name = str(node.get("name") or "")
+        cached = self._last_model_snapshots.get(node_name)
+        models = cached.get("models") if cached is not None else None
+        model_list = models if isinstance(models, list) else None
+        running_models = [
+            model
+            for model in (model_list or [])
+            if isinstance(model, dict) and (model.get("running") is True or model.get("status") == "running")
+        ]
+        primary = running_models[0] if running_models else (model_list or [None])[0]
+        primary_name = primary.get("name") if isinstance(primary, dict) and isinstance(primary.get("name"), str) else None
+        reachable = bool(node.get("heartbeat_fresh"))
+        if cached is not None and cached.get("reachable") is False:
+            reachable = False
+        return {
+            "name": node_name,
+            "url": node.get("url"),
+            "reachable": reachable,
+            "heartbeat_fresh": bool(node.get("heartbeat_fresh")),
+            "heartbeat_age_seconds": node.get("heartbeat_age_seconds"),
+            "last_heartbeat": node.get("last_heartbeat"),
+            "registration": node.get("registration"),
+            "models_total": len(model_list) if model_list is not None else None,
+            "models_running": len(running_models) if model_list is not None else None,
+            "primary_model": primary_name,
         }
 
     def heartbeat_age_seconds(self, name: str) -> int | None:
@@ -174,8 +217,8 @@ class NodeRegistry:
             return self._dynamic_nodes[name]
         raise KeyError(f"Unknown node: {name}")
 
-    @staticmethod
     async def _default_request(
+        self,
         method: str,
         url: str,
         api_key: str | None,
@@ -187,10 +230,24 @@ class NodeRegistry:
         headers: dict[str, str] = {}
         if api_key:
             headers[LLAMA_PACK_API_KEY_HEADER] = api_key
-        async with httpx.AsyncClient(timeout=timeout, verify=verify_tls) as client:
-            response = await client.request(method, url, headers=headers, json=json_body)
-            response.raise_for_status()
-            return response.json()
+        client = self._get_client(timeout, verify_tls)
+        response = await client.request(method, url, headers=headers, json=json_body)
+        response.raise_for_status()
+        return response.json()
+
+    def _get_client(self, timeout: float | None, verify_tls: bool) -> httpx.AsyncClient:
+        key = (timeout, verify_tls)
+        client = self._clients.get(key)
+        if client is None:
+            client = httpx.AsyncClient(timeout=timeout, verify=verify_tls)
+            self._clients[key] = client
+        return client
+
+    async def aclose(self) -> None:
+        clients = list(self._clients.values())
+        self._clients.clear()
+        for client in clients:
+            await client.aclose()
 
     def _load_state(self) -> None:
         if self._store is None:

@@ -471,6 +471,7 @@ For historical Raspberry Pi topology notes and smoke checks, see
 - Auto-registration auth: `controller_registration_key` on controller, `controller_registration_key_outbound` on agent.
 - Agent heartbeat/registration fields: `controller_url`, `node_name`, `agent_url`, `heartbeat_interval_seconds`.
 - Stale node timeout on controller: `node_heartbeat_timeout_seconds`.
+- Workflow managed-model startup timeout: `workflow_model_start_timeout_seconds`.
 - Browser external client origins: `client_cors_origins` enables CORS for
   explicitly listed origins such as `http://localhost:5173`. Leave it empty for
   same-origin UI, CLI clients, server-to-server clients, and Electron apps that

@@ -2,6 +2,7 @@ from pathlib import Path
 from unittest.mock import patch
 from datetime import UTC, datetime, timedelta
 from fastapi.testclient import TestClient as RawTestClient
+import asyncio
 import json
 import httpx
 import pytest
@@ -934,6 +935,110 @@ def test_controller_aggregates_models_from_nodes():
     assert payload[1]["name"] == "win"
     assert payload[1]["reachable"] is True
     assert payload[1]["agent_config_source"] == "D:/win-agent-config.yaml"
+
+
+def test_controller_aggregates_node_models_concurrently():
+    config = load_config(
+        {
+            "mode": "controller",
+            "node_heartbeat_timeout_seconds": 999999,
+            "nodes": {
+                "mac": {"url": "http://mac-agent:9000"},
+                "win": {"url": "http://win-agent:9000"},
+            },
+        }
+    )
+    model_requests_started = 0
+    both_model_requests_started = asyncio.Event()
+
+    async def fake_request(method, url, api_key, verify_tls):
+        nonlocal model_requests_started
+        if url.endswith("/health"):
+            return {"config_source": f"{url}-config.yaml"}
+        if url.endswith("/lm-api/v1/models"):
+            model_requests_started += 1
+            if model_requests_started == 2:
+                both_model_requests_started.set()
+            await asyncio.wait_for(both_model_requests_started.wait(), timeout=0.25)
+            return [{"name": url.split("//", 1)[1].split("-", 1)[0]}]
+        raise AssertionError(url)
+
+    app = create_app(config=config, controller_request=fake_request)
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/nodes/models")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert [node["name"] for node in payload] == ["mac", "win"]
+    assert [node["reachable"] for node in payload] == [True, True]
+
+
+def test_controller_node_summary_does_not_call_agents_live():
+    config = load_config(
+        {
+            "mode": "controller",
+            "node_heartbeat_timeout_seconds": 999999,
+            "nodes": {"mac": {"url": "http://mac-agent:9000"}},
+        }
+    )
+
+    async def fake_request(method, url, api_key, verify_tls):
+        raise AssertionError(f"summary should not call agent: {method} {url}")
+
+    app = create_app(config=config, controller_request=fake_request)
+    client = TestClient(app)
+
+    response = client.get("/lm-api/v1/nodes/summary")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {
+            "name": "mac",
+            "url": "http://mac-agent:9000",
+            "reachable": True,
+            "heartbeat_fresh": True,
+            "heartbeat_age_seconds": None,
+            "last_heartbeat": None,
+            "registration": "static",
+            "models_total": None,
+            "models_running": None,
+            "primary_model": None,
+        }
+    ]
+
+
+def test_controller_node_summary_uses_cached_model_inventory_counts():
+    config = load_config(
+        {
+            "mode": "controller",
+            "node_heartbeat_timeout_seconds": 999999,
+            "nodes": {"mac": {"url": "http://mac-agent:9000"}},
+        }
+    )
+
+    async def fake_request(method, url, api_key, verify_tls):
+        if url == "http://mac-agent:9000/health":
+            return {"config_source": "mac-config.yaml"}
+        if url == "http://mac-agent:9000/lm-api/v1/models":
+            return [
+                {"name": "qwen", "running": True},
+                {"name": "coder", "status": "stopped"},
+            ]
+        raise AssertionError(url)
+
+    app = create_app(config=config, controller_request=fake_request)
+    client = TestClient(app)
+
+    models_response = client.get("/lm-api/v1/nodes/models")
+    summary_response = client.get("/lm-api/v1/nodes/summary")
+
+    assert models_response.status_code == 200
+    assert summary_response.status_code == 200
+    payload = summary_response.json()
+    assert payload[0]["models_total"] == 2
+    assert payload[0]["models_running"] == 1
+    assert payload[0]["primary_model"] == "qwen"
 
 
 def test_controller_aggregates_gguf_files_from_nodes():

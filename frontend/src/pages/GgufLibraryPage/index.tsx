@@ -2,7 +2,7 @@ import "./styles.css";
 import { useEffect, useMemo, useState } from "react";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { createGgufTransfer, addGgufModel, deleteConfiguredModel, deleteGguf, listGgufs, updateGgufAsset, updateGgufModel } from "../../api/library";
-import { getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
+import { getCachedNodeModels, getNodeGgufs, getNodeModels, listNodes } from "../../api/nodes";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { Button, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge } from "../../components/ui";
 import { ModelCard } from "../../components/ModelCard";
@@ -136,7 +136,7 @@ export function GgufLibraryPage() {
   const appMode = useAppMode();
   const { data, loading, error, refresh, setError } = useAsyncResource<GgufLibraryData>(
     () => loadGgufLibraryData(appMode),
-    { files: [], nodeSnapshots: [], nodeGgufSnapshots: [] },
+    { files: [], nodeSnapshots: getCachedNodeModels() || [], nodeGgufSnapshots: [] },
     [appMode],
   );
   const { files, nodeSnapshots, nodeGgufSnapshots } = data;

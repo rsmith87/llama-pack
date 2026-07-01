@@ -1,11 +1,14 @@
 import { apiGet } from "./client";
 import type { DashboardData, HealthResponse, LocalModel, NodeInventoryItem } from "../types/index";
+import { getNodeModels, listNodeSummaries } from "./nodes";
 
 export type ControllerStatusResponse = {
   reachable: boolean;
   error?: string;
   status_code?: number;
 };
+
+let healthRequest: Promise<HealthResponse> | null = null;
 
 function isRecord(payload: unknown): payload is Record<string, unknown> {
   return typeof payload === "object" && payload !== null && !Array.isArray(payload);
@@ -45,10 +48,6 @@ function parseModelList(payload: unknown): LocalModel[] {
   return requireObjectArray("/models", payload, "models") as LocalModel[];
 }
 
-function parseNodeList(payload: unknown): NodeInventoryItem[] {
-  return requireObjectArray("/nodes/models", payload, "nodes") as NodeInventoryItem[];
-}
-
 function parseControllerStatus(payload: unknown): ControllerStatusResponse {
   const record = requireRecord(payload, "/health/controller");
   if (typeof record.reachable !== "boolean") {
@@ -64,7 +63,15 @@ function parseControllerStatus(payload: unknown): ControllerStatusResponse {
 }
 
 export function getHealth(): Promise<HealthResponse> {
-  return apiGet<unknown>("/health").then(parseHealthResponse);
+  if (healthRequest) {
+    return healthRequest;
+  }
+  healthRequest = apiGet<unknown>("/health")
+    .then(parseHealthResponse)
+    .finally(() => {
+      healthRequest = null;
+    });
+  return healthRequest;
 }
 
 export function getControllerStatus(): Promise<ControllerStatusResponse> {
@@ -72,15 +79,17 @@ export function getControllerStatus(): Promise<ControllerStatusResponse> {
 }
 
 export async function loadDashboardData(): Promise<DashboardData> {
-  const [health, localModelsPayload, nodesPayload] = await Promise.all([
+  const [health, localModelsPayload, nodes, nodeSummaries] = await Promise.all([
     getHealth(),
     apiGet<unknown>("/models"),
-    apiGet<unknown>("/nodes/models"),
+    getNodeModels(),
+    listNodeSummaries().catch(() => []),
   ]);
 
   return {
     health: parseHealthResponse(health),
     localModels: parseModelList(localModelsPayload),
-    nodes: parseNodeList(nodesPayload),
+    nodes: nodes as NodeInventoryItem[],
+    nodeSummaries,
   };
 }

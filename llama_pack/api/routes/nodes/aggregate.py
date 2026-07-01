@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import httpx
 from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, Request
@@ -86,13 +87,26 @@ async def _fetch_node_snapshot(registry: NodeRegistry, node: dict, include_model
 
 @router.get("/nodes/status")
 async def node_status(registry: NodeRegistry = Depends(get_node_registry)):
-    return [await _fetch_node_snapshot(registry, node, include_models=False) for node in registry.list_nodes()]
+    nodes = registry.list_nodes()
+    return await asyncio.gather(
+        *(_fetch_node_snapshot(registry, node, include_models=False) for node in nodes)
+    )
+
+
+@router.get("/nodes/summary")
+async def node_summary(registry: NodeRegistry = Depends(get_node_registry)):
+    return registry.node_summaries()
 
 
 @router.get("/nodes/models")
 async def node_models(request: Request, registry: NodeRegistry = Depends(get_node_registry)):
     store = getattr(request.app.state, "model_asset_store", None)
-    return [await _fetch_node_snapshot(registry, node, include_models=True, store=store) for node in registry.list_nodes()]
+    nodes = registry.list_nodes()
+    snapshots = await asyncio.gather(
+        *(_fetch_node_snapshot(registry, node, include_models=True, store=store) for node in nodes)
+    )
+    registry.cache_model_snapshots(list(snapshots))
+    return snapshots
 
 
 async def _fetch_node_gguf_snapshot(registry: NodeRegistry, node: dict) -> dict:
@@ -108,12 +122,16 @@ async def _fetch_node_gguf_snapshot(registry: NodeRegistry, node: dict) -> dict:
 
 @router.get("/nodes/ggufs")
 async def node_ggufs(registry: NodeRegistry = Depends(get_node_registry)):
-    return [await _fetch_node_gguf_snapshot(registry, node) for node in registry.list_nodes()]
+    nodes = registry.list_nodes()
+    return await asyncio.gather(*(_fetch_node_gguf_snapshot(registry, node) for node in nodes))
 
 
 @router.get("/nodes/models/profiles")
 async def node_model_profiles(registry: NodeRegistry = Depends(get_node_registry)):
-    snapshots = [await _fetch_node_snapshot(registry, node, include_models=True) for node in registry.list_nodes()]
+    nodes = registry.list_nodes()
+    snapshots = await asyncio.gather(
+        *(_fetch_node_snapshot(registry, node, include_models=True) for node in nodes)
+    )
     statuses = []
     for snapshot in snapshots:
         if not snapshot.get("reachable") or not isinstance(snapshot.get("models"), list):

@@ -9,6 +9,7 @@ from fastapi import FastAPI
 from llama_pack.core.threads.models import WorkflowStep
 from llama_pack_workflows.models import TriggerType, WorkflowDefinition, WorkflowRun
 from llama_pack_workflows.store import WorkflowStore
+from llama_pack_workflows.templates import validate_template_parameters
 
 
 class ModelRouteRegistry(Protocol):
@@ -67,6 +68,9 @@ class WorkflowRunner:
                 ],
                 "targets": [_route_option("auto", "Auto", True, "Routing policy will choose an eligible node.")],
             }
+        cached_options = _cached_route_options(registry)
+        if cached_options is not None:
+            return cached_options
 
         models: dict[str, RouteOption] = {
             "auto": _route_option("auto", "Auto", True, "Routing policy will choose an eligible running model.")
@@ -115,6 +119,7 @@ class WorkflowRunner:
 
     async def _run_thread_prompt_chain(self, run_id: str, definition: WorkflowDefinition) -> None:
         parameters = definition.parameters
+        validate_template_parameters(definition.template_id, parameters)
         content = _required_string(parameters, "content")
         steps = _required_steps(parameters)
         model = _required_string(parameters, "model")
@@ -196,6 +201,61 @@ def _required_steps(parameters: dict[str, object]) -> list[WorkflowStep]:
 
 def _route_option(value: str, label: str, selectable: bool, reason: str) -> RouteOption:
     return {"value": value, "label": label, "selectable": selectable, "reason": reason}
+
+
+def _cached_route_options(registry: ModelRouteRegistry) -> dict[str, list[RouteOption]] | None:
+    summaries_method = getattr(registry, "node_summaries", None)
+    snapshots_method = getattr(registry, "cached_model_snapshots", None)
+    if not callable(summaries_method) or not callable(snapshots_method):
+        return None
+    summaries = summaries_method()
+    snapshots = snapshots_method()
+    if not summaries:
+        return None
+    models: dict[str, RouteOption] = {
+        "auto": _route_option("auto", "Auto", True, "Routing policy will choose an eligible running model.")
+    }
+    targets: dict[str, RouteOption] = {
+        "auto": _route_option("auto", "Auto", True, "Routing policy will choose an eligible node.")
+    }
+    reachable_nodes: dict[str, bool] = {}
+    for summary in summaries:
+        node_name = str(summary.get("name") or "").strip()
+        if not node_name:
+            continue
+        reachable = bool(summary.get("reachable"))
+        reachable_nodes[node_name] = reachable
+        if reachable:
+            targets[f"node:{node_name}"] = _route_option(
+                f"node:{node_name}",
+                node_name,
+                True,
+                f"Node {node_name} is reachable.",
+            )
+        else:
+            targets[f"node:{node_name}"] = _route_option(
+                f"node:{node_name}",
+                node_name,
+                False,
+                f"Node {node_name} is unavailable because its heartbeat is stale or missing.",
+            )
+    for snapshot in snapshots:
+        node_name = str(snapshot.get("name") or "").strip()
+        if not node_name or reachable_nodes.get(node_name) is not True:
+            continue
+        raw_models = snapshot.get("models")
+        if not isinstance(raw_models, list):
+            continue
+        for model in raw_models:
+            if not isinstance(model, dict):
+                continue
+            model_name = str(model.get("name") or "").strip()
+            if model_name:
+                models[model_name] = _model_route_option(model_name, node_name, bool(model.get("running")))
+    return {
+        "models": list(models.values()),
+        "targets": list(targets.values()),
+    }
 
 
 def _model_route_option(model_name: str, node_name: str, running: bool) -> RouteOption:

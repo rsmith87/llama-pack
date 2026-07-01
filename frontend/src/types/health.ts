@@ -1,5 +1,5 @@
 import type { LocalModel } from "./models";
-import type { NodeInventoryItem } from "./nodes";
+import type { NodeInventoryItem, NodeSummary } from "./nodes";
 
 export type RuntimeDiagnostic = {
   id: string;
@@ -128,4 +128,5 @@ export type DashboardData = {
   health: HealthResponse | null;
   localModels: LocalModel[];
   nodes: NodeInventoryItem[];
+  nodeSummaries: NodeSummary[];
 };

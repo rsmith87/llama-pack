@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, it, vi } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { NodesPage } from "../../pages/NodesPage";
+import { getNodeModels, invalidateNodeModelsCache } from "../../api/nodes";
 
 const { mockedNavigate } = vi.hoisted(() => ({
   mockedNavigate: vi.fn(),
@@ -25,6 +26,7 @@ function renderNodesPage() {
 }
 
 afterEach(() => {
+  invalidateNodeModelsCache();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   mockedNavigate.mockReset();
@@ -33,6 +35,21 @@ afterEach(() => {
 function okJson(payload: unknown) {
   return { ok: true, json: async () => payload };
 }
+
+it("renders cached node model inventory immediately while refreshing", async () => {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockResolvedValue(okJson([{ name: "cached-agent", reachable: true, models: [{ name: "cached-model" }] }])),
+  );
+  await getNodeModels();
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+
+  renderNodesPage();
+
+  expect(screen.getByText("1/1 reachable nodes, 1 reported models")).toBeInTheDocument();
+  expect(screen.getAllByText("cached-agent").length).toBeGreaterThan(0);
+  expect(screen.getByText("cached-model")).toBeInTheDocument();
+});
 
 it("loads, merges, filters, and summarizes nodes", async () => {
   vi.stubGlobal(
