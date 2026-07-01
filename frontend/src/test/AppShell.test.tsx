@@ -4,6 +4,11 @@ import { afterEach, vi } from "vitest";
 import App from "../App";
 import { pluginStatusIssuesFromPayload } from "../features/plugins/pluginNavContext";
 
+const RUNTIME_SETTINGS_RESPONSE = {
+  settings: { display_timezone: "UTC" },
+  sources: { display_timezone: "default" },
+};
+
 afterEach(() => {
   localStorage.clear();
   document.documentElement.removeAttribute("data-theme");
@@ -472,6 +477,9 @@ it("loads plugin navigation on document refresh with the persisted UI session", 
       if (url === "/lm-api/v1/auth/me" && token === "persisted-session") {
         return Promise.resolve({ ok: true, json: async () => ({ username: "admin", role: "admin" }) });
       }
+      if (url === "/lm-api/v1/settings/runtime" && token === "persisted-session") {
+        return Promise.resolve({ ok: true, json: async () => RUNTIME_SETTINGS_RESPONSE });
+      }
       if (url === "/lm-api/v1/health") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller" }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
       if (url === "/lm-api/v1/setup/status") return Promise.resolve({ ok: true, json: async () => ({ mode: "controller", auth_bootstrap_required: false, auth_enabled: false, setup_recommended: false }) });
@@ -719,6 +727,7 @@ it("refreshes the active page after login so protected data reloads with the ses
       if (url === "/lm-api/v1/nodes/models") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
       if (url === "/lm-api/v1/nodes" && token === "token-1") return Promise.resolve({ ok: true, json: async () => ({ nodes: [] }) });
       if (url === "/lm-api/v1/nodes") return Promise.resolve({ ok: false, status: 401, statusText: "Unauthorized", text: async () => '{"detail":"Unauthorized"}' });
+      if (url === "/lm-api/v1/settings/runtime" && token === "token-1") return Promise.resolve({ ok: true, json: async () => RUNTIME_SETTINGS_RESPONSE });
       if (url === "/lm-api/v1/auth/login") return Promise.resolve({ ok: true, json: async () => ({ token: "token-1", username: "admin", role: "admin", expires_at: "later" }) });
       return Promise.resolve({ ok: true, json: async () => ({}) });
     }),

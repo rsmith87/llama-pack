@@ -22,10 +22,15 @@ class ManagedModelLifecycle:
         for running_model in running_before:
             await self.request_node_model_action(node_name, running_model, "stop")
 
-        await self.request_node_model_action(node_name, model_name, "start")
-        if await self.wait_for_model_running(node_name, model_name):
+        start_response = await self.request_node_model_action(node_name, model_name, "start")
+        expected_names = _expected_running_names(model_name, start_response)
+        if await self.wait_for_model_running(node_name, expected_names):
             return
-        raise RuntimeError("model_start_timeout")
+        models = await self.list_node_models(node_name)
+        observed = ", ".join(_observed_model_summaries(models)) or "none"
+        raise RuntimeError(
+            f"model_start_timeout: node={node_name} model={model_name} observed_models=[{observed}]"
+        )
 
     async def restore_exclusive(self, node_name: str, loaded_model: str, prior_models: list[str]) -> None:
         if not node_name:
@@ -44,18 +49,18 @@ class ManagedModelLifecycle:
         payload = await self.node_registry.request_node(node_name, "GET", "/lm-api/v1/models")
         return payload if isinstance(payload, list) else []
 
-    async def request_node_model_action(self, node_name: str, model_name: str, action: str) -> None:
+    async def request_node_model_action(self, node_name: str, model_name: str, action: str) -> object:
         encoded_model = quote(model_name, safe="")
-        await self.node_registry.request_node(
+        return await self.node_registry.request_node(
             node_name,
             "POST",
             f"/lm-api/v1/models/{encoded_model}/{action}",
         )
 
-    async def wait_for_model_running(self, node_name: str, model_name: str) -> bool:
+    async def wait_for_model_running(self, node_name: str, model_names: set[str]) -> bool:
         deadline = asyncio.get_running_loop().time() + self.model_start_timeout_seconds
         while True:
-            if model_running(await self.list_node_models(node_name), model_name):
+            if model_running(await self.list_node_models(node_name), model_names):
                 return True
             if asyncio.get_running_loop().time() >= deadline:
                 return False
@@ -70,8 +75,29 @@ def running_model_names(models: list[dict[str, Any]]) -> list[str]:
     ]
 
 
-def model_running(models: list[dict[str, Any]], model_name: str) -> bool:
+def model_running(models: list[dict[str, Any]], model_names: set[str]) -> bool:
     return any(
-        isinstance(model, dict) and model.get("name") == model_name and bool(model.get("running"))
+        isinstance(model, dict) and model.get("name") in model_names and bool(model.get("running"))
         for model in models
     )
+
+
+def _expected_running_names(model_name: str, start_response: object) -> set[str]:
+    names = {model_name}
+    if isinstance(start_response, dict):
+        response_name = str(start_response.get("name") or "").strip()
+        if response_name:
+            names.add(response_name)
+    return names
+
+
+def _observed_model_summaries(models: list[dict[str, Any]]) -> list[str]:
+    summaries: list[str] = []
+    for model in models:
+        if not isinstance(model, dict):
+            continue
+        name = str(model.get("name") or "").strip()
+        if not name:
+            continue
+        summaries.append(f"{name}:running={bool(model.get('running'))}")
+    return summaries

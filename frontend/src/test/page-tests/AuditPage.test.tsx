@@ -21,6 +21,7 @@ afterEach(() => {
 
 it("loads filtered audit events and shows event detail", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }));
     if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "alice", role: "admin", created_at: "now" }));
     if (url.includes("event_type=model_start")) return Promise.resolve(okJson([
       { id: "evt-2", actor: "bob", created_at: "2026-05-20T11:00:00Z", event_type: "model_start", dry_run: true, target: "qwen", route: "model", payload: { dry: true } },
@@ -47,6 +48,7 @@ it("loads filtered audit events and shows event detail", async () => {
 
 it("filters loaded events to the current user", async () => {
   vi.stubGlobal("fetch", vi.fn((url: string) => {
+    if (url === "/lm-api/v1/setup/status") return Promise.resolve(okJson({ mode: "controller", auth_bootstrap_required: false, auth_enabled: true, setup_recommended: false }));
     if (url === "/lm-api/v1/auth/me") return Promise.resolve(okJson({ username: "alice", role: "admin", created_at: "now" }));
     return Promise.resolve(okJson([
       { id: "evt-1", actor: "alice", created_at: "now", event_type: "auth_key_create", dry_run: false, target: "alice", route: "auth" },

@@ -7,6 +7,8 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field, PrivateAttr, field_validator, model_validator
 
+from llama_pack.core.config.timezones import validate_iana_timezone
+
 
 Mode = Literal["agent", "controller"]
 ReasoningMode = Literal["on", "off", "auto"]
@@ -232,6 +234,7 @@ class AppConfig(BaseModel):
     controller_retention_days: int = 30
     controller_archive_retention_days: int = 90
     controller_archive_dir: Path = Path("./logs/archive")
+    display_timezone: str = "UTC"
     controller_registration_key_outbound: str | None = None
     auth_db_url: str | None = None
     audit_db_url: str | None = None
@@ -299,6 +302,11 @@ class AppConfig(BaseModel):
             if not PLUGIN_ID_PATTERN.fullmatch(plugin_id):
                 raise ValueError(f"Invalid plugin id {plugin_id!r}")
         return value
+
+    @field_validator("display_timezone")
+    @classmethod
+    def validate_display_timezone(cls, value: str) -> str:
+        return validate_iana_timezone(value, "display_timezone")
 
     @field_validator("plugins")
     @classmethod

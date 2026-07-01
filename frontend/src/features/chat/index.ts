@@ -165,9 +165,9 @@ export function readChatHandoff() {
   };
 }
 
-export function sessionLabel(session: ChatSession) {
+export function sessionLabel(session: ChatSession, formatDisplayDateTime: (value: string | null | undefined) => string) {
   const item = session as ChatSession & { name?: string; model?: string };
-  return item.name || [item.model, item.updated_at].filter(Boolean).join(" - ") || item.id || "Untitled session";
+  return item.name || [item.model, formatDisplayDateTime(item.updated_at)].filter((value) => value && value !== "-").join(" - ") || item.id || "Untitled session";
 }
 
 export function sessionMessages(payload: unknown): ChatMessage[] {

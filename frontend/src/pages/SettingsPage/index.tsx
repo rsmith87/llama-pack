@@ -16,6 +16,7 @@ import { ErrorBanner, Panel } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
 import { useAuthSession } from "../../features/auth/authSession";
 import { useGlobalStatus } from "../../features/globalStatus/globalStatusContext";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { managesLocalAccounts, runtimeTopology } from "../../features/runtimeMode/runtimeMode";
 import { modelRootRows, normalizedModelRoots, parseJsonObject, parseJsonRecord, safeRootsText } from "../../features/settings/settingsForms";
 import { AccessPane, RuntimeSettingsPane, StoragePane, ToolCatalogPane, ToolExecutionPane } from "./panes";
@@ -26,6 +27,7 @@ const EMPTY_RUNTIME_SETTINGS: RuntimeSettings = {
   controller_retention_days: 30,
   controller_archive_retention_days: 90,
   controller_archive_dir: "./logs/archive",
+  display_timezone: "UTC",
   routing_fanout_enabled: false,
   routing_fanout_max: 2,
   agent_worker_enabled: false,
@@ -57,6 +59,7 @@ export function SettingsPage() {
   const appMode = useAppMode();
   const isAgentMode = appMode === "agent";
   const { controllerUrl } = useGlobalStatus();
+  const { formatConfiguredDateTime, refreshDateTimeSettings } = useDateTime();
   const topology = runtimeTopology(appMode, controllerUrl);
   const canManageLocalAccounts = managesLocalAccounts(topology);
   const { authUser, authRole } = useAuthSession();
@@ -121,6 +124,7 @@ export function SettingsPage() {
     const text = `${tool.name} ${tool.type} ${tool.description}`.toLowerCase();
     return matchesType && text.includes(toolSearch.trim().toLowerCase());
   });
+  const formatDisplayDateTime = (value: string | null | undefined) => formatConfiguredDateTime(value).label;
 
   useEffect(() => {
     let cancelled = false;
@@ -304,6 +308,7 @@ export function SettingsPage() {
       setAgentWorkerCapacityText(JSON.stringify(updated.settings.agent_worker_capacity, null, 2));
       setClientCorsOriginsText(updated.settings.client_cors_origins.join("\n"));
       setAgentToolsSafeRootsText(safeRootsText(updated.settings.agent_tools_safe_roots));
+      await refreshDateTimeSettings();
       setRuntimeStatus("Runtime settings saved");
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to save runtime settings.");
@@ -460,6 +465,7 @@ export function SettingsPage() {
             createAuthKey={() => void createAuthKey()}
             refreshAuthKeys={() => void refreshAuthKeys()}
             revokeAuthKey={(id) => void revokeAuthKey(id)}
+            formatDisplayDateTime={formatDisplayDateTime}
           />
         ) : null}
 

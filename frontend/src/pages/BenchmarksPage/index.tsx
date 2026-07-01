@@ -11,6 +11,7 @@ import {
 import { getNodeModels } from "../../api/nodes";
 import { DataTable, ErrorBanner, FormField, Panel, Button } from "../../components/ui";
 import { readBenchmarkHandoff } from "../../features/benchmarks/handoff";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import type {
   BenchmarkAggregate,
   BenchmarkDefinitionRecord,
@@ -76,10 +77,12 @@ function AggregateRow({
   run,
   maxTtft,
   maxTps,
+  formatDisplayDateTime,
 }: {
   run: BenchmarkRunRecord;
   maxTtft: number;
   maxTps: number;
+  formatDisplayDateTime: (value: string | null | undefined) => string;
 }) {
   const agg: BenchmarkAggregate | null = run.aggregate ?? null;
   return (
@@ -102,7 +105,7 @@ function AggregateRow({
       </td>
       <td>{fmt(agg?.total_duration_ms_median)} ms</td>
       <td>{agg?.success_rate != null ? `${(agg.success_rate * 100).toFixed(0)}%` : "—"}</td>
-      <td className="muted">{run.started_at ? new Date(run.started_at).toLocaleString() : "—"}</td>
+      <td className="muted">{formatDisplayDateTime(run.started_at)}</td>
     </tr>
   );
 }
@@ -201,6 +204,7 @@ function CreateDefinitionForm({ onCreated }: { onCreated: (def: BenchmarkDefinit
 // Main page
 // ---------------------------------------------------------------------------
 export function BenchmarksPage() {
+  const { formatConfiguredDateTime } = useDateTime();
   const handoff = readBenchmarkHandoff();
   const [definitions, setDefinitions] = useState<BenchmarkDefinitionRecord[]>([]);
   const [selectedDefId, setSelectedDefId] = useState<string>("");
@@ -218,6 +222,7 @@ export function BenchmarksPage() {
   const [compareIds, setCompareIds] = useState<Set<string>>(new Set());
   const [comparison, setComparison] = useState<BenchmarkRunRecord[] | null>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const formatDisplayDateTime = (value: string | null | undefined) => formatConfiguredDateTime(value).label;
 
   const loadDefinitions = useCallback(async () => {
     setLoadingDefs(true);
@@ -613,7 +618,7 @@ export function BenchmarksPage() {
                             : "—"}
                         </td>
                         <td className="muted">
-                          {run.started_at ? new Date(run.started_at).toLocaleString() : "—"}
+                          {formatDisplayDateTime(run.started_at)}
                         </td>
                       </tr>
                     ))}
@@ -635,6 +640,7 @@ export function BenchmarksPage() {
                       run={run}
                       maxTtft={maxTtft}
                       maxTps={maxTps}
+                      formatDisplayDateTime={formatDisplayDateTime}
                     />
                   ))}
                 </div>

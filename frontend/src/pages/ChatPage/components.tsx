@@ -4,6 +4,7 @@ import type { ChangeEvent, FormEvent, KeyboardEvent, RefObject } from "react";
 import { EmptyState, FormField, Panel, Button } from "../../components/ui";
 import type { ChatMessage, ChatSession } from "../../types/chat";
 import type { DocumentCollectionRecord } from "../../api/documentCollections";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import {
   routeExplanationItems,
   sessionLabel,
@@ -45,6 +46,8 @@ export function ChatSessionsPanel({
   onDeleteSession: () => void;
   onResumeRecentSession: () => void;
 }) {
+  const { formatConfiguredDateTime } = useDateTime();
+  const formatDisplayDateTime = (value: string | null | undefined) => formatConfiguredDateTime(value).label;
   return (
     <Panel title="Conversation History" eyebrow="Save and resume" className="chat-sessions-panel">
       <div className="chat-session-panel chat-session-panel-top">
@@ -52,7 +55,7 @@ export function ChatSessionsPanel({
         <FormField label="Saved sessions">
           <select value={selectedSessionId} onChange={(event) => onSelectedSessionIdChange(event.target.value)}>
             <option value="">Select a session</option>
-            {sessions.map((session) => <option key={session.id} value={session.id}>{sessionLabel(session)}</option>)}
+            {sessions.map((session) => <option key={session.id} value={session.id}>{sessionLabel(session, formatDisplayDateTime)}</option>)}
           </select>
         </FormField>
         <div className="modal-actions">

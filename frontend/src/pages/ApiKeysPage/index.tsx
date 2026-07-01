@@ -3,11 +3,8 @@ import { useRef, useState } from "react";
 import { createExternalKey, getExternalKeyAnalytics, listExternalKeys, revokeExternalKey } from "../../api/externalKeys";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { Button, DataTable, ErrorBanner, FormField, Modal, Panel } from "../../components/ui";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import type { ExternalApiKey, ExternalApiKeyAnalytics, ExternalApiKeyCreated } from "../../types/index";
-
-function formatDateTime(value?: string) {
-  return value ? new Date(value).toLocaleString() : "-";
-}
 
 function lastRouteLabel(row: ExternalApiKey) {
   if (!row.last_used_route && !row.last_used_model) {
@@ -91,12 +88,14 @@ function KeyAnalyticsModal({
   loading,
   error,
   onClose,
+  formatDisplayDateTime,
 }: {
   selectedKey: ExternalApiKey | null;
   analytics: ExternalApiKeyAnalytics | null;
   loading: boolean;
   error: string;
   onClose: () => void;
+  formatDisplayDateTime: (value: string | null | undefined) => string;
 }) {
   return (
     <Modal title={selectedKey ? `${selectedKey.site_name || "External app"} analytics` : "External app analytics"} open={Boolean(selectedKey)} onClose={onClose}>
@@ -129,7 +128,7 @@ function KeyAnalyticsModal({
               emptyMessage="No external calls recorded for this key."
               getRowKey={(row, index) => `${row.created_at || "call"}-${index}`}
               columns={[
-                { key: "created_at", header: "Time", render: (row) => formatDateTime(row.created_at) },
+                { key: "created_at", header: "Time", render: (row) => formatDisplayDateTime(row.created_at) },
                 { key: "endpoint", header: "Endpoint", render: (row) => String(row.endpoint || "-") },
                 { key: "model", header: "Model", render: (row) => String(row.model || "-") },
                 { key: "route", header: "Route", render: (row) => String(row.route || row.node || "-") },
@@ -144,6 +143,7 @@ function KeyAnalyticsModal({
 }
 
 export function ApiKeysPage() {
+  const { formatConfiguredDateTime } = useDateTime();
   const { data: keys, loading, error, refresh, setError } = useAsyncResource<ExternalApiKey[]>(
     () => listExternalKeys().then((data) => data.keys || []),
     [],
@@ -209,6 +209,7 @@ export function ApiKeysPage() {
 
   const activeKeys = keys.filter((k) => !k.revoked);
   const revokedKeys = keys.filter((k) => k.revoked);
+  const formatDisplayDateTime = (value: string | null | undefined) => formatConfiguredDateTime(value).label;
 
   return (
     <div className="api-keys-page">
@@ -296,12 +297,12 @@ export function ApiKeysPage() {
             {
               key: "created_at",
               header: "Created",
-              render: (row) => formatDateTime(row.created_at),
+              render: (row) => formatDisplayDateTime(row.created_at),
             },
             {
               key: "last_used_at",
               header: "Last used",
-              render: (row) => formatDateTime(row.last_used_at),
+              render: (row) => formatDisplayDateTime(row.last_used_at),
             },
             {
               key: "last_used_route",
@@ -346,11 +347,11 @@ export function ApiKeysPage() {
               { key: "site_name", header: "Site name", render: (row) => String(row.site_name || "-") },
               { key: "site_url", header: "Site URL", render: (row) => String(row.site_url || "-") },
               { key: "key_hint", header: "Key hint", render: (row) => <code>{String(row.key_hint || "-")}</code> },
-              { key: "last_used_at", header: "Last used", render: (row) => formatDateTime(row.last_used_at) },
+              { key: "last_used_at", header: "Last used", render: (row) => formatDisplayDateTime(row.last_used_at) },
               {
                 key: "created_at",
                 header: "Created",
-                render: (row) => formatDateTime(row.created_at),
+                render: (row) => formatDisplayDateTime(row.created_at),
               },
             ]}
             rows={revokedKeys}
@@ -366,7 +367,8 @@ export function ApiKeysPage() {
         loading={analyticsLoading}
         error={analyticsError}
         onClose={() => setAnalyticsKey(null)}
-      />
+        formatDisplayDateTime={formatDisplayDateTime}
+        />
     </div>
   );
 }

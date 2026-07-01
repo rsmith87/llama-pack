@@ -47,20 +47,34 @@ def test_runtime_settings_defaults_are_derived_from_config(tmp_path: Path):
 
 
 def test_runtime_settings_patch_persists_database_overrides(tmp_path: Path):
-    config = load_config({"log_dir": str(tmp_path / "logs"), "routing_fanout_max": 2})
+    config = load_config({"log_dir": str(tmp_path / "logs"), "routing_fanout_max": 2, "display_timezone": "UTC"})
     store = _store(tmp_path)
     service = RuntimeSettingsService(config=config, store=store)
 
     updated = service.patch(
-        RuntimeSettingsPatch(routing_fanout_max=4, agent_worker_labels={"gpu": "metal"}),
+        RuntimeSettingsPatch(routing_fanout_max=4, agent_worker_labels={"gpu": "metal"}, display_timezone="America/Chicago"),
         updated_by="admin",
     )
     reloaded = RuntimeSettingsService(config=config, store=store).get_document()
 
     assert updated.settings.routing_fanout_max == 4
     assert updated.sources["routing_fanout_max"] == "database"
+    assert updated.settings.display_timezone == "America/Chicago"
+    assert updated.sources["display_timezone"] == "database"
     assert reloaded.settings.routing_fanout_max == 4
     assert reloaded.settings.agent_worker_labels == {"gpu": "metal"}
+    assert reloaded.settings.display_timezone == "America/Chicago"
+
+
+def test_runtime_settings_patch_rejects_invalid_display_timezone(tmp_path: Path):
+    config = load_config({"log_dir": str(tmp_path / "logs")})
+    service = RuntimeSettingsService(config=config, store=_store(tmp_path))
+
+    with pytest.raises(ValueError, match="display_timezone must be a valid IANA timezone"):
+        RuntimeSettingsPatch(display_timezone="Central")
+
+    with pytest.raises(ValueError, match="display_timezone must be a valid IANA timezone"):
+        service.patch(RuntimeSettingsPatch(display_timezone="America/NotAZone"), updated_by="admin")
 
 
 def test_runtime_settings_patch_persists_model_roots(tmp_path: Path):

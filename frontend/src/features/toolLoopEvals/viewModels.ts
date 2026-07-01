@@ -1,4 +1,5 @@
 import type { LocalModel, ToolLoopEvalCaseResult, ToolLoopEvalPresetGroup, ToolLoopEvalRunDetail, ToolLoopEvalSuite, TraceEvent } from "../../types";
+import { formatDateTime } from "../dateTime/dateTime";
 import { isRunnableModelOption } from "../models";
 
 export function scorePercent(score?: number): string {
@@ -16,10 +17,8 @@ export function sequenceText(sequence?: string[]): string {
   return sequence?.length ? sequence.join(" -> ") : "-";
 }
 
-export function formatDate(value?: string | null): string {
-  if (!value) return "-";
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
+export function formatDate(value: string | null | undefined, timeZone: string): string {
+  return formatDateTime(value, timeZone).label;
 }
 
 export function checks(result?: ToolLoopEvalCaseResult): Array<[string, boolean]> {

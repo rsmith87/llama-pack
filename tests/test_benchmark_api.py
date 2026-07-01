@@ -385,7 +385,8 @@ class TestBenchmarkRunExecution:
 
         finished = store.get_run(run["id"])
         assert finished["status"] == "failed"
-        assert finished["error_detail"] == "model_start_timeout"
+        assert finished["error_detail"].startswith("model_start_timeout")
+        assert "observed_models=" in finished["error_detail"]
         assert finished["samples"] == []
         assert running == {"other-model"}
         assert calls[-1] == ("gpu-a", "POST", "/lm-api/v1/models/other-model/start")

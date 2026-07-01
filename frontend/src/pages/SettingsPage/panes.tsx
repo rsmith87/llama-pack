@@ -178,6 +178,17 @@ export function RuntimeSettingsPane({
               <input aria-label="Controller Archive Directory" value={runtimeSettings && runtimeSettings.controller_archive_dir ? runtimeSettings.controller_archive_dir : "./logs/archive"} onChange={(event) => updateRuntimeString("controller_archive_dir", event.target.value)} />
               <span className="settings-source">{sourceFor(runtimeDocument, "controller_archive_dir")}</span>
             </FormField>
+            <FormField label="Display Timezone">
+              <input aria-label="Display Timezone" list="display-timezone-options" value={runtimeSettings.display_timezone} onChange={(event) => updateRuntimeString("display_timezone", event.target.value)} />
+              <datalist id="display-timezone-options">
+                <option value="UTC" />
+                <option value="America/Chicago" />
+                <option value="America/New_York" />
+                <option value="America/Los_Angeles" />
+                <option value="Europe/London" />
+              </datalist>
+              <span className="settings-source">{sourceFor(runtimeDocument, "display_timezone")}</span>
+            </FormField>
             <FormField label="Routing Fanout Enabled">
               <label className="checkbox-label">
                 <input aria-label="Routing Fanout Enabled" type="checkbox" checked={runtimeSettings && runtimeSettings.routing_fanout_enabled ? runtimeSettings.routing_fanout_enabled : false} onChange={(event) => updateRuntimeBoolean("routing_fanout_enabled", event.target.checked)} />
@@ -541,6 +552,7 @@ export function AccessPane({
   createAuthKey,
   refreshAuthKeys,
   revokeAuthKey,
+  formatDisplayDateTime,
 }: {
   authRole: string;
   keyUsername: string;
@@ -552,6 +564,7 @@ export function AccessPane({
   createAuthKey: () => void;
   refreshAuthKeys: () => void;
   revokeAuthKey: (id: string) => void;
+  formatDisplayDateTime: (value: string | null | undefined) => string;
 }) {
   return (
     <div className="settings-pane active">
@@ -578,7 +591,7 @@ export function AccessPane({
           { key: "role", header: "Role", render: (key) => String(key.role || "-") },
           { key: "hint", header: "Hint", render: keyHint },
           { key: "revoked", header: "Revoked", render: (key) => String(Boolean(key.revoked)) },
-          { key: "created", header: "Created", render: (key) => String(key.created_at || "-") },
+          { key: "created", header: "Created", render: (key) => formatDisplayDateTime(key.created_at) },
           { key: "action", header: "Action", render: (key) => {
             const id = keyId(key);
             return <button type="button" aria-label={`Revoke ${id}`} disabled={!id || Boolean(key.revoked)} onClick={() => revokeAuthKey(id)}>Revoke</button>;

@@ -7,6 +7,7 @@ import { createGgufTransfer, listGgufs } from "../../api/library";
 import { getNodeModels } from "../../api/nodes";
 import { DataTable, EmptyState, ErrorBanner, FormField, Modal, Panel, StatusBadge, Button } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { transferDestinationOptions, type NodeRecord } from "../../features/nodes/nodesView";
 import type { DownloadRecommendation, DownloadRecord, DownloadRecommendationsResponse, GgufFile } from "../../types/index";
 import type { QuantRecord, RemoteGgufSource, RecommendedInventory, HfTransferState, RecommendedDownload } from "../../types/downloads";
@@ -93,6 +94,10 @@ function progressText(record: DownloadRecord) {
   return `${formatBytes(downloaded)} / ${formatBytes(total)}`;
 }
 
+function timestampValue(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
 function DownloadProgress({ record }: { record: DownloadRecord }) {
   const percent = progressPercent(record);
   const text = progressText(record);
@@ -143,23 +148,6 @@ function recommendationMachineText(payload: DownloadRecommendationsResponse | nu
     return `${Math.round(ramGb || 0)} GB RAM${vramGb ? `, ${Math.round(vramGb)} GB VRAM` : ""} detected`;
   }
   return "Conservative picks shown until hardware details are available.";
-}
-
-function formatTime(datetime: unknown) {
-  if (datetime == null || datetime === "") return "-";
-  const value = String(datetime).trim();
-  if (!value) return "-";
-
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return value;
-
-  return parsed.toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
 }
 
 function inventoryForRecommended(item: RecommendedDownload, localGgufs: GgufFile[], nodes: NodeRecord[]): RecommendedInventory {
@@ -228,6 +216,7 @@ async function loadHfDownloadsData(): Promise<HfDownloadsData> {
 
 export function HfDownloadsPage() {
   const appMode = useAppMode();
+  const { formatConfiguredDateTime } = useDateTime();
   const [transfer, setTransfer] = useState<HfTransferState | null>(null);
   const [repoId, setRepoId] = useState("");
   const [revision, setRevision] = useState("");
@@ -447,8 +436,8 @@ export function HfDownloadsPage() {
               { key: "repo", header: "Repo", render: (row) => field(row, "repo_id") },
               { key: "status", header: "Status", render: (row) => <StatusBadge tone={row.status === "running" ? "warning" : row.status === "complete" ? "success" : "muted"}>{field(row, "status")}</StatusBadge> },
               { key: "progress", header: "Progress", render: (row) => <DownloadProgress record={row} /> },
-              { key: "started", header: "Started", render: (row) => formatTime(row.started_at) },
-              { key: "finished", header: "Finished", render: (row) => formatTime(row.finished_at) },
+              { key: "started", header: "Started", render: (row) => formatConfiguredDateTime(timestampValue(row.started_at)).label },
+              { key: "finished", header: "Finished", render: (row) => formatConfiguredDateTime(timestampValue(row.finished_at)).label },
               { key: "path", header: "Path", render: (row) => field(row, "local_path", field(row, "path")) },
               { key: "by", header: "By", render: (row) => field(row, "triggered_by") },
               { key: "actions", header: "Actions", render: (row) => {

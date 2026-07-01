@@ -4,6 +4,7 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { GlobalStatusProvider } from "./features/globalStatus/globalStatusContext";
 import { LogModalProvider } from "./features/logs/logModalContext";
 import { PluginNavProvider } from "./features/plugins/pluginNavContext";
+import { DateTimeProvider } from "./features/dateTime/dateTimeContext";
 import { AuthGate } from "./router/AuthGate";
 import { AppLayout } from "./router/AppLayout";
 import { DashboardPage } from "./pages/DashboardPage";
@@ -37,39 +38,41 @@ export default function App() {
         <BrowserRouter>
           <GlobalStatusProvider>
             <PluginNavProvider>
-              <LogModalProvider>
-                <Routes>
-                  <Route element={<AuthGate />}>
-                    <Route element={<AppLayout />}>
-                      <Route path="/" element={<DashboardPage />} />
-                      <Route path="/ui" element={<DashboardPage />} />
-                      <Route path="/ui/" element={<DashboardPage />} />
-                      <Route path="/ui/chat" element={<ChatPage />} />
-                      <Route path="/ui/setup" element={<SetupPage />} />
-                      <Route path="/ui/nodes" element={<NodesPage />} />
-                      <Route path="/ui/projects" element={<ProjectsPage />} />
-                      <Route path="/ui/collections" element={<DocumentCollectionsPage />} />
-                      <Route path="/ui/models" element={<ModelsPage />} />
-                      <Route path="/ui/gguf-library" element={<GgufLibraryPage />} />
-                      <Route path="/ui/hf-to-gguf" element={<HfToGgufPage />} />
-                      <Route path="/ui/hf-downloads" element={<HfDownloadsPage />} />
-                      <Route path="/ui/quantization" element={<QuantizationPage />} />
-                      <Route path="/ui/controller-ops" element={<ControllerOpsPage />} />
-                      <Route path="/ui/embeddings" element={<EmbeddingsPage />} />
-                      <Route path="/ui/runtime" element={<RuntimeOverviewPage />} />
-                      <Route path="/ui/tool-loop-evals" element={<ToolLoopEvalsPage />} />
-                      <Route path="/ui/audit" element={<AuditPage />} />
-                      <Route path="/ui/benchmarks" element={<BenchmarksPage />} />
-                      <Route path="/ui/api-keys" element={<ApiKeysPage />} />
-                      <Route path="/ui/plugins" element={<PluginsPage />} />
-                      <Route path="/ui/plugins/:pluginId/*" element={<PluginHostPage />} />
-                      <Route path="/ui/settings" element={<SettingsPage />} />
+              <DateTimeProvider>
+                <LogModalProvider>
+                  <Routes>
+                    <Route element={<AuthGate />}>
+                      <Route element={<AppLayout />}>
+                        <Route path="/" element={<DashboardPage />} />
+                        <Route path="/ui" element={<DashboardPage />} />
+                        <Route path="/ui/" element={<DashboardPage />} />
+                        <Route path="/ui/chat" element={<ChatPage />} />
+                        <Route path="/ui/setup" element={<SetupPage />} />
+                        <Route path="/ui/nodes" element={<NodesPage />} />
+                        <Route path="/ui/projects" element={<ProjectsPage />} />
+                        <Route path="/ui/collections" element={<DocumentCollectionsPage />} />
+                        <Route path="/ui/models" element={<ModelsPage />} />
+                        <Route path="/ui/gguf-library" element={<GgufLibraryPage />} />
+                        <Route path="/ui/hf-to-gguf" element={<HfToGgufPage />} />
+                        <Route path="/ui/hf-downloads" element={<HfDownloadsPage />} />
+                        <Route path="/ui/quantization" element={<QuantizationPage />} />
+                        <Route path="/ui/controller-ops" element={<ControllerOpsPage />} />
+                        <Route path="/ui/embeddings" element={<EmbeddingsPage />} />
+                        <Route path="/ui/runtime" element={<RuntimeOverviewPage />} />
+                        <Route path="/ui/tool-loop-evals" element={<ToolLoopEvalsPage />} />
+                        <Route path="/ui/audit" element={<AuditPage />} />
+                        <Route path="/ui/benchmarks" element={<BenchmarksPage />} />
+                        <Route path="/ui/api-keys" element={<ApiKeysPage />} />
+                        <Route path="/ui/plugins" element={<PluginsPage />} />
+                        <Route path="/ui/plugins/:pluginId/*" element={<PluginHostPage />} />
+                        <Route path="/ui/settings" element={<SettingsPage />} />
+                      </Route>
+                      <Route path="/ui/docs" element={<DocsPage />} />
+                      <Route path="/ui/test-chat" element={<TestChatPage />} />
                     </Route>
-                    <Route path="/ui/docs" element={<DocsPage />} />
-                    <Route path="/ui/test-chat" element={<TestChatPage />} />
-                  </Route>
-                </Routes>
-              </LogModalProvider>
+                  </Routes>
+                </LogModalProvider>
+              </DateTimeProvider>
             </PluginNavProvider>
           </GlobalStatusProvider>
         </BrowserRouter>

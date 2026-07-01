@@ -12,6 +12,7 @@ import {
 } from "../../api/toolLoopEvals";
 import { DataTable, ErrorBanner, Panel, StatusBadge, Button, FormField, Modal } from "../../components/ui";
 import { useAppMode } from "../../features/appMode/appModeContext";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { compareToolLoopRuns, type ToolLoopComparison } from "../../features/toolLoopEvals/comparisonAnalysis";
 import { analyzeToolLoopFailures } from "../../features/toolLoopEvals/failureAnalysis";
 import {
@@ -43,6 +44,7 @@ import type {
 
 export function ToolLoopEvalsPage() {
   const appMode = useAppMode();
+  const { timeZone } = useDateTime();
   const isLocalMode = appMode === "agent";
   const isControllerMode = appMode === "controller";
   const { data, loading, error, refresh } = useAsyncResource<ToolLoopEvalLatest | null>(
@@ -314,7 +316,7 @@ export function ToolLoopEvalsPage() {
                 );
               },
             },
-            { key: "generated", header: "Generated", render: (row) => formatDate(row.generated_at) },
+            { key: "generated", header: "Generated", render: (row) => formatDate(row.generated_at, timeZone) },
             { key: "model", header: "Model", render: (row) => String(row.model || "-") },
             { key: "preset", header: "Preset", render: (row) => presetSummary(row.case_ids) },
             { key: "status", header: "Status", render: (row) => <StatusBadge tone={statusTone(row.status)}>{row.status || "-"}</StatusBadge> },
@@ -361,7 +363,7 @@ export function ToolLoopEvalsPage() {
         <>
           <Panel title="Latest Summary" eyebrow="Tool-call loop quality">
             <div className="tool-loop-summary">
-              <div><span className="muted">Generated</span><strong>{formatDate(data.generated_at)}</strong></div>
+              <div><span className="muted">Generated</span><strong>{formatDate(data.generated_at, timeZone)}</strong></div>
               <div><span className="muted">Models</span><strong>{data.models?.length ?? 0}</strong></div>
               <div><span className="muted">Suites</span><strong>{data.suite_count ?? suites.length}</strong></div>
             </div>

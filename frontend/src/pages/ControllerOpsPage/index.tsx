@@ -5,6 +5,7 @@ import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { getNodeModels, listNodes } from "../../api/nodes";
 import { checkOfflineReadiness, distributeOfflineModel, type OfflineDistributionResponse, type OfflineReadinessResponse } from "../../api/offline";
 import { DataTable, EmptyState, ErrorBanner, FormField, Panel, StatusBadge, Button } from "../../components/ui";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { mergeNodeInventory } from "../../features/nodes/nodesView";
 import { field } from "../../features/shared/helpers";
 import type { RecordItem, JobDetail } from "../../types/operations";
@@ -71,6 +72,7 @@ async function loadControllerOpsData(): Promise<ControllerOpsData> {
 }
 
 export function ControllerOpsPage() {
+  const { formatConfiguredDateTime } = useDateTime();
   const { data, loading, error, refresh, setError } = useAsyncResource<ControllerOpsData>(loadControllerOpsData, {
     jobs: [],
     nodes: [],
@@ -224,7 +226,7 @@ export function ControllerOpsPage() {
               { key: "status", header: "Status", render: (row) => <StatusBadge tone={statusTone(row.status)}>{field(row, "status")}</StatusBadge> },
               { key: "type", header: "Type", render: (row) => field(row, "type") },
               { key: "target", header: "Target", render: (row) => field(row, "target_selector", "auto") },
-              { key: "updated", header: "Updated", render: (row) => field(row, "updated_at") },
+              { key: "updated", header: "Updated", render: (row) => formatConfiguredDateTime(field(row, "updated_at")).label },
               { key: "actions", header: "Actions", render: (row) => {
                 const id = jobId(row);
                 return <div className="actions"><Button type="button" onClick={() => void loadDetail(id)} aria-label={`View ${id}`}>View</Button><Button type="button" onClick={() => void cancel(id)} disabled={!id || ["succeeded", "failed", "cancelled", "canceled"].includes(field(row, "status", "").toLowerCase())} aria-label={`Cancel ${id}`}>Cancel</Button></div>;
@@ -239,7 +241,7 @@ export function ControllerOpsPage() {
               <div className="job-detail-summary">
                 <strong>{field(detail.job, "id")}</strong>
                 <span className="muted">status={field(detail.job, "status")} type={field(detail.job, "type")} target={field(detail.job, "target_selector", "auto")}</span>
-                <span className="muted">created={field(detail.job, "created_at")} updated={field(detail.job, "updated_at")}</span>
+                <span className="muted">created={formatConfiguredDateTime(field(detail.job, "created_at")).label} updated={formatConfiguredDateTime(field(detail.job, "updated_at")).label}</span>
               </div>
               <h4>Events</h4>
               <DataTable
@@ -247,7 +249,7 @@ export function ControllerOpsPage() {
                 emptyMessage="No events."
                 getRowKey={(row, index) => `${field(row, "created_at", "event")}-${index}`}
                 columns={[
-                  { key: "time", header: "Time", render: (row) => field(row, "created_at") },
+                  { key: "time", header: "Time", render: (row) => formatConfiguredDateTime(field(row, "created_at")).label },
                   { key: "type", header: "Type", render: (row) => field(row, "event_type", field(row, "type")) },
                   { key: "payload", header: "Payload", render: (row) => <pre className="inline-json">{pretty(row.event_json || row.payload || row)}</pre> },
                 ]}

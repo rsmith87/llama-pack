@@ -8,6 +8,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationInfo, field_validat
 
 from llama_pack.core.config import AppConfig
 from llama_pack.core.config.models import AGENT_TOOL_MAX_ITERATIONS_LIMIT, AgentToolDefinitionConfig, AgentToolsConfig
+from llama_pack.core.config.timezones import validate_iana_timezone
 from llama_pack.core.persistence.settings_store_orm import SettingsStoreOrm
 
 
@@ -26,6 +27,7 @@ class RuntimeSettings(BaseModel):
     controller_retention_days: int = Field(ge=0)
     controller_archive_retention_days: int = Field(ge=1)
     controller_archive_dir: Path
+    display_timezone: str
     routing_fanout_enabled: bool
     routing_fanout_max: int = Field(ge=1, le=32)
     agent_worker_enabled: bool
@@ -52,6 +54,11 @@ class RuntimeSettings(BaseModel):
     agent_tools_answer_verification_max_retries: int = Field(ge=0, le=2)
     agent_tools_safe_roots: list[Path]
 
+    @field_validator("display_timezone")
+    @classmethod
+    def validate_display_timezone(cls, value: str) -> str:
+        return validate_iana_timezone(value, "display_timezone")
+
     @field_validator("agent_worker_labels", "agent_worker_capacity", mode="before")
     @classmethod
     def validate_json_scalar_map(cls, value: object, info: ValidationInfo) -> object:
@@ -70,6 +77,7 @@ class RuntimeSettingsPatch(BaseModel):
     controller_retention_days: int | None = Field(default=None, ge=0)
     controller_archive_retention_days: int | None = Field(default=None, ge=1)
     controller_archive_dir: Path | None = None
+    display_timezone: str | None = None
     routing_fanout_enabled: bool | None = None
     routing_fanout_max: int | None = Field(default=None, ge=1, le=32)
     agent_worker_enabled: bool | None = None
@@ -95,6 +103,13 @@ class RuntimeSettingsPatch(BaseModel):
     agent_tools_answer_verification_mode: Literal["off", "warn", "strict"] | None = None
     agent_tools_answer_verification_max_retries: int | None = Field(default=None, ge=0, le=2)
     agent_tools_safe_roots: list[Path] | None = None
+
+    @field_validator("display_timezone")
+    @classmethod
+    def validate_display_timezone(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return validate_iana_timezone(value, "display_timezone")
 
     @field_validator("agent_worker_labels", "agent_worker_capacity", mode="before")
     @classmethod
@@ -146,6 +161,7 @@ RUNTIME_SETTING_FIELDS: tuple[str, ...] = (
     "controller_retention_days",
     "controller_archive_retention_days",
     "controller_archive_dir",
+    "display_timezone",
     "routing_fanout_enabled",
     "routing_fanout_max",
     "agent_worker_enabled",

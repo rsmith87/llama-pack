@@ -17,6 +17,7 @@ import {
 } from "../../api/projects";
 import { listNodes } from "../../api/nodes";
 import { Button, DataTable, ErrorBanner, FormField, Panel, StatusBadge } from "../../components/ui";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import type { NodeInventoryItem } from "../../types";
 
@@ -97,6 +98,7 @@ function nodeRootMappings(nodes: NodeInventoryItem[], roots: ProjectNodeRootReco
 }
 
 export function ProjectsPage() {
+  const { formatConfiguredDateTime } = useDateTime();
   const { data, loading, error, refresh, setError } = useAsyncResource<ProjectsData>(loadProjectsData, { projects: [], nodes: [] });
   const projects = data.projects;
   const nodes = data.nodes;
@@ -361,7 +363,7 @@ export function ProjectsPage() {
                   { key: "node", header: "Node", render: (root) => root.node_name },
                   { key: "path", header: "Root Path", render: (root) => root.root_path },
                   { key: "status", header: "Safe Status", render: (root) => <StatusBadge tone={statusTone(root.safe_root_status)}>{root.safe_root_status}</StatusBadge> },
-                  { key: "updated", header: "Updated", render: (root) => root.updated_at },
+                  { key: "updated", header: "Updated", render: (root) => formatConfiguredDateTime(root.updated_at).label },
                   { key: "actions", header: "Actions", render: (root) => <Button type="button" onClick={() => editRoot(root)}>Edit</Button> },
                 ]}
               />
@@ -423,7 +425,7 @@ export function ProjectsPage() {
                   <div><span>Files</span><strong>{graphMetricValue(graphStatus?.file_count)}</strong></div>
                   <div><span>Symbols</span><strong>{graphMetricValue(graphStatus?.symbol_count)}</strong></div>
                   <div><span>Relations</span><strong>{graphMetricValue(graphStatus?.relation_count)}</strong></div>
-                  <div><span>Last Update</span><strong>{graphStatus?.updated_at || "-"}</strong></div>
+                  <div><span>Last Update</span><strong>{formatConfiguredDateTime(graphStatus?.updated_at).label}</strong></div>
                 </div>
                 {graphStatusMessage(graphStatus) ? (
                   <div className={`projects-graph-explanation ${hasStaleGraphIngest(graphStatus) ? "warning" : "danger"}`} role="status">

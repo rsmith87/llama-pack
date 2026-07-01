@@ -4,6 +4,7 @@ import { listAuditEvents } from "../../api/audit";
 import { useAsyncResource } from "../../hooks/useAsyncResource";
 import { DataTable, ErrorBanner, FormField, Panel } from "../../components/ui";
 import { useAuthSession } from "../../features/auth/authSession";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { field } from "../../features/shared/helpers";
 import type { AuditEvent } from "../../types/operations";
 
@@ -18,6 +19,7 @@ function dateToIso(value: string) {
 
 export function AuditPage() {
   const { authUser } = useAuthSession();
+  const { formatConfiguredDateTime } = useDateTime();
   const [visibleEvents, setVisibleEvents] = useState<AuditEvent[]>([]);
   const [selected, setSelected] = useState<AuditEvent | null>(null);
   const [eventType, setEventType] = useState("");
@@ -87,7 +89,7 @@ export function AuditPage() {
             emptyMessage="No audit events."
             getRowKey={(event, index) => field(event, "id", String(index))}
             columns={[
-              { key: "time", header: "Time", render: (event) => field(event, "created_at") },
+              { key: "time", header: "Time", render: (event) => formatConfiguredDateTime(field(event, "created_at")).label },
               { key: "type", header: "Type", render: (event) => field(event, "event_type") },
               { key: "dry", header: "Dry", render: (event) => String(Boolean(event.dry_run)) },
               { key: "target", header: "Target", render: (event) => field(event, "target") },

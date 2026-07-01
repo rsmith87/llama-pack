@@ -5,6 +5,7 @@ import { Button, ErrorBanner, FormField, StatusBadge } from "../../components/ui
 import type { ModelProfileCatalog, ModelProfileFamily } from "../../types/models";
 import type { TestChatBootstrap, TestChatSession, TestChatMessage, RouteMeta, ChatModel } from "../../types/chat";
 import { asModels } from "../../features/shared/helpers";
+import { useDateTime } from "../../features/dateTime/dateTimeContext";
 import { modelName } from "../../features/models";
 
 function modelTarget(model: ChatModel) {
@@ -43,8 +44,8 @@ function firstProfileForFamily(catalog: ModelProfileCatalog, family: string) {
   return catalog.families.find((item) => item.family === family)?.profiles[0]?.profile || "";
 }
 
-function sessionLabel(session: TestChatSession) {
-  return session.name || [session.model, session.updated_at].filter(Boolean).join(" - ") || session.id || "Untitled session";
+function sessionLabel(session: TestChatSession, formatDisplayDateTime: (value: string | null | undefined) => string) {
+  return session.name || [session.model, formatDisplayDateTime(session.updated_at)].filter((value) => value && value !== "-").join(" - ") || session.id || "Untitled session";
 }
 
 function routeMeta(route: unknown): RouteMeta {
@@ -62,6 +63,7 @@ async function assertOk(response: Response) {
 }
 
 export function TestChatPage() {
+  const { formatConfiguredDateTime } = useDateTime();
   const [sessionActive, setSessionActive] = useState(false);
   const [keyHint, setKeyHint] = useState("");
   const [models, setModels] = useState<ChatModel[]>([]);
@@ -299,6 +301,7 @@ export function TestChatPage() {
   const targetOptions = ["auto", target, ...models.map(modelTarget)].filter((item, index, items) => item && items.indexOf(item) === index);
   const profileFamilies = profileCatalog.families.filter((family) => family.family && family.profiles.length);
   const selectedProfileFamily = profileFamilies.find((family) => family.family === selectedFamily);
+  const formatDisplayDateTime = (value: string | null | undefined) => formatConfiguredDateTime(value).label;
 
   return (
     <div className="test-chat-shell">
@@ -313,9 +316,9 @@ export function TestChatPage() {
           <span className="eyebrow">Sessions</span>
           <div className="test-chat-session-list">
             {sessions.length ? sessions.map((session) => (
-              <button type="button" key={session.id} aria-label={sessionLabel(session)} onClick={() => void loadSession(session.id)}>
-                <strong>{sessionLabel(session)}</strong>
-                <small>{[session.model, session.updated_at].filter(Boolean).join(" - ") || session.id}</small>
+              <button type="button" key={session.id} aria-label={sessionLabel(session, formatDisplayDateTime)} onClick={() => void loadSession(session.id)}>
+                <strong>{sessionLabel(session, formatDisplayDateTime)}</strong>
+                <small>{[session.model, formatDisplayDateTime(session.updated_at)].filter((value) => value && value !== "-").join(" - ") || session.id}</small>
               </button>
             )) : <p>No saved sessions.</p>}
           </div>

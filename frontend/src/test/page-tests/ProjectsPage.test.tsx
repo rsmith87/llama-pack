@@ -186,7 +186,7 @@ it("shows failed graph ingest details", async () => {
   expect(screen.getByText("Parser crashed on src/main.py")).toBeInTheDocument();
   expect(screen.getByText("Files")).toBeInTheDocument();
   expect(screen.getAllByText("0").length).toBeGreaterThan(0);
-  expect(screen.getByText("2026-06-18T12:05:00Z")).toBeInTheDocument();
+  expect(screen.getByText(/Jun 18, 2026/)).toBeInTheDocument();
 });
 
 it("shows stale graph details when latest ingest failed after an active snapshot", async () => {
@@ -211,5 +211,5 @@ it("shows stale graph details when latest ingest failed after an active snapshot
   expect(screen.getByText("12")).toBeInTheDocument();
   expect(screen.getByText("34")).toBeInTheDocument();
   expect(screen.getByText("56")).toBeInTheDocument();
-  expect(screen.getByText("2026-06-18T12:05:00Z")).toBeInTheDocument();
+  expect(screen.getByText(/Jun 18, 2026/)).toBeInTheDocument();
 });

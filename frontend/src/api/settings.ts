@@ -35,6 +35,7 @@ export type RuntimeSettings = {
   controller_retention_days: number;
   controller_archive_retention_days: number;
   controller_archive_dir: string;
+  display_timezone: string;
   routing_fanout_enabled: boolean;
   routing_fanout_max: number;
   agent_worker_enabled: boolean;
