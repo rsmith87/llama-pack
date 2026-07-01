@@ -119,7 +119,7 @@ class ThreadWorkflowRunner:
                 ]
 
                 try:
-                    managed_load = await self._ensure_model_loaded(decision)
+                    managed_load = await self._ensure_model_loaded(decision, request_metadata)
                     if managed_load is not None:
                         managed_loads.append(managed_load)
                     raw_response, _response_meta = await self.chat_proxy.chat_with_meta(
@@ -194,10 +194,15 @@ class ThreadWorkflowRunner:
         finally:
             await self._restore_managed_loads(managed_loads)
 
-    async def _ensure_model_loaded(self, decision: RouteDecision) -> tuple[str, str, list[str]] | None:
-        if not decision.startup_needed:
+    async def _ensure_model_loaded(
+        self,
+        decision: RouteDecision,
+        request_metadata: dict[str, Any],
+    ) -> tuple[str, str, list[str]] | None:
+        force_lifecycle = request_metadata.get("manage_model_lifecycle") is True
+        if not decision.startup_needed and not force_lifecycle:
             return None
-        if decision.startup_decision != "start_now":
+        if decision.startup_needed and decision.startup_decision != "start_now":
             raise RuntimeError(f"model_start_deferred: node={decision.node} model={decision.model}")
         if self.model_lifecycle is None:
             raise RuntimeError(f"model_lifecycle_unavailable: node={decision.node} model={decision.model}")

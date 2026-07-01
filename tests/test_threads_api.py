@@ -2099,6 +2099,61 @@ async def test_workflow_starts_stopped_model_and_restores_prior_models(tmp_path)
     assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
 
 
+@pytest.mark.asyncio
+async def test_workflow_forces_managed_lifecycle_when_requested(tmp_path):
+    running = {"qwen"}
+    calls: list[tuple[str, str, str]] = []
+
+    class NodeRegistry:
+        async def request_node(self, node_name, method, path, json_body=None):
+            calls.append((node_name, method, path))
+            if method == "GET":
+                return [{"name": "qwen", "running": "qwen" in running}]
+            if path.endswith("/stop"):
+                running.discard(path.split("/")[-2])
+            if path.endswith("/start"):
+                running.add(path.split("/")[-2])
+            return {"name": path.split("/")[-2], "running": path.endswith("/start")}
+
+    chat_proxy = RecordingChatProxy(responses=["managed output"])
+    chat_proxy.node_registry = NodeRegistry()
+    service = ThreadService(
+        config=_config(),
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: True,
+        model_available=lambda node, model: False,
+        node_startup_allowed=lambda node, model: True,
+    )
+    thread = _thread(service)
+
+    result = await service.run_workflow_async(
+        thread_id=thread["id"],
+        content="start",
+        steps=[WorkflowStep(label="respond", instructions="respond")],
+        model="qwen",
+        target="node:linux-2080ti",
+        metadata={"manage_model_lifecycle": True},
+    )
+
+    assert result["message"]["content"] == "managed output"
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/stop") in calls
+    assert ("linux-2080ti", "POST", "/lm-api/v1/models/qwen/start") in calls
+    assert chat_proxy.calls == [
+        {
+            "model_name": "qwen",
+            "payload": {
+                "messages": [
+                    {"role": "system", "content": "respond"},
+                    {"role": "user", "content": "start"},
+                ],
+                "target": "node:linux-2080ti",
+                "_trusted_controller_target": True,
+            },
+        }
+    ]
+
+
 def test_thread_service_uses_configured_workflow_model_start_timeout(tmp_path):
     config = load_config(
         {

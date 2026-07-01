@@ -140,7 +140,11 @@ class WorkflowRunner:
             steps=steps,
             model=model,
             target=target,
-            metadata={"workflow_id": definition.id, "workflow_run_id": run_id},
+            metadata={
+                "workflow_id": definition.id,
+                "workflow_run_id": run_id,
+                "manage_model_lifecycle": parameters.get("manage_model_lifecycle") is True,
+            },
         )
         message = result.get("message")
         if not isinstance(message, dict):
