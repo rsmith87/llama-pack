@@ -32,6 +32,8 @@ class ManagedModelLifecycle:
 
         start_response = await self.request_node_model_action(node_name, model_name, "start")
         expected_names = _expected_running_names(model_name, start_response)
+        if _start_response_running(start_response, expected_names):
+            return
         wait_result = await self.wait_for_model_running(node_name, expected_names)
         if wait_result.running:
             return
@@ -106,6 +108,13 @@ def _expected_running_names(model_name: str, start_response: object) -> set[str]
         if response_name:
             names.add(response_name)
     return names
+
+
+def _start_response_running(start_response: object, model_names: set[str]) -> bool:
+    if not isinstance(start_response, dict):
+        return False
+    response_name = str(start_response.get("name") or "").strip()
+    return response_name in model_names and bool(start_response.get("running"))
 
 
 def _observed_model_summaries(models: list[dict[str, Any]]) -> list[str]:

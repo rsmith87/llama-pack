@@ -34,7 +34,27 @@ async def test_load_exclusive_waits_for_canonical_model_name_from_start_response
     await lifecycle.load_exclusive("mac-mini", "saved-label", [])
 
     assert registry.running == {"canonical-model"}
-    assert ("mac-mini", "GET", "/lm-api/v1/models") in registry.calls
+    assert registry.calls == [("mac-mini", "POST", "/lm-api/v1/models/saved-label/start")]
+
+
+@pytest.mark.asyncio
+async def test_load_exclusive_accepts_running_start_response_without_status_poll():
+    class RunningStartRegistry:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, str, str]] = []
+
+        async def request_node(self, node_name: str, method: str, path: str):
+            self.calls.append((node_name, method, path))
+            if method == "GET":
+                raise AssertionError("running start response should not require a status poll")
+            return {"name": "saved-label", "running": True}
+
+    registry = RunningStartRegistry()
+    lifecycle = ManagedModelLifecycle(registry, 0.0)
+
+    await lifecycle.load_exclusive("mac-mini", "saved-label", [])
+
+    assert registry.calls == [("mac-mini", "POST", "/lm-api/v1/models/saved-label/start")]
 
 
 @pytest.mark.asyncio
