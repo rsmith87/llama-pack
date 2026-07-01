@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import signal
+import socket
 import subprocess
 import time
 from contextlib import contextmanager
@@ -79,6 +80,7 @@ class _AdoptedProcess:
 class ModelStatus:
     name: str
     running: bool
+    ready: bool
     pid: int | None
     process_state: str
     port: int
@@ -151,9 +153,11 @@ class ProcessManager:
             self._close_log(name)
             process = None
         process_state = self._process_state(name, running, stale_pid)
+        ready = running and _port_accepting_connections("127.0.0.1", model.port, 0.2)
         return ModelStatus(
             name=name,
             running=running,
+            ready=ready,
             pid=process.pid if running and process is not None else stale_pid,
             process_state=process_state,
             port=model.port,
@@ -386,3 +390,11 @@ def _pid_is_zombie(pid: int) -> bool:
     if result.returncode != 0:
         return False
     return result.stdout.strip().startswith("Z")
+
+
+def _port_accepting_connections(host: str, port: int, timeout_seconds: float) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout_seconds):
+            return True
+    except OSError:
+        return False

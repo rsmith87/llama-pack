@@ -32,8 +32,6 @@ class ManagedModelLifecycle:
 
         start_response = await self.request_node_model_action(node_name, model_name, "start")
         expected_names = _expected_running_names(model_name, start_response)
-        if _start_response_running(start_response, expected_names):
-            return
         wait_result = await self.wait_for_model_running(node_name, expected_names)
         if wait_result.running:
             return
@@ -96,7 +94,10 @@ def running_model_names(models: list[dict[str, Any]]) -> list[str]:
 
 def model_running(models: list[dict[str, Any]], model_names: set[str]) -> bool:
     return any(
-        isinstance(model, dict) and model.get("name") in model_names and bool(model.get("running"))
+        isinstance(model, dict)
+        and model.get("name") in model_names
+        and bool(model.get("running"))
+        and _model_ready(model)
         for model in models
     )
 
@@ -110,11 +111,10 @@ def _expected_running_names(model_name: str, start_response: object) -> set[str]
     return names
 
 
-def _start_response_running(start_response: object, model_names: set[str]) -> bool:
-    if not isinstance(start_response, dict):
-        return False
-    response_name = str(start_response.get("name") or "").strip()
-    return response_name in model_names and bool(start_response.get("running"))
+def _model_ready(model: dict[str, Any]) -> bool:
+    if "ready" not in model:
+        return True
+    return bool(model.get("ready"))
 
 
 def _observed_model_summaries(models: list[dict[str, Any]]) -> list[str]:
@@ -124,6 +124,9 @@ def _observed_model_summaries(models: list[dict[str, Any]]) -> list[str]:
             continue
         name = str(model.get("name") or "").strip()
         if not name:
+            continue
+        if "ready" in model:
+            summaries.append(f"{name}:running={bool(model.get('running'))}:ready={bool(model.get('ready'))}")
             continue
         summaries.append(f"{name}:running={bool(model.get('running'))}")
     return summaries

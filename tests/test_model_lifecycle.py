@@ -34,11 +34,14 @@ async def test_load_exclusive_waits_for_canonical_model_name_from_start_response
     await lifecycle.load_exclusive("mac-mini", "saved-label", [])
 
     assert registry.running == {"canonical-model"}
-    assert registry.calls == [("mac-mini", "POST", "/lm-api/v1/models/saved-label/start")]
+    assert registry.calls == [
+        ("mac-mini", "POST", "/lm-api/v1/models/saved-label/start"),
+        ("mac-mini", "GET", "/lm-api/v1/models"),
+    ]
 
 
 @pytest.mark.asyncio
-async def test_load_exclusive_accepts_running_start_response_without_status_poll():
+async def test_load_exclusive_polls_status_after_running_start_response():
     class RunningStartRegistry:
         def __init__(self) -> None:
             self.calls: list[tuple[str, str, str]] = []
@@ -46,7 +49,7 @@ async def test_load_exclusive_accepts_running_start_response_without_status_poll
         async def request_node(self, node_name: str, method: str, path: str):
             self.calls.append((node_name, method, path))
             if method == "GET":
-                raise AssertionError("running start response should not require a status poll")
+                return [{"name": "saved-label", "running": True}]
             return {"name": "saved-label", "running": True}
 
     registry = RunningStartRegistry()
@@ -54,7 +57,30 @@ async def test_load_exclusive_accepts_running_start_response_without_status_poll
 
     await lifecycle.load_exclusive("mac-mini", "saved-label", [])
 
-    assert registry.calls == [("mac-mini", "POST", "/lm-api/v1/models/saved-label/start")]
+    assert registry.calls == [
+        ("mac-mini", "POST", "/lm-api/v1/models/saved-label/start"),
+        ("mac-mini", "GET", "/lm-api/v1/models"),
+    ]
+
+
+@pytest.mark.asyncio
+async def test_load_exclusive_waits_for_ready_status_when_reported():
+    class StartingRegistry:
+        def __init__(self) -> None:
+            self.status_attempts = 0
+
+        async def request_node(self, node_name: str, method: str, path: str):
+            if method == "GET":
+                self.status_attempts += 1
+                return [{"name": "saved-label", "running": True, "ready": self.status_attempts > 1}]
+            return {"name": "saved-label", "running": True, "ready": False}
+
+    registry = StartingRegistry()
+    lifecycle = ManagedModelLifecycle(registry, 2.0)
+
+    await lifecycle.load_exclusive("mac-mini", "saved-label", [])
+
+    assert registry.status_attempts == 2
 
 
 @pytest.mark.asyncio
