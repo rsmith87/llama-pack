@@ -355,6 +355,7 @@ def _register_lifespan(app: FastAPI) -> None:
                     app.state.controller_sweeper_task = None
                 await app.state.agent_worker.stop()
                 await app.state.heartbeat_client.stop()
+                await app.state.node_registry.aclose()
             if plugin_stop_error is not None:
                 raise plugin_stop_error
 

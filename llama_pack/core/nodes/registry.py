@@ -35,6 +35,7 @@ class NodeRegistry:
         self._dynamic_nodes: dict[str, NodeConfig] = {}
         self._node_overrides: dict[str, NodeConfig] = {}
         self._heartbeats: dict[str, str] = {}
+        self._clients: dict[tuple[float | None, bool], httpx.AsyncClient] = {}
         self._load_state()
 
     def list_nodes(self) -> list[dict[str, str]]:
@@ -174,8 +175,8 @@ class NodeRegistry:
             return self._dynamic_nodes[name]
         raise KeyError(f"Unknown node: {name}")
 
-    @staticmethod
     async def _default_request(
+        self,
         method: str,
         url: str,
         api_key: str | None,
@@ -187,10 +188,24 @@ class NodeRegistry:
         headers: dict[str, str] = {}
         if api_key:
             headers[LLAMA_PACK_API_KEY_HEADER] = api_key
-        async with httpx.AsyncClient(timeout=timeout, verify=verify_tls) as client:
-            response = await client.request(method, url, headers=headers, json=json_body)
-            response.raise_for_status()
-            return response.json()
+        client = self._get_client(timeout, verify_tls)
+        response = await client.request(method, url, headers=headers, json=json_body)
+        response.raise_for_status()
+        return response.json()
+
+    def _get_client(self, timeout: float | None, verify_tls: bool) -> httpx.AsyncClient:
+        key = (timeout, verify_tls)
+        client = self._clients.get(key)
+        if client is None:
+            client = httpx.AsyncClient(timeout=timeout, verify=verify_tls)
+            self._clients[key] = client
+        return client
+
+    async def aclose(self) -> None:
+        clients = list(self._clients.values())
+        self._clients.clear()
+        for client in clients:
+            await client.aclose()
 
     def _load_state(self) -> None:
         if self._store is None:

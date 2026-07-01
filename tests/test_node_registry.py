@@ -208,7 +208,8 @@ async def test_request_node_allows_long_running_default_request(monkeypatch):
         }
     )
     registry = NodeRegistry(config=config)
-    seen = {}
+    seen: dict[str, object] = {}
+    created_clients = []
 
     class FakeResponse:
         def raise_for_status(self):
@@ -221,12 +222,7 @@ async def test_request_node_allows_long_running_default_request(monkeypatch):
         def __init__(self, timeout=None, verify=True):
             seen["timeout"] = timeout
             seen["verify"] = verify
-
-        async def __aenter__(self):
-            return self
-
-        async def __aexit__(self, *_args):
-            return None
+            created_clients.append(self)
 
         async def request(self, method, url, headers, json):
             seen["method"] = method
@@ -234,6 +230,9 @@ async def test_request_node_allows_long_running_default_request(monkeypatch):
             seen["headers"] = headers
             seen["json"] = json
             return FakeResponse()
+
+        async def aclose(self):
+            seen["closed"] = True
 
     monkeypatch.setattr("llama_pack.core.nodes.registry.httpx.AsyncClient", FakeClient)
 
@@ -254,6 +253,82 @@ async def test_request_node_allows_long_running_default_request(monkeypatch):
         "headers": {"X-Llama-Pack-Key": "secret"},
         "json": {"model": "gpt-oss-20b"},
     }
+    assert len(created_clients) == 1
+
+
+@pytest.mark.asyncio
+async def test_default_request_reuses_async_client_for_matching_settings(monkeypatch):
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {"mac-mini": {"url": "https://mac-mini.local", "verify_tls": False}},
+        }
+    )
+    registry = NodeRegistry(config=config)
+    created_clients = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeClient:
+        def __init__(self, timeout=None, verify=True):
+            created_clients.append({"timeout": timeout, "verify": verify, "client": self})
+
+        async def request(self, method, url, headers, json):
+            return FakeResponse()
+
+        async def aclose(self):
+            return None
+
+    monkeypatch.setattr("llama_pack.core.nodes.registry.httpx.AsyncClient", FakeClient)
+
+    await registry.request_node("mac-mini", "GET", "/lm-api/v1/models")
+    await registry.request_node("mac-mini", "GET", "/lm-api/v1/models")
+
+    assert len(created_clients) == 1
+    assert created_clients[0]["timeout"] == 10
+    assert created_clients[0]["verify"] is False
+
+
+@pytest.mark.asyncio
+async def test_close_closes_reused_default_request_clients(monkeypatch):
+    config = load_config(
+        {
+            "mode": "controller",
+            "nodes": {"mac-mini": {"url": "https://mac-mini.local", "verify_tls": True}},
+        }
+    )
+    registry = NodeRegistry(config=config)
+    closed_clients = []
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"ok": True}
+
+    class FakeClient:
+        def __init__(self, timeout=None, verify=True):
+            return None
+
+        async def request(self, method, url, headers, json):
+            return FakeResponse()
+
+        async def aclose(self):
+            closed_clients.append(self)
+
+    monkeypatch.setattr("llama_pack.core.nodes.registry.httpx.AsyncClient", FakeClient)
+
+    await registry.request_node("mac-mini", "GET", "/lm-api/v1/models")
+    await registry.aclose()
+    await registry.aclose()
+
+    assert len(closed_clients) == 1
 
 
 def test_updates_static_node_runtime_config_without_changing_registration():
