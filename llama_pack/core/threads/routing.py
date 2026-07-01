@@ -216,6 +216,9 @@ class RoutingPolicy:
                 reason="explicit_target",
                 candidates=candidates,
             )
+        available = await self._choose_available_candidate(list(candidates), reason_prefix="explicit_target")
+        if available is not None:
+            return dc_replace(available, strategy="explicit")
         raise ValueError(f"No eligible running model found for node target: {node_name}")
 
     async def _choose_thread_affinity(self, previous_route: dict[str, Any] | None) -> RouteDecision | None:
