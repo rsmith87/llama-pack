@@ -36,6 +36,13 @@ nodes:
     assert config.models["qwen-coder"].port == 8081
     assert config.nodes["mac-mini"].url == "http://127.0.0.1:9000"
     assert config.node_heartbeat_timeout_seconds == 90
+    assert config.workflow_model_start_timeout_seconds == 600.0
+
+
+def test_config_reads_workflow_model_start_timeout_seconds():
+    config = load_config({"workflow_model_start_timeout_seconds": 900})
+
+    assert config.workflow_model_start_timeout_seconds == 900.0
 
 
 def test_example_network_configs_use_env_placeholders_for_lan_urls():

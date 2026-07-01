@@ -54,6 +54,7 @@ offline_allowed_cidrs: []
 # Multi-agent fanout routing (controller mode only):
 # routing_fanout_enabled: false
 # routing_fanout_max: 2
+# workflow_model_start_timeout_seconds: 600
 # Browser-based external clients can be allowed explicitly. Leave empty unless
 # a web app on another origin needs to call Neuraxis directly.
 # client_cors_origins:

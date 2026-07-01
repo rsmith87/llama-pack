@@ -67,7 +67,7 @@ class ThreadService:
             self.routing_policy,
             chat_proxy,
             self.event_publisher,
-            _managed_model_lifecycle(chat_proxy),
+            _managed_model_lifecycle(chat_proxy, config.workflow_model_start_timeout_seconds),
         )
 
     async def acquire_turn_lock(self, thread_id: str) -> asyncio.Lock:
@@ -748,11 +748,11 @@ class ThreadService:
         )
 
 
-def _managed_model_lifecycle(chat_proxy: Any) -> ManagedModelLifecycle | None:
+def _managed_model_lifecycle(chat_proxy: Any, model_start_timeout_seconds: float) -> ManagedModelLifecycle | None:
     node_registry = getattr(chat_proxy, "node_registry", None)
     if node_registry is None:
         wrapped_proxy = getattr(chat_proxy, "proxy", None)
         node_registry = getattr(wrapped_proxy, "node_registry", None)
     if node_registry is None:
         return None
-    return ManagedModelLifecycle(node_registry, 120.0)
+    return ManagedModelLifecycle(node_registry, model_start_timeout_seconds)

@@ -263,6 +263,7 @@ class AppConfig(BaseModel):
     chat_max_active_per_session: int = Field(default=1, ge=1, le=32)
     chat_max_queue_per_session: int = Field(default=4, ge=0, le=1000)
     chat_admission_timeout_seconds: float = Field(default=120.0, gt=0, le=3600)
+    workflow_model_start_timeout_seconds: float = Field(default=600.0, gt=0, le=7200)
     context_summarization_enabled: bool = True
     context_summarization_trigger_ratio: float = Field(default=0.75, gt=0, le=1)
     context_summarization_target_ratio: float = Field(default=0.55, gt=0, le=1)

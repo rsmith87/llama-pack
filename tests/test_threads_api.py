@@ -2099,6 +2099,29 @@ async def test_workflow_starts_stopped_model_and_restores_prior_models(tmp_path)
     assert calls[-1] == ("linux-2080ti", "POST", "/lm-api/v1/models/other-model/start")
 
 
+def test_thread_service_uses_configured_workflow_model_start_timeout(tmp_path):
+    config = load_config(
+        {
+            "mode": "controller",
+            "workflow_model_start_timeout_seconds": 900,
+            "nodes": {"linux-2080ti": {"url": "http://linux", "default_model": "qwen"}},
+        }
+    )
+    chat_proxy = RecordingChatProxy(responses=["unused"])
+    chat_proxy.node_registry = object()
+
+    service = ThreadService(
+        config=config,
+        store=ThreadStore(tmp_path / "threads.db"),
+        chat_proxy=chat_proxy,
+        model_running=lambda node, model: False,
+        model_available=lambda node, model: True,
+    )
+
+    assert service.workflow_runner.model_lifecycle is not None
+    assert service.workflow_runner.model_lifecycle.model_start_timeout_seconds == 900.0
+
+
 @pytest.mark.asyncio
 async def test_workflow_restores_prior_models_after_step_failure(tmp_path):
     running = {"other-model"}
