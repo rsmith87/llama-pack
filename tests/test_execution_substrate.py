@@ -378,6 +378,38 @@ async def test_agent_worker_default_request_diagnoses_empty_gateway_error(monkey
 
 
 @pytest.mark.asyncio
+async def test_agent_worker_records_latest_claim_failure():
+    request = httpx.Request("POST", "https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim")
+    response = httpx.Response(502, request=request, text="bad gateway from proxy")
+
+    async def failing_request(method, url, payload, headers):
+        raise httpx.HTTPStatusError("claim failed", request=request, response=response)
+
+    worker = AgentWorker(
+        load_config(
+            {
+                "mode": "agent",
+                "controller_url": "https://pi-controller.local",
+                "node_name": "mac-mini",
+                "agent_worker_enabled": True,
+            }
+        ),
+        request=failing_request,
+    )
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await worker.run_once()
+
+    failure = worker.latest_node_failure()
+    assert failure is not None
+    assert failure["method"] == "POST"
+    assert failure["endpoint"] == "https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim"
+    assert failure["status_code"] == 502
+    assert failure["response_detail"] == "bad gateway from proxy"
+    assert failure["timestamp"]
+
+
+@pytest.mark.asyncio
 async def test_agent_worker_fails_unsupported_job_type_non_retryable():
     calls = []
 

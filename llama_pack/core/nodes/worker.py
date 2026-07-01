@@ -7,7 +7,7 @@ from collections.abc import Awaitable, Callable
 from datetime import datetime, timezone
 from pathlib import Path
 from time import monotonic
-from typing import Any
+from typing import Any, TypedDict
 
 import httpx
 
@@ -33,6 +33,14 @@ WorkerEmbeddings = Callable[[str, list[str], str], Awaitable[tuple[dict[str, Any
 WorkerTransferStream = Callable[[str, dict[str, str]], Awaitable[Any]]
 WorkerDownloadManager = Any
 logger = logging.getLogger(__name__)
+
+
+class NodeCommunicationFailure(TypedDict):
+    method: str
+    endpoint: str
+    status_code: int | None
+    timestamp: str
+    response_detail: str
 
 
 class AgentWorker:
@@ -61,6 +69,7 @@ class AgentWorker:
         self._project_graph_indexer = project_graph_indexer
         self._task: asyncio.Task | None = None
         self._stop_event: asyncio.Event | None = None
+        self._latest_node_failure: NodeCommunicationFailure | None = None
 
     @property
     def enabled(self) -> bool:
@@ -119,8 +128,33 @@ class AgentWorker:
             "labels": self.config.agent_worker_labels,
             "capacity": self.config.agent_worker_capacity,
         }
-        response = await self._request("POST", self._url(f"/nodes/{self.config.node_name}/work/claim"), payload, self._headers())
+        method = "POST"
+        url = self._url(f"/nodes/{self.config.node_name}/work/claim")
+        try:
+            response = await self._request(method, url, payload, self._headers())
+        except Exception as exc:
+            self.record_node_failure_from_exception(method, url, exc)
+            raise
         return response if isinstance(response, list) else []
+
+    def latest_node_failure(self) -> NodeCommunicationFailure | None:
+        if self._latest_node_failure is None:
+            return None
+        return dict(self._latest_node_failure)
+
+    def record_node_failure(self, method: str, endpoint: str, status_code: int | None, response_detail: str) -> None:
+        self._latest_node_failure = {
+            "method": method,
+            "endpoint": endpoint,
+            "status_code": status_code,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "response_detail": response_detail,
+        }
+
+    def record_node_failure_from_exception(self, method: str, endpoint: str, exc: Exception) -> None:
+        status_code = _status_code_from_exception(exc)
+        response_detail = _response_detail_from_exception(exc)
+        self.record_node_failure(method, endpoint, status_code, response_detail)
 
     async def _handle_claim(self, claim: dict[str, Any]) -> None:
         job = claim.get("job") if isinstance(claim.get("job"), dict) else {}
@@ -747,6 +781,23 @@ def _raise_for_status_with_body(response: httpx.Response) -> None:
             if diagnostic:
                 message = f"{message}\n{diagnostic}"
         raise httpx.HTTPStatusError(message, request=exc.request, response=exc.response) from exc
+
+
+def _status_code_from_exception(exc: Exception) -> int | None:
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code
+    return None
+
+
+def _response_detail_from_exception(exc: Exception) -> str:
+    if isinstance(exc, httpx.HTTPStatusError):
+        response = exc.response
+        if response.text:
+            return response.text[:2000]
+        diagnostic = _empty_error_response_diagnostic(response)
+        if diagnostic:
+            return diagnostic
+    return str(exc)
 
 
 def _empty_error_response_diagnostic(response: httpx.Response) -> str:

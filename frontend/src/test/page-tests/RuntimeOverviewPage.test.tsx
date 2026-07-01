@@ -141,6 +141,13 @@ it("renders the reduced agent runtime surface", async () => {
           labels: { os: "mac", transfer: "enabled" },
           capacity: { gpu: 1, disk_gb: 500 },
           executors: { chat: true, embeddings: false, model_transfer: true },
+          latest_node_failure: {
+            method: "POST",
+            endpoint: "https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim",
+            status_code: 502,
+            timestamp: "2026-07-01T12:34:56+00:00",
+            response_detail: "Gateway/proxy returned 502 with an empty response body.",
+          },
         },
         running_models: {
           available: true,
@@ -165,6 +172,10 @@ it("renders the reduced agent runtime surface", async () => {
   expect(screen.getByText("chat, model transfer")).toBeInTheDocument();
   expect(screen.getByText("gpu=1, disk_gb=500")).toBeInTheDocument();
   expect(screen.getByText("Work claim endpoint: http://controller/lm-api/v1/nodes/agent-a/work/claim")).toBeInTheDocument();
+  expect(screen.getByText("Latest node communication failure")).toBeInTheDocument();
+  expect(screen.getByText("POST https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim")).toBeInTheDocument();
+  expect(screen.getByText("Status 502 at 2026-07-01T12:34:56+00:00")).toBeInTheDocument();
+  expect(screen.getByText("Gateway/proxy returned 502 with an empty response body.")).toBeInTheDocument();
   expect(screen.getByText("qwen")).toBeInTheDocument();
   expect(screen.getByText(":8081 / fast / gpu")).toBeInTheDocument();
   expect(screen.getByText("read_file")).toBeInTheDocument();

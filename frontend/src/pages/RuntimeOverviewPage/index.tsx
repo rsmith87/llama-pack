@@ -43,6 +43,23 @@ function workerStatus(worker?: WorkerOverview) {
   return "Disabled";
 }
 
+function nodeFailureStatusText(failure: NonNullable<WorkerOverview["latest_node_failure"]>) {
+  const status = failure.status_code == null ? "Status unavailable" : `Status ${failure.status_code}`;
+  return `${status} at ${failure.timestamp || "unknown time"}`;
+}
+
+function LatestNodeFailure({ failure }: { failure?: WorkerOverview["latest_node_failure"] }) {
+  if (!failure) return null;
+  return (
+    <div className="runtime-node-failure">
+      <strong>Latest node communication failure</strong>
+      <code>{failure.method || "REQUEST"} {failure.endpoint || "-"}</code>
+      <span className="muted">{nodeFailureStatusText(failure)}</span>
+      <p>{failure.response_detail || "No response detail captured."}</p>
+    </div>
+  );
+}
+
 type AgentAction = {
   label: string;
   detail: string;
@@ -220,6 +237,7 @@ export function RuntimeOverviewPage() {
               <div><span className="muted">Node name</span><strong>{worker?.node_name || "-"}</strong></div>
             </div>
             <p className="muted runtime-note">Work claim endpoint: {worker?.claim_url || "not available"}</p>
+            <LatestNodeFailure failure={worker?.latest_node_failure} />
           </Panel>
 
           <Panel eyebrow="Worker" title={workerStatus(worker)}>
@@ -398,6 +416,7 @@ export function RuntimeOverviewPage() {
             <div><span className="muted">Capacity</span><code>{keyValueList(worker?.capacity)}</code></div>
             <div><span className="muted">Claim</span><code>{worker?.claim_url || "-"}</code></div>
           </div>
+          <LatestNodeFailure failure={worker?.latest_node_failure} />
         </Panel>
 
         {overview?.node_runtimes?.available ? (

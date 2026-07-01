@@ -35,6 +35,27 @@ class FakeRouteRegistry:
         raise AssertionError(f"Unexpected node request: {node_name}")
 
 
+class FakeEligibilityRouteRegistry:
+    def list_nodes(self) -> list[dict[str, object]]:
+        return [
+            {"name": "mac-mini", "heartbeat_fresh": True},
+            {"name": "linux-2080ti", "heartbeat_fresh": False},
+        ]
+
+    async def request_node(self, node_name: str, method: str, path: str) -> object:
+        if method != "GET":
+            raise AssertionError(f"Unexpected node request: {method} {path}")
+        if node_name == "mac-mini" and path == "/lm-api/v1/models":
+            return [{"name": "qwen", "running": True}, {"name": "mistral", "running": False}]
+        if node_name == "mac-mini" and path == "/lm-api/v1/library/ggufs":
+            return [{"registered_as": "deepseek"}]
+        if node_name == "linux-2080ti" and path == "/lm-api/v1/models":
+            raise AssertionError("Unavailable nodes must not be queried for live models")
+        if node_name == "linux-2080ti" and path == "/lm-api/v1/library/ggufs":
+            raise AssertionError("Unavailable nodes must not be queried for GGUFs")
+        raise AssertionError(f"Unexpected node request: {node_name} {path}")
+
+
 def workflows_config(tmp_path: Path):
     log_dir = tmp_path / "logs"
     prepare_all_persistence_dbs(log_dir)
@@ -310,19 +331,38 @@ def test_workflows_plugin_route_options_list_models_and_node_targets(tmp_path: P
         response = client.get("/lm-api/v1/plugins/llama_pack_workflows/route-options")
 
         assert response.status_code == 200
-        assert response.json() == {
-            "models": [
-                {"value": "auto", "label": "Auto"},
-                {"value": "qwen", "label": "qwen"},
-                {"value": "mistral", "label": "mistral"},
-                {"value": "deepseek", "label": "deepseek"},
-                {"value": "deepseek-r1", "label": "deepseek-r1"},
-            ],
-            "targets": [
-                {"value": "auto", "label": "Auto"},
-                {"value": "node:gpu-box", "label": "gpu-box"},
-            ],
-        }
+        payload = response.json()
+        assert [item["value"] for item in payload["models"]] == ["auto", "qwen", "mistral", "deepseek", "deepseek-r1"]
+        assert [item["value"] for item in payload["targets"]] == ["auto", "node:gpu-box", "node:offline-box"]
+        assert payload["models"][1]["reason"] == "Running on gpu-box."
+        assert payload["models"][2]["reason"] == "Stopped on gpu-box; workflow routing can start it if capacity allows."
+        assert payload["targets"][1]["selectable"] is True
+        assert payload["targets"][2]["selectable"] is False
+
+
+def test_workflows_plugin_route_options_explain_model_and_node_eligibility(tmp_path: Path):
+    app = create_app(config=workflows_config(tmp_path))
+    app.state.node_registry = FakeEligibilityRouteRegistry()
+
+    with authenticated_client(app) as client:
+        response = client.get("/lm-api/v1/plugins/llama_pack_workflows/route-options")
+
+        assert response.status_code == 200
+        payload = response.json()
+        models = {item["value"]: item for item in payload["models"]}
+        targets = {item["value"]: item for item in payload["targets"]}
+        assert models["auto"]["selectable"] is True
+        assert models["auto"]["reason"] == "Routing policy will choose an eligible running model."
+        assert models["qwen"]["selectable"] is True
+        assert models["qwen"]["reason"] == "Running on mac-mini."
+        assert models["mistral"]["selectable"] is True
+        assert models["mistral"]["reason"] == "Stopped on mac-mini; workflow routing can start it if capacity allows."
+        assert models["deepseek"]["selectable"] is True
+        assert models["deepseek"]["reason"] == "Registered on mac-mini but no running instance was reported."
+        assert targets["node:mac-mini"]["selectable"] is True
+        assert targets["node:mac-mini"]["reason"] == "Node mac-mini is reachable."
+        assert targets["node:linux-2080ti"]["selectable"] is False
+        assert targets["node:linux-2080ti"]["reason"] == "Node linux-2080ti is unavailable because its heartbeat is stale or missing."
 
 
 class FakeThreadService:
@@ -442,6 +482,9 @@ def test_workflows_plugin_static_assets_load(tmp_path: Path):
         assert "renderRunDetail" in controller.text
         assert "syncRouteSelects" in controller.text
         assert 'host.apiGet("/route-options")' in controller.text
+        assert "option.title = option.reason" in controller.text
+        assert "element.disabled = option.selectable === false" in controller.text
+        assert "formatRouteOptionLabel" in controller.text
         assert "inspect-run" in controller.text
         assert "data-workflow-run-id" in controller.text
         assert "linked_thread_id" in controller.text

@@ -53,6 +53,13 @@ export type RuntimeOverview = {
     claim_url?: string | null;
     labels?: Record<string, unknown>;
     capacity?: Record<string, unknown>;
+    latest_node_failure?: {
+      method?: string;
+      endpoint?: string;
+      status_code?: number | null;
+      timestamp?: string;
+      response_detail?: string;
+    } | null;
     executors?: {
       chat?: boolean;
       embeddings?: boolean;

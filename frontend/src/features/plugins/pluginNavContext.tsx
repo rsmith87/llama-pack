@@ -18,7 +18,7 @@ const PluginNavContext = createContext<PluginNavContextValue>({
 });
 
 export function PluginNavProvider({ children }: { children: ReactNode }) {
-  const { authToken } = useAuthSession();
+  const { authToken, authChecked, authEnabled, isAuthenticated } = useAuthSession();
   const [enabledPlugins, setEnabledPlugins] = useState<EnabledPlugin[]>(() => readCachedPluginNavigation());
   const [pluginStatusIssues, setPluginStatusIssues] = useState<string[]>([]);
 
@@ -28,6 +28,13 @@ export function PluginNavProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (authEnabled === null) {
+      return;
+    }
+    if (authEnabled && (!authChecked || !isAuthenticated)) {
+      setPluginStatusIssues([]);
+      return;
+    }
     let alive = true;
     void Promise.allSettled([getEnabledPlugins(), getPluginStatus()])
       .then(([enabledResult, statusResult]) => {
@@ -46,7 +53,7 @@ export function PluginNavProvider({ children }: { children: ReactNode }) {
     return () => {
       alive = false;
     };
-  }, [authToken]);
+  }, [authToken, authChecked, authEnabled, isAuthenticated]);
 
   const value = useMemo<PluginNavContextValue>(() => ({
     enabledPlugins,

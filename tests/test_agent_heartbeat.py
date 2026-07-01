@@ -1,5 +1,6 @@
 import asyncio
 
+import httpx
 import pytest
 
 from llama_pack.core.nodes.heartbeat import AgentHeartbeatClient
@@ -84,6 +85,35 @@ async def test_agent_heartbeat_loop_survives_failed_heartbeat_send():
     assert any(url.endswith("/nodes/linux-1/heartbeat") for _, url, _ in calls)
 
     await client.stop()
+
+
+@pytest.mark.asyncio
+async def test_agent_heartbeat_records_latest_heartbeat_failure():
+    request = httpx.Request("POST", "https://pi-controller.local/lm-api/v1/nodes/mac-mini/heartbeat")
+    response = httpx.Response(502, request=request, text="controller upstream unavailable")
+
+    async def failing_request(method, url, payload):
+        raise httpx.HTTPStatusError("heartbeat failed", request=request, response=response)
+
+    config = load_config(
+        {
+            "mode": "agent",
+            "controller_url": "https://pi-controller.local",
+            "node_name": "mac-mini",
+        }
+    )
+    client = AgentHeartbeatClient(config, request=failing_request)
+
+    with pytest.raises(httpx.HTTPStatusError):
+        await client._heartbeat()
+
+    failure = client.latest_node_failure()
+    assert failure is not None
+    assert failure["method"] == "POST"
+    assert failure["endpoint"] == "https://pi-controller.local/lm-api/v1/nodes/mac-mini/heartbeat"
+    assert failure["status_code"] == 502
+    assert failure["response_detail"] == "controller upstream unavailable"
+    assert failure["timestamp"]
 
 
 @pytest.mark.asyncio

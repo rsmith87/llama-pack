@@ -69,7 +69,11 @@ async def runtime_overview(request: Request) -> dict[str, object]:
             "top_k": config.memory.top_k,
         },
         "jobs": _jobs_summary(config.mode, orchestrator),
-        "worker": _worker_summary(config, getattr(request.app.state, "agent_worker", None)),
+        "worker": _worker_summary(
+            config,
+            getattr(request.app.state, "agent_worker", None),
+            getattr(request.app.state, "heartbeat_client", None),
+        ),
         "threads": _threads_summary(config.mode, thread_service),
         "nodes": _nodes_summary(config.mode, node_registry),
         "node_runtimes": await _node_runtimes_summary(config.mode, node_registry),
@@ -433,7 +437,7 @@ def _jobs_summary(mode: str, orchestrator) -> dict[str, object]:
     return {"available": True, "counts": orchestrator.controller_stats().get("job_counts", {})}
 
 
-def _worker_summary(config, worker) -> dict[str, object]:
+def _worker_summary(config, worker, heartbeat_client) -> dict[str, object]:
     claim_url = None
     if config.controller_url and config.node_name:
         base = str(config.controller_url).rstrip("/")
@@ -451,6 +455,7 @@ def _worker_summary(config, worker) -> dict[str, object]:
         "claim_url": claim_url,
         "labels": dict(config.agent_worker_labels),
         "capacity": dict(config.agent_worker_capacity),
+        "latest_node_failure": _latest_node_failure(worker, heartbeat_client),
         "executors": {
             "chat": bool(worker is not None and getattr(worker, "_chat", None) is not None),
             "embeddings": bool(worker is not None and getattr(worker, "_embeddings", None) is not None),
@@ -464,6 +469,21 @@ def _worker_summary(config, worker) -> dict[str, object]:
             ),
         },
     }
+
+
+def _latest_node_failure(worker, heartbeat_client) -> dict[str, object] | None:
+    failures = []
+    if worker is not None and hasattr(worker, "latest_node_failure"):
+        worker_failure = worker.latest_node_failure()
+        if worker_failure is not None:
+            failures.append(worker_failure)
+    if heartbeat_client is not None and hasattr(heartbeat_client, "latest_node_failure"):
+        heartbeat_failure = heartbeat_client.latest_node_failure()
+        if heartbeat_failure is not None:
+            failures.append(heartbeat_failure)
+    if not failures:
+        return None
+    return max(failures, key=lambda item: str(item.get("timestamp", "")))
 
 
 def _threads_summary(mode: str, thread_service) -> dict[str, object]:

@@ -64,7 +64,14 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    if (authEnabled === null) {
+      return;
+    }
     if (!authToken) {
+      setAuthChecked(true);
+      return;
+    }
+    if (!authEnabled) {
       setAuthChecked(true);
       return;
     }
@@ -86,7 +93,7 @@ export function AuthSessionProvider({ children }: { children: ReactNode }) {
         setAuthRole("");
         setAuthChecked(true);
       });
-  }, [authToken, authUser]);
+  }, [authToken, authUser, authEnabled]);
 
   async function loginWithKey(username: string, apiKey: string) {
     const response = await login({ username, api_key: apiKey });

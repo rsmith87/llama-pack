@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 from collections.abc import Awaitable, Callable
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
 
 from llama_pack.core.config import AppConfig
 from llama_pack.core.network.tls_diagnostics import ssl_diagnostic_message
+from llama_pack.core.nodes.worker import NodeCommunicationFailure, _raise_for_status_with_body, _response_detail_from_exception, _status_code_from_exception
 
 
 RequestFn = Callable[[str, str, dict[str, Any] | None], Awaitable[dict[str, Any]]]
@@ -21,6 +23,7 @@ class AgentHeartbeatClient:
         self._request = request or self._default_request
         self._task: asyncio.Task[None] | None = None
         self._stopped = asyncio.Event()
+        self._latest_node_failure: NodeCommunicationFailure | None = None
 
     def enabled(self) -> bool:
         return (
@@ -86,7 +89,32 @@ class AgentHeartbeatClient:
 
     async def _heartbeat(self) -> None:
         url = self.config.controller_url.rstrip("/")
-        await self._request("POST", f"{url}/lm-api/v1/nodes/{self.config.node_name}/heartbeat", None)
+        method = "POST"
+        endpoint = f"{url}/lm-api/v1/nodes/{self.config.node_name}/heartbeat"
+        try:
+            await self._request(method, endpoint, None)
+        except Exception as exc:
+            self.record_node_failure_from_exception(method, endpoint, exc)
+            raise
+
+    def latest_node_failure(self) -> NodeCommunicationFailure | None:
+        if self._latest_node_failure is None:
+            return None
+        return dict(self._latest_node_failure)
+
+    def record_node_failure(self, method: str, endpoint: str, status_code: int | None, response_detail: str) -> None:
+        self._latest_node_failure = {
+            "method": method,
+            "endpoint": endpoint,
+            "status_code": status_code,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "response_detail": response_detail,
+        }
+
+    def record_node_failure_from_exception(self, method: str, endpoint: str, exc: Exception) -> None:
+        status_code = _status_code_from_exception(exc)
+        response_detail = _response_detail_from_exception(exc)
+        self.record_node_failure(method, endpoint, status_code, response_detail)
 
     @staticmethod
     async def _default_request(
@@ -94,5 +122,5 @@ class AgentHeartbeatClient:
     ) -> dict[str, Any]:
         async with httpx.AsyncClient(timeout=10) as client:
             response = await client.request(method, url, json=payload)
-            response.raise_for_status()
+            _raise_for_status_with_body(response)
             return response.json()

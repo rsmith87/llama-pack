@@ -95,6 +95,7 @@ def test_runtime_overview_reports_agent_runtime_state(tmp_path):
         "claim_url": "http://controller/lm-api/v1/nodes/agent-a/work/claim",
         "labels": {"os": "mac", "transfer": "enabled"},
         "capacity": {"gpu": 1, "disk_gb": 500},
+        "latest_node_failure": None,
         "executors": {"chat": True, "embeddings": False, "model_transfer": True, "model_download": True, "model_install": True},
     }
     assert body["threads"]["available"] is False
@@ -102,6 +103,47 @@ def test_runtime_overview_reports_agent_runtime_state(tmp_path):
     assert body["running_models"]["available"] is True
     assert body["running_models"]["count"] == 0
     assert body["downloads"]["available"] is True
+
+
+def test_runtime_overview_reports_latest_agent_node_failure(tmp_path):
+    prepare_all_persistence_dbs(tmp_path)
+    app = create_app(
+        config=load_config(
+            {
+                "mode": "agent",
+                "log_dir": str(tmp_path),
+                "controller_url": "https://pi-controller.local",
+                "node_name": "mac-mini",
+                "agent_worker_enabled": True,
+                "memory": {"enabled": False},
+            }
+        )
+    )
+    app.state.agent_worker.record_node_failure(
+        "POST",
+        "https://pi-controller.local/lm-api/v1/nodes/mac-mini/work/claim",
+        502,
+        "upstream controller unavailable",
+    )
+    app.state.heartbeat_client.record_node_failure(
+        "POST",
+        "https://pi-controller.local/lm-api/v1/nodes/mac-mini/heartbeat",
+        502,
+        "Gateway/proxy returned 502 with an empty response body.",
+    )
+    key = app.state.auth_store.create_key("admin", "admin")["key"]
+    client = TestClient(app)
+    client.headers.update({"X-Llama-Pack-Key": key})
+
+    response = client.get("/lm-api/v1/runtime/overview")
+
+    assert response.status_code == 200
+    failure = response.json()["worker"]["latest_node_failure"]
+    assert failure["endpoint"] == "https://pi-controller.local/lm-api/v1/nodes/mac-mini/heartbeat"
+    assert failure["method"] == "POST"
+    assert failure["status_code"] == 502
+    assert failure["response_detail"] == "Gateway/proxy returned 502 with an empty response body."
+    assert failure["timestamp"]
 
 
 def test_runtime_overview_reports_running_model_summary_error(tmp_path):

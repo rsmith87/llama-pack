@@ -226,8 +226,8 @@ function setStatus(root, message) {
 
 function defaultRouteOptions() {
   return {
-    models: [{ value: "auto", label: "Auto" }],
-    targets: [{ value: "auto", label: "Auto" }],
+    models: [{ value: "auto", label: "Auto", selectable: true, reason: "Routing policy will choose an eligible running model." }],
+    targets: [{ value: "auto", label: "Auto", selectable: true, reason: "Routing policy will choose an eligible node." }],
   };
 }
 
@@ -244,21 +244,32 @@ function normalizeRouteOptions(payload) {
 function normalizeRouteOptionList(items, defaults) {
   const options = new Map();
   for (const item of defaults) {
-    options.set(item.value, item.label);
+    options.set(item.value, item);
   }
   for (const item of items) {
     if (!item || typeof item !== "object") continue;
     const value = String(item.value || "").trim();
     const label = String(item.label || value).trim();
-    if (value) options.set(value, label || value);
+    const reason = String(item.reason || "").trim();
+    const selectable = item.selectable !== false;
+    if (value) options.set(value, { value, label: label || value, selectable, reason });
   }
-  return Array.from(options.entries()).map(([value, label]) => ({ value, label }));
+  return Array.from(options.values());
 }
 
 function ensureRouteOption(options, value, label) {
   const normalizedValue = String(value || "").trim() || "auto";
   if (options.some((item) => item.value === normalizedValue)) return options;
-  return [...options, { value: normalizedValue, label: `${label}: ${normalizedValue}` }];
+  return [...options, {
+    value: normalizedValue,
+    label: `${label}: ${normalizedValue}`,
+    selectable: true,
+    reason: "Saved workflow value; current route eligibility was not reported.",
+  }];
+}
+
+function formatRouteOptionLabel(option) {
+  return option.reason ? `${option.label} - ${option.reason}` : option.label;
 }
 
 function populateSelect(select, options, selectedValue) {
@@ -267,7 +278,9 @@ function populateSelect(select, options, selectedValue) {
   for (const option of options) {
     const element = document.createElement("option");
     element.value = option.value;
-    element.textContent = option.label;
+    element.textContent = formatRouteOptionLabel(option);
+    element.disabled = option.selectable === false;
+    if (option.reason) option.title = option.reason;
     select.appendChild(element);
   }
   select.value = selectedValue;
