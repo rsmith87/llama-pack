@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+import httpx
 
 from llama_pack.core.model_lifecycle import ManagedModelLifecycle
 
@@ -54,3 +55,27 @@ async def test_model_start_timeout_reports_observed_model_statuses():
     assert "node=mac-mini" in message
     assert "model=saved-label" in message
     assert "other-model" in message
+
+
+@pytest.mark.asyncio
+async def test_load_exclusive_retries_transient_model_status_gateway_errors():
+    class TransientGatewayRegistry:
+        def __init__(self) -> None:
+            self.status_attempts = 0
+
+        async def request_node(self, node_name: str, method: str, path: str):
+            if method == "GET":
+                self.status_attempts += 1
+                if self.status_attempts == 1:
+                    request = httpx.Request("GET", "https://mac-mini.local/lm-api/v1/models")
+                    response = httpx.Response(502, request=request)
+                    raise httpx.HTTPStatusError("502 Bad Gateway", request=request, response=response)
+                return [{"name": "saved-label", "running": True}]
+            return {"name": "saved-label", "running": False}
+
+    registry = TransientGatewayRegistry()
+    lifecycle = ManagedModelLifecycle(registry, 2.0)
+
+    await lifecycle.load_exclusive("mac-mini", "saved-label", [])
+
+    assert registry.status_attempts == 2

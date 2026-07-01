@@ -2,10 +2,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class ModelWaitResult:
+    running: bool
+    last_models: list[dict[str, Any]]
+    last_error: str | None
 
 
 class ManagedModelLifecycle:
@@ -24,12 +32,13 @@ class ManagedModelLifecycle:
 
         start_response = await self.request_node_model_action(node_name, model_name, "start")
         expected_names = _expected_running_names(model_name, start_response)
-        if await self.wait_for_model_running(node_name, expected_names):
+        wait_result = await self.wait_for_model_running(node_name, expected_names)
+        if wait_result.running:
             return
-        models = await self.list_node_models(node_name)
-        observed = ", ".join(_observed_model_summaries(models)) or "none"
+        observed = ", ".join(_observed_model_summaries(wait_result.last_models)) or "none"
+        error_detail = f" last_error={wait_result.last_error}" if wait_result.last_error is not None else ""
         raise RuntimeError(
-            f"model_start_timeout: node={node_name} model={model_name} observed_models=[{observed}]"
+            f"model_start_timeout: node={node_name} model={model_name} observed_models=[{observed}]{error_detail}"
         )
 
     async def restore_exclusive(self, node_name: str, loaded_model: str, prior_models: list[str]) -> None:
@@ -57,13 +66,21 @@ class ManagedModelLifecycle:
             f"/lm-api/v1/models/{encoded_model}/{action}",
         )
 
-    async def wait_for_model_running(self, node_name: str, model_names: set[str]) -> bool:
+    async def wait_for_model_running(self, node_name: str, model_names: set[str]) -> ModelWaitResult:
         deadline = asyncio.get_running_loop().time() + self.model_start_timeout_seconds
+        last_models: list[dict[str, Any]] = []
+        last_error: str | None = None
         while True:
-            if model_running(await self.list_node_models(node_name), model_names):
-                return True
+            try:
+                last_models = await self.list_node_models(node_name)
+                last_error = None
+                if model_running(last_models, model_names):
+                    return ModelWaitResult(running=True, last_models=last_models, last_error=None)
+            except Exception as exc:
+                last_error = f"{type(exc).__name__}: {exc}"
+                logger.warning("Model lifecycle status poll failed for %s on %s: %s", sorted(model_names), node_name, exc)
             if asyncio.get_running_loop().time() >= deadline:
-                return False
+                return ModelWaitResult(running=False, last_models=last_models, last_error=last_error)
             await asyncio.sleep(1.0)
 
 
